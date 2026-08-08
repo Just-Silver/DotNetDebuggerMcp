@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ILSpyMcp.Client/ILSpyMcp.Client.csproj" Id="f3860b2b-4192-4565-a126-d506da738ec3" />
+    <Project Path="src/ILSpyMcp/ILSpyMcp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj" />
+  </Folder>
+</Solution>

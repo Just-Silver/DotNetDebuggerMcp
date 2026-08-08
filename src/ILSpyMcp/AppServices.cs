@@ -1,0 +1,56 @@
+namespace ILSpyMcp;
+
+/// <summary>
+/// 进程级共享服务容器：缓存、执行管道、安装检测全会话单例，避免每个工具各自持有独立实例。 测试可经 <see cref="ConfigureForTest"/> 替换进程执行器与缓存。
+/// </summary>
+internal static class AppServices
+{
+    /// <summary>
+    /// 全局操作超时：所有 MCP 工具统一生效，超时返回提示文本。
+    /// </summary>
+    public static readonly TimeSpan DefaultTimeout = AppConfig.DefaultTimeout;
+
+    /// <summary>
+    /// 共享子进程执行器（可替换：测试经 <see cref="ConfigureForTest"/> 注入 fake）。
+    /// </summary>
+    public static IProcessRunner Process = new ProcessRunner();
+
+    /// <summary>
+    /// 共享反编译结果缓存（LRU，上限 <see cref="AppConfig.MaxCacheBytes"/>）（可替换：测试经 <see cref="ConfigureForTest"/> 注入小缓存）。
+    /// </summary>
+    public static DecompileCache Cache = new();
+
+    /// <summary>
+    /// 共享执行管道（缓存 → 回源 → 分页），工具经此调用 ilspycmd。
+    /// </summary>
+    public static ToolPipeline Pipeline = new(Process, Cache);
+
+    /// <summary>
+    /// 共享 ilspycmd 安装检测（会话内缓存一次）。
+    /// </summary>
+    public static InstallChecker Installer = new(Process);
+
+    /// <summary>
+    /// 测试注入：以指定进程执行器（与可选缓存）重建 Cache/Pipeline/Installer，使工具层可在不启动真实子进程的情况下测试。
+    /// </summary>
+    /// <param name="process">测试用进程执行器（fake）。</param>
+    /// <param name="cache">测试用缓存；缺省为默认 <see cref="AppConfig.MaxCacheBytes"/> 上限的缓存。</param>
+    internal static void ConfigureForTest(IProcessRunner process, DecompileCache? cache = null)
+    {
+        Process = process;
+        Cache = cache ?? new DecompileCache();
+        Pipeline = new ToolPipeline(Process, Cache);
+        Installer = new InstallChecker(Process);
+    }
+
+    /// <summary>
+    /// 恢复默认实现（测试后调用，避免污染其他用例）。
+    /// </summary>
+    internal static void ResetForTest()
+    {
+        Process = new ProcessRunner();
+        Cache = new DecompileCache();
+        Pipeline = new ToolPipeline(Process, Cache);
+        Installer = new InstallChecker(Process);
+    }
+}

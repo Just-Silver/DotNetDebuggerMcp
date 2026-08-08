@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Set up the NuGet package to be an MCP server -->
+    <PackAsTool>true</PackAsTool>
+    <PackageType>McpServer</PackageType>
+
+    <!-- Set recommended package metadata -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageId>ilspymcp</PackageId>
+    <PackageVersion>1.0.1</PackageVersion>
+    <ToolCommandName>ilspymcp</ToolCommandName>
+    <Authors>Just-Silver</Authors>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/Just-Silver/ILSpyMcp.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Just-Silver/ILSpyMcp</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>AI; MCP; server; stdio; ilspy; decompiler; dotnet</PackageTags>
+    <Description>基于 ilspycmd 的反编译 MCP 服务器，可在对话中直接反编译 .NET 程序集为 C# 源码或列出类型。</Description>
+    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- Include additional files for browsing the MCP server. -->
+  <ItemGroup>
+    <None Include=".mcp\server.json" Pack="true" PackagePath="/.mcp/" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageReference Include="ModelContextProtocol" Version="2.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ILSpyMcp.Tests" />
+  </ItemGroup>
+
+</Project>

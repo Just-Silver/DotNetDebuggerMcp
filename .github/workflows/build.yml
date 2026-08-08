@@ -1,0 +1,52 @@
+name: build-and-publish
+
+# 触发：推送 master 分支、手动触发，或推送 v* 版本标签时构建；打 tag 才发布 NuGet 包
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write # 允许 GitHub 为本 job 颁发 OIDC 令牌（NuGet 受信任发布用，无需 API key）
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build -c Release src/ILSpyMcp/ILSpyMcp.csproj
+
+      - name: Test
+        run: dotnet test tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj -c Release --no-build
+
+      # 仅版本标签（v*）时打包并发布到 NuGet（框架依赖，无需 -r）
+      - name: Pack
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: dotnet pack src/ILSpyMcp/ILSpyMcp.csproj -c Release --no-build -o artifacts
+
+      # OIDC 交换出短期 NuGet API 密钥（有效期 1 小时，勿提前获取）
+      - name: NuGet login (OIDC -> temp API key)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: Silver # nuget.org 用户名（profile name，非邮箱）
+
+      - name: NuGet push
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $nupkg = Get-ChildItem artifacts/*.nupkg | Select-Object -First 1
+          dotnet nuget push $nupkg.FullName --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
