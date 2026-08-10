@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace ILSpyMcp;
+namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
 /// 管道执行结果：反编译/格式化文本或错误提示。

@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace ILSpyMcp;
+namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
 /// 标准输出结果格式化：默认返回前 200 行，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片（单次最多 500 行）。

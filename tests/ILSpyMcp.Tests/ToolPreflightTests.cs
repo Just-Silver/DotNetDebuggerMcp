@@ -1,5 +1,6 @@
-using ILSpyMcp;
+using ILSpyMcp.Infrastructure;
 using ILSpyMcp.Tools;
+using ILSpyMcp.Validation;
 using Xunit;
 
 namespace ILSpyMcp.Tests;

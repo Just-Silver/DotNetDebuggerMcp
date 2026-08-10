@@ -1,4 +1,4 @@
-namespace ILSpyMcp;
+namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
 /// 缓存键：程序集绝对路径 + 文件指纹 + 参数签名。dll 更新后指纹变化，旧键自然失配。

@@ -1,4 +1,4 @@
-using ILSpyMcp;
+using ILSpyMcp.Validation;
 using Xunit;
 
 namespace ILSpyMcp.Tests;

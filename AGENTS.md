@@ -12,12 +12,14 @@
 ## 结构
 
 - `src/ILSpyMcp/` — MCP 服务器（net10.0、PackAsTool、框架依赖；运行期需 .NET 10 运行时）
-  - `Tools/` — DecompileTool / ListTypesTool / DecompileToDirTool：`[McpServerToolType]` 静态类，只做参数校验与命令组装，经共享服务执行。每个工具都带 `timeoutSeconds` 参数（默认 30s，大程序集可调大，校验仅要求 ≥1 的正整数，无上限）。注意 `decompile_to_dir` 不经缓存管道，直接经 `AppServices.Process` 执行（`ToolPipelineResult` 无 Oversized 字段，仅 `Text`）；另两个工具走 `ToolPipeline`
-  - `AppServices.cs` — 进程级共享单例（进程执行器、缓存、执行管道、安装检测），避免各工具独立持有实例；测试经 `ConfigureForTest`/`ResetForTest` 注入 fake
-  - `ProcessRunner.cs` — 通用子进程执行（args[0] 为可执行名，超时终止进程树，失败返回提示不抛异常）；stdout 流式读取并有 `AppConfig.MaxOutputBytes`（=64MB）上限，超过即终止并返回"建议改用 decompile_to_dir"提示，防 OOM
-  - `ToolPipeline.cs` — 共享执行管道：缓存命中 → 回源反编译（同 key 并发单飞）→ lines 分页格式化
-  - `DecompileCache.cs` — 线程安全 LRU 缓存（默认 64MB，结构化 CacheKey 含程序集指纹，dll 更新自动失效）
-  - `OutputFormatter.cs` — 行号标注与 `lines` 分页；`ArgumentValidators.cs` — 共享参数校验；`InstallChecker.cs` — 会话内缓存一次检测结果
+  - `Tools/` — DecompileTool / ListTypesTool / DecompileToDirTool（`ILSpyMcp.Tools`）：`[McpServerToolType]` 静态类，只做参数校验与命令组装，经共享服务执行。每个工具都带 `timeoutSeconds` 参数（默认 30s，大程序集可调大，校验仅要求 ≥1 的正整数，无上限）。注意 `decompile_to_dir` 不经缓存管道，直接经 `AppServices.Process` 执行（`ToolPipelineResult` 无 Oversized 字段，仅 `Text`）；另两个工具走 `ToolPipeline`
+  - `Infrastructure/`（`ILSpyMcp.Infrastructure`）— 执行基础设施：
+    - `AppServices.cs` — 进程级共享单例（进程执行器、缓存、执行管道、安装检测），避免各工具独立持有实例；测试经 `ConfigureForTest`/`ResetForTest` 注入 fake
+    - `ProcessRunner.cs` — 通用子进程执行（args[0] 为可执行名，超时终止进程树，失败返回提示不抛异常）；stdout 流式读取并有 `AppConfig.MaxOutputBytes`（=64MB）上限，超过即终止并返回"建议改用 decompile_to_dir"提示，防 OOM
+    - `ToolPipeline.cs` — 共享执行管道：缓存命中 → 回源反编译（同 key 并发单飞）→ lines 分页格式化
+    - `DecompileCache.cs` — 线程安全 LRU 缓存（默认 64MB，结构化 CacheKey 含程序集指纹，dll 更新自动失效）
+    - `OutputFormatter.cs` — 行号标注与 `lines` 分页；`InstallChecker.cs` — 会话内缓存一次检测结果；`AppConfig.cs` — 全局配置常量
+  - `Validation/`（`ILSpyMcp.Validation`）— `ArgumentValidators.cs` 共享参数校验；`ToolPreflight.cs` 安装检测 + assembly 校验的前置检查
 - `src/ILSpyMcp.Client/` — 端到端验证客户端：场景拆分为 `DecompileCases` / `ListTypesCases` / `DecompileToDirCases`（各工具全参数覆盖）与 `ClientRunner`（连接/执行/输出），`Program.cs` 仅做入口
 - `tests/ILSpyMcp.Tests/` — xUnit 单元测试（缓存/管道/格式化/校验/进程执行，fake 注入 `IProcessRunner`）
 - `tests/TestData/System.Linq.dll` — 验证用程序集（.NET 的 ref 版 System.Linq.dll，入库跟踪；Client 用它对全部工具参数做端到端验证）

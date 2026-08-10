@@ -1,4 +1,4 @@
-namespace ILSpyMcp;
+namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
 /// 检测 ilspycmd 是否已安装；结果会话内缓存一次，避免每次调用都拉起子进程。

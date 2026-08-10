@@ -1,4 +1,6 @@
-namespace ILSpyMcp;
+using ILSpyMcp.Infrastructure;
+
+namespace ILSpyMcp.Validation;
 
 /// <summary>
 /// 工具调用前置检查：安装检测 + assembly 参数校验。三个工具共用同一入口，避免前置逻辑各写一份、新工具照抄时漏步。

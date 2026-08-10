@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 
-namespace ILSpyMcp;
+namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
 /// 子进程执行结果。

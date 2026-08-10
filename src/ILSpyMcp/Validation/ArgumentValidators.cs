@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 
-namespace ILSpyMcp;
+namespace ILSpyMcp.Validation;
 
 /// <summary>
 /// 工具参数共享校验：全部返回 bool + out error，失败时返回中文提示文本。
