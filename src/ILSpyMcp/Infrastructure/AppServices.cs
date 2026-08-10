@@ -1,5 +1,7 @@
 namespace ILSpyMcp.Infrastructure;
 
+using ILSpyMcp.Tools;
+
 /// <summary>
 /// 进程级共享服务容器：缓存、执行管道、安装检测全会话单例，避免每个工具各自持有独立实例。 测试可经 <see cref="ConfigureForTest"/> 替换进程执行器与缓存。
 /// </summary>
@@ -32,6 +34,18 @@ internal static class AppServices
     public static InstallChecker Installer = new(Process);
 
     /// <summary>
+    /// 共享 NuGet 包版本查询（check_status 用它检查 ilspymcp 是否有新版本）。
+    /// </summary>
+    public static NuGetClient NuGet = new();
+
+    /// <summary>
+    /// check_status 的环境自检报告：会话内只真实检查一次（安装/版本变化需重启 CLI 才生效），后续直接复用缓存文本。
+    /// 单飞保证并发首次调用只执行一次完整检查。
+    /// </summary>
+    public static Lazy<Task<string>> StatusReport =
+        new(CheckTool.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+
+    /// <summary>
     /// 测试注入：以指定进程执行器（与可选缓存）重建 Cache/Pipeline/Installer，使工具层可在不启动真实子进程的情况下测试。
     /// </summary>
     /// <param name="process">测试用进程执行器（fake）。</param>
@@ -42,6 +56,8 @@ internal static class AppServices
         Cache = cache ?? new DecompileCache();
         Pipeline = new ToolPipeline(Process, Cache);
         Installer = new InstallChecker(Process);
+        NuGet = new NuGetClient();
+        StatusReport = new Lazy<Task<string>>(CheckTool.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
@@ -53,5 +69,7 @@ internal static class AppServices
         Cache = new DecompileCache();
         Pipeline = new ToolPipeline(Process, Cache);
         Installer = new InstallChecker(Process);
+        NuGet = new NuGetClient();
+        StatusReport = new Lazy<Task<string>>(CheckTool.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 }

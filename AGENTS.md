@@ -1,6 +1,6 @@
 # AGENTS.md
 
-基于 [ilspycmd](https://github.com/icsharpcode/ilspy) 的反编译 MCP 服务器：通过 stdio 暴露四个 MCP 工具，内部以子进程调用 `ilspycmd`（不内置反编译库），stdout 输出带行号。
+基于 [ilspycmd](https://github.com/icsharpcode/ilspy) 的反编译 MCP 服务器：通过 stdio 暴露五个 MCP 工具，内部以子进程调用 `ilspycmd`（不内置反编译库），stdout 输出带行号。
 
 ## 关键约束
 
@@ -13,14 +13,14 @@
 ## 结构
 
 - `src/ILSpyMcp/` — MCP 服务器（net10.0、PackAsTool、框架依赖；运行期需 .NET 10 运行时）
-  - `Tools/` — DecompileTool / DecompileMemberTool / ListTypesTool / DecompileToDirTool（`ILSpyMcp.Tools`）：`[McpServerToolType]` 静态类，只做参数校验与命令组装，经共享服务执行。每个工具都带 `timeoutSeconds` 参数（默认 30s，大程序集可调大，校验仅要求 ≥1 的正整数，无上限）。注意 `decompile_to_dir` 不经缓存管道，直接经 `AppServices.Process` 执行（`ToolPipelineResult` 无 Oversized 字段，仅 `Text`）；另三个工具走 `ToolPipeline`。`decompile` 仅类型级反编译（`typeName` 必填，成员级由 decompile_member 承接）；`decompile_member` 按成员名子串在指定类型内搜索并反编译（纯元数据读取定位，**只传 `-m <token>`**——ilspycmd 的 `-t` 与 `-m` 互斥，token 全局唯一；多匹配合并行号连续）
+  - `Tools/` — DecompileTool / DecompileMemberTool / ListTypesTool / DecompileToDirTool / CheckTool（`ILSpyMcp.Tools`）：`[McpServerToolType]` 静态类，只做参数校验与命令组装，经共享服务执行。每个工具都带 `timeoutSeconds` 参数（默认 30s，大程序集可调大，校验仅要求 ≥1 的正整数，无上限）。注意 `decompile_to_dir` 不经缓存管道，直接经 `AppServices.Process` 执行（`ToolPipelineResult` 无 Oversized 字段，仅 `Text`）；另三个工具走 `ToolPipeline`。`decompile` 仅类型级反编译（`typeName` 必填，成员级由 decompile_member 承接）；`decompile_member` 按成员名子串在指定类型内搜索并反编译（纯元数据读取定位，**只传 `-m <token>`**——ilspycmd 的 `-t` 与 `-m` 互斥，token 全局唯一；多匹配合并行号连续）。`check_status` 环境自检（无参数）：检查 ilspycmd 安装与版本（>= `AppConfig.RequiredIlspyCmdVersion`=11，`-m` 单成员反编译所需）及 ilspymcp 是否有新版；**结果会话内缓存**（环境变化需重启 CLI 才生效，重复检查无意义），NuGet 网络失败/超时静默跳过该检查项
   - `Infrastructure/`（`ILSpyMcp.Infrastructure`）— 执行基础设施：
-    - `AppServices.cs` — 进程级共享单例（进程执行器、缓存、执行管道、安装检测），避免各工具独立持有实例；测试经 `ConfigureForTest`/`ResetForTest` 注入 fake
+    - `AppServices.cs` — 进程级共享单例（进程执行器、缓存、执行管道、安装检测、NuGet 查询、check_status 报告缓存 `StatusReport`），避免各工具独立持有实例；测试经 `ConfigureForTest`/`ResetForTest` 注入 fake
     - `ProcessRunner.cs` — 通用子进程执行（args[0] 为可执行名，超时终止进程树，失败返回提示不抛异常）；stdout 流式读取并有 `AppConfig.MaxOutputBytes`（=64MB）上限，超过即终止并返回"建议改用 decompile_to_dir"提示，防 OOM
     - `ToolPipeline.cs` — 共享执行管道：缓存命中 → 回源反编译（同 key 并发单飞）→ lines 分页格式化；`ExecuteMergedAsync` 合并多条命令（decompile_member 多匹配）为一个大行列表后统一格式化
     - `DecompileCache.cs` — 线程安全 LRU 缓存（默认 64MB，结构化 CacheKey 含程序集指纹，dll 更新自动失效）
     - `MemberResolver.cs` — 纯元数据读取（PEReader+MetadataReader，不加载程序集）定位类型并枚举方法，按名字子串匹配返回 `[{名字, token}]`；token 格式 `0x06000005` 直用于 `ilspycmd -m`
-    - `OutputFormatter.cs` — 行号标注与 `lines` 分页；`InstallChecker.cs` — 会话内缓存一次检测结果；`AppConfig.cs` — 全局配置常量
+    - `OutputFormatter.cs` — 行号标注与 `lines` 分页；`InstallChecker.cs` — 会话内缓存一次检测结果并解析版本号（从 `ilspycmd -v` 输出）；`NuGetClient.cs` — NuGet 最新稳定版查询（排除预发布，网络失败返回 null 供 check_status 静默跳过）；`AppConfig.cs` — 全局配置常量（含 `RequiredIlspyCmdVersion`=11）
   - `Validation/`（`ILSpyMcp.Validation`）— `ArgumentValidators.cs` 共享参数校验；`ToolPreflight.cs` 安装检测 + assembly 校验的前置检查
 - `src/ILSpyMcp.Client/` — 端到端验证客户端：场景拆分为 `DecompileCases` / `DecompileMemberCases` / `ListTypesCases` / `DecompileToDirCases`（各工具全参数覆盖）与 `ClientRunner`（连接/执行/输出）、`TestDataHelper`（自动发现测试 dll 并共享类型/成员标识），`Program.cs` 仅做入口
 - `tests/ILSpyMcp.Tests/` — xUnit 单元测试（缓存/管道/格式化/校验/进程执行，fake 注入 `IProcessRunner`）
@@ -41,6 +41,7 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -t <TypeName> -mn <成员名子串>  # 按名搜成员
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -l c               # 列 class（c/i/s/d/e 可组合）
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -o <dir>           # 写盘（-p 项目形式）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -c                         # 环境自检（check_status，无需 -a）
   ```
   其他选项：`-ln start-end` 按行分页、`-lv` 语言版本、`--timeout` 秒数
 - 运行期依赖 `ilspycmd` 需全局安装（`dotnet tool install --global ilspycmd`），未安装时工具返回安装提示
@@ -50,7 +51,7 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
 
 ## 输出约定
 
-- 结果前置头部信息块（`程序集/目标` 两行 + 总量字段 + `当前输出` 字段 + `---` 分隔线，纯文本不带行号），由工具经 `FormatContext` 传入、`OutputFormatter` 生成，给 agent 明确的代码归属、总体规模与当前切片位置。**不展示参数行**——agent 面对的是 MCP 命名参数，ilspycmd 内部命令行参数（如 `-m token`、`-t`、`-l`）会误导 agent；`decompile_to_dir` 成功提示含「来源 <assembly>」
+- 结果前置头部信息块（`程序集/目标` 两行 + 总量字段 + `当前输出` 字段 + `---` 分隔线，纯文本不带行号），由工具经 `FormatContext` 传入、`OutputFormatter` 生成，给 agent 明确的代码归属、总体规模与当前切片位置。**不展示参数行**——agent 面对的是 MCP 命名参数，ilspycmd 内部命令行参数（如 `-m token`、`-t`、`-l`）会误导 agent；`decompile_to_dir` 成功提示含「来源 <assembly>」；`check_status` 无头部信息块（不涉及程序集），直接返回状态报告
 - 总量：反编译为 `总行数: N 行`；列类型同时给出 `匹配实体: N 个` 与 `总行数: N 行`（每行一个实体，行数=实体数）。`当前输出` 统一按行（如 `1-200（200 行，已截断）`），空结果为 `无`、越界为 `无效（起始行 X 超出总行数 Y）`
 - `decompile_member` 头部目标描述为 `类型 X 的成员 <memberName>（N 个匹配）`；多成员匹配合并输出（行号连续、总行数基于合并结果），无匹配返回「类型 X 中未找到名称包含 Y 的成员」、类型不存在返回「未找到类型 X」
 - 头部之下按行号标注（`行号\t内容`），切片时行号基于原始位置

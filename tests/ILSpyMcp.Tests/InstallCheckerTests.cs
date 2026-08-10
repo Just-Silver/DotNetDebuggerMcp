@@ -76,4 +76,37 @@ public class InstallCheckerTests
         Assert.False(checker.IsInstalled);
         Assert.Equal(1, fake.CallCount);
     }
+
+    [Fact]
+    public async Task 标准输出_解析出ilspycmd版本号()
+    {
+        var fake = new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\nICSharpCode.Decompiler: 11.0.0.9335\n" };
+        var checker = new InstallChecker(fake);
+
+        Assert.True(await checker.CheckInstalledAsync());
+
+        Assert.Equal(new Version(11, 0, 0, 9335), checker.Version);
+    }
+
+    [Fact]
+    public async Task 空输出_已安装但版本未知()
+    {
+        var fake = new FakeProcessRunner { Code = 0, Stdout = "" };
+        var checker = new InstallChecker(fake);
+
+        Assert.True(await checker.CheckInstalledAsync());
+
+        Assert.Null(checker.Version);
+    }
+
+    [Fact]
+    public async Task 非法版本号_已安装但版本未知()
+    {
+        var fake = new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: not-a-version\n" };
+        var checker = new InstallChecker(fake);
+
+        Assert.True(await checker.CheckInstalledAsync());
+
+        Assert.Null(checker.Version);
+    }
 }

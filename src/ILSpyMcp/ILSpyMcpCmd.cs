@@ -76,17 +76,26 @@ public class ILSpyMcpCmd
     public int TimeoutSeconds { get; } = AppConfig.DefaultTimeoutSeconds;
 
     /// <summary>
+    /// 检查运行环境是否可用：ilspycmd 是否安装/版本是否满足要求（>= 11）、当前 ilspymcp 是否有新版本。无需 -a。
+    /// </summary>
+    [Option("-c|--check", "检查运行环境：ilspycmd 是否安装、版本是否满足要求（>= 11，-m 单成员反编译所需）、当前 ilspymcp 是否有新版本。结果会话内缓存，仅首次真实检查。", CommandOptionType.NoValue)]
+    public bool Check { get; }
+    /// <summary>
     /// 版本号文本（由 -v/--version 触发输出），与 NuGet 包版本保持一致。
     /// </summary>
     public string Version => "ilspymcp " + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
 
     /// <summary>
-    /// 命令行分发：-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// 命令行分发：-c 走 check_status，-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string languageVersion, string entityTypes,
-        string outputDir, bool project, bool nestedDirectories, string lines, int timeoutSeconds)
+        string outputDir, bool project, bool nestedDirectories, string lines, int timeoutSeconds, bool check)
     {
+        if (check)
+        {
+            return await CheckTool.CheckStatus();
+        }
         if (!string.IsNullOrEmpty(outputDir))
         {
             return await DecompileToDirTool.DecompileToDir(assembly, outputDir, project, typeName, nestedDirectories, languageVersion, timeoutSeconds);
@@ -103,15 +112,15 @@ public class ILSpyMcpCmd
     }
 
     /// <summary>
-    /// 默认执行：未指定业务参数时启动 MCP 服务器；否则以命令行模式执行并输出结果。
+    /// 默认执行：未指定业务参数（-a 或 -c）时启动 MCP 服务器；否则以命令行模式执行并输出结果。
     /// </summary>
     private async Task<int> OnExecuteAsync(CommandLineApplication app)
     {
-        if (!string.IsNullOrEmpty(Assembly))
+        if (!string.IsNullOrEmpty(Assembly) || Check)
         {
             Console.WriteLine(await DispatchCliAsync(
                 Assembly, TypeName, MemberName, LanguageVersion, EntityTypes,
-                OutputDir, Project, NestedDirectories, Lines, TimeoutSeconds));
+                OutputDir, Project, NestedDirectories, Lines, TimeoutSeconds, Check));
             return 0;
         }
 

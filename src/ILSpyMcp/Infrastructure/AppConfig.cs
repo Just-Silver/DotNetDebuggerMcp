@@ -30,4 +30,24 @@ internal static class AppConfig
     /// ilspycmd 安装检测子进程的超时上限（快速失败，避免拖慢首次工具调用）。
     /// </summary>
     public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// ilspycmd 最低要求的版本：单成员反编译（-m）在 11.0 起提供，低于此版本 decompile_member 不可用。
+    /// </summary>
+    public static readonly Version RequiredIlspyCmdVersion = new(11, 0);
+
+    /// <summary>
+    /// 本工具发布的 NuGet 包 id，check_status 用它查询是否有新版本。
+    /// </summary>
+    public const string NuGetPackageId = "ilspymcp";
+
+    /// <summary>
+    /// NuGet flatcontainer 版本清单 API 前缀（拼上包 id 即得完整 URL）。
+    /// </summary>
+    public const string NuGetVersionListUrlPrefix = "https://api.nuget.org/v3-flatcontainer/";
+
+    /// <summary>
+    /// NuGet 新版本检查的超时上限；超时/网络失败时静默跳过该检查项（不影响反编译功能）。
+    /// </summary>
+    public static readonly TimeSpan NuGetCheckTimeout = TimeSpan.FromSeconds(8);
 }
