@@ -1,7 +1,8 @@
 namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
-/// 检测 ilspycmd 是否已安装；结果会话内缓存一次，避免每次调用都拉起子进程。
+/// 检测 ilspycmd 是否已安装并解析其版本；结果会话内缓存一次，避免每次调用都拉起子进程。
+/// _check 承载完整检测结果（安装状态 + 版本），版本号由 CheckInstalledAsync 一次性填充。
 /// </summary>
 public sealed class InstallChecker
 {
@@ -14,11 +15,9 @@ public sealed class InstallChecker
     private readonly IProcessRunner _process;
 
     /// <summary>
-    /// 检测任务的单飞缓存：ExecutionAndPublication 保证并发首次调用只执行一次检测。
+    /// 检测任务的单飞缓存：承载完整结果（安装状态 + 版本），ExecutionAndPublication 保证并发首次调用只执行一次检测。
     /// </summary>
-    private readonly Lazy<Task<bool>> _check;
-
-    private bool? _installed;
+    private readonly Lazy<Task<(bool Installed, Version? Version)>> _check;
 
     /// <summary>
     /// 检测到的 ilspycmd 版本（从 -v 输出解析，如 11.0.0.9335）；未检测过或解析失败为 null。
@@ -32,16 +31,11 @@ public sealed class InstallChecker
     public InstallChecker(IProcessRunner process)
     {
         _process = process;
-        _check = new Lazy<Task<bool>>(RunCheckAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+        _check = new Lazy<Task<(bool Installed, Version? Version)>>(RunCheckAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
-    /// 本次会话内已确定的检测结果；未检测过为 null。
-    /// </summary>
-    public bool? IsInstalled => _installed;
-
-    /// <summary>
-    /// 检测到的 ilspycmd 版本；需先调用 <see cref="CheckInstalledAsync"/>，未安装或版本解析失败为 null。
+    /// 检测到的 ilspycmd 版本（未安装或版本解析失败为 null）；由 <see cref="CheckInstalledAsync"/> 填充。
     /// </summary>
     public Version? Version => _version;
 
@@ -51,20 +45,20 @@ public sealed class InstallChecker
     /// <returns>ilspycmd 是否已安装。</returns>
     public async Task<bool> CheckInstalledAsync()
     {
-        var installed = await _check.Value;
-        _installed = installed;
+        var (installed, version) = await _check.Value;
+        _version = version;
         return installed;
     }
 
     /// <summary>
     /// 实际执行一次安装检测：调用 ilspycmd -v，退出码为 0 视为已安装，并从输出解析版本号（格式 "ilspycmd: 11.0.0.9335"）。
+    /// 返回完整结果元组，由调用方统一写入 <see cref="_version"/>，保证安装状态与版本同源。
     /// </summary>
-    private async Task<bool> RunCheckAsync()
+    private async Task<(bool Installed, Version? Version)> RunCheckAsync()
     {
         var result = await _process.RunAsync(ToolCommand.DefaultExecutable, new[] { "-v" }, Environment.CurrentDirectory, AppConfig.CheckTimeout);
-        if (result.Code != 0) return false;
-        _version = ParseVersion(result.Stdout);
-        return true;
+        if (result.Code != 0) return (false, null);
+        return (true, ParseVersion(result.Stdout));
     }
 
     /// <summary>

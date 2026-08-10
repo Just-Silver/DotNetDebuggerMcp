@@ -83,14 +83,15 @@ public class ILSpyMcpCmd
     /// <summary>
     /// 版本号文本（由 -v/--version 触发输出），与 NuGet 包版本保持一致。
     /// </summary>
-    public string Version => "ilspymcp " + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
+    public string Version => AppConfig.NuGetPackageId + " " + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
 
     /// <summary>
     /// 命令行分发：-c 走 check_status，-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string languageVersion, string entityTypes,
-        string outputDir, bool project, bool nestedDirectories, string lines, int timeoutSeconds, bool check)
+        string outputDir, bool project, bool nestedDirectories, string lines, int timeoutSeconds, bool check,
+        CancellationToken cancellationToken = default)
     {
         if (check)
         {
@@ -98,17 +99,17 @@ public class ILSpyMcpCmd
         }
         if (!string.IsNullOrEmpty(outputDir))
         {
-            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, project, typeName, nestedDirectories, languageVersion, timeoutSeconds);
+            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, project, typeName, nestedDirectories, languageVersion, timeoutSeconds, cancellationToken);
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {
-            return await ListTypesTool.ListTypes(assembly, entityTypes, lines, timeoutSeconds);
+            return await ListTypesTool.ListTypes(assembly, entityTypes, lines, timeoutSeconds, cancellationToken);
         }
         if (!string.IsNullOrEmpty(memberName))
         {
-            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, lines, languageVersion, timeoutSeconds);
+            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, lines, languageVersion, timeoutSeconds, cancellationToken);
         }
-        return await DecompileTool.Decompile(assembly, typeName, lines, languageVersion, timeoutSeconds);
+        return await DecompileTool.Decompile(assembly, typeName, lines, languageVersion, timeoutSeconds, cancellationToken);
     }
 
     /// <summary>

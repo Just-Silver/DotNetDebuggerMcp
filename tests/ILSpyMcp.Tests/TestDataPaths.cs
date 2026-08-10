@@ -11,9 +11,13 @@ internal static class TestDataPaths
     private static string Locate(params string[] segments)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        // bin/Debug/net10.0 → 上溯 5 层到仓库根（含 ILSpyMcp.slnx）
-        for (var i = 0; i < 5 && dir is not null; i++) dir = dir.Parent;
-        if (dir is null || !File.Exists(Path.Combine(dir.FullName, "ILSpyMcp.slnx")))
+        // 从测试进程 CWD（bin/Debug/net10.0）逐级上溯，直到找到含 ILSpyMcp.slnx 的仓库根
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "ILSpyMcp.slnx"))) break;
+            dir = dir.Parent;
+        }
+        if (dir is null)
         {
             throw new DirectoryNotFoundException("未找到仓库根目录（缺少 ILSpyMcp.slnx）");
         }

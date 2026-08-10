@@ -21,6 +21,7 @@ public static class DecompileToDirTool
     /// <param name="nestedDirectories">输出到目录时按命名空间使用嵌套目录。</param>
     /// <param name="languageVersion">C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest。</param>
     /// <param name="timeoutSeconds">本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大）。</param>
+    /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
     [McpServerTool]
     [Description("将 .NET 程序集（dll/exe）反编译写入指定目录（全量或项目形式，可指定单个类型）。结果写入磁盘而非标准输出，不做行数截断；读取源码请使用 opencode 内置工具。")]
@@ -31,7 +32,8 @@ public static class DecompileToDirTool
         [Description("仅反编译指定全限定类型名，例如 System.String；省略则反编译整个程序集")] string typeName = "",
         [Description("输出到目录时按命名空间使用嵌套目录")] bool nestedDirectories = false,
         [Description("C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest")] string languageVersion = "",
-        [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds)
+        [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
+        CancellationToken cancellationToken = default)
     {
         // 前置检查：ilspycmd 已安装且 assembly 参数有效；未通过直接返回提示
         if (await ToolPreflight.CheckAsync(assembly) is { } preflightError) return preflightError;
@@ -44,16 +46,8 @@ public static class DecompileToDirTool
 
         // 由参数结构统一生成命令行（本工具不经缓存，签名字段不使用）
         var cwd = Environment.CurrentDirectory;
-        string assemblyFull, outputFull;
-        try
-        {
-            assemblyFull = Path.GetFullPath(assembly, cwd);
-            outputFull = Path.GetFullPath(outputDir, cwd);
-        }
-        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
-        {
-            return $"路径非法：{ex.Message}";
-        }
+        if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
+        var outputFull = Path.GetFullPath(outputDir, cwd);
         var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
             new ToolParameter("-o", outputFull),
             ToolParameter.Switch("-p", project),
@@ -62,7 +56,7 @@ public static class DecompileToDirTool
             ToolParameter.Optional("-lv", languageVersion));
 
         // 执行反编译写盘；退出码非 0 时返回 stderr，成功则返回输出目录与文件计数（超时由 timeoutSeconds 参数控制，默认 30s）
-        var result = await AppServices.Process.RunAsync(command.Executable, command.Args, cwd, TimeSpan.FromSeconds(timeoutSeconds));
+        var result = await ToolExecutor.RunProcessAsync(command, cwd, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken);
         if (result.Code != 0) return $"ilspycmd 退出码: {result.Code}\n{result.Stderr}";
         // 枚举输出目录下文件总数供 agent 决策后续动作；枚举失败时退回基础提示，不拖垮工具
         try

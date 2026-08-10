@@ -13,3 +13,9 @@ catch (CommandParsingException ex)
     Console.Error.WriteLine($"{ex.Message} 参数不完整或用法错误，可用 -h/--help 查看所有选项。");
     return 1;
 }
+// MCP 装配期（HostBuilder/WithToolsFromAssembly/DI）异常兜底：避免崩溃堆栈直接暴露给用户，统一走 stderr 中文提示 + 非零退出码
+catch (Exception ex)
+{
+    Console.Error.WriteLine($"启动失败：{ex.Message}");
+    return 1;
+}

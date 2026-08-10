@@ -1,17 +1,10 @@
 namespace ILSpyMcp.Infrastructure;
 
-using ILSpyMcp.Tools;
-
 /// <summary>
 /// 进程级共享服务容器：缓存、执行管道、安装检测全会话单例，避免每个工具各自持有独立实例。 测试可经 <see cref="ConfigureForTest"/> 替换进程执行器与缓存。
 /// </summary>
 internal static class AppServices
 {
-    /// <summary>
-    /// 全局操作超时：所有 MCP 工具统一生效，超时返回提示文本。
-    /// </summary>
-    public static readonly TimeSpan DefaultTimeout = AppConfig.DefaultTimeout;
-
     /// <summary>
     /// 共享子进程执行器（可替换：测试经 <see cref="ConfigureForTest"/> 注入 fake）。
     /// </summary>
@@ -43,7 +36,7 @@ internal static class AppServices
     /// 单飞保证并发首次调用只执行一次完整检查。
     /// </summary>
     public static Lazy<Task<string>> StatusReport =
-        new(CheckTool.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+        new(EnvironmentChecker.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>
     /// 测试注入：以指定进程执行器（与可选缓存）重建 Cache/Pipeline/Installer，使工具层可在不启动真实子进程的情况下测试。
@@ -57,7 +50,7 @@ internal static class AppServices
         Pipeline = new ToolPipeline(Process, Cache);
         Installer = new InstallChecker(Process);
         NuGet = new NuGetClient();
-        StatusReport = new Lazy<Task<string>>(CheckTool.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+        StatusReport = new Lazy<Task<string>>(EnvironmentChecker.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
@@ -70,6 +63,6 @@ internal static class AppServices
         Pipeline = new ToolPipeline(Process, Cache);
         Installer = new InstallChecker(Process);
         NuGet = new NuGetClient();
-        StatusReport = new Lazy<Task<string>>(CheckTool.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+        StatusReport = new Lazy<Task<string>>(EnvironmentChecker.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 }

@@ -20,6 +20,7 @@ public static class DecompileTool
     /// <param name="lines">按行号范围读取反编译结果，格式 "start-end"（1-based 含两端，单次最多 500 行）。</param>
     /// <param name="languageVersion">C# 语言版本，如 CSharp12_0、Latest；省略使用 ilspycmd 默认。</param>
     /// <param name="timeoutSeconds">本次反编译回源超时秒数（默认 30）。</param>
+    /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的反编译结果或错误提示文本。</returns>
     [McpServerTool]
     [Description("反编译 .NET 程序集（dll/exe）中指定的单个类型到标准输出。输出每行带行号标注，可直接引用具体行。结果默认只返回前 200 行，超过时可用 lines 参数按行号范围拉取后续（结果缓存在内存）。全量/项目反编译请使用 decompile_to_dir 工具，按成员名搜索请使用 decompile_member 工具。")]
@@ -28,7 +29,8 @@ public static class DecompileTool
         [Description("要反编译的全限定类型名，例如 System.String（必填）")] string typeName = "",
         [Description("按行号范围读取反编译结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"")] string lines = "",
         [Description("C# 语言版本，如 CSharp12_0、Latest；省略使用 ilspycmd 默认")] string languageVersion = "",
-        [Description("本次反编译回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds)
+        [Description("本次反编译回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
+        CancellationToken cancellationToken = default)
     {
         // 前置检查：ilspycmd 已安装且 assembly 参数有效；未通过直接返回提示
         if (await ToolPreflight.CheckAsync(assembly) is { } preflightError) return preflightError;
@@ -40,7 +42,7 @@ public static class DecompileTool
         if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
 
         // 由参数结构统一派生命令行与缓存签名，杜绝命令/签名两处手写导致缓存 key 错配
-        var assemblyFull = Path.GetFullPath(assembly);
+        if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
         var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
             ToolParameter.Optional("-t", typeName),
             ToolParameter.Optional("-lv", languageVersion));
@@ -49,6 +51,6 @@ public static class DecompileTool
         var context = new FormatContext(assemblyFull, $"类型 {typeName}");
 
         // 走共享执行管道：缓存命中 → 回源 → lines 分页；stdout 超限时 ProcessRunner 直接返回错误提示
-        return (await AppServices.Pipeline.ExecuteAsync(assembly, command, lines, TimeSpan.FromSeconds(timeoutSeconds), context: context)).Text;
+        return await ToolExecutor.RunPipelineAsync(command, lines, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken, context);
     }
 }

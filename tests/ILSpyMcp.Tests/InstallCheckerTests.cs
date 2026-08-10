@@ -33,7 +33,6 @@ public class InstallCheckerTests
         await checker.CheckInstalledAsync();
 
         Assert.Equal(1, fake.CallCount);
-        Assert.True(checker.IsInstalled);
     }
 
     [Fact]
@@ -61,7 +60,6 @@ public class InstallCheckerTests
 
         Assert.All(results, r => Assert.True(r));
         Assert.Equal(1, fake.CallCount);
-        Assert.True(checker.IsInstalled);
     }
 
     [Fact]
@@ -73,7 +71,6 @@ public class InstallCheckerTests
         Assert.False(await checker.CheckInstalledAsync());
         Assert.False(await checker.CheckInstalledAsync());
 
-        Assert.False(checker.IsInstalled);
         Assert.Equal(1, fake.CallCount);
     }
 

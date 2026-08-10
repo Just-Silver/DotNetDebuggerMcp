@@ -13,7 +13,7 @@ public class ToolPipelineTests
         var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
         var pipeline = Create(fake);
 
-        var result = await pipeline.ExecuteAsync(AssemblyPath, new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "");
+        var result = await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "");
 
         Assert.Equal(1, fake.CallCount);
         Assert.Equal("1\ta\n2\tb", result.Text);
@@ -26,8 +26,8 @@ public class ToolPipelineTests
         var pipeline = Create(fake);
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
 
-        await pipeline.ExecuteAsync(AssemblyPath, command, "");
-        await pipeline.ExecuteAsync(AssemblyPath, command, "");
+        await pipeline.ExecuteAsync(command, "");
+        await pipeline.ExecuteAsync(command, "");
 
         Assert.Equal(1, fake.CallCount);
     }
@@ -40,8 +40,8 @@ public class ToolPipelineTests
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
         var context = new FormatContext(@"D:\x\a.dll", "类型 System.String");
 
-        var first = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
-        var second = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
+        var first = await pipeline.ExecuteAsync(command, "", context: context);
+        var second = await pipeline.ExecuteAsync(command, "", context: context);
 
         Assert.Equal(1, fake.CallCount); // 命中缓存，不再回源
         Assert.StartsWith("程序集: ", first.Text);
@@ -59,7 +59,7 @@ public class ToolPipelineTests
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
         var context = new FormatContext(@"D:\x\a.dll", "类型 System.String");
 
-        var result = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
+        var result = await pipeline.ExecuteAsync(command, "", context: context);
 
         Assert.StartsWith("程序集: ", result.Text); // 对外输出带头部
         var key = cache.BuildKey(AssemblyPath, command.Signature);
@@ -74,8 +74,8 @@ public class ToolPipelineTests
         var fake = new FakeProcessRunner { Stdout = "x\n" };
         var pipeline = Create(fake);
 
-        await pipeline.ExecuteAsync(AssemblyPath, new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig1")), "");
-        await pipeline.ExecuteAsync(AssemblyPath, new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig2")), "");
+        await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig1")), "");
+        await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig2")), "");
 
         Assert.Equal(2, fake.CallCount);
     }
@@ -86,7 +86,7 @@ public class ToolPipelineTests
         var fake = new FakeProcessRunner { Stdout = "a\nb\nc\n" };
         var pipeline = Create(fake);
 
-        var result = await pipeline.ExecuteAsync(AssemblyPath, new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "2-3");
+        var result = await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "2-3");
 
         Assert.Equal("2\tb\n3\tc", result.Text);
     }
@@ -97,7 +97,7 @@ public class ToolPipelineTests
         var fake = new FakeProcessRunner { Code = 1, Stderr = "boom" };
         var pipeline = Create(fake);
 
-        var result = await pipeline.ExecuteAsync(AssemblyPath, new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "");
+        var result = await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "");
 
         Assert.Contains("ilspycmd 退出码: 1", result.Text);
         Assert.Contains("boom", result.Text);
@@ -110,7 +110,7 @@ public class ToolPipelineTests
         var pipeline = Create(fake);
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
 
-        var tasks = Enumerable.Range(0, 20).Select(_ => pipeline.ExecuteAsync(AssemblyPath, command, "")).ToArray();
+        var tasks = Enumerable.Range(0, 20).Select(_ => pipeline.ExecuteAsync(command, "")).ToArray();
         var results = await Task.WhenAll(tasks);
 
         Assert.Equal(1, fake.CallCount);
@@ -124,7 +124,7 @@ public class ToolPipelineTests
         var pipeline = Create(fake);
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
 
-        await pipeline.ExecuteAsync(AssemblyPath, command, "", TimeSpan.FromSeconds(99));
+        await pipeline.ExecuteAsync(command, "", TimeSpan.FromSeconds(99));
 
         Assert.Equal(TimeSpan.FromSeconds(99), fake.Timeout);
     }
@@ -136,7 +136,7 @@ public class ToolPipelineTests
         var pipeline = Create(fake);
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
 
-        await pipeline.ExecuteAsync(AssemblyPath, command, "");
+        await pipeline.ExecuteAsync(command, "");
 
         Assert.Equal(AppConfig.DefaultTimeout, fake.Timeout);
     }
@@ -149,11 +149,11 @@ public class ToolPipelineTests
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
 
         fake.Code = 1;
-        var first = await pipeline.ExecuteAsync(AssemblyPath, command, "");
+        var first = await pipeline.ExecuteAsync(command, "");
         Assert.Contains("退出码", first.Text);
 
         fake.Code = 0;
-        var second = await pipeline.ExecuteAsync(AssemblyPath, command, "");
+        var second = await pipeline.ExecuteAsync(command, "");
         Assert.Equal(2, fake.CallCount);
         Assert.Equal("1\ta", second.Text);
     }
@@ -167,6 +167,7 @@ public class ToolPipelineTests
             ToolParameter.Optional("-lv", ""));
 
         Assert.Equal("tool", cmd.Executable);
+        Assert.Equal(AssemblyPath, cmd.Assembly);
         Assert.Equal(new[] { "-t", "A", "-p", AssemblyPath }, cmd.Args);
         Assert.Equal("-t\u001FA\u001F-p", cmd.Signature);
     }
@@ -189,7 +190,7 @@ public class ToolPipelineTests
         var fake = new FakeProcessRunner { Stdout = "a\n" };
         var pipeline = Create(fake);
 
-        var result = await pipeline.ExecuteAsync("", new ToolCommand("tool", "", new ToolParameter("-t", "sig")), "");
+        var result = await pipeline.ExecuteAsync(new ToolCommand("tool", "", new ToolParameter("-t", "sig")), "");
 
         Assert.Contains("反编译失败", result.Text);
         Assert.Equal(0, fake.CallCount); // 未进入回源
@@ -203,7 +204,7 @@ public class ToolPipelineTests
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
         using var cts = new CancellationTokenSource();
 
-        await pipeline.ExecuteAsync(AssemblyPath, command, "", null, cts.Token);
+        await pipeline.ExecuteAsync(command, "", null, cts.Token);
 
         Assert.Equal(cts.Token, fake.LastToken);
     }
@@ -219,7 +220,7 @@ public class ToolPipelineTests
             new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
         };
 
-        var result = await pipeline.ExecuteMergedAsync(AssemblyPath, commands, "");
+        var result = await pipeline.ExecuteMergedAsync(commands, "");
 
         Assert.Equal(2, fake.CallCount); // 每条命令各回源一次
         Assert.Equal("1\ta\n2\tb\n3\ta\n4\tb", result.Text); // 合并后行号连续
@@ -236,8 +237,8 @@ public class ToolPipelineTests
             new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
         };
 
-        await pipeline.ExecuteMergedAsync(AssemblyPath, commands, "");
-        await pipeline.ExecuteMergedAsync(AssemblyPath, commands, "");
+        await pipeline.ExecuteMergedAsync(commands, "");
+        await pipeline.ExecuteMergedAsync(commands, "");
 
         Assert.Equal(2, fake.CallCount); // 首次两条各回源一次，二次全部缓存命中
     }
@@ -253,7 +254,7 @@ public class ToolPipelineTests
             new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
         };
 
-        var result = await pipeline.ExecuteMergedAsync(AssemblyPath, commands, "");
+        var result = await pipeline.ExecuteMergedAsync(commands, "");
 
         Assert.Contains("ilspycmd 退出码: 1", result.Text);
     }

@@ -52,6 +52,7 @@ public sealed class ToolCommand
     public ToolCommand(string executable, string assembly, params ToolParameter?[] parameters)
     {
         Executable = executable;
+        Assembly = assembly;
         var args = new List<string>();
         var sig = new List<string>();
         foreach (var p in parameters)
@@ -69,6 +70,11 @@ public sealed class ToolCommand
         Args = args;
         Signature = string.Join('\u001F', sig);
     }
+
+    /// <summary>
+    /// 程序集路径（缓存 key 与命令行共用同一份数据，杜绝「管道实参」与「命令内路径」双份错配）。
+    /// </summary>
+    public string Assembly { get; }
 
     /// <summary>
     /// 参数签名，参与缓存 key 计算；由启用的参数（开关名与值）自动派生，保证不同参数组合的 key 互不冲突。
@@ -109,19 +115,18 @@ public sealed class ToolPipeline
     /// <summary>
     /// 执行一次 ilspycmd 调用：缓存命中直接返回；未命中则并发单飞回源（Lazy 保证同 key 只启动一个子进程）后写缓存。 指定 lines 时按行号切片，否则返回前 200 行；一切错误返回提示文本，不抛异常。
     /// </summary>
-    /// <param name="assembly">程序集路径（相对或绝对）。</param>
-    /// <param name="command">调用描述（参数签名 + 命令行参数）。</param>
+    /// <param name="command">调用描述（程序集路径 + 参数签名 + 命令行参数）。</param>
     /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前 200 行。</param>
     /// <param name="timeout">本次回源超时；为 null 时用全局默认超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="context">头部信息块上下文；提供时结果前置程序集/目标说明。</param>
     /// <returns>管道执行结果：格式化后的反编译文本或错误提示。</returns>
-    public async Task<ToolPipelineResult> ExecuteAsync(string assembly, ToolCommand command, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
+    public async Task<ToolPipelineResult> ExecuteAsync(ToolCommand command, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
     {
         List<string> source;
         try
         {
-            source = await GetSourceLinesAsync(assembly, command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
+            source = await GetSourceLinesAsync(command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -134,14 +139,13 @@ public sealed class ToolPipeline
     /// 合并执行多条命令（decompile_member 多匹配场景）：各自走缓存/回源拿全量纯净行，按命令顺序合并为一个大行列表，
     /// 再统一做行号标注与 lines 分页/截断（总行数/当前输出均基于合并结果）。任一命令失败即返回错误提示，不抛异常。
     /// </summary>
-    /// <param name="assembly">程序集路径（相对或绝对）。</param>
     /// <param name="commands">多条调用描述（每个匹配成员一条，各自独立缓存）。</param>
     /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前 200 行。</param>
     /// <param name="timeout">本次回源超时；为 null 时用全局默认超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="context">头部信息块上下文；提供时结果前置程序集/目标说明。</param>
     /// <returns>管道执行结果：合并后格式化文本或错误提示。</returns>
-    public async Task<ToolPipelineResult> ExecuteMergedAsync(string assembly, IReadOnlyList<ToolCommand> commands, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
+    public async Task<ToolPipelineResult> ExecuteMergedAsync(IReadOnlyList<ToolCommand> commands, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
     {
         var merged = new List<string>();
         foreach (var command in commands)
@@ -149,7 +153,7 @@ public sealed class ToolPipeline
             List<string> source;
             try
             {
-                source = await GetSourceLinesAsync(assembly, command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
+                source = await GetSourceLinesAsync(command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -163,17 +167,16 @@ public sealed class ToolPipeline
     /// <summary>
     /// 取指定调用的全量纯净行列表：缓存命中直接返回；未命中则并发单飞回源后写缓存。错误向上抛出，由调用方转为提示文本。
     /// </summary>
-    /// <param name="assembly">程序集路径（相对或绝对）。</param>
-    /// <param name="command">调用描述（参数签名 + 命令行参数）。</param>
+    /// <param name="command">调用描述（程序集路径 + 参数签名 + 命令行参数）。</param>
     /// <param name="timeout">本次回源超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>反编译结果纯净行列表（不含头部与行号，供渲染期统一格式化）。</returns>
-    private async Task<List<string>> GetSourceLinesAsync(string assembly, ToolCommand command, TimeSpan timeout, CancellationToken cancellationToken)
+    private async Task<List<string>> GetSourceLinesAsync(ToolCommand command, TimeSpan timeout, CancellationToken cancellationToken)
     {
         CacheKey key;
         try
         {
-            key = _cache.BuildKey(assembly, command.Signature);
+            key = _cache.BuildKey(command.Assembly, command.Signature);
         }
         catch (Exception ex)
         {
@@ -184,7 +187,7 @@ public sealed class ToolPipeline
 
         // 并发单飞：同 key 只启动一个子进程，其余等待者复用同一 Lazy 承载的 Task
         var lazy = _inflight.GetOrAdd(key,
-            _ => new Lazy<Task<List<string>>>(() => RunSourceAsync(assembly, command, timeout, cancellationToken), LazyThreadSafetyMode.ExecutionAndPublication));
+            _ => new Lazy<Task<List<string>>>(() => RunSourceAsync(command, timeout, cancellationToken), LazyThreadSafetyMode.ExecutionAndPublication));
         try
         {
             cached = await lazy.Value;
@@ -202,12 +205,11 @@ public sealed class ToolPipeline
     /// <summary>
     /// 回源反编译：调用子进程并拆分结果；退出码非 0 时抛异常由调用方转为提示文本。
     /// </summary>
-    /// <param name="assembly">程序集路径。</param>
-    /// <param name="command">调用描述（参数签名 + 命令行参数）。</param>
+    /// <param name="command">调用描述（程序集路径 + 参数签名 + 命令行参数）。</param>
     /// <param name="timeout">本次回源超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>反编译结果行列表。</returns>
-    private async Task<List<string>> RunSourceAsync(string assembly, ToolCommand command, TimeSpan timeout, CancellationToken cancellationToken)
+    private async Task<List<string>> RunSourceAsync(ToolCommand command, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var result = await _process.RunAsync(command.Executable, command.Args, Environment.CurrentDirectory, timeout, cancellationToken);
         if (result.Code != 0)
