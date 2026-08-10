@@ -1,6 +1,5 @@
 using ILSpyMcp.Configuration;
 using ILSpyMcp.Pipeline;
-using ILSpyMcp.Processes;
 using ILSpyMcp.Services;
 using ILSpyMcp.Validation;
 using ModelContextProtocol.Server;
@@ -22,7 +21,9 @@ public static class DecompileToDirTool
     /// <param name="project">以可编译项目形式反编译（每个类型一个源码文件，默认 false）。</param>
     /// <param name="typeName">仅反编译指定全限定类型名；省略则反编译整个程序集（仅 project=false 时生效）。</param>
     /// <param name="nestedDirectories">输出到目录时按命名空间使用嵌套目录（默认 true）。</param>
-    /// <param name="languageVersion">C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest；省略使用 ilspycmd 默认。</param>
+    /// <param name="languageVersion">
+    /// C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest；省略使用 ilspycmd 默认。
+    /// </param>
     /// <param name="timeoutSeconds">本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>

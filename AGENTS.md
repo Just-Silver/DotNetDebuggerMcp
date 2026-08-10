@@ -11,7 +11,7 @@
 - **`[Description]` 面向 agent（MCP 调用方），不是给人类开发者看的**：只写 agent 决策需要的行为、默认值、必填、示例与限制；不得出现实现细节或设计动机类措辞（如「agent 友好」「供 agent 决策」等），这类说明写代码注释或本文件。
 - **有默认值的工具参数，`[Description]` 必须注明默认值**（如「默认 30」「默认 true」「缺省返回前 200 行」「省略使用 ilspycmd 默认」），否则 agent 无从感知当前默认行为。
 - **每个反编译工具方法带 `CancellationToken cancellationToken = default` 参数**（放在 `timeoutSeconds` 之后）：SDK 识别为取消令牌并注入、**不暴露为 MCP 参数**（不要写 `[Description]`），客户端取消调用时沿 Pipeline/ProcessRunner 终止 ilspycmd 子进程。勿删。
-- **更新版本号必须同步改两处**：`src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 与 `src/ILSpyMcp/.mcp/server.json`（顶层 `version` 与 `packages[0].version` 两处都要改一致）。`-v/--version` 输出版本取程序集版本（由 csproj 生成），但 NuGet MCP 注册信息读 server.json，不同步会导致发布后展示版本不一致。**CHANGELOG 变更统一记在 `[Unreleased]` 段**（当前 1.1.0 从未发布）；发布打 `v*` tag 时 CI 从 CHANGELOG.md 提取 `## [<version>]` 段落注入 `PackageReleaseNotes`，故发布前须把 Unreleased 内容转成 `## [<version>] - <date>` 段，缺段会导致发布失败（防静默无说明）。
+- **更新版本号必须同步改三处**：`src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>`、`src/ILSpyMcp/.mcp/server.json`（顶层 `version` 与 `packages[0].version` 两处都要改一致）、`CHANGELOG.md`（发布前把 `[Unreleased]` 内容转成 `## [<version>] - <date>` 段）。`-v/--version` 输出版本取程序集版本（由 csproj 生成），但 NuGet MCP 注册信息读 server.json，不同步会导致发布后展示版本不一致。**CHANGELOG 变更统一记在 `[Unreleased]` 段**；发布打 `v*` tag 时 CI 从 CHANGELOG.md 提取 `## [<version>]` 段落注入 `PackageReleaseNotes`，缺段会导致发布失败（防静默无说明）。
 
 ## 结构
 

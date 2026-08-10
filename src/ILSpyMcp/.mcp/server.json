@@ -2,12 +2,12 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "description": "基于 ilspycmd 的反编译 MCP 服务器，可反编译 .NET 程序集为 C# 源码或列出类型。前置条件：用户已安装 ilspycmd（dotnet tool）。",
   "name": "io.github.just-silver/ilspymcp",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "packages": [
     {
       "registryType": "nuget",
       "identifier": "ilspymcp",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "transport": {
         "type": "stdio"
       },

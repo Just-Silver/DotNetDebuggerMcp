@@ -8,8 +8,8 @@ namespace ILSpyMcp.Formatting;
 public sealed record FormatContext(string AssemblyPath, string Target, bool IsListing = false);
 
 /// <summary>
-/// 标准输出结果格式化：默认返回前 200 行，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片（单次最多 500 行）。
-    /// 传入 <see cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/总量/当前输出），给 agent 明确代码归属与当前切片位置。
+/// 标准输出结果格式化：默认返回前 200 行，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片（单次最多 500 行）。 传入 <see
+/// cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/总量/当前输出），给 agent 明确代码归属与当前切片位置。
 /// </summary>
 public static class OutputFormatter
 {
@@ -57,16 +57,6 @@ public static class OutputFormatter
         if (context is null) return body;
         var header = BuildHeader(context, lines, linesParam);
         return string.IsNullOrEmpty(body) ? header : $"{header}\n{body}";
-    }
-
-    /// <summary>
-    /// 按行号范围切片；非法格式/边界返回错误提示。
-    /// </summary>
-    private static string FormatSlice(List<string> lines, string linesParam)
-    {
-        var (start, end, error) = ParseLines(linesParam);
-        if (error is not null) return error;
-        return SliceLines(lines, start, end);
     }
 
     /// <summary>
@@ -132,6 +122,16 @@ public static class OutputFormatter
     }
 
     /// <summary>
+    /// 按行号范围切片；非法格式/边界返回错误提示。
+    /// </summary>
+    private static string FormatSlice(List<string> lines, string linesParam)
+    {
+        var (start, end, error) = ParseLines(linesParam);
+        if (error is not null) return error;
+        return SliceLines(lines, start, end);
+    }
+
+    /// <summary>
     /// 给每行添加行号前缀（`行号\t内容`），行号从 start 起；统一用 \n 换行避免 \r 残留。
     /// </summary>
     /// <param name="lines">待标注行号的行列表。</param>
@@ -149,8 +149,7 @@ public static class OutputFormatter
 
     /// <summary>
     /// 生成头部信息块：程序集 / 目标 两行 + 总量与当前输出字段行 + 分隔线。
-    /// 总量：反编译为「总行数」，列类型同时给出「匹配实体」与「总行数」（每行一个实体，行数=实体数）；当前输出统一按「行」定位。
-    /// 头部为纯文本、不带行号前缀，避免与源码行号混淆。
+    /// 总量：反编译为「总行数」，列类型同时给出「匹配实体」与「总行数」（每行一个实体，行数=实体数）；当前输出统一按「行」定位。 头部为纯文本、不带行号前缀，避免与源码行号混淆。
     /// </summary>
     private static string BuildHeader(FormatContext ctx, List<string> lines, string linesParam)
     {

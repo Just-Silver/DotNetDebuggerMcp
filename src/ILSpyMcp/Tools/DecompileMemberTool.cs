@@ -11,8 +11,7 @@ using System.ComponentModel;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 按成员名在指定类型内搜索并反编译匹配的成员：适合只知道方法名、给不出完整文档 ID 的场景。
-/// 匹配的多个成员全部反编译并合并输出（行号连续），同样默认返回前 200 行、可用 lines 分页。
+/// 按成员名在指定类型内搜索并反编译匹配的成员：适合只知道方法名、给不出完整文档 ID 的场景。 匹配的多个成员全部反编译并合并输出（行号连续），同样默认返回前 200 行、可用 lines 分页。
 /// </summary>
 [McpServerToolType]
 public static class DecompileMemberTool
@@ -55,16 +54,15 @@ public static class DecompileMemberTool
         if (!typeFound) return $"未找到类型 {typeName}";
         if (matches.Count == 0) return $"类型 {typeName} 中未找到名称包含 \"{memberName}\" 的成员";
 
-        // 每个匹配成员一条命令：token 全局唯一，ilspycmd 的 -t 与 -m 互斥，故仅传 -m <token>；
-        // 各命令独立缓存 key，同一成员不同子串查询共享缓存
+        // 每个匹配成员一条命令：token 全局唯一，ilspycmd 的 -t 与 -m 互斥，故仅传 -m <token>； 各命令独立缓存 key，同一成员不同子串查询共享缓存
         var commands = matches
             .Select(m => new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
                 new ToolParameter("-m", m.Token),
                 ToolParameter.Optional("-lv", languageVersion)))
             .ToArray();
 
-        // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）。不展示参数——对外工具没有 -m/token 概念，
-        // 暴露内部 token 或 ilspycmd 参数会误导 agent（agent 面对的是 MCP 命名参数）
+        // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）。不展示参数——对外工具没有 -m/token 概念， 暴露内部 token 或 ilspycmd 参数会误导
+        // agent（agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员 {memberName}（{matches.Count} 个匹配）");
 
         // 走共享执行管道：各成员缓存/回源后合并，统一行号与 lines 分页

@@ -9,8 +9,8 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// 串行化使用 <see cref="AppServices"/> 静态状态的测试类（CheckToolTests / ToolPreflightTests），
-/// 避免跨类并行执行时相互覆盖注入的 fake 造成竞态。
+/// 串行化使用 <see cref="AppServices"/> 静态状态的测试类（CheckToolTests / ToolPreflightTests）， 避免跨类并行执行时相互覆盖注入的
+/// fake 造成竞态。
 /// </summary>
 [CollectionDefinition("AppServices", DisableParallelization = true)]
 public sealed class AppServicesTestCollection;
@@ -123,8 +123,8 @@ public class CheckToolTests
     }
 
     /// <summary>
-    /// 注入 fake 进程执行器，并将 Updater 指向预写缓存（或空目录）的临时目录，验证环境自检（CLI -c/握手注入）报告组装。
-    /// NuGet 段经 <see cref="UpdateChecker.GetCachedNuGetLine"/> 同步读缓存，故不注入网络 handler。
+    /// 注入 fake 进程执行器，并将 Updater 指向预写缓存（或空目录）的临时目录，验证环境自检（CLI -c/握手注入）报告组装。 NuGet 段经 <see
+    /// cref="UpdateChecker.GetCachedNuGetLine"/> 同步读缓存，故不注入网络 handler。
     /// </summary>
     private static async Task RunWithAsync(FakeProcessRunner fake, string? cachedLatest, Func<string, Task> assert)
     {

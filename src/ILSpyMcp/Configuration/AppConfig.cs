@@ -24,6 +24,26 @@ internal static class AppConfig
     public const int DefaultTimeoutSeconds = 30;
 
     /// <summary>
+    /// 本工具发布的 NuGet 包 id，环境自检（CLI -c/握手注入）用它查询是否有新版本。
+    /// </summary>
+    public const string NuGetPackageId = "ilspymcp";
+
+    /// <summary>
+    /// NuGet flatcontainer 版本清单 API 前缀（拼上包 id 即得完整 URL）。
+    /// </summary>
+    public const string NuGetVersionListUrlPrefix = "https://api.nuget.org/v3-flatcontainer/";
+
+    /// <summary>
+    /// ilspycmd 可执行文件名（工具命令与安装检测共用同一来源，避免两处手写漂移）。
+    /// </summary>
+    public const string IlspyCmdExecutable = "ilspycmd";
+
+    /// <summary>
+    /// NuGet 新版本检查磁盘缓存文件名（位于 <see cref="ILSpyMcp.UpdateCheck.UpdateChecker"/> 的缓存目录下）。
+    /// </summary>
+    public const string UpdateCheckCacheFileName = "update-check.json";
+
+    /// <summary>
     /// 全局操作默认超时（由 <see cref="DefaultTimeoutSeconds"/> 派生）。
     /// </summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(DefaultTimeoutSeconds);
@@ -37,21 +57,6 @@ internal static class AppConfig
     /// ilspycmd 最低要求的版本：单成员反编译（-m）在 11.0 起提供，低于此版本 decompile_member 不可用。
     /// </summary>
     public static readonly Version RequiredIlspyCmdVersion = new(11, 0);
-
-    /// <summary>
-    /// 本工具发布的 NuGet 包 id，环境自检（CLI -c/握手注入）用它查询是否有新版本。
-    /// </summary>
-    public const string NuGetPackageId = "ilspymcp";
-
-    /// <summary>
-    /// 当前程序集版本（NuGet 包版本来源）。 反编译工具与环境自检/握手注入统一经此获取当前版本，避免各处重复读取 Assembly 元数据。
-    /// </summary>
-    public static Version? CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version;
-
-    /// <summary>
-    /// NuGet flatcontainer 版本清单 API 前缀（拼上包 id 即得完整 URL）。
-    /// </summary>
-    public const string NuGetVersionListUrlPrefix = "https://api.nuget.org/v3-flatcontainer/";
 
     /// <summary>
     /// NuGet 新版本检查的超时上限；超时/网络失败时静默跳过该检查项（不影响反编译功能）。
@@ -69,12 +74,7 @@ internal static class AppConfig
     public static readonly TimeSpan UpdateCheckFailureBackoff = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// ilspycmd 可执行文件名（工具命令与安装检测共用同一来源，避免两处手写漂移）。
+    /// 当前程序集版本（NuGet 包版本来源）。 反编译工具与环境自检/握手注入统一经此获取当前版本，避免各处重复读取 Assembly 元数据。
     /// </summary>
-    public const string IlspyCmdExecutable = "ilspycmd";
-
-    /// <summary>
-    /// NuGet 新版本检查磁盘缓存文件名（位于 <see cref="ILSpyMcp.UpdateCheck.UpdateChecker"/> 的缓存目录下）。
-    /// </summary>
-    public const string UpdateCheckCacheFileName = "update-check.json";
+    public static Version? CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version;
 }

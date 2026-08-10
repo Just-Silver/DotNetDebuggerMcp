@@ -77,17 +77,19 @@ public class ILSpyMcpCmd
     public int TimeoutSeconds { get; } = AppConfig.DefaultTimeoutSeconds;
 
     /// <summary>
-    /// 检查运行环境是否可用：ilspycmd 是否安装/版本是否满足要求（>= 11）、当前 ilspymcp 是否有新版本。无需 -a。
+    /// 检查运行环境是否可用：ilspycmd 是否安装/版本是否满足要求（&gt;= 11）、当前 ilspymcp 是否有新版本。无需 -a。
     /// </summary>
     [Option("-c|--check", "检查运行环境：ilspycmd 是否安装、版本是否满足要求（>= 11，-m 单成员反编译所需）、当前 ilspymcp 是否有新版本。结果会话内缓存，仅首次真实检查。", CommandOptionType.NoValue)]
     public bool Check { get; }
+
     /// <summary>
     /// 版本号文本（由 -v/--version 触发输出），与 NuGet 包版本保持一致。
     /// </summary>
     public string Version => AppConfig.NuGetPackageId + " " + (AppConfig.CurrentVersion?.ToString(3) ?? "unknown");
 
     /// <summary>
-    /// 命令行分发：-c 走环境自检，-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// 命令行分发：-c 走环境自检，-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走
+    /// decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string languageVersion, string entityTypes,
@@ -96,8 +98,7 @@ public class ILSpyMcpCmd
     {
         if (check)
         {
-            // CLI -c 是主动调试入口：先刷新 NuGet 磁盘缓存（TTL/退避内不联网、失败静默降级），再组装报告，
-            // 避免无缓存记录时 NuGet 段永远留白；握手路径不 await（后台刷新供下次会话），这里等结果
+            // CLI -c 是主动调试入口：先刷新 NuGet 磁盘缓存（TTL/退避内不联网、失败静默降级），再组装报告， 避免无缓存记录时 NuGet 段永远留白；握手路径不 await（后台刷新供下次会话），这里等结果
             await AppServices.Updater.RefreshIfStaleAsync();
             return await CheckTool.CheckStatus();
         }
@@ -130,8 +131,8 @@ public class ILSpyMcpCmd
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
-        // 握手期先执行环境自检（ilspycmd 安装/版本 + NuGet 更新状态），报告由 StatusReport 会话内缓存、与 CLI -c 同源；
-        // NuGet 段同步读磁盘缓存，无有效检查记录时留白。报告注入 ServerInstructions，让 agent 会话起始即可感知环境状态
+        // 握手期先执行环境自检（ilspycmd 安装/版本 + NuGet 更新状态），报告由 StatusReport 会话内缓存、与 CLI -c 同源； NuGet
+        // 段同步读磁盘缓存，无有效检查记录时留白。报告注入 ServerInstructions，让 agent 会话起始即可感知环境状态
         string report;
         try
         {

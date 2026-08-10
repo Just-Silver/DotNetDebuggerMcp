@@ -3,8 +3,8 @@ using ILSpyMcp.Configuration;
 namespace ILSpyMcp.Processes;
 
 /// <summary>
-/// 检测 ilspycmd 是否已安装并解析其版本；结果会话内缓存一次，避免每次调用都拉起子进程。
-/// _check 承载完整检测结果（安装状态 + 版本），版本号由 CheckInstalledAsync 一次性填充。
+/// 检测 ilspycmd 是否已安装并解析其版本；结果会话内缓存一次，避免每次调用都拉起子进程。 _check 承载完整检测结果（安装状态 + 版本），版本号由
+/// CheckInstalledAsync 一次性填充。
 /// </summary>
 public sealed class InstallChecker
 {
@@ -53,17 +53,6 @@ public sealed class InstallChecker
     }
 
     /// <summary>
-    /// 实际执行一次安装检测：调用 ilspycmd -v，退出码为 0 视为已安装，并从输出解析版本号（格式 "ilspycmd: 11.0.0.9335"）。
-    /// 返回完整结果元组，由调用方统一写入 <see cref="_version"/>，保证安装状态与版本同源。
-    /// </summary>
-    private async Task<(bool Installed, Version? Version)> RunCheckAsync()
-    {
-        var result = await _process.RunAsync(AppConfig.IlspyCmdExecutable, new[] { "-v" }, Environment.CurrentDirectory, AppConfig.CheckTimeout);
-        if (result.Code != 0) return (false, null);
-        return (true, ParseVersion(result.Stdout));
-    }
-
-    /// <summary>
     /// 从 ilspycmd -v 输出解析版本号：取 "ilspycmd:" 行冒号后的版本段；格式不符时返回 null（仍视为已安装，仅版本未知）。
     /// </summary>
     /// <param name="stdout">ilspycmd -v 的完整输出。</param>
@@ -74,5 +63,16 @@ public sealed class InstallChecker
         if (line is null) return null;
         var value = line.Split(':')[1].Trim();
         return Version.TryParse(value, out var v) ? v : null;
+    }
+
+    /// <summary>
+    /// 实际执行一次安装检测：调用 ilspycmd -v，退出码为 0 视为已安装，并从输出解析版本号（格式 "ilspycmd: 11.0.0.9335"）。
+    /// 返回完整结果元组，由调用方统一写入 <see cref="_version"/>，保证安装状态与版本同源。
+    /// </summary>
+    private async Task<(bool Installed, Version? Version)> RunCheckAsync()
+    {
+        var result = await _process.RunAsync(AppConfig.IlspyCmdExecutable, new[] { "-v" }, Environment.CurrentDirectory, AppConfig.CheckTimeout);
+        if (result.Code != 0) return (false, null);
+        return (true, ParseVersion(result.Stdout));
     }
 }

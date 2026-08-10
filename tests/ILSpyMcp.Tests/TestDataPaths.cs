@@ -5,7 +5,9 @@ namespace ILSpyMcp.Tests;
 /// </summary>
 internal static class TestDataPaths
 {
-    /// <summary>生成的测试程序集 ILSpyMcp.TestSamples.dll（601 class + BigClass）。</summary>
+    /// <summary>
+    /// 生成的测试程序集 ILSpyMcp.TestSamples.dll（601 class + BigClass）。
+    /// </summary>
     public static readonly string TestSamplesDll = Locate("tests", "TestData", "ILSpyMcp.TestSamples.dll");
 
     private static string Locate(params string[] segments)

@@ -7,8 +7,8 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// 工具前置检查（安装检测 + assembly 校验）与工具层注入 fake 的用例；所有用例在 finally 中恢复 AppServices 默认实现。
-/// 与 CheckToolTests 同属 AppServices collection，串行执行避免静态状态竞态。
+/// 工具前置检查（安装检测 + assembly 校验）与工具层注入 fake 的用例；所有用例在 finally 中恢复 AppServices 默认实现。 与 CheckToolTests
+/// 同属 AppServices collection，串行执行避免静态状态竞态。
 /// </summary>
 [Collection("AppServices")]
 public class ToolPreflightTests

@@ -12,8 +12,8 @@ namespace ILSpyMcp.Metadata;
 public readonly record struct MemberMatch(string Name, string Token);
 
 /// <summary>
-/// 成员名搜索：纯元数据读取（PEReader + MetadataReader），不加载程序集、不反编译 IL。
-/// 按全限定类型名定位 TypeDefinition，枚举其全部方法并按名字子串匹配，返回可直用于 ilspycmd -m 的 token。
+/// 成员名搜索：纯元数据读取（PEReader + MetadataReader），不加载程序集、不反编译 IL。 按全限定类型名定位
+/// TypeDefinition，枚举其全部方法并按名字子串匹配，返回可直用于 ilspycmd -m 的 token。
 /// </summary>
 public static class MemberResolver
 {

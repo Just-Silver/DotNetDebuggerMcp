@@ -4,6 +4,28 @@
 
 版本号与 `src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 保持一致；发布时 `<PackageReleaseNotes>` 自动提取当前版本对应段落。未发布的变更统一记录在 `[Unreleased]`，发布时再转为带日期的版本段落。
 
+## [1.1.2] - 2026-08-11
+
+### Added
+
+- 环境自检新增 NuGet 更新检查：检查 ilspymcp 是否有新版本，结果落盘跨进程共享（成功 TTL 24h、失败 1h 退避、失败保留旧值），避免每次会话都联网复查
+- MCP 握手期经 `ServerInstructions` 注入完整环境自检报告（ilspycmd 安装/版本 + NuGet 更新状态），agent 会话起始即可感知环境；握手后台异步刷新 NuGet 磁盘缓存供下次会话
+- 版本比较共用 `IsNewerThanCurrent` 静态方法（环境自检报告与握手注入两处调同一规则），防版本比较规则漂移
+
+### Changed
+
+- **check_status 不再暴露为 MCP 工具**（破坏性变更）：环境自检报告改由握手期注入 `ServerInstructions`，agent 无需手动调用；`CheckStatus` 保留供 CLI `-c/--check` 调试
+- 源码按功能拆分命名空间（原 `Infrastructure` 拆为 `Configuration`/`Services`/`Pipeline`/`Processes`/`Caching`/`Formatting`/`Metadata`/`UpdateCheck`），消除 `Infrastructure` 大杂烩
+- 解除命名空间循环依赖：`UpdateChecker` 构造注入查询委托、`EnvironmentChecker` 依赖经参数传入、`ToolExecutor` 移入 Services 层、`InstallChecker` 改用 `AppConfig.IlspyCmdExecutable` 常量，依赖方向单向化（Services → 各功能层 → Tools）
+- CLI `-c/--check` 调用前先刷新 NuGet 缓存（TTL/退避内不联网），无缓存记录时 NuGet 段不再永远留白
+- 多行提示/报告文本统一改用 `Environment.NewLine`（环境自检报告、ilspycmd 退出码错误提示、Client 终端输出），跨平台换行正确
+
+### Fixed
+
+- 握手期 `StatusReport` 环境自检异常不再阻断 MCP 启动：降级为空注入提示，核心反编译功能不受影响
+- `GetCachedNuGetLine` 复用已解析版本（`IsNewerThanCurrent` 新增 `Version` 重载），消除重复 TryParse
+- 修复 `AppConfig` XML cref 无法解析（改用全限定名）与文件尾缺失换行
+
 ## [1.1.1] - 2026-08-10
 
 ### Changed

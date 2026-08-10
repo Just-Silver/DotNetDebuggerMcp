@@ -3,7 +3,6 @@ using ILSpyMcp.Services;
 using ILSpyMcp.UpdateCheck;
 
 using System.Net;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 

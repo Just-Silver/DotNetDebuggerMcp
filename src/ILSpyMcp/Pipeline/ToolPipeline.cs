@@ -141,8 +141,7 @@ public sealed class ToolPipeline
     }
 
     /// <summary>
-    /// 合并执行多条命令（decompile_member 多匹配场景）：各自走缓存/回源拿全量纯净行，按命令顺序合并为一个大行列表，
-    /// 再统一做行号标注与 lines 分页/截断（总行数/当前输出均基于合并结果）。任一命令失败即返回错误提示，不抛异常。
+    /// 合并执行多条命令（decompile_member 多匹配场景）：各自走缓存/回源拿全量纯净行，按命令顺序合并为一个大行列表， 再统一做行号标注与 lines 分页/截断（总行数/当前输出均基于合并结果）。任一命令失败即返回错误提示，不抛异常。
     /// </summary>
     /// <param name="commands">多条调用描述（每个匹配成员一条，各自独立缓存）。</param>
     /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前 200 行。</param>
@@ -196,8 +195,8 @@ public sealed class ToolPipeline
         try
         {
             cached = await lazy.Value;
-            // 超限（超过 AppConfig.MaxOutputBytes）时 ProcessRunner 返回 Code=-1，RunSourceAsync 抛异常，
-            // 由调用方 catch 拦截返回提示；能走到这里说明 await 未抛异常，结果必未超限，直接写入
+            // 超限（超过 AppConfig.MaxOutputBytes）时 ProcessRunner 返回 Code=-1，RunSourceAsync 抛异常， 由调用方
+            // catch 拦截返回提示；能走到这里说明 await 未抛异常，结果必未超限，直接写入
             _cache.Put(key, cached);
             return cached;
         }

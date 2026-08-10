@@ -5,10 +5,9 @@ using System.Text.Json;
 namespace ILSpyMcp.UpdateCheck;
 
 /// <summary>
-/// NuGet 新版本检查的磁盘缓存与报告段组装：成功/失败结果落盘跨进程共享，重启不丢，避免每次会话都联网复查。
-/// 环境自检报告经 <see cref="GetCachedNuGetLine"/> 同步读缓存（零网络，无结果留白），网络刷新由握手后台
-/// <see cref="RefreshIfStaleAsync"/> 承担。网络查询经构造函数注入的查询委托（测试注入 fake，生产由 AppServices 传入共享 NuGetClient）；
-/// 一切 IO/网络异常静默降级，绝不影响核心功能。
+/// NuGet 新版本检查的磁盘缓存与报告段组装：成功/失败结果落盘跨进程共享，重启不丢，避免每次会话都联网复查。 环境自检报告经 <see cref="GetCachedNuGetLine"/>
+/// 同步读缓存（零网络，无结果留白），网络刷新由握手后台 <see cref="RefreshIfStaleAsync"/> 承担。网络查询经构造函数注入的查询委托（测试注入 fake，生产由
+/// AppServices 传入共享 NuGetClient）； 一切 IO/网络异常静默降级，绝不影响核心功能。
 /// </summary>
 public sealed class UpdateChecker
 {
@@ -29,20 +28,7 @@ public sealed class UpdateChecker
         _queryLatest = queryLatest ?? (id => new NuGetClient().GetLatestStableVersionAsync(id));
     }
 
-    /// <summary>
-    /// 磁盘缓存结构：最近一次尝试时间、最近一次成功时间与查到的最新版本（成功/失败均可空）。
-    /// </summary>
-    public sealed class UpdateCheckCache
-    {
-        /// <summary>最近一次检查尝试时间（成功或失败都会写入）。</summary>
-        public DateTimeOffset LastAttemptAt { get; set; }
-
-        /// <summary>最近一次成功联网查询时间（从未成功为空）。</summary>
-        public DateTimeOffset? LastSuccessAt { get; set; }
-
-        /// <summary>最近一次成功查询到的最新版本号（从未成功为空）。</summary>
-        public string? Latest { get; set; }
-    }
+    private string CachePath => Path.Combine(_cacheDir, AppConfig.UpdateCheckCacheFileName);
 
     /// <summary>
     /// 判断 NuGet 最新版本是否高于当前程序集版本。 环境自检报告与握手注入共用此比较，避免版本比较规则两处独立实现后漂移。
@@ -66,8 +52,7 @@ public sealed class UpdateChecker
         => currentVersion is not null && latestVersion > currentVersion;
 
     /// <summary>
-    /// 同步读磁盘缓存（零网络），返回环境自检报告用的 NuGet 段整行：有新版本给升级建议、已是最新明确告知。
-    /// 无有效检查记录（无缓存/损坏/版本无法解析）返回 null，报告该段留白——由握手后台刷新补位供下次会话，绝不阻塞握手。
+    /// 同步读磁盘缓存（零网络），返回环境自检报告用的 NuGet 段整行：有新版本给升级建议、已是最新明确告知。 无有效检查记录（无缓存/损坏/版本无法解析）返回 null，报告该段留白——由握手后台刷新补位供下次会话，绝不阻塞握手。
     /// </summary>
     public string? GetCachedNuGetLine()
     {
@@ -114,8 +99,6 @@ public sealed class UpdateChecker
         }
     }
 
-    private string CachePath => Path.Combine(_cacheDir, AppConfig.UpdateCheckCacheFileName);
-
     private bool IsFresh(UpdateCheckCache? cache, DateTimeOffset now)
     {
         if (cache is null) return false;
@@ -148,5 +131,26 @@ public sealed class UpdateChecker
         {
             // 只读目录/写盘失败静默吞掉，不影响功能
         }
+    }
+
+    /// <summary>
+    /// 磁盘缓存结构：最近一次尝试时间、最近一次成功时间与查到的最新版本（成功/失败均可空）。
+    /// </summary>
+    public sealed class UpdateCheckCache
+    {
+        /// <summary>
+        /// 最近一次检查尝试时间（成功或失败都会写入）。
+        /// </summary>
+        public DateTimeOffset LastAttemptAt { get; set; }
+
+        /// <summary>
+        /// 最近一次成功联网查询时间（从未成功为空）。
+        /// </summary>
+        public DateTimeOffset? LastSuccessAt { get; set; }
+
+        /// <summary>
+        /// 最近一次成功查询到的最新版本号（从未成功为空）。
+        /// </summary>
+        public string? Latest { get; set; }
     }
 }

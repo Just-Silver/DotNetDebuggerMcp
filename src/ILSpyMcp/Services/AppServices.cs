@@ -44,8 +44,7 @@ internal static class AppServices
     public static UpdateChecker Updater = new(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
 
     /// <summary>
-    /// 环境自检报告：会话内只真实检查一次（安装/版本变化需重启 CLI 才生效），后续直接复用缓存文本。
-    /// 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入 UpdateCheck 层，避免反向引用。
+    /// 环境自检报告：会话内只真实检查一次（安装/版本变化需重启 CLI 才生效），后续直接复用缓存文本。 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入 UpdateCheck 层，避免反向引用。
     /// </summary>
     public static Lazy<Task<string>> StatusReport =
         new(() => EnvironmentChecker.BuildReportAsync(Installer, Updater), LazyThreadSafetyMode.ExecutionAndPublication);

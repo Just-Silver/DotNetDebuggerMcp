@@ -5,8 +5,7 @@ using System.Text.Json;
 namespace ILSpyMcp.UpdateCheck;
 
 /// <summary>
-/// NuGet 包最新稳定版查询：经 flatcontainer 版本清单 API 拉取全部版本，取最大稳定版（排除预发布）。
-/// 网络失败/超时/解析异常一律返回 null（调用方静默跳过该检查项），绝不影响反编译等核心功能。
+/// NuGet 包最新稳定版查询：经 flatcontainer 版本清单 API 拉取全部版本，取最大稳定版（排除预发布）。 网络失败/超时/解析异常一律返回 null（调用方静默跳过该检查项），绝不影响反编译等核心功能。
 /// </summary>
 public sealed class NuGetClient
 {
