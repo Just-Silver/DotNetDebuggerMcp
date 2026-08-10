@@ -12,7 +12,6 @@
 - MCP 工具（decompile / decompile_member / list_types / decompile_to_dir）调用支持取消：客户端取消一次调用时立即终止 ilspycmd 子进程，避免孤儿进程占用资源（内部逐层传递 CancellationToken）
 - MCP 工具（decompile / list_types）输出前置头部信息块（程序集/目标/内容），明确代码归属与当前切片位置，缓存命中时同样携带
 - decompile_to_dir 成功提示并入来源程序集
-- CI 新增端到端验证步骤（安装 ilspycmd + 运行 Client 走全部工具），端到端验证不再依赖手工执行
 
 ### Changed
 

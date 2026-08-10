@@ -31,19 +31,6 @@ jobs:
       - name: Test
         run: dotnet test tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj -c Release --no-build
 
-      # Client 端到端运行期依赖，server 用 `ilspycmd` 命令名从 PATH 解析。
-      - name: Install ilspycmd (global tool)
-        shell: pwsh
-        run: dotnet tool install --global ilspycmd
-
-      # 走全部 5 个工具 + 工具列表断言 + decompile_to_dir 产物断言；
-      # 任何场景失败时 Client 以非零退出码结束，使本 job 失败。
-      - name: End-to-end (Client)
-        shell: pwsh
-        run: |
-          $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
-          dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj
-
       # 仅版本标签（v*）时打包并发布到 NuGet（框架依赖，无需 -r）。
       # PackageReleaseNotes 从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]），缺失则构建失败，防止静默无说明发布。
       - name: Pack

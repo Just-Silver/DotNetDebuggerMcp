@@ -36,7 +36,7 @@ dotnet test tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj --filter "FullyQualifiedN
 dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # 调全部工具做端到端验证
 ```
 
-- Client 端到端会以 Release 自启动 server 项目（`dotnet run --project src/ILSpyMcp/ILSpyMcp.csproj -c Release`，无需预先单独构建 server），运行后自动清理写盘产物 `tests/.ilspymcp-client-out/`（已在 .gitignore）；运行期需 ilspycmd 在 PATH（CI 显式把 `%USERPROFILE%\.dotnet\tools` 前置到 PATH）
+- Client 端到端会以 Release 自启动 server 项目（`dotnet run --project src/ILSpyMcp/ILSpyMcp.csproj -c Release`，无需预先单独构建 server），运行后自动清理写盘产物 `tests/.ilspymcp-client-out/`（已在 .gitignore）；本机运行需 ilspycmd 在 PATH（`%USERPROFILE%\.dotnet\tools`）
 - CLI 调试（改完 server 代码用 Debug 构建的 exe 快速验证，行为与 MCP 工具一致，是验证新行为的主要手段）：
   ```bash
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -t <TypeName>      # 反编译类型
@@ -47,7 +47,7 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
   ```
   其他选项：`-ln start-end` 按行分页、`-lv` 语言版本、`--timeout` 秒数
 - 运行期依赖 `ilspycmd` 需全局安装（`dotnet tool install --global ilspycmd`），未安装时工具返回安装提示
-- 修改逻辑后：build 通过 + 单元测试通过 + 运行 Client 确认输出样式（CI 的 build.yml 已含端到端步骤：master push 时自动 Install ilspycmd + 运行 Client，不再只靠手工）
+- 修改逻辑后：build 通过 + 单元测试通过 + 本机运行 Client 确认输出样式（CI 的 build.yml 只做 build/test/发布，不跑端到端；端到端验证改为本机手动执行）
 - 重新生成测试程序集：`powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1`（注意 `BigMethod` 用数组链而非常量链——否则 Release 编译常量折叠会让方法只剩几行，无法触发 600 行截断）
 - 本地调试注意：根 `opencode.json` 把本仓库自身的 MCP server 绑定到 `src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe`，改完 server 代码需重新 build 并重启 opencode 才生效；会话内 `ilspy_*` 工具反映旧二进制，验证新行为请以 Client 输出为准
 
