@@ -29,14 +29,14 @@ public sealed class NuGetClient
 
     private NuGetClient(HttpClient http)
     {
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("ilspymcp");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd(AppConfig.NuGetPackageId);
         _http = http;
     }
 
     /// <summary>
     /// 查询指定包的最新稳定版本；网络/超时/解析异常返回 null。
     /// </summary>
-    /// <param name="packageId">NuGet 包 id，如 "ilspymcp"。</param>
+    /// <param name="packageId">NuGet 包 id，如 <see cref="AppConfig.NuGetPackageId"/>。</param>
     /// <returns>最新稳定版本号（如 "1.1.0"）；失败为 null。</returns>
     public async Task<string?> GetLatestStableVersionAsync(string packageId)
     {
@@ -45,14 +45,14 @@ public sealed class NuGetClient
             var url = $"{AppConfig.NuGetVersionListUrlPrefix}{packageId}/index.json";
             var json = await _http.GetStringAsync(url);
             using var doc = JsonDocument.Parse(json);
+            // flatcontainer 版本清单按发布时间升序，最后一个即最新：从尾部向前取第一个稳定版（排除预发布）
             var versions = doc.RootElement.GetProperty("versions").EnumerateArray().Select(e => e.GetString());
-            Version? best = null;
-            foreach (var v in versions)
+            foreach (var v in versions.Reverse())
             {
                 if (v is null || v.Contains('-')) continue; // 排除预发布（如 1.2.0-beta）
-                if (Version.TryParse(v, out var ver) && (best is null || ver > best)) best = ver;
+                if (Version.TryParse(v, out var ver)) return ver.ToString(3);
             }
-            return best?.ToString(3);
+            return null;
         }
         catch
         {
