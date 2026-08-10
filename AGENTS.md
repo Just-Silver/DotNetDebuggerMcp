@@ -8,19 +8,20 @@
 - 工具方法返回 `Task<string>`，一切错误（参数校验、ilspycmd 退出码非 0）均返回提示文本，不抛异常。
 - stdout 只承载 MCP 协议消息；日志必须走 stderr（`Program.cs` 已配置，勿改）。
 - 工具的 `[Description]` 与所有提示用中文，必填参数标注「（必填）」。
-- **更新版本号必须同步改三处**：`src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>`、`src/ILSpyMcp/.mcp/server.json`（顶层 `version` 与 `packages[0].version` 两处都要改一致）、`CHANGELOG.md`（新增 `## [<version>] - <date>` 段落记录变更）。`-v/--version` 输出版本取程序集版本（由 csproj 生成），但 NuGet MCP 注册信息读 server.json，两处不同步会导致发布后展示的版本不一致；`PackageReleaseNotes` 由 CI（`build.yml` 打 `v*` tag 时）从 CHANGELOG.md 提取当前版本段注入，CHANGELOG 缺段会导致发布失败（防静默无说明）。
+- **每个反编译工具方法带 `CancellationToken cancellationToken = default` 参数**（放在 `timeoutSeconds` 之后）：SDK 识别为取消令牌并注入、**不暴露为 MCP 参数**（不要写 `[Description]`），客户端取消调用时沿 Pipeline/ProcessRunner 终止 ilspycmd 子进程。勿删。
+- **更新版本号必须同步改两处**：`src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 与 `src/ILSpyMcp/.mcp/server.json`（顶层 `version` 与 `packages[0].version` 两处都要改一致）。`-v/--version` 输出版本取程序集版本（由 csproj 生成），但 NuGet MCP 注册信息读 server.json，不同步会导致发布后展示版本不一致。**CHANGELOG 变更统一记在 `[Unreleased]` 段**（当前 1.1.0 从未发布）；发布打 `v*` tag 时 CI 从 CHANGELOG.md 提取 `## [<version>]` 段落注入 `PackageReleaseNotes`，故发布前须把 Unreleased 内容转成 `## [<version>] - <date>` 段，缺段会导致发布失败（防静默无说明）。
 
 ## 结构
 
 - `src/ILSpyMcp/` — MCP 服务器（net10.0、PackAsTool、框架依赖；运行期需 .NET 10 运行时）
-  - `Tools/` — DecompileTool / DecompileMemberTool / ListTypesTool / DecompileToDirTool / CheckTool（`ILSpyMcp.Tools`）：`[McpServerToolType]` 静态类，只做参数校验与命令组装，经共享服务执行。每个工具都带 `timeoutSeconds` 参数（默认 30s，大程序集可调大，校验仅要求 ≥1 的正整数，无上限）。注意 `decompile_to_dir` 不经缓存管道，直接经 `AppServices.Process` 执行（`ToolPipelineResult` 无 Oversized 字段，仅 `Text`）；另三个工具走 `ToolPipeline`。`decompile` 仅类型级反编译（`typeName` 必填，成员级由 decompile_member 承接）；`decompile_member` 按成员名子串在指定类型内搜索并反编译（纯元数据读取定位，**只传 `-m <token>`**——ilspycmd 的 `-t` 与 `-m` 互斥，token 全局唯一；多匹配合并行号连续）。`check_status` 环境自检（无参数）：检查 ilspycmd 安装与版本（>= `AppConfig.RequiredIlspyCmdVersion`=11，`-m` 单成员反编译所需）及 ilspymcp 是否有新版；**结果会话内缓存**（环境变化需重启 CLI 才生效，重复检查无意义），NuGet 网络失败/超时静默跳过该检查项
+  - `Tools/` — DecompileTool / DecompileMemberTool / ListTypesTool / DecompileToDirTool / CheckTool（`ILSpyMcp.Tools`）：`[McpServerToolType]` 静态类，只做参数校验与命令组装，经共享服务执行。除 `check_status` 外每个工具都带 `timeoutSeconds` 参数（默认 30s，大程序集可调大，校验仅要求 ≥1 的正整数，无上限）。**执行样板统一走 `ToolExecutor`**（`ResolveAssembly`/`RunPipelineAsync`/`RunMergedAsync`/`RunProcessAsync`），新工具复用勿复制；注意 `decompile_to_dir` 不经缓存管道（`ToolExecutor.RunProcessAsync` 直接调子进程，`ToolPipelineResult` 无 Oversized 字段，仅 `Text`），其余走 `ToolPipeline`。`decompile` 仅类型级反编译（`typeName` 必填，成员级由 decompile_member 承接）；`decompile_member` 按成员名子串在指定类型内搜索并反编译（纯元数据读取定位，**只传 `-m <token>`**——ilspycmd 的 `-t` 与 `-m` 互斥，token 全局唯一；多匹配合并行号连续）。`check_status` 环境自检（无参数）：检查 ilspycmd 安装与版本（>= `AppConfig.RequiredIlspyCmdVersion`=11，`-m` 单成员反编译所需）及 ilspymcp 是否有新版；**结果会话内缓存**（环境变化需重启 CLI 才生效，重复检查无意义），NuGet 网络失败/超时静默跳过该检查项
   - `Infrastructure/`（`ILSpyMcp.Infrastructure`）— 执行基础设施：
-    - `AppServices.cs` — 进程级共享单例（进程执行器、缓存、执行管道、安装检测、NuGet 查询、check_status 报告缓存 `StatusReport`），避免各工具独立持有实例；测试经 `ConfigureForTest`/`ResetForTest` 注入 fake
+    - `AppServices.cs` — 进程级共享单例（进程执行器、缓存、执行管道、安装检测、NuGet 查询、check_status 报告缓存 `StatusReport`），避免各工具独立持有实例；测试经 `ConfigureForTest`/`ResetForTest` 注入 fake。**本层不得反向引用 `ILSpyMcp.Tools`**（交叉依赖已消除，check_status 报告组装在下述 `EnvironmentChecker.cs`）
     - `ProcessRunner.cs` — 通用子进程执行（args[0] 为可执行名，超时终止进程树，失败返回提示不抛异常）；stdout 流式读取并有 `AppConfig.MaxOutputBytes`（=64MB）上限，超过即终止并返回"建议改用 decompile_to_dir"提示，防 OOM
-    - `ToolPipeline.cs` — 共享执行管道：缓存命中 → 回源反编译（同 key 并发单飞）→ lines 分页格式化；`ExecuteMergedAsync` 合并多条命令（decompile_member 多匹配）为一个大行列表后统一格式化
+    - `ToolPipeline.cs` — 共享执行管道：缓存命中 → 回源反编译（同 key 并发单飞）→ lines 分页格式化；`ExecuteMergedAsync` 合并多条命令（decompile_member 多匹配）为一个大行列表后统一格式化。**`ToolCommand` 持有 `Assembly` 属性（程序集唯一数据源），`ExecuteAsync(ToolCommand command, ...)` 不再单独传 assembly——勿再造双份程序集参数**
     - `DecompileCache.cs` — 线程安全 LRU 缓存（默认 64MB，结构化 CacheKey 含程序集指纹，dll 更新自动失效）
     - `MemberResolver.cs` — 纯元数据读取（PEReader+MetadataReader，不加载程序集）定位类型并枚举方法，按名字子串匹配返回 `[{名字, token}]`；token 格式 `0x06000005` 直用于 `ilspycmd -m`
-    - `OutputFormatter.cs` — 行号标注与 `lines` 分页；`InstallChecker.cs` — 会话内缓存一次检测结果并解析版本号（从 `ilspycmd -v` 输出）；`NuGetClient.cs` — NuGet 最新稳定版查询（排除预发布，网络失败返回 null 供 check_status 静默跳过）；`AppConfig.cs` — 全局配置常量（含 `RequiredIlspyCmdVersion`=11）
+    - `OutputFormatter.cs` — 行号标注与 `lines` 分页；`InstallChecker.cs` — 会话内缓存一次检测，安装状态与版本号同源一次填充（从 `ilspycmd -v` 解析）；`NuGetClient.cs` — NuGet 最新稳定版查询（排除预发布，网络失败返回 null 供 check_status 静默跳过）；`EnvironmentChecker.cs` — check_status 报告组装；`ToolExecutor.cs` — 工具执行共享辅助（路径安全解析 + 管道/子进程调用样板）；`AppConfig.cs` — 全局配置常量（含 `RequiredIlspyCmdVersion`=11）
   - `Validation/`（`ILSpyMcp.Validation`）— `ArgumentValidators.cs` 共享参数校验；`ToolPreflight.cs` 安装检测 + assembly 校验的前置检查
 - `src/ILSpyMcp.Client/` — 端到端验证客户端：场景拆分为 `DecompileCases` / `DecompileMemberCases` / `ListTypesCases` / `DecompileToDirCases`（各工具全参数覆盖）与 `ClientRunner`（连接/执行/输出）、`TestDataHelper`（自动发现测试 dll 并共享类型/成员标识），`Program.cs` 仅做入口
 - `tests/ILSpyMcp.Tests/` — xUnit 单元测试（缓存/管道/格式化/校验/进程执行，fake 注入 `IProcessRunner`）
@@ -45,7 +46,7 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
   ```
   其他选项：`-ln start-end` 按行分页、`-lv` 语言版本、`--timeout` 秒数
 - 运行期依赖 `ilspycmd` 需全局安装（`dotnet tool install --global ilspycmd`），未安装时工具返回安装提示
-- 修改逻辑后：build 通过 + 单元测试通过 + 运行 Client 确认输出样式
+- 修改逻辑后：build 通过 + 单元测试通过 + 运行 Client 确认输出样式（CI 的 build.yml 已含端到端步骤：master push 时自动 Install ilspycmd + 运行 Client，不再只靠手工）
 - 重新生成测试程序集：`powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1`（注意 `BigMethod` 用数组链而非常量链——否则 Release 编译常量折叠会让方法只剩几行，无法触发 600 行截断）
 - 本地调试注意：根 `opencode.json` 把本仓库自身的 MCP server 绑定到 `src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe`，改完 server 代码需重新 build 并重启 opencode 才生效；会话内 `ilspy_*` 工具反映旧二进制，验证新行为请以 Client 输出为准
 
@@ -61,4 +62,4 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
 ## 验证注意
 
 - `ProcessRunnerTests` 覆盖 ReadCappedAsync 超限/取消/边界；真实超限验证可用 xUnit 直连 `ToolPipeline` + `ProcessRunner` 反编译 `tests/TestData` 下 dll 的 `ILSpyMcp.Samples.BigClass`（600+ 行，调小上限即触发）
-- 单测里经 `ToolPipeline` 的 assembly 路径解析基准是测试进程 CWD（`bin/Debug/net10.0`）；访问 `tests/TestData` 下 dll 用 `TestDataPaths.TestSamplesDll` 帮助类（`tests/ILSpyMcp.Tests/TestDataPaths.cs`，自动上溯仓库根 5 层 `..`），MemberResolver 单测则直接用 `typeof(OutputFormatter).Assembly.Location`（主项目程序集，无需 TestData）
+- 单测里经 `ToolPipeline` 的 assembly 路径解析基准是测试进程 CWD（`bin/Debug/net10.0`）；访问 `tests/TestData` 下 dll 用 `TestDataPaths.TestSamplesDll` 帮助类（`tests/ILSpyMcp.Tests/TestDataPaths.cs`，逐级上溯找 `ILSpyMcp.slnx`），MemberResolver 单测则直接用 `typeof(OutputFormatter).Assembly.Location`（主项目程序集，无需 TestData）
