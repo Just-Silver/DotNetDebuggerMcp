@@ -28,10 +28,10 @@ public class ILSpyMcpCmd
     public string TypeName { get; } = null!;
 
     /// <summary>
-    /// 反编译单个成员：XML 文档 ID 或元数据 token。
+    /// 在指定类型内按成员名子串搜索并反编译匹配的成员，需配合 -t。
     /// </summary>
-    [Option("-m|--member <doc-id-or-token>", "反编译单个成员：XML 文档 ID（如 M:System.String.Concat(System.String,System.String)）或元数据 token（如 0x06000005）。", CommandOptionType.SingleValue)]
-    public string Member { get; } = null!;
+    [Option("-mn|--membername <substring>", "在指定类型内按成员名子串搜索并反编译匹配的成员（需配合 -t 指定类型）。", CommandOptionType.SingleValue)]
+    public string MemberName { get; } = null!;
 
     /// <summary>
     /// C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest。
@@ -81,10 +81,10 @@ public class ILSpyMcpCmd
     public string Version => "ilspymcp " + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
 
     /// <summary>
-    /// 命令行分发：-o 走 decompile_to_dir，-l 走 list_types，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// 命令行分发：-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
-        string assembly, string typeName, string member, string languageVersion, string entityTypes,
+        string assembly, string typeName, string memberName, string languageVersion, string entityTypes,
         string outputDir, bool project, bool nestedDirectories, string lines, int timeoutSeconds)
     {
         if (!string.IsNullOrEmpty(outputDir))
@@ -95,7 +95,11 @@ public class ILSpyMcpCmd
         {
             return await ListTypesTool.ListTypes(assembly, entityTypes, lines, timeoutSeconds);
         }
-        return await DecompileTool.Decompile(assembly, typeName, member, languageVersion, lines, timeoutSeconds);
+        if (!string.IsNullOrEmpty(memberName))
+        {
+            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, lines, languageVersion, timeoutSeconds);
+        }
+        return await DecompileTool.Decompile(assembly, typeName, lines, languageVersion, timeoutSeconds);
     }
 
     /// <summary>
@@ -106,7 +110,7 @@ public class ILSpyMcpCmd
         if (!string.IsNullOrEmpty(Assembly))
         {
             Console.WriteLine(await DispatchCliAsync(
-                Assembly, TypeName, Member, LanguageVersion, EntityTypes,
+                Assembly, TypeName, MemberName, LanguageVersion, EntityTypes,
                 OutputDir, Project, NestedDirectories, Lines, TimeoutSeconds));
             return 0;
         }

@@ -118,6 +118,58 @@ public sealed class ToolPipeline
     /// <returns>管道执行结果：格式化后的反编译文本或错误提示。</returns>
     public async Task<ToolPipelineResult> ExecuteAsync(string assembly, ToolCommand command, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
     {
+        List<string> source;
+        try
+        {
+            source = await GetSourceLinesAsync(assembly, command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return new ToolPipelineResult($"反编译失败：{ex.Message}");
+        }
+        return new ToolPipelineResult(OutputFormatter.Format(source, lines, context));
+    }
+
+    /// <summary>
+    /// 合并执行多条命令（decompile_member 多匹配场景）：各自走缓存/回源拿全量纯净行，按命令顺序合并为一个大行列表，
+    /// 再统一做行号标注与 lines 分页/截断（总行数/当前输出均基于合并结果）。任一命令失败即返回错误提示，不抛异常。
+    /// </summary>
+    /// <param name="assembly">程序集路径（相对或绝对）。</param>
+    /// <param name="commands">多条调用描述（每个匹配成员一条，各自独立缓存）。</param>
+    /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前 200 行。</param>
+    /// <param name="timeout">本次回源超时；为 null 时用全局默认超时。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="context">头部信息块上下文；提供时结果前置程序集/目标/参数说明。</param>
+    /// <returns>管道执行结果：合并后格式化文本或错误提示。</returns>
+    public async Task<ToolPipelineResult> ExecuteMergedAsync(string assembly, IReadOnlyList<ToolCommand> commands, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
+    {
+        var merged = new List<string>();
+        foreach (var command in commands)
+        {
+            List<string> source;
+            try
+            {
+                source = await GetSourceLinesAsync(assembly, command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                return new ToolPipelineResult($"反编译失败：{ex.Message}");
+            }
+            merged.AddRange(source);
+        }
+        return new ToolPipelineResult(OutputFormatter.Format(merged, lines, context));
+    }
+
+    /// <summary>
+    /// 取指定调用的全量纯净行列表：缓存命中直接返回；未命中则并发单飞回源后写缓存。错误向上抛出，由调用方转为提示文本。
+    /// </summary>
+    /// <param name="assembly">程序集路径（相对或绝对）。</param>
+    /// <param name="command">调用描述（参数签名 + 命令行参数）。</param>
+    /// <param name="timeout">本次回源超时。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>反编译结果纯净行列表（不含头部与行号，供渲染期统一格式化）。</returns>
+    private async Task<List<string>> GetSourceLinesAsync(string assembly, ToolCommand command, TimeSpan timeout, CancellationToken cancellationToken)
+    {
         CacheKey key;
         try
         {
@@ -125,32 +177,26 @@ public sealed class ToolPipeline
         }
         catch (Exception ex)
         {
-            return new ToolPipelineResult($"反编译失败：{ex.Message}");
+            throw new InvalidOperationException(ex.Message, ex);
         }
         var cached = _cache.Get(key);
-        if (cached is null)
-        {
-            // 并发单飞：同 key 只启动一个子进程，其余等待者复用同一 Lazy 承载的 Task
-            var lazy = _inflight.GetOrAdd(key,
-                _ => new Lazy<Task<List<string>>>(() => RunSourceAsync(assembly, command, timeout ?? AppConfig.DefaultTimeout, cancellationToken), LazyThreadSafetyMode.ExecutionAndPublication));
-            try
-            {
-                cached = await lazy.Value;
-                // 超限（超过 AppConfig.MaxOutputBytes）时 ProcessRunner 返回 Code=-1，RunSourceAsync 抛异常， 被上方
-                // catch 拦截返回提示；能走到这里说明 await 未抛异常，结果必未超限，直接写入
-                _cache.Put(key, cached);
-            }
-            catch (Exception ex)
-            {
-                return new ToolPipelineResult($"反编译失败：{ex.Message}");
-            }
-            finally
-            {
-                _inflight.TryRemove(new KeyValuePair<CacheKey, Lazy<Task<List<string>>>>(key, lazy));
-            }
-        }
+        if (cached is not null) return cached;
 
-        return new ToolPipelineResult(OutputFormatter.Format(cached, lines, context));
+        // 并发单飞：同 key 只启动一个子进程，其余等待者复用同一 Lazy 承载的 Task
+        var lazy = _inflight.GetOrAdd(key,
+            _ => new Lazy<Task<List<string>>>(() => RunSourceAsync(assembly, command, timeout, cancellationToken), LazyThreadSafetyMode.ExecutionAndPublication));
+        try
+        {
+            cached = await lazy.Value;
+            // 超限（超过 AppConfig.MaxOutputBytes）时 ProcessRunner 返回 Code=-1，RunSourceAsync 抛异常，
+            // 由调用方 catch 拦截返回提示；能走到这里说明 await 未抛异常，结果必未超限，直接写入
+            _cache.Put(key, cached);
+            return cached;
+        }
+        finally
+        {
+            _inflight.TryRemove(new KeyValuePair<CacheKey, Lazy<Task<List<string>>>>(key, lazy));
+        }
     }
 
     /// <summary>

@@ -208,6 +208,56 @@ public class ToolPipelineTests
         Assert.Equal(cts.Token, fake.LastToken);
     }
 
+    [Fact]
+    public async Task ExecuteMergedAsync_多条命令_合并行号连续()
+    {
+        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
+        var pipeline = Create(fake);
+        var commands = new[]
+        {
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")),
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
+        };
+
+        var result = await pipeline.ExecuteMergedAsync(AssemblyPath, commands, "");
+
+        Assert.Equal(2, fake.CallCount); // 每条命令各回源一次
+        Assert.Equal("1\ta\n2\tb\n3\ta\n4\tb", result.Text); // 合并后行号连续
+    }
+
+    [Fact]
+    public async Task ExecuteMergedAsync_再次调用_各命令均命中缓存()
+    {
+        var fake = new FakeProcessRunner { Stdout = "a\n" };
+        var pipeline = Create(fake);
+        var commands = new[]
+        {
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")),
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
+        };
+
+        await pipeline.ExecuteMergedAsync(AssemblyPath, commands, "");
+        await pipeline.ExecuteMergedAsync(AssemblyPath, commands, "");
+
+        Assert.Equal(2, fake.CallCount); // 首次两条各回源一次，二次全部缓存命中
+    }
+
+    [Fact]
+    public async Task ExecuteMergedAsync_任一条失败_返回错误提示()
+    {
+        var fake = new FakeProcessRunner { Code = 1, Stderr = "boom" };
+        var pipeline = Create(fake);
+        var commands = new[]
+        {
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")),
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
+        };
+
+        var result = await pipeline.ExecuteMergedAsync(AssemblyPath, commands, "");
+
+        Assert.Contains("ilspycmd 退出码: 1", result.Text);
+    }
+
     private static ToolPipeline Create(FakeProcessRunner fake, DecompileCache? cache = null)
                                                             => new(fake, cache ?? new DecompileCache());
 }

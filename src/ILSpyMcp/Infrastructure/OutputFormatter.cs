@@ -9,7 +9,7 @@ public sealed record FormatContext(string AssemblyPath, string Target, string Pa
 
 /// <summary>
 /// 标准输出结果格式化：默认返回前 200 行，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片（单次最多 500 行）。
-/// 传入 <see cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/参数/内容），给 agent 明确代码归属与当前切片位置。
+    /// 传入 <see cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/参数/总量/当前输出），给 agent 明确代码归属与当前切片位置。
 /// </summary>
 public static class OutputFormatter
 {
@@ -70,7 +70,7 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 默认返回前 DefaultMaxLines 行（每行标注行号）；结果更大时截断并附总行数/大小提示。
+    /// 默认返回前 DefaultMaxLines 行（每行标注行号）；结果更大时截断并附操作提示（总行数由头部字段提供，此处不再重复）。
     /// </summary>
     /// <param name="lines">反编译结果行列表。</param>
     /// <returns>前 200 行的行号文本；超限时附截断提示。</returns>
@@ -78,12 +78,11 @@ public static class OutputFormatter
     {
         var numbered = NumberLines(lines.Take(DefaultMaxLines).ToList(), 1);
         if (lines.Count <= DefaultMaxLines) return numbered;
-        var kb = (CountBytes(lines) / 1024.0).ToString("0.0");
-        return $"{numbered}\n\n--- 已截断：共 {lines.Count} 行 / {kb} KB，以上为前 {DefaultMaxLines} 行。可用 lines=\"start-end\" 参数按行读取后续范围（1-based 含两端，单次最多 {LinesRangeMax} 行）---";
+        return $"{numbered}\n\n--- 已截断：以上为前 {DefaultMaxLines} 行。可用 lines=\"start-end\" 参数按行读取后续范围（1-based 含两端，单次最多 {LinesRangeMax} 行）---";
     }
 
     /// <summary>
-    /// 从缓存结果按行号切片返回（每行标注行号）；单次最多 LinesRangeMax 行，超出时截断并提示剩余范围。
+    /// 从缓存结果按行号切片返回（每行标注行号）；单次最多 LinesRangeMax 行，超出时截断并提示剩余范围（总行数由头部字段提供，此处不再重复）。
     /// </summary>
     /// <param name="lines">反编译结果行列表。</param>
     /// <param name="start">起始行号（1-based，含）。</param>
@@ -97,11 +96,13 @@ public static class OutputFormatter
         }
         var rangeEnd = Math.Min(end, start + LinesRangeMax - 1);
         var actualEnd = Math.Min(rangeEnd, lines.Count);
+        // 本次请求实际可达的最大行号（受数据末尾约束）；与 actualEnd 相等即无上限截断
+        var maxRequestedEnd = Math.Min(end, lines.Count);
         var count = actualEnd - start + 1;
         var range = NumberLines(lines.Skip(start - 1).Take(count).ToList(), start);
-        if (rangeEnd < end)
+        if (maxRequestedEnd > actualEnd)
         {
-            return $"{range}\n\n--- 已截断：请求范围 {start}-{end} 共 {end - start + 1} 行，超过单次上限 {LinesRangeMax} 行，已返回 {start}-{actualEnd}（{count} 行）。剩余 {actualEnd + 1}-{end} 可再次使用 lines 参数拉取 ---";
+            return $"{range}\n\n--- 已截断：请求范围 {start}-{end} 超过单次上限 {LinesRangeMax} 行，已返回 {start}-{actualEnd}（{count} 行）。剩余 {actualEnd + 1}-{maxRequestedEnd} 可再次使用 lines 参数拉取 ---";
         }
         return range;
     }
@@ -147,7 +148,9 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 生成头部信息块：程序集 / 目标 / 参数 / 内容 四行 + 分隔线。头部为纯文本、不带行号前缀，避免与源码行号混淆。
+    /// 生成头部信息块：程序集 / 目标 / 参数 三行 + 总量与当前输出字段行 + 分隔线。
+    /// 总量：反编译为「总行数」，列类型同时给出「匹配实体」与「总行数」（每行一个实体，行数=实体数）；当前输出统一按「行」定位。
+    /// 头部为纯文本、不带行号前缀，避免与源码行号混淆。
     /// </summary>
     private static string BuildHeader(FormatContext ctx, List<string> lines, string linesParam)
     {
@@ -155,25 +158,41 @@ public static class OutputFormatter
         sb.Append("程序集: ").Append(ctx.AssemblyPath).Append('\n');
         sb.Append("目标:   ").Append(ctx.Target).Append('\n');
         if (!string.IsNullOrEmpty(ctx.Parameters)) sb.Append("参数:   ").Append(ctx.Parameters).Append('\n');
-        sb.Append("内容:   ").Append(DescribeContent(ctx, lines.Count, linesParam));
+        sb.Append(DescribeStats(ctx, lines.Count)).Append('\n');
+        sb.Append(DescribeCurrent(linesParam, lines.Count));
         sb.Append("\n---");
         return sb.ToString();
     }
 
     /// <summary>
-    /// 描述内容规模与当前切片范围：反编译按「行」、列类型按「匹配实体」，两者皆以行为单位分页。
+    /// 总量字段：反编译为「总行数: N 行」；列类型先给「匹配实体: N 个」再给「总行数: N 行」，兼顾语义计数与行定位。
     /// </summary>
-    private static string DescribeContent(FormatContext ctx, int total, string linesParam)
+    private static string DescribeStats(FormatContext ctx, int total)
     {
-        var unit = ctx.IsListing ? "个匹配实体" : "行";
-        var baseText = $"共 {total} {unit}";
+        var line = $"总行数:   {total} 行";
+        return ctx.IsListing ? $"匹配实体: {total} 个\n{line}" : line;
+    }
+
+    /// <summary>
+    /// 当前输出字段：本次返回的行号范围与数量（统一按行，对应 codegraph 正文的行定位）；空结果、越界、超上限时附说明。
+    /// </summary>
+    private static string DescribeCurrent(string linesParam, int total)
+    {
+        if (total == 0) return "当前输出: 无";
         if (string.IsNullOrEmpty(linesParam))
         {
-            return total > DefaultMaxLines ? $"{baseText}，当前显示前 {DefaultMaxLines} 行" : baseText;
+            return total <= DefaultMaxLines
+                ? $"当前输出: 1-{total}（{total} 行）"
+                : $"当前输出: 1-{DefaultMaxLines}（{DefaultMaxLines} 行，已截断）";
         }
         var (start, end, error) = ParseLines(linesParam);
-        if (error is not null) return baseText;
-        var shownEnd = Math.Min(Math.Min(end, start + LinesRangeMax - 1), total);
-        return $"{baseText}，当前显示 {start}-{shownEnd} 行";
+        if (error is not null) return $"当前输出: 无效（{error}）";
+        if (start > total) return $"当前输出: 无效（起始行 {start} 超出总行数 {total}）";
+        var rangeEnd = Math.Min(end, start + LinesRangeMax - 1);
+        var actualEnd = Math.Min(rangeEnd, total);
+        var count = actualEnd - start + 1;
+        return rangeEnd < end
+            ? $"当前输出: {start}-{actualEnd}（{count} 行，已截断）"
+            : $"当前输出: {start}-{actualEnd}（{count} 行）";
     }
 }

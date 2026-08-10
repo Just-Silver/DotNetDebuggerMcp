@@ -16,7 +16,7 @@ public static class DecompileToDirCases
             new Dictionary<string, object?> { ["assembly"] = dll, ["outputDir"] = Path.Combine(outDir, "project"), ["project"] = true },
             ExpectedContains: "已写入", MustNotContain: "at System"),
         new ToolCallCase("decompile_to_dir", "typeName 单类型",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["outputDir"] = Path.Combine(outDir, "single"), ["typeName"] = "System.Linq.Enumerable" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["outputDir"] = Path.Combine(outDir, "single"), ["typeName"] = TestDataHelper.TypeName },
             ExpectedContains: "已写入", MustNotContain: "at System"),
         new ToolCallCase("decompile_to_dir", "nestedDirectories 嵌套目录",
             new Dictionary<string, object?> { ["assembly"] = dll, ["outputDir"] = Path.Combine(outDir, "nested"), ["nestedDirectories"] = true },

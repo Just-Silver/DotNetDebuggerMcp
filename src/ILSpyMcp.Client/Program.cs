@@ -1,20 +1,8 @@
 ﻿using ILSpyMcp.Client;
 
-// 向上查找仓库根目录（含 ILSpyMcp.slnx），路径随仓库整体移动而自动适配
-static string FindRepoRoot()
-{
-    var dir = new DirectoryInfo(AppContext.BaseDirectory);
-    while (dir is not null)
-    {
-        if (File.Exists(Path.Combine(dir.FullName, "ILSpyMcp.slnx"))) return dir.FullName;
-        dir = dir.Parent;
-    }
-    throw new DirectoryNotFoundException("未找到仓库根目录（缺少 ILSpyMcp.slnx）");
-}
-
-var root = FindRepoRoot();
+var root = TestDataHelper.RepoRoot;
 var serverProject = Path.Combine(root, "src", "ILSpyMcp", "ILSpyMcp.csproj");
-var dll = Path.Combine(root, "tests", "TestData", "System.Linq.dll");
+var dll = TestDataHelper.Dll;
 var outDir = Path.Combine(root, "tests", ".ilspymcp-client-out");
 
 var runner = await ClientRunner.ConnectAsync(serverProject);
@@ -25,6 +13,7 @@ try
 {
     await runner.ListToolsAsync();
     await runner.RunAsync(DecompileCases.All(dll));
+    await runner.RunAsync(DecompileMemberCases.All(dll));
     await runner.RunAsync(ListTypesCases.All(dll));
     await runner.RunAsync(DecompileToDirCases.All(dll, outDir));
 

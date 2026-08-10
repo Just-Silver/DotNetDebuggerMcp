@@ -136,33 +136,25 @@ public class ArgumentValidatorsTests : IDisposable
     }
 
     [Fact]
-    public void ValidateDecompileTarget_同时指定typeName与member_返回互斥提示()
+    public void ValidateMemberNameSearch_缺typeName_返回提示()
     {
-        var ok = ArgumentValidators.ValidateDecompileTarget("System.String", "M:System.String.Concat", out var error);
+        var ok = ArgumentValidators.ValidateMemberNameSearch("", "SerializeAsync", out var error);
         Assert.False(ok);
-        Assert.Contains("只能指定其一", error!);
+        Assert.Contains("typeName", error!);
     }
 
     [Fact]
-    public void ValidateDecompileTarget_都为空_返回请指定目标提示()
+    public void ValidateMemberNameSearch_缺memberName_返回提示()
     {
-        var ok = ArgumentValidators.ValidateDecompileTarget("", "", out var error);
+        var ok = ArgumentValidators.ValidateMemberNameSearch("System.Text.Json.JsonSerializer", "", out var error);
         Assert.False(ok);
-        Assert.Contains("请指定 typeName 或 member 之一", error!);
+        Assert.Contains("memberName", error!);
     }
 
     [Fact]
-    public void ValidateDecompileTarget_只传typeName_校验通过()
+    public void ValidateMemberNameSearch_都提供_校验通过()
     {
-        var ok = ArgumentValidators.ValidateDecompileTarget("System.String", "", out var error);
-        Assert.True(ok);
-        Assert.Null(error);
-    }
-
-    [Fact]
-    public void ValidateDecompileTarget_只传member_校验通过()
-    {
-        var ok = ArgumentValidators.ValidateDecompileTarget("", "M:System.String.Concat", out var error);
+        var ok = ArgumentValidators.ValidateMemberNameSearch("System.Text.Json.JsonSerializer", "SerializeAsync", out var error);
         Assert.True(ok);
         Assert.Null(error);
     }

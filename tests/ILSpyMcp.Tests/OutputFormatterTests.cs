@@ -106,7 +106,7 @@ public class OutputFormatterTests
         var lines = Enumerable.Range(1, 250).Select(i => $"line{i}").ToList();
         var result = OutputFormatter.FormatHead(lines);
         Assert.Contains("已截断", result);
-        Assert.Contains("250 行", result);
+        Assert.DoesNotContain("KB", result);
         Assert.StartsWith("1\tline1", result);
         Assert.Contains("200\tline200", result);
         Assert.DoesNotContain("201\tline201", result);
@@ -152,8 +152,29 @@ public class OutputFormatterTests
         var result = OutputFormatter.SliceLines(lines, 1, 600);
         Assert.Contains("已截断", result);
         Assert.Contains("500 行", result);
+        Assert.Contains("剩余 501-600", result);
         Assert.Contains("1\tline1", result);
         Assert.DoesNotContain("501\tline501", result);
+    }
+
+    [Fact]
+    public void SliceLines_请求范围超出总行数且超上限_剩余提示用真实行数()
+    {
+        var lines = Enumerable.Range(1, 503).Select(i => $"line{i}").ToList();
+        var result = OutputFormatter.SliceLines(lines, 1, 1000);
+        Assert.Contains("已返回 1-500（500 行）", result);
+        Assert.Contains("剩余 501-503", result);
+        Assert.DoesNotContain("501-1000", result);
+    }
+
+    [Fact]
+    public void SliceLines_请求范围超出总行数但不足500行_返回全部不报截断()
+    {
+        var lines = Enumerable.Range(1, 100).Select(i => $"line{i}").ToList();
+        var result = OutputFormatter.SliceLines(lines, 1, 1000);
+        Assert.StartsWith("1\tline1", result);
+        Assert.EndsWith("100\tline100", result);
+        Assert.DoesNotContain("已截断", result);
     }
 
     [Fact]
@@ -164,44 +185,75 @@ public class OutputFormatterTests
 
         var result = OutputFormatter.Format(lines, "", ctx);
 
-        Assert.StartsWith("程序集: D:\\a\\b.dll\n目标:   类型 System.String\n参数:   -t System.String\n内容:   共 3 行\n---\n1\tline1", result);
+        Assert.StartsWith("程序集: D:\\a\\b.dll\n目标:   类型 System.String\n参数:   -t System.String\n总行数:   3 行\n当前输出: 1-3（3 行）\n---\n1\tline1", result);
         Assert.EndsWith("1\tline1\n2\tline2\n3\tline3", result);
     }
 
     [Fact]
-    public void Format_带context且超限_内容行标注前200行()
+    public void Format_带context且超限_头部标注总量与前200行_截断提示不含重复行数()
     {
         var lines = Enumerable.Range(1, 250).Select(i => $"line{i}").ToList();
         var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
 
         var result = OutputFormatter.Format(lines, "", ctx);
 
-        Assert.Contains("内容:   共 250 行，当前显示前 200 行", result);
+        Assert.Contains("总行数:   250 行", result);
+        Assert.Contains("当前输出: 1-200（200 行，已截断）", result);
         Assert.Contains("已截断", result);
+        Assert.DoesNotContain("已截断：共 250 行", result);
     }
 
     [Fact]
-    public void Format_带context且lines切片_内容行标注当前范围()
+    public void Format_带context且lines切片_头部标注总量与当前范围()
     {
         var lines = Enumerable.Range(1, 600).Select(i => $"line{i}").ToList();
         var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
 
         var result = OutputFormatter.Format(lines, "200-400", ctx);
 
-        Assert.Contains("内容:   共 600 行，当前显示 200-400 行", result);
+        Assert.Contains("总行数:   600 行", result);
+        Assert.Contains("当前输出: 200-400（201 行）", result);
         Assert.Contains("200\tline200", result);
     }
 
     [Fact]
-    public void Format_带listing_context_空结果_内容显示共0个匹配实体()
+    public void Format_带context且lines越界_头部标注当前输出无效()
     {
-        var ctx = new FormatContext(@"D:\a\b.dll", "实体类别 d(delegate)", "-l d", IsListing: true);
+        var lines = Enumerable.Range(1, 3).Select(i => $"line{i}").ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
+
+        var result = OutputFormatter.Format(lines, "5-6", ctx);
+
+        Assert.Contains("总行数:   3 行", result);
+        Assert.Contains("当前输出: 无效（起始行 5 超出总行数 3）", result);
+        Assert.Contains("超出总行数", result);
+    }
+
+    [Fact]
+    public void Format_带listing_context_空结果_头部标注匹配实体与总行数()
+    {
+        var ctx = new FormatContext(@"D:\a\b.dll", "实体类别 c(class)", "-l c", IsListing: true);
 
         var result = OutputFormatter.Format(new List<string>(), "", ctx);
 
-        Assert.Contains("内容:   共 0 个匹配实体", result);
+        Assert.Contains("匹配实体: 0 个", result);
+        Assert.Contains("总行数:   0 行", result);
+        Assert.Contains("当前输出: 无", result);
         Assert.EndsWith("---", result);
         Assert.DoesNotContain("1\t", result);
+    }
+
+    [Fact]
+    public void Format_带listing_context_非空结果_匹配实体与总行数并存()
+    {
+        var lines = Enumerable.Range(1, 2).Select(i => $"C{i}").ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "实体类别 c(class)", "-l c", IsListing: true);
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.Contains("匹配实体: 2 个", result);
+        Assert.Contains("总行数:   2 行", result);
+        Assert.Contains("当前输出: 1-2（2 行）", result);
     }
 
     [Fact]

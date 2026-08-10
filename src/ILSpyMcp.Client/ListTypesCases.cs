@@ -7,14 +7,14 @@ public static class ListTypesCases
 {
     public static IReadOnlyList<ToolCallCase> All(string dll) => new[]
     {
-        // 单类别 c：结果应含 System.Linq.Enumerable 等 class 类型名
+        // 单类别 c：结果应含 TestDataHelper.ListedClassName 等 class 类型名
         new ToolCallCase("list_types", "单类别 c",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c" },
-            ExpectedContains: "Enumerable", MustNotContain: "at System"),
+            ExpectedContains: TestDataHelper.ListedClassName, MustNotContain: "at System"),
         // 组合类别 csi：仍应含 class 类型名
         new ToolCallCase("list_types", "组合类别 csi",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "csi" },
-            ExpectedContains: "Enumerable", MustNotContain: "at System"),
+            ExpectedContains: TestDataHelper.ListedClassName, MustNotContain: "at System"),
         // 行号切片应定位到第 1 行
         new ToolCallCase("list_types", "list + lines 按行号切片",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["lines"] = "1-5" },
@@ -22,7 +22,7 @@ public static class ListTypesCases
         // 自定义超时参数应被接受
         new ToolCallCase("list_types", "list + timeoutSeconds（自定义超时）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["timeoutSeconds"] = 45 },
-            ExpectedContains: "Enumerable", MustNotContain: "at System"),
+            ExpectedContains: TestDataHelper.ListedClassName, MustNotContain: "at System"),
         // 非法 list 应返回中文校验提示而非异常堆栈
         new ToolCallCase("list_types", "非法 list（应返回校验提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "xyz" },
