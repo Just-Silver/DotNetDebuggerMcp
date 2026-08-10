@@ -8,7 +8,7 @@
 - 工具方法返回 `Task<string>`，一切错误（参数校验、ilspycmd 退出码非 0）均返回提示文本，不抛异常。
 - stdout 只承载 MCP 协议消息；日志必须走 stderr（`Program.cs` 已配置，勿改）。
 - 工具的 `[Description]` 与所有提示用中文，必填参数标注「（必填）」。
-- **更新版本号必须同步改两处**：`src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 与 `src/ILSpyMcp/.mcp/server.json`。注意 server.json 里 `version` 出现两次（顶层 `version` 与 `packages[0].version`），都要改成一致。`-v/--version` 输出版本取程序集版本（由 csproj 生成），但 NuGet MCP 注册信息读 server.json，两处不同步会导致发布后展示的版本不一致。
+- **更新版本号必须同步改三处**：`src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>`、`src/ILSpyMcp/.mcp/server.json`（顶层 `version` 与 `packages[0].version` 两处都要改一致）、`CHANGELOG.md`（新增 `## [<version>] - <date>` 段落记录变更）。`-v/--version` 输出版本取程序集版本（由 csproj 生成），但 NuGet MCP 注册信息读 server.json，两处不同步会导致发布后展示的版本不一致；`PackageReleaseNotes` 由 CI（`build.yml` 打 `v*` tag 时）从 CHANGELOG.md 提取当前版本段注入，CHANGELOG 缺段会导致发布失败（防静默无说明）。
 
 ## 结构
 
