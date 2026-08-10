@@ -1,4 +1,10 @@
-namespace ILSpyMcp.Infrastructure;
+using ILSpyMcp.Caching;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Pipeline;
+using ILSpyMcp.Processes;
+using ILSpyMcp.UpdateCheck;
+
+namespace ILSpyMcp.Services;
 
 /// <summary>
 /// 进程级共享服务容器：缓存、执行管道、安装检测全会话单例，避免每个工具各自持有独立实例。 测试可经 <see cref="ConfigureForTest"/> 替换进程执行器与缓存。

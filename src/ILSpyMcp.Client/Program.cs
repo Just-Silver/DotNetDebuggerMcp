@@ -12,7 +12,6 @@ var artifactFailures = 0;
 try
 {
     await runner.ListToolsAsync();
-    await runner.RunAsync(CheckCases.All());
     await runner.RunAsync(DecompileCases.All(dll));
     await runner.RunAsync(DecompileMemberCases.All(dll));
     await runner.RunAsync(ListTypesCases.All(dll));

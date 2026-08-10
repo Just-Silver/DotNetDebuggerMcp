@@ -1,4 +1,4 @@
-using ILSpyMcp.Infrastructure;
+using ILSpyMcp.Processes;
 using Xunit;
 
 namespace ILSpyMcp.Tests;

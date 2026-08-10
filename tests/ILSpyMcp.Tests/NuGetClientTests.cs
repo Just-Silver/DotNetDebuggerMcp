@@ -1,4 +1,5 @@
-using ILSpyMcp.Infrastructure;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.UpdateCheck;
 
 using System.Net;
 using System.Net.Http;

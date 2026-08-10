@@ -63,7 +63,7 @@ ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program      # 反编译单个类型（
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Main  # 按成员名子串搜成员（等价 ilspy_decompile_member）
 ilspymcp -a bin/Debug/MyApp.dll -l csi               # 列出实体类型（等价 ilspy_list_types）
 ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories   # 反编译写盘（等价 ilspy_decompile_to_dir）
-ilspymcp -c                                          # 环境自检（等价 ilspy_check_status，无需 -a）
+ilspymcp -c                                          # 环境自检（CLI 调试用，无需 -a；MCP 会话起始已自动注入环境状态报告）
 ```
 
 常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-mn|--membername`（按名搜索成员）、`-l|--list`（类型类别）、`-o|--outputdir`（输出目录）、`-p|--project`（项目形式）、`--nested-directories`（嵌套目录）、`-lv|--languageversion`（C# 版本）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）、`-c|--check`（环境自检）。
@@ -76,9 +76,8 @@ ilspymcp -c                                          # 环境自检（等价 ils
 | `ilspy_decompile_member` | 按成员名子串在指定类型内搜索并反编译匹配的成员，输出带行号标注，支持分页拉取 |
 | `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），输出带行号标注 |
 | `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量/项目/单类型；`typeName` 仅非项目模式生效） |
-| `ilspy_check_status` | 检查运行环境是否可用：ilspycmd 是否安装、版本是否满足要求、当前 ilspymcp 是否有新版本 |
 
-`ilspy_decompile`、`ilspy_decompile_member` 与 `ilspy_list_types` 默认仅输出前 200 行，可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir` 结果写盘、不做行数截断。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效；`ilspycmd` 未安装时仅提示，不代为执行。
+`ilspy_decompile`、`ilspy_decompile_member` 与 `ilspy_list_types` 默认仅输出前 200 行，可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir` 结果写盘、不做行数截断。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效；`ilspycmd` 未安装时仅提示，不代为执行。MCP 会话启动握手时自动执行环境自检（ilspycmd 安装/版本、ilspymcp 更新状态）并注入会话起始提示，无需单独调用检查工具。
 
 ### 工具参数
 
@@ -102,7 +101,6 @@ ilspymcp -c                                          # 环境自检（等价 ils
 | | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集（仅 `project=false` 时生效；`project=true` 时项目模式忽略此参数并全量输出） | 否 |
 | | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录（默认 true） | 否 |
 | | `languageVersion` | C# 语言版本；省略使用 ilspycmd 默认 | 否 |
-| `ilspy_check_status` | （无参数） | 检查运行环境是否可用（ilspycmd 安装/版本、ilspymcp 更新） | - |
 
 ## 使用示例
 

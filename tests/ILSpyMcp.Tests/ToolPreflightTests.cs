@@ -1,4 +1,5 @@
-using ILSpyMcp.Infrastructure;
+using ILSpyMcp.Processes;
+using ILSpyMcp.Services;
 using ILSpyMcp.Tools;
 using ILSpyMcp.Validation;
 using Xunit;

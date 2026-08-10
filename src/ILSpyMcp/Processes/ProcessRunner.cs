@@ -1,7 +1,10 @@
+using ILSpyMcp.Configuration;
+
 using System.Diagnostics;
 using System.Text;
+using Process = System.Diagnostics.Process;
 
-namespace ILSpyMcp.Infrastructure;
+namespace ILSpyMcp.Processes;
 
 /// <summary>
 /// 子进程执行结果。

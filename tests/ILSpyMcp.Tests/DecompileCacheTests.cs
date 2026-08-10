@@ -1,4 +1,6 @@
-using ILSpyMcp.Infrastructure;
+using ILSpyMcp.Caching;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Formatting;
 using System.Reflection;
 using Xunit;
 

@@ -1,9 +1,8 @@
-using ILSpyMcp.Infrastructure;
-using ILSpyMcp.Tools;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Services;
+using ILSpyMcp.UpdateCheck;
 
-using System.Net;
-using System.Net.Http;
-using System.Text;
+using System.Text.Json;
 
 using Xunit;
 
@@ -24,7 +23,7 @@ public class CheckToolTests
     {
         await RunWithAsync(
             new FakeProcessRunner { Code = 1 },
-            JsonHandler("{\"versions\":[]}"),
+            cachedLatest: null,
             async text =>
             {
                 Assert.Contains("环境状态: 存在缺口", text);
@@ -38,7 +37,7 @@ public class CheckToolTests
     {
         await RunWithAsync(
             new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 10.0.0\n" },
-            JsonHandler("{\"versions\":[]}"),
+            cachedLatest: null,
             async text =>
             {
                 Assert.Contains("环境状态: 存在缺口", text);
@@ -52,7 +51,7 @@ public class CheckToolTests
     {
         await RunWithAsync(
             new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" },
-            JsonHandler("{\"versions\":[]}"),
+            cachedLatest: null,
             async text =>
             {
                 Assert.Contains("环境状态: 就绪", text);
@@ -62,12 +61,11 @@ public class CheckToolTests
     }
 
     [Fact]
-    public async Task NuGet网络失败_静默跳过该检查项()
+    public async Task 无缓存_NuGet段留白()
     {
-        var handler = new FakeHandler { Responder = _ => throw new HttpRequestException("network down") };
         await RunWithAsync(
             new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" },
-            handler,
+            cachedLatest: null,
             async text =>
             {
                 Assert.DoesNotContain("ilspymcp", text);
@@ -80,7 +78,7 @@ public class CheckToolTests
     {
         await RunWithAsync(
             new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" },
-            JsonHandler("{\"versions\":[\"1.0.0\",\"2.0.0\"]}"),
+            cachedLatest: "2.0.0",
             async text =>
             {
                 Assert.Contains("ilspymcp: 当前", text);
@@ -94,7 +92,7 @@ public class CheckToolTests
     {
         await RunWithAsync(
             new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" },
-            JsonHandler("{\"versions\":[\"1.1.0\"]}"),
+            cachedLatest: "1.1.0",
             async text =>
             {
                 Assert.Contains("已是最新版本", text);
@@ -106,16 +104,16 @@ public class CheckToolTests
     public async Task 会话缓存_第二次调用不再执行检查()
     {
         var fake = new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" };
-        var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"1.1.0\"]}") };
         AppServices.ConfigureForTest(fake);
-        AppServices.NuGet = new NuGetClient(handler);
+        var cacheDir = TempDir();
+        WriteCacheFile(cacheDir, "1.1.0");
+        AppServices.Updater = new UpdateChecker(cacheDir);
         try
         {
             await CheckTool.CheckStatus();
             var second = await CheckTool.CheckStatus();
 
             Assert.Equal(1, fake.CallCount);
-            Assert.Equal(1, handler.CallCount);
             Assert.Contains("环境状态: 就绪", second);
         }
         finally
@@ -124,10 +122,16 @@ public class CheckToolTests
         }
     }
 
-    private static async Task RunWithAsync(FakeProcessRunner fake, HttpMessageHandler handler, Func<string, Task> assert)
+    /// <summary>
+    /// 注入 fake 进程执行器，并将 Updater 指向预写缓存（或空目录）的临时目录，验证 check_status 报告组装。
+    /// NuGet 段经 <see cref="UpdateChecker.GetCachedNuGetLine"/> 同步读缓存，故不注入网络 handler。
+    /// </summary>
+    private static async Task RunWithAsync(FakeProcessRunner fake, string? cachedLatest, Func<string, Task> assert)
     {
         AppServices.ConfigureForTest(fake);
-        AppServices.NuGet = new NuGetClient(handler);
+        var cacheDir = TempDir();
+        if (cachedLatest is not null) WriteCacheFile(cacheDir, cachedLatest);
+        AppServices.Updater = new UpdateChecker(cacheDir);
         try
         {
             var text = await CheckTool.CheckStatus();
@@ -139,19 +143,17 @@ public class CheckToolTests
         }
     }
 
-    private static FakeHandler JsonHandler(string json) => new() { Responder = _ => Json(json) };
-
-    private static HttpResponseMessage Json(string json) => new(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8) };
-
-    private sealed class FakeHandler : HttpMessageHandler
+    private static void WriteCacheFile(string cacheDir, string latest)
     {
-        public Func<HttpRequestMessage, HttpResponseMessage> Responder { get; set; } = _ => Json("{\"versions\":[]}");
-        public int CallCount { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            CallCount++;
-            return Task.FromResult(Responder(request));
-        }
+        Directory.CreateDirectory(cacheDir);
+        File.WriteAllText(Path.Combine(cacheDir, AppConfig.UpdateCheckCacheFileName),
+            JsonSerializer.Serialize(new UpdateChecker.UpdateCheckCache
+            {
+                LastAttemptAt = DateTimeOffset.Now,
+                LastSuccessAt = DateTimeOffset.Now,
+                Latest = latest,
+            }));
     }
+
+    private static string TempDir() => Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N"));
 }

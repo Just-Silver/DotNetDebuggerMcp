@@ -1,4 +1,8 @@
-namespace ILSpyMcp.Infrastructure;
+using ILSpyMcp.Formatting;
+using ILSpyMcp.Processes;
+using ILSpyMcp.Services;
+
+namespace ILSpyMcp.Pipeline;
 
 /// <summary>
 /// 工具执行共享辅助：统一「程序集路径安全解析」与「管道/子进程调用」样板，避免各工具重复手写并在细节上漂移。

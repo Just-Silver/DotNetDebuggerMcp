@@ -1,4 +1,7 @@
-namespace ILSpyMcp.Infrastructure;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Pipeline;
+
+namespace ILSpyMcp.Processes;
 
 /// <summary>
 /// 检测 ilspycmd 是否已安装并解析其版本；结果会话内缓存一次，避免每次调用都拉起子进程。

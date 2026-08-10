@@ -1,4 +1,5 @@
-using ILSpyMcp.Infrastructure;
+﻿using ILSpyMcp.Formatting;
+using ILSpyMcp.Metadata;
 using Xunit;
 
 namespace ILSpyMcp.Tests;
@@ -11,7 +12,7 @@ public class MemberResolverTests
     [Fact]
     public void FindMembers_按子串命中方法_返回可用的metadata_token()
     {
-        var (typeFound, matches) = MemberResolver.FindMembers(AssemblyPath, "ILSpyMcp.Infrastructure.OutputFormatter", "Format");
+        var (typeFound, matches) = MemberResolver.FindMembers(AssemblyPath, "ILSpyMcp.Formatting.OutputFormatter", "Format");
 
         Assert.True(typeFound);
         Assert.NotEmpty(matches);
@@ -22,7 +23,7 @@ public class MemberResolverTests
     [Fact]
     public void FindMembers_大小写不敏感()
     {
-        var (typeFound, matches) = MemberResolver.FindMembers(AssemblyPath, "ILSpyMcp.Infrastructure.OutputFormatter", "format");
+        var (typeFound, matches) = MemberResolver.FindMembers(AssemblyPath, "ILSpyMcp.Formatting.OutputFormatter", "format");
 
         Assert.True(typeFound);
         Assert.Contains(matches, m => m.Name == "Format");
@@ -31,7 +32,7 @@ public class MemberResolverTests
     [Fact]
     public void FindMembers_空子串_命中全部方法()
     {
-        var (typeFound, matches) = MemberResolver.FindMembers(AssemblyPath, "ILSpyMcp.Infrastructure.OutputFormatter", "");
+        var (typeFound, matches) = MemberResolver.FindMembers(AssemblyPath, "ILSpyMcp.Formatting.OutputFormatter", "");
 
         Assert.True(typeFound);
         Assert.Contains(matches, m => m.Name == "FormatHead");
@@ -50,7 +51,7 @@ public class MemberResolverTests
     [Fact]
     public void FindMembers_类型存在但无匹配_返回空列表()
     {
-        var (typeFound, matches) = MemberResolver.FindMembers(AssemblyPath, "ILSpyMcp.Infrastructure.OutputFormatter", "ZzzNoSuch");
+        var (typeFound, matches) = MemberResolver.FindMembers(AssemblyPath, "ILSpyMcp.Formatting.OutputFormatter", "ZzzNoSuch");
 
         Assert.True(typeFound);
         Assert.Empty(matches);

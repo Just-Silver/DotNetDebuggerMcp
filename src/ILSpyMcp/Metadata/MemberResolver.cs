@@ -2,7 +2,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-namespace ILSpyMcp.Infrastructure;
+namespace ILSpyMcp.Metadata;
 
 /// <summary>
 /// 一个匹配成员：方法名与其元数据 token（可直接用于 ilspycmd -m）。

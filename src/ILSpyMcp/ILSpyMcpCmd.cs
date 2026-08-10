@@ -1,4 +1,5 @@
-using ILSpyMcp.Infrastructure;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Services;
 using ILSpyMcp.Tools;
 using McMaster.Extensions.CommandLineUtils;
 using Microsoft.Extensions.DependencyInjection;
@@ -126,15 +127,15 @@ public class ILSpyMcpCmd
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
+        // 握手期先执行环境自检（ilspycmd 安装/版本 + NuGet 更新状态），报告由 StatusReport 会话内缓存、与 check_status 工具同源；
+        // NuGet 段同步读磁盘缓存，无有效检查记录时留白。报告注入 ServerInstructions，让 agent 会话起始即可感知环境状态
+        var report = await AppServices.StatusReport.Value;
         builder.Services.AddMcpServer(o =>
         {
-            // 握手期同步读取磁盘缓存（零网络），始终注入更新状态提示（有新版本/已是最新/状态未知），
-            // 让 agent 会话起始即可感知更新状态，避免其因零提示而手动调用 check_status 复查
-            var notice = AppServices.Updater.GetCachedInstructions();
-            if (notice is not null) o.ServerInstructions = notice;
+            if (!string.IsNullOrEmpty(report)) o.ServerInstructions = report;
         })
         .WithStdioServerTransport().WithToolsFromAssembly();
-        // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新磁盘缓存供下一次会话使用，不 await 以免阻塞启动
+        // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新 NuGet 磁盘缓存供下一次会话使用，不 await 以免阻塞启动
         _ = AppServices.Updater.RefreshIfStaleAsync();
         await builder.Build().RunAsync();
         return 0;

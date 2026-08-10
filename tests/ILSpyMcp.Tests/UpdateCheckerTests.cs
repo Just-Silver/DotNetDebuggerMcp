@@ -1,4 +1,6 @@
-using ILSpyMcp.Infrastructure;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Services;
+using ILSpyMcp.UpdateCheck;
 
 using System.Net;
 using System.Net.Http;
@@ -174,19 +176,17 @@ public class UpdateCheckerTests
     }
 
     [Fact]
-    public void 无缓存时GetCachedInstructions返回状态未知提示()
+    public void 无缓存时GetCachedNuGetLine返回null()
     {
         var checker = new UpdateChecker(TempDir());
 
-        var result = checker.GetCachedInstructions();
+        var result = checker.GetCachedNuGetLine();
 
-        Assert.NotNull(result);
-        Assert.Contains("更新状态未知", result);
-        Assert.Contains("check_status", result);
+        Assert.Null(result);
     }
 
     [Fact]
-    public async Task 有更新时返回注入文本()
+    public async Task 有更新时返回升级建议行()
     {
         var tempDir = TempDir();
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"99.0.0\"]}") };
@@ -198,13 +198,12 @@ public class UpdateCheckerTests
             var latest = await checker.RefreshIfStaleAsync();
             Assert.Equal("99.0.0", latest);
 
-            var instructions = checker.GetCachedInstructions();
+            var line = checker.GetCachedNuGetLine();
 
-            Assert.NotNull(instructions);
-            Assert.Contains("有新版本 99.0.0", instructions);
-            Assert.Contains("dotnet tool update --global ilspymcp", instructions);
-            Assert.Contains(AppConfig.NuGetPackageId, instructions);
-            Assert.Contains("无需调用 check_status 复查", instructions);
+            Assert.NotNull(line);
+            Assert.Contains("NuGet 最新 99.0.0", line);
+            Assert.Contains("dotnet tool update --global ilspymcp", line);
+            Assert.Contains(AppConfig.NuGetPackageId, line);
         }
         finally
         {
@@ -213,7 +212,7 @@ public class UpdateCheckerTests
     }
 
     [Fact]
-    public async Task 已是最新时返回已是最新提示()
+    public async Task 已是最新时返回已是最新行()
     {
         var tempDir = TempDir();
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"0.0.1\"]}") };
@@ -225,12 +224,11 @@ public class UpdateCheckerTests
             var latest = await checker.RefreshIfStaleAsync();
             Assert.Equal("0.0.1", latest);
 
-            var instructions = checker.GetCachedInstructions();
+            var line = checker.GetCachedNuGetLine();
 
-            Assert.NotNull(instructions);
-            Assert.Contains("已是最新版本", instructions);
-            Assert.DoesNotContain("有新版本", instructions);
-            Assert.Contains("无需调用 check_status 复查", instructions);
+            Assert.NotNull(line);
+            Assert.Contains("已是最新版本", line);
+            Assert.DoesNotContain("NuGet 最新", line);
         }
         finally
         {
@@ -239,18 +237,16 @@ public class UpdateCheckerTests
     }
 
     [Fact]
-    public void 损坏缓存_返回状态未知提示()
+    public void 损坏缓存_GetCachedNuGetLine返回null()
     {
         var tempDir = TempDir();
         Directory.CreateDirectory(tempDir);
         File.WriteAllText(Path.Combine(tempDir, AppConfig.UpdateCheckCacheFileName), "{not-json!!!");
         var checker = new UpdateChecker(tempDir);
 
-        var result = checker.GetCachedInstructions();
+        var result = checker.GetCachedNuGetLine();
 
-        Assert.NotNull(result);
-        Assert.Contains("更新状态未知", result);
-        Assert.Contains("无需调用 check_status 复查", result);
+        Assert.Null(result);
     }
 
     private static string TempDir() => Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N"));

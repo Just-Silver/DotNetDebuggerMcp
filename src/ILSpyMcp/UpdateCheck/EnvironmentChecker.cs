@@ -1,8 +1,12 @@
-namespace ILSpyMcp.Infrastructure;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Processes;
+using ILSpyMcp.Services;
+
+namespace ILSpyMcp.UpdateCheck;
 
 /// <summary>
 /// 环境自检报告组装：ilspycmd 是否安装/版本是否满足要求（>= 11，-m 单成员反编译所需）、当前 ilspymcp 是否有新版本。
-/// 报告由 <see cref="AppServices.StatusReport"/> 会话内缓存，仅首次真实执行；NuGet 网络失败/超时静默跳过该检查项。
+/// 报告由 <see cref="AppServices.StatusReport"/> 会话内缓存，仅首次真实执行；NuGet 段同步读磁盘缓存，无有效检查记录时留白。
 /// </summary>
 internal static class EnvironmentChecker
 {
@@ -38,16 +42,9 @@ internal static class EnvironmentChecker
                 : $"成员反编译（-m）: 不可用（{version} < {required}）。请执行 `dotnet tool update --global ilspycmd` 升级。");
         }
 
-        // NuGet 新版本检查：经 UpdateChecker 走磁盘缓存（TTL/退避内不联网），网络失败/超时静默跳过该检查项，不影响反编译等核心功能
-        var latest = await AppServices.Updater.RefreshIfStaleAsync();
-        if (latest is not null)
-        {
-            var current = AppConfig.CurrentVersion;
-            var currentText = current?.ToString(3) ?? "未知";
-            lines.Add(UpdateChecker.IsNewerThanCurrent(latest, current)
-                ? $"{AppConfig.NuGetPackageId}: 当前 {currentText}，NuGet 最新 {latest}。可执行 `dotnet tool update --global {AppConfig.NuGetPackageId}` 升级。"
-                : $"{AppConfig.NuGetPackageId}: 当前 {currentText}，已是最新版本。");
-        }
+        // NuGet 新版本检查：同步读磁盘缓存（零网络），无有效检查记录时该段留白；网络刷新由握手后台 RefreshIfStaleAsync 承担
+        var nugetLine = AppServices.Updater.GetCachedNuGetLine();
+        if (nugetLine is not null) lines.Add(nugetLine);
 
         return string.Join('\n', lines);
     }

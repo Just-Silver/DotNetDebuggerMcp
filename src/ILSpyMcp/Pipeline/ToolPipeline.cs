@@ -1,6 +1,11 @@
+using ILSpyMcp.Caching;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Formatting;
+using ILSpyMcp.Processes;
+
 using System.Collections.Concurrent;
 
-namespace ILSpyMcp.Infrastructure;
+namespace ILSpyMcp.Pipeline;
 
 /// <summary>
 /// 管道执行结果：反编译/格式化文本或错误提示。

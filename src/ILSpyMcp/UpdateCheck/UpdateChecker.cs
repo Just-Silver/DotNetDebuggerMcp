@@ -1,10 +1,15 @@
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Services;
+
 using System.Text.Json;
 
-namespace ILSpyMcp.Infrastructure;
+namespace ILSpyMcp.UpdateCheck;
 
 /// <summary>
-/// NuGet 新版本检查的磁盘缓存与注入文本组装：成功/失败结果落盘跨进程共享，重启不丢，避免每次会话都联网复查。
-/// 网络查询经 <see cref="AppServices.NuGet"/>（运行时读取静态字段，测试可注入 fake）；一切 IO/网络异常静默降级，绝不影响核心功能。
+/// NuGet 新版本检查的磁盘缓存与报告段组装：成功/失败结果落盘跨进程共享，重启不丢，避免每次会话都联网复查。
+/// check_status 报告经 <see cref="GetCachedNuGetLine"/> 同步读缓存（零网络，无结果留白），网络刷新由握手后台
+/// <see cref="RefreshIfStaleAsync"/> 承担。网络查询经 <see cref="AppServices.NuGet"/>（运行时读取静态字段，测试可注入 fake）；
+/// 一切 IO/网络异常静默降级，绝不影响核心功能。
 /// </summary>
 public sealed class UpdateChecker
 {
@@ -50,21 +55,20 @@ public sealed class UpdateChecker
            && latest > currentVersion;
 
     /// <summary>
-    /// 同步读磁盘缓存（零网络），始终返回非 null 的注入提示文本：有新版本给升级建议、已是最新明确告知、无有效检查记录则如实说明状态未知，
-    /// 避免 agent 因未收到任何更新信息而误以为需要主动调用 check_status 复查（仅极端异常才返回 null 兜底）。
+    /// 同步读磁盘缓存（零网络），返回 check_status 报告用的 NuGet 段整行：有新版本给升级建议、已是最新明确告知。
+    /// 无有效检查记录（无缓存/损坏/版本无法解析）返回 null，报告该段留白——由握手后台刷新补位供下次会话，绝不阻塞握手。
     /// </summary>
-    public string? GetCachedInstructions()
+    public string? GetCachedNuGetLine()
     {
         try
         {
             var current = AppConfig.CurrentVersion;
             var currentText = current?.ToString(3) ?? "未知";
             var cache = ReadCache();
-            if (cache is null || string.IsNullOrEmpty(cache.Latest) || !Version.TryParse(cache.Latest, out _))
-                return $"{AppConfig.NuGetPackageId}: 当前 {currentText}，更新状态未知（尚无有效检查记录）。更新状态已由服务器自动检查，无需调用 check_status 复查。";
-            if (IsNewerThanCurrent(cache.Latest, current))
-                return $"{AppConfig.NuGetPackageId}: 当前 {currentText}，有新版本 {cache.Latest}。可执行 `dotnet tool update --global {AppConfig.NuGetPackageId}` 升级（升级属高风险操作，需用户确认执行）。更新状态已由服务器自动检查，无需调用 check_status 复查。";
-            return $"{AppConfig.NuGetPackageId}: 当前 {currentText}，已是最新版本。更新状态已由服务器自动检查，无需调用 check_status 复查。";
+            if (cache is null || string.IsNullOrEmpty(cache.Latest) || !Version.TryParse(cache.Latest, out _)) return null;
+            return IsNewerThanCurrent(cache.Latest, current)
+                ? $"{AppConfig.NuGetPackageId}: 当前 {currentText}，NuGet 最新 {cache.Latest}。可执行 `dotnet tool update --global {AppConfig.NuGetPackageId}` 升级。"
+                : $"{AppConfig.NuGetPackageId}: 当前 {currentText}，已是最新版本。";
         }
         catch
         {

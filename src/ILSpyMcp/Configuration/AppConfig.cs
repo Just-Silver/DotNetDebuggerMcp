@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace ILSpyMcp.Infrastructure;
+namespace ILSpyMcp.Configuration;
 
 /// <summary>
 /// 全局静态参数集中配置：缓存上限、超时等可调参数统一在此维护，便于集中修改与调整。

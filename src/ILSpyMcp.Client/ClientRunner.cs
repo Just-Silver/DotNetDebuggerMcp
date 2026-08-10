@@ -45,15 +45,14 @@ public sealed class ClientRunner
         foreach (var tool in tools) Console.WriteLine($"- {tool.Name}");
 
         var names = tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
-        var pass = tools.Count >= 4
+        var pass = tools.Count >= 3
             && names.Contains("decompile")
             && names.Contains("decompile_member")
             && names.Contains("list_types")
-            && names.Contains("decompile_to_dir")
-            && names.Contains("check_status");
+            && names.Contains("decompile_to_dir");
         if (pass)
         {
-            Console.WriteLine("[PASS] 工具数量 >= 4 且含 decompile/decompile_member/list_types/decompile_to_dir/check_status");
+            Console.WriteLine("[PASS] 工具数量 >= 3 且含 decompile/decompile_member/list_types/decompile_to_dir");
         }
         else
         {

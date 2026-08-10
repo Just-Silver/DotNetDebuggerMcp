@@ -1,6 +1,8 @@
+using ILSpyMcp.Configuration;
+
 using System.Text.Json;
 
-namespace ILSpyMcp.Infrastructure;
+namespace ILSpyMcp.UpdateCheck;
 
 /// <summary>
 /// NuGet 包最新稳定版查询：经 flatcontainer 版本清单 API 拉取全部版本，取最大稳定版（排除预发布）。

@@ -1,4 +1,7 @@
-using ILSpyMcp.Infrastructure;
+using ILSpyMcp.Caching;
+using ILSpyMcp.Configuration;
+using ILSpyMcp.Formatting;
+using ILSpyMcp.Pipeline;
 using Xunit;
 
 namespace ILSpyMcp.Tests;

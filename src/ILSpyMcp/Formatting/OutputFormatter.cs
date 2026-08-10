@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace ILSpyMcp.Infrastructure;
+namespace ILSpyMcp.Formatting;
 
 /// <summary>
 /// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞。
