@@ -219,7 +219,7 @@ public sealed class ToolPipeline
         var result = await _process.RunAsync(command.Executable, command.Args, Environment.CurrentDirectory, timeout, cancellationToken);
         if (result.Code != 0)
         {
-            throw new InvalidOperationException($"ilspycmd 退出码: {result.Code}\n{result.Stderr}");
+            throw new InvalidOperationException($"ilspycmd 退出码: {result.Code}{Environment.NewLine}{result.Stderr}");
         }
         return OutputFormatter.SplitLines(result.Stdout);
     }

@@ -4,8 +4,8 @@ using ILSpyMcp.Processes;
 namespace ILSpyMcp.UpdateCheck;
 
 /// <summary>
-/// 环境自检报告组装：ilspycmd 是否安装/版本是否满足要求（>= 11，-m 单成员反编译所需）、当前 ilspymcp 是否有新版本。
-/// 报告由 <see cref="ILSpyMcp.Services.AppServices.StatusReport"/> 会话内缓存，仅首次真实执行；NuGet 段同步读磁盘缓存，无有效检查记录时留白。
+/// 环境自检报告组装：ilspycmd 是否安装/版本是否满足要求（&gt;= 11，-m 单成员反编译所需）、当前 ilspymcp 是否有新版本。 报告由 <see
+/// cref="ILSpyMcp.Services.AppServices.StatusReport"/> 会话内缓存，仅首次真实执行；NuGet 段同步读磁盘缓存，无有效检查记录时留白。
 /// 依赖以参数传入（安装检测器 + 更新检查器），不反向引用 Services 层。
 /// </summary>
 internal static class EnvironmentChecker
@@ -48,6 +48,6 @@ internal static class EnvironmentChecker
         var nugetLine = updater.GetCachedNuGetLine();
         if (nugetLine is not null) lines.Add(nugetLine);
 
-        return string.Join('\n', lines);
+        return string.Join(Environment.NewLine, lines);
     }
 }

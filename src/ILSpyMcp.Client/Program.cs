@@ -23,11 +23,11 @@ try
         : 0;
     if (csCount > 0)
     {
-        Console.WriteLine($"\n[PASS] decompile_to_dir 产物校验：{outDir} 下共 {csCount} 个 .cs 文件");
+        Console.WriteLine($"{Environment.NewLine}[PASS] decompile_to_dir 产物校验：{outDir} 下共 {csCount} 个 .cs 文件");
     }
     else
     {
-        Console.WriteLine($"\n[FAIL] decompile_to_dir 产物校验：{outDir} 下未发现 .cs 文件");
+        Console.WriteLine($"{Environment.NewLine}[FAIL] decompile_to_dir 产物校验：{outDir} 下未发现 .cs 文件");
         artifactFailures++;
     }
 }
@@ -37,17 +37,17 @@ finally
     if (Directory.Exists(outDir))
     {
         Directory.Delete(outDir, recursive: true);
-        Console.WriteLine($"\n已清理验证产物: {outDir}");
+        Console.WriteLine($"{Environment.NewLine}已清理验证产物: {outDir}");
     }
 }
 
 var totalFailures = runner.Failures + artifactFailures;
 if (totalFailures > 0)
 {
-    Console.WriteLine($"\n共 {totalFailures} 个场景未通过（工具调用 {runner.Failures} 个 + 产物断言 {artifactFailures} 个）。");
+    Console.WriteLine($"{Environment.NewLine}共 {totalFailures} 个场景未通过（工具调用 {runner.Failures} 个 + 产物断言 {artifactFailures} 个）。");
     Environment.ExitCode = 1;
 }
 else
 {
-    Console.WriteLine("\n全部场景通过。");
+    Console.WriteLine($"{Environment.NewLine}全部场景通过。");
 }

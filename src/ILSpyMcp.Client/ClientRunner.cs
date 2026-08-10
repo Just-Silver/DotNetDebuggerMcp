@@ -85,7 +85,7 @@ public sealed class ClientRunner
     /// <returns>断言通过返回 true。</returns>
     private async Task<bool> CallAsync(ToolCallCase c)
     {
-        Console.WriteLine($"\n=== CALL {c.Tool}：{c.Label} ===");
+        Console.WriteLine($"{Environment.NewLine}=== CALL {c.Tool}：{c.Label} ===");
         var result = await _mcp.CallToolAsync(c.Tool, c.Args, cancellationToken: CancellationToken.None);
 
         // 提取文本块结果；非文本块（如图片）只打印类型名
@@ -94,7 +94,7 @@ public sealed class ClientRunner
         {
             if (block is not TextContentBlock) Console.WriteLine($"({block.GetType().Name})");
         }
-        var text = string.Join("\n", textBlocks.Select(b => b.Text));
+        var text = string.Join(Environment.NewLine, textBlocks.Select(b => b.Text));
 
         // 断言：ExpectSuccess 为 true 时要求 IsError 为 false；错误提示场景（ExpectSuccess=false）的
         // 语义是「预期返回错误提示文本」，server 端一切错误均以中文提示文本返回（IsError 恒为 false）， 故错误场景额外要求 IsError 不得为

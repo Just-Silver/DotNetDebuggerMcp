@@ -60,7 +60,7 @@ public static class DecompileToDirTool
 
         // 执行反编译写盘；退出码非 0 时返回 stderr，成功则返回输出目录与文件计数（超时由 timeoutSeconds 参数控制，默认 30s）
         var result = await ToolExecutor.RunProcessAsync(command, cwd, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken);
-        if (result.Code != 0) return $"ilspycmd 退出码: {result.Code}\n{result.Stderr}";
+        if (result.Code != 0) return $"ilspycmd 退出码: {result.Code}{Environment.NewLine}{result.Stderr}";
         // 枚举输出目录下文件总数供 agent 决策后续动作；枚举失败时退回基础提示，不拖垮工具
         try
         {
