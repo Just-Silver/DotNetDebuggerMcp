@@ -31,6 +31,7 @@ public sealed class ClientRunner
             Arguments = ["run", "--project", serverProject, "-c", "Release"],
         });
         var mcp = await McpClient.CreateAsync(transport);
+        Console.WriteLine($"=== ServerInstructions: {mcp.ServerInstructions} ===");
         return new ClientRunner(mcp);
     }
 

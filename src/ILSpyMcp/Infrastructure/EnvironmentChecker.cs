@@ -40,8 +40,8 @@ internal static class EnvironmentChecker
                 : $"成员反编译（-m）: 不可用（{version} < {required}）。请执行 `dotnet tool update --global ilspycmd` 升级。");
         }
 
-        // NuGet 新版本检查：网络失败/超时静默跳过该检查项，不影响反编译等核心功能
-        var latest = await AppServices.NuGet.GetLatestStableVersionAsync(AppConfig.NuGetPackageId);
+        // NuGet 新版本检查：经 UpdateChecker 走磁盘缓存（TTL/退避内不联网），网络失败/超时静默跳过该检查项，不影响反编译等核心功能
+        var latest = await AppServices.Updater.RefreshIfStaleAsync();
         if (latest is not null)
         {
             var current = Assembly.GetExecutingAssembly().GetName().Version;

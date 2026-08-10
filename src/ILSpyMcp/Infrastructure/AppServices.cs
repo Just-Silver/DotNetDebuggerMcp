@@ -32,6 +32,12 @@ internal static class AppServices
     public static NuGetClient NuGet = new();
 
     /// <summary>
+    /// 共享新版本检查与注入文本组装：check_status 与 MCP 握手（ServerInstructions 注入）共用同一磁盘缓存，
+    /// 缓存文件跨进程共享（重启不丢、避免每次会话都联网复查）。
+    /// </summary>
+    public static UpdateChecker Updater = new();
+
+    /// <summary>
     /// check_status 的环境自检报告：会话内只真实检查一次（安装/版本变化需重启 CLI 才生效），后续直接复用缓存文本。
     /// 单飞保证并发首次调用只执行一次完整检查。
     /// </summary>
@@ -50,6 +56,7 @@ internal static class AppServices
         Pipeline = new ToolPipeline(Process, Cache);
         Installer = new InstallChecker(Process);
         NuGet = new NuGetClient();
+        Updater = new UpdateChecker(Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N")));
         StatusReport = new Lazy<Task<string>>(EnvironmentChecker.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
@@ -63,6 +70,7 @@ internal static class AppServices
         Pipeline = new ToolPipeline(Process, Cache);
         Installer = new InstallChecker(Process);
         NuGet = new NuGetClient();
+        Updater = new UpdateChecker();
         StatusReport = new Lazy<Task<string>>(EnvironmentChecker.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 }

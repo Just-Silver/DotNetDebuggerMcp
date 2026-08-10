@@ -126,7 +126,15 @@ public class ILSpyMcpCmd
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
-        builder.Services.AddMcpServer().WithStdioServerTransport().WithToolsFromAssembly();
+        builder.Services.AddMcpServer(o =>
+        {
+            // 握手期同步读取磁盘缓存（零网络），有新版本提示时注入 ServerInstructions，让 agent 会话起始即可感知升级建议
+            var notice = AppServices.Updater.GetCachedInstructions();
+            if (notice is not null) o.ServerInstructions = notice;
+        })
+        .WithStdioServerTransport().WithToolsFromAssembly();
+        // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新磁盘缓存供下一次会话使用，不 await 以免阻塞启动
+        _ = AppServices.Updater.RefreshIfStaleAsync();
         await builder.Build().RunAsync();
         return 0;
     }
