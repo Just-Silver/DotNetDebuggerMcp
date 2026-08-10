@@ -94,8 +94,8 @@ public static class ArgumentValidators
     }
 
     /// <summary>
-    /// 校验 languageVersion 参数：空/空白视为未指定；非空须为 CSharp 版本（如 CSharp12_0）、Preview 或 Latest。
-    /// 未知但格式合法的 CSharp 版本（如 CSharp16_0）放行兜底，防止版本漂移误杀。
+    /// 校验 languageVersion 参数：空/空白视为未指定；非空须为 CSharp 版本（如 CSharp12_0）、Preview 或 Latest。 未知但格式合法的
+    /// CSharp 版本（如 CSharp16_0）放行兜底，防止版本漂移误杀。
     /// </summary>
     /// <param name="value">C# 语言版本，缺省为空字符串。</param>
     /// <param name="error">校验失败时的错误提示；通过时为 null。</param>
@@ -199,9 +199,8 @@ public static class ArgumentValidators
     }
 
     /// <summary>
-    /// 检测路径是否含 Windows 非法字符（控制字符与 &lt; &gt; " | ? *）。
-    /// .NET 10 的 GetFullPath 已不再对这些字符抛异常，但它们在文件系统层面仍非法，
-    /// 提前识别可返回明确的「路径非法」提示而非「文件不存在」。
+    /// 检测路径是否含 Windows 非法字符（控制字符与 &lt; &gt; " | ? *）。 .NET 10 的 GetFullPath
+    /// 已不再对这些字符抛异常，但它们在文件系统层面仍非法， 提前识别可返回明确的「路径非法」提示而非「文件不存在」。
     /// </summary>
     /// <param name="path">待检测路径。</param>
     /// <returns>含非法字符返回 true，否则 false。</returns>

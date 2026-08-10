@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.IO;
 using System.Text;
 
 namespace ILSpyMcp.Infrastructure;
@@ -57,8 +56,7 @@ public sealed class ProcessRunner : IProcessRunner
             return new ProcessResult(-1, "", $"无法启动进程 {executable}：{ex.Message}");
         }
 
-        // stdout 流式读取并设字节上限：超过 MaxOutputBytes 即丢弃后续输出但仍 drain 至 EOF，
-        // 避免子进程因管道阻塞卡死；主流程判定 OverCap 后返回错误提示而非崩进程。
+        // stdout 流式读取并设字节上限：超过 MaxOutputBytes 即丢弃后续输出但仍 drain 至 EOF， 避免子进程因管道阻塞卡死；主流程判定 OverCap 后返回错误提示而非崩进程。
         var stdoutTask = ReadCappedAsync(proc.StandardOutput, AppConfig.MaxOutputBytes, cancellationToken);
         var stderrTask = proc.StandardError.ReadToEndAsync();
 
@@ -107,8 +105,8 @@ public sealed class ProcessRunner : IProcessRunner
     }
 
     /// <summary>
-    /// 流式读取 stdout 并限制累计字节：超过 maxBytes 后丢弃后续但仍读取至 EOF（避免子进程管道阻塞卡死）。
-    /// UTF-16 下每 char 占 2 字节，按 (charCount * 2) 估算字节数判定上限。
+    /// 流式读取 stdout 并限制累计字节：超过 maxBytes 后丢弃后续但仍读取至 EOF（避免子进程管道阻塞卡死）。 UTF-16 下每 char 占 2 字节，按
+    /// (charCount * 2) 估算字节数判定上限。
     /// </summary>
     /// <param name="reader">子进程的标准输出读取器。</param>
     /// <param name="maxBytes">累计字节上限。</param>

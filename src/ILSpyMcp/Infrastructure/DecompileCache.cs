@@ -9,7 +9,8 @@ namespace ILSpyMcp.Infrastructure;
 public readonly record struct CacheKey(string AssemblyPath, string Fingerprint, string Signature);
 
 /// <summary>
-/// 反编译结果内存缓存（线程安全 LRU，总上限可配置，默认 <see cref="AppConfig.MaxCacheBytes"/>）。key = 程序集绝对路径 + 文件指纹（mtime+size）+ 参数签名， 不同参数组合各自独立缓存；程序集更新后指纹变化，同路径同签名的旧条目自动清理。
+/// 反编译结果内存缓存（线程安全 LRU，总上限可配置，默认 <see cref="AppConfig.MaxCacheBytes"/>）。key = 程序集绝对路径 +
+/// 文件指纹（mtime+size）+ 参数签名， 不同参数组合各自独立缓存；程序集更新后指纹变化，同路径同签名的旧条目自动清理。
 /// </summary>
 public sealed class DecompileCache
 {
@@ -145,7 +146,7 @@ public sealed class DecompileCache
 
     private sealed class CacheEntry
     {
-        public required List<string> Lines;
+        public List<string> Lines;
         public long TotalBytes;
         public LinkedListNode<CacheKey>? Node;
     }

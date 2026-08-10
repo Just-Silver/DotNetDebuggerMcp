@@ -1,13 +1,11 @@
-using System.Reflection;
 using ILSpyMcp.Infrastructure;
+using System.Reflection;
 using Xunit;
 
 namespace ILSpyMcp.Tests;
 
 public class DecompileCacheTests
 {
-    private static List<string> Lines(params string[] lines) => lines.ToList();
-
     [Fact]
     public void Put后Get_命中并返回相同行()
     {
@@ -122,4 +120,6 @@ public class DecompileCacheTests
             cache.Get(key);
         });
     }
+
+    private static List<string> Lines(params string[] lines) => lines.ToList();
 }

@@ -1,5 +1,4 @@
 using ILSpyMcp.Infrastructure;
-using System.IO;
 using System.Text;
 using Xunit;
 
@@ -25,7 +24,9 @@ public class ProcessRunnerTests
     }
 
     [Fact]
-    /// <summary>命令不存在时返回退出码 -1 并附「无法启动」提示。</summary>
+    /// <summary>
+    /// 命令不存在时返回退出码 -1 并附「无法启动」提示。
+    /// </summary>
     public async Task CommandNotFound_ReturnsNegativeOneWithHint()
     {
         var result = await _runner.RunAsync("ilspymcp-no-such-cmd-xyz", Array.Empty<string>(), Environment.CurrentDirectory);

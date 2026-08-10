@@ -16,7 +16,8 @@ internal static class AppServices
     public static IProcessRunner Process = new ProcessRunner();
 
     /// <summary>
-    /// 共享反编译结果缓存（LRU，上限 <see cref="AppConfig.MaxCacheBytes"/>）（可替换：测试经 <see cref="ConfigureForTest"/> 注入小缓存）。
+    /// 共享反编译结果缓存（LRU，上限 <see cref="AppConfig.MaxCacheBytes"/>）（可替换：测试经 <see
+    /// cref="ConfigureForTest"/> 注入小缓存）。
     /// </summary>
     public static DecompileCache Cache = new();
 

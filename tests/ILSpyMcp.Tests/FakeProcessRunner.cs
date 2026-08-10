@@ -2,7 +2,9 @@ using ILSpyMcp.Infrastructure;
 
 namespace ILSpyMcp.Tests;
 
-/// <summary>测试用 fake 进程执行器，可配置退出码/输出/延迟并统计调用次数。</summary>
+/// <summary>
+/// 测试用 fake 进程执行器，可配置退出码/输出/延迟并统计调用次数。
+/// </summary>
 internal sealed class FakeProcessRunner : IProcessRunner
 {
     public int Code = 0;

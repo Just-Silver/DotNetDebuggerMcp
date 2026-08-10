@@ -135,8 +135,8 @@ public sealed class ToolPipeline
             try
             {
                 cached = await lazy.Value;
-                // 超限（超过 AppConfig.MaxOutputBytes）时 ProcessRunner 返回 Code=-1，RunSourceAsync 抛异常，
-                // 被上方 catch 拦截返回提示；能走到这里说明 await 未抛异常，结果必未超限，直接写入
+                // 超限（超过 AppConfig.MaxOutputBytes）时 ProcessRunner 返回 Code=-1，RunSourceAsync 抛异常， 被上方
+                // catch 拦截返回提示；能走到这里说明 await 未抛异常，结果必未超限，直接写入
                 _cache.Put(key, cached);
             }
             catch (Exception ex)

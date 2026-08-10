@@ -7,9 +7,6 @@ public class ToolPipelineTests
 {
     private static readonly string AssemblyPath = typeof(ToolPipelineTests).Assembly.Location;
 
-    private static ToolPipeline Create(FakeProcessRunner fake, DecompileCache? cache = null)
-        => new(fake, cache ?? new DecompileCache());
-
     [Fact]
     public async Task 首次调用_回源并返回格式化结果()
     {
@@ -174,4 +171,7 @@ public class ToolPipelineTests
 
         Assert.Equal(cts.Token, fake.LastToken);
     }
+
+    private static ToolPipeline Create(FakeProcessRunner fake, DecompileCache? cache = null)
+                                                            => new(fake, cache ?? new DecompileCache());
 }

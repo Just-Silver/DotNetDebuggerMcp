@@ -11,8 +11,8 @@ internal static class AppConfig
     public const long MaxCacheBytes = 64 * 1024 * 1024;
 
     /// <summary>
-    /// 子进程 stdout 读取的累计字节上限；超过即终止进程并返回提示，防止单类型反编译巨型输出（OOM）拖垮整个 MCP 进程。
-    /// 取值与缓存上限一致：超过此值的结果不缓存也不返回给 agent，由 agent 改用 decompile_to_dir 反编译到本地目录。
+    /// 子进程 stdout 读取的累计字节上限；超过即终止进程并返回提示，防止单类型反编译巨型输出（OOM）拖垮整个 MCP 进程。 取值与缓存上限一致：超过此值的结果不缓存也不返回给
+    /// agent，由 agent 改用 decompile_to_dir 反编译到本地目录。
     /// </summary>
     public const long MaxOutputBytes = MaxCacheBytes;
 

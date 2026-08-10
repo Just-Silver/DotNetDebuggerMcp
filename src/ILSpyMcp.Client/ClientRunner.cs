@@ -69,6 +69,14 @@ public sealed class ClientRunner
     }
 
     /// <summary>
+    /// 截取文本前 200 字符用于错误提示，避免刷屏。
+    /// </summary>
+    /// <param name="text">完整结果文本。</param>
+    /// <returns>截断后的预览文本。</returns>
+    private static string Preview(string text)
+        => text.Length <= 200 ? text : text[..200] + "...";
+
+    /// <summary>
     /// 执行单个场景：调用工具、提取文本结果、按断言字段检查并打印 PASS/FAIL。
     /// </summary>
     /// <param name="c">场景定义。</param>
@@ -87,8 +95,8 @@ public sealed class ClientRunner
         var text = string.Join("\n", textBlocks.Select(b => b.Text));
 
         // 断言：ExpectSuccess 为 true 时要求 IsError 为 false；错误提示场景（ExpectSuccess=false）的
-        // 语义是「预期返回错误提示文本」，server 端一切错误均以中文提示文本返回（IsError 恒为 false），
-        // 故错误场景额外要求 IsError 不得为 true——若回归为框架级 Tool Error，即使文本命中也判定失败
+        // 语义是「预期返回错误提示文本」，server 端一切错误均以中文提示文本返回（IsError 恒为 false）， 故错误场景额外要求 IsError 不得为
+        // true——若回归为框架级 Tool Error，即使文本命中也判定失败
         var pass = true;
         if (c.ExpectSuccess && result.IsError == true)
         {
@@ -118,12 +126,4 @@ public sealed class ClientRunner
         if (!pass) Failures++;
         return pass;
     }
-
-    /// <summary>
-    /// 截取文本前 200 字符用于错误提示，避免刷屏。
-    /// </summary>
-    /// <param name="text">完整结果文本。</param>
-    /// <returns>截断后的预览文本。</returns>
-    private static string Preview(string text)
-        => text.Length <= 200 ? text : text[..200] + "...";
 }

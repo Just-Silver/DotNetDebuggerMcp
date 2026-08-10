@@ -7,9 +7,8 @@ using Microsoft.Extensions.Hosting;
 namespace ILSpyMcp;
 
 /// <summary>
-/// 命令行入口（McMaster.CommandLineUtils，与 ilspycmd 实现方式一致）。
-/// 无业务参数时启动 MCP 服务器（stdio 传输）；传入 -a/--assembly 等参数时
-/// 以命令行形式直接执行反编译/列类型/写盘，复用与 MCP 工具相同的校验与执行逻辑，便于调试。
+/// 命令行入口（McMaster.CommandLineUtils，与 ilspycmd 实现方式一致）。 无业务参数时启动 MCP 服务器（stdio 传输）；传入 -a/--assembly
+/// 等参数时 以命令行形式直接执行反编译/列类型/写盘，复用与 MCP 工具相同的校验与执行逻辑，便于调试。
 /// -v/--version 输出版本号，-h/--help 输出帮助信息。
 /// </summary>
 [HelpOption("-h|--help")]
@@ -82,6 +81,24 @@ public class ILSpyMcpCmd
     public string Version => "ilspymcp " + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
 
     /// <summary>
+    /// 命令行分发：-o 走 decompile_to_dir，-l 走 list_types，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// </summary>
+    internal static async Task<string> DispatchCliAsync(
+        string assembly, string typeName, string member, string languageVersion, string entityTypes,
+        string outputDir, bool project, bool nestedDirectories, string lines, int timeoutSeconds)
+    {
+        if (!string.IsNullOrEmpty(outputDir))
+        {
+            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, project, typeName, nestedDirectories, languageVersion, timeoutSeconds);
+        }
+        if (!string.IsNullOrEmpty(entityTypes))
+        {
+            return await ListTypesTool.ListTypes(assembly, entityTypes, lines, timeoutSeconds);
+        }
+        return await DecompileTool.Decompile(assembly, typeName, member, languageVersion, lines, timeoutSeconds);
+    }
+
+    /// <summary>
     /// 默认执行：未指定业务参数时启动 MCP 服务器；否则以命令行模式执行并输出结果。
     /// </summary>
     private async Task<int> OnExecuteAsync(CommandLineApplication app)
@@ -98,23 +115,5 @@ public class ILSpyMcpCmd
         builder.Services.AddMcpServer().WithStdioServerTransport().WithToolsFromAssembly();
         await builder.Build().RunAsync();
         return 0;
-    }
-
-    /// <summary>
-    /// 命令行分发：-o 走 decompile_to_dir，-l 走 list_types，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
-    /// </summary>
-    internal static async Task<string> DispatchCliAsync(
-        string assembly, string typeName, string member, string languageVersion, string entityTypes,
-        string outputDir, bool project, bool nestedDirectories, string lines, int timeoutSeconds)
-    {
-        if (!string.IsNullOrEmpty(outputDir))
-        {
-            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, project, typeName, nestedDirectories, languageVersion, timeoutSeconds);
-        }
-        if (!string.IsNullOrEmpty(entityTypes))
-        {
-            return await ListTypesTool.ListTypes(assembly, entityTypes, lines, timeoutSeconds);
-        }
-        return await DecompileTool.Decompile(assembly, typeName, member, languageVersion, lines, timeoutSeconds);
     }
 }
