@@ -75,7 +75,7 @@ ilspymcp -c                                          # 环境自检（等价 ils
 | `ilspy_decompile` | 反编译单个类型到标准输出，输出带行号标注，支持按行号范围分页拉取 |
 | `ilspy_decompile_member` | 按成员名子串在指定类型内搜索并反编译匹配的成员，输出带行号标注，支持分页拉取 |
 | `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），输出带行号标注 |
-| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量/项目/单类型） |
+| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量/项目/单类型；`typeName` 仅非项目模式生效） |
 | `ilspy_check_status` | 检查运行环境是否可用：ilspycmd 是否安装、版本是否满足要求、当前 ilspymcp 是否有新版本 |
 
 `ilspy_decompile`、`ilspy_decompile_member` 与 `ilspy_list_types` 默认仅输出前 200 行，可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir` 结果写盘、不做行数截断。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效；`ilspycmd` 未安装时仅提示，不代为执行。
@@ -86,22 +86,22 @@ ilspymcp -c                                          # 环境自检（等价 ils
 | ---- | ---- | ---- | ---- |
 | `ilspy_decompile` | `assembly` | 程序集文件路径（.dll/.exe），可为相对当前工作目录的路径 | 是 |
 | | `typeName` | 仅反编译指定全限定类型名，例如 `System.String` | 是 |
-| | `languageVersion` | C# 语言版本，如 `CSharp8_0`、`CSharp12_0`、`CSharp13_0`、`Latest` | 否 |
-| | `lines` | 按行号范围读取结果，格式 `start-end`（1-based 含两端，单次最多 500 行），如 `200-400` | 否 |
+| | `languageVersion` | C# 语言版本，如 `CSharp8_0`、`CSharp12_0`、`CSharp13_0`、`Latest`；省略使用 ilspycmd 默认 | 否 |
+| | `lines` | 按行号范围读取结果，格式 `start-end`（1-based 含两端，单次最多 500 行），如 `200-400`；省略返回前 200 行 | 否 |
 | `ilspy_decompile_member` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 在指定类型内搜索成员，全限定类型名，例如 `System.Text.Json.JsonSerializer` | 是 |
 | | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；匹配到的成员全部反编译 | 是 |
-| | `languageVersion` | C# 语言版本 | 否 |
-| | `lines` | 按行号范围读取结果，格式 `start-end` | 否 |
+| | `languageVersion` | C# 语言版本；省略使用 ilspycmd 默认 | 否 |
+| | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 | `ilspy_list_types` | `assembly` | 程序集文件路径 | 是 |
 | | `list` | 实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 `csi` | 是 |
-| | `lines` | 按行号范围读取结果，格式 `start-end` | 否 |
+| | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 | `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
-| | `project` | 以可编译项目形式反编译（每个类型一个源码文件） | 否 |
-| | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集 | 否 |
-| | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录 | 否 |
-| | `languageVersion` | C# 语言版本 | 否 |
+| | `project` | 以可编译项目形式反编译（每个类型一个源码文件，默认 false） | 否 |
+| | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集（仅 `project=false` 时生效；`project=true` 时项目模式忽略此参数并全量输出） | 否 |
+| | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录（默认 true） | 否 |
+| | `languageVersion` | C# 语言版本；省略使用 ilspycmd 默认 | 否 |
 | `ilspy_check_status` | （无参数） | 检查运行环境是否可用（ilspycmd 安装/版本、ilspymcp 更新） | - |
 
 ## 使用示例

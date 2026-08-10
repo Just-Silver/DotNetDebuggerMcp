@@ -29,7 +29,7 @@ public static class ListTypesTool
     /// </summary>
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="list">实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 "csi"（必填）。</param>
-    /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多 500 行）。</param>
+    /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多 500 行）；缺省返回前 200 行。</param>
     /// <param name="timeoutSeconds">本次回源超时秒数（默认 30）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的类型列表或错误提示文本。</returns>
@@ -38,7 +38,7 @@ public static class ListTypesTool
     public static async Task<string> ListTypes(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum；可组合多个字母同时列出，例如 \"csi\"（必填）")] string list = "",
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"")] string lines = "",
+        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"；缺省返回前 200 行")] string lines = "",
         [Description("本次回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {

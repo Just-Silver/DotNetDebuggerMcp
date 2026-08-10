@@ -6,7 +6,7 @@ using System.ComponentModel;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 将 .NET 程序集（dll/exe）反编译写入指定目录（全量或项目形式，可指定单个类型）。结果写入磁盘而非标准输出，不做行数截断。
+/// 将 .NET 程序集（dll/exe）反编译写入指定目录（全量、项目形式或单个类型）。结果写入磁盘而非标准输出，不做行数截断。
 /// </summary>
 [McpServerToolType]
 public static class DecompileToDirTool
@@ -16,22 +16,22 @@ public static class DecompileToDirTool
     /// </summary>
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="outputDir">输出目录；反编译结果写入该目录而非标准输出（必填）。</param>
-    /// <param name="project">以可编译项目形式反编译（每个类型一个源码文件）。</param>
-    /// <param name="typeName">仅反编译指定全限定类型名；省略则反编译整个程序集。</param>
-    /// <param name="nestedDirectories">输出到目录时按命名空间使用嵌套目录。</param>
-    /// <param name="languageVersion">C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest。</param>
+    /// <param name="project">以可编译项目形式反编译（每个类型一个源码文件，默认 false）。</param>
+    /// <param name="typeName">仅反编译指定全限定类型名；省略则反编译整个程序集（仅 project=false 时生效）。</param>
+    /// <param name="nestedDirectories">输出到目录时按命名空间使用嵌套目录（默认 true）。</param>
+    /// <param name="languageVersion">C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest；省略使用 ilspycmd 默认。</param>
     /// <param name="timeoutSeconds">本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
     [McpServerTool]
-    [Description("将 .NET 程序集（dll/exe）反编译写入指定目录（全量或项目形式，可指定单个类型）。结果写入磁盘而非标准输出，不做行数截断；读取源码请使用 opencode 内置工具。")]
+    [Description("将 .NET 程序集（dll/exe）反编译写入指定目录（全量、项目形式或单个类型）。结果写入磁盘而非标准输出，不做行数截断；读取源码请使用 opencode 内置工具。")]
     public static async Task<string> DecompileToDir(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("输出目录；反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
-        [Description("以可编译项目形式反编译（每个类型一个源码文件）")] bool project = false,
-        [Description("仅反编译指定全限定类型名，例如 System.String；省略则反编译整个程序集")] string typeName = "",
-        [Description("输出到目录时按命名空间使用嵌套目录")] bool nestedDirectories = false,
-        [Description("C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest")] string languageVersion = "",
+        [Description("以可编译项目形式反编译（每个类型一个源码文件，默认 false）")] bool project = false,
+        [Description("仅反编译指定全限定类型名，例如 System.String；省略则反编译整个程序集（注意：仅 project=false 时生效；project=true 时项目模式会忽略此参数并全量输出）")] string typeName = "",
+        [Description("输出到目录时按命名空间使用嵌套目录（默认 true）")] bool nestedDirectories = true,
+        [Description("C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest；省略使用 ilspycmd 默认")] string languageVersion = "",
         [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {

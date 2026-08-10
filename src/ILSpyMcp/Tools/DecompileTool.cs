@@ -17,7 +17,7 @@ public static class DecompileTool
     /// </summary>
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">要反编译的全限定类型名，例如 System.String（必填）。</param>
-    /// <param name="lines">按行号范围读取反编译结果，格式 "start-end"（1-based 含两端，单次最多 500 行）。</param>
+    /// <param name="lines">按行号范围读取反编译结果，格式 "start-end"（1-based 含两端，单次最多 500 行）；缺省返回前 200 行。</param>
     /// <param name="languageVersion">C# 语言版本，如 CSharp12_0、Latest；省略使用 ilspycmd 默认。</param>
     /// <param name="timeoutSeconds">本次反编译回源超时秒数（默认 30）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
@@ -27,7 +27,7 @@ public static class DecompileTool
     public static async Task<string> Decompile(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("要反编译的全限定类型名，例如 System.String（必填）")] string typeName = "",
-        [Description("按行号范围读取反编译结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"")] string lines = "",
+        [Description("按行号范围读取反编译结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"；缺省返回前 200 行")] string lines = "",
         [Description("C# 语言版本，如 CSharp12_0、Latest；省略使用 ilspycmd 默认")] string languageVersion = "",
         [Description("本次反编译回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)

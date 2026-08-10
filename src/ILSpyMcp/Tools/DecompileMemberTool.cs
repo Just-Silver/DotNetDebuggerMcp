@@ -19,7 +19,7 @@ public static class DecompileMemberTool
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">在指定类型内搜索成员，全限定类型名（必填）。</param>
     /// <param name="memberName">成员名子串，忽略大小写；匹配到的成员全部反编译（必填）。</param>
-    /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多 500 行）。</param>
+    /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多 500 行）；缺省返回前 200 行。</param>
     /// <param name="languageVersion">C# 语言版本，如 CSharp12_0、Latest；省略使用 ilspycmd 默认。</param>
     /// <param name="timeoutSeconds">本次反编译回源超时秒数（默认 30）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
@@ -30,7 +30,7 @@ public static class DecompileMemberTool
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("在指定类型内搜索成员，全限定类型名，例如 System.Text.Json.JsonSerializer（必填）")] string typeName = "",
         [Description("成员名子串（忽略大小写），例如 SerializeAsync；匹配到的成员会全部反编译（必填）")] string memberName = "",
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"")] string lines = "",
+        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"；缺省返回前 200 行")] string lines = "",
         [Description("C# 语言版本，如 CSharp12_0、Latest；省略使用 ilspycmd 默认")] string languageVersion = "",
         [Description("本次反编译回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)

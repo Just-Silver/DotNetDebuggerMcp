@@ -4,6 +4,14 @@
 
 版本号与 `src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 保持一致；发布时 `<PackageReleaseNotes>` 自动提取当前版本对应段落。未发布的变更统一记录在 `[Unreleased]`，发布时再转为带日期的版本段落。
 
+## [1.1.1] - 2026-08-10
+
+### Changed
+
+- decompile_to_dir 的 `nestedDirectories` 默认改为 `true`（省略即按命名空间嵌套目录输出）
+- 全部工具参数描述补齐默认值说明（`lines` 缺省返回前 200 行、`project` 默认 false、`nestedDirectories` 默认 true、`languageVersion` 省略使用 ilspycmd 默认），消除 agent 对默认行为的盲区
+- decompile_to_dir 的 `typeName` 参数描述注明「仅 project=false 时生效；project=true 时项目模式忽略并全量输出」，消除描述与实现不符（ilspycmd 项目模式会静默忽略 `-t`）
+
 ## [1.1.0] - 2026-08-10
 
 ### Added
