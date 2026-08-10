@@ -174,13 +174,15 @@ public class UpdateCheckerTests
     }
 
     [Fact]
-    public void 无缓存时GetCachedInstructions返回null()
+    public void 无缓存时GetCachedInstructions返回状态未知提示()
     {
         var checker = new UpdateChecker(TempDir());
 
         var result = checker.GetCachedInstructions();
 
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Contains("更新状态未知", result);
+        Assert.Contains("check_status", result);
     }
 
     [Fact]
@@ -202,6 +204,7 @@ public class UpdateCheckerTests
             Assert.Contains("有新版本 99.0.0", instructions);
             Assert.Contains("dotnet tool update --global ilspymcp", instructions);
             Assert.Contains(AppConfig.NuGetPackageId, instructions);
+            Assert.Contains("无需调用 check_status 复查", instructions);
         }
         finally
         {
@@ -210,7 +213,7 @@ public class UpdateCheckerTests
     }
 
     [Fact]
-    public async Task 已是最新时返回null()
+    public async Task 已是最新时返回已是最新提示()
     {
         var tempDir = TempDir();
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"0.0.1\"]}") };
@@ -222,7 +225,12 @@ public class UpdateCheckerTests
             var latest = await checker.RefreshIfStaleAsync();
             Assert.Equal("0.0.1", latest);
 
-            Assert.Null(checker.GetCachedInstructions());
+            var instructions = checker.GetCachedInstructions();
+
+            Assert.NotNull(instructions);
+            Assert.Contains("已是最新版本", instructions);
+            Assert.DoesNotContain("有新版本", instructions);
+            Assert.Contains("无需调用 check_status 复查", instructions);
         }
         finally
         {
@@ -231,7 +239,7 @@ public class UpdateCheckerTests
     }
 
     [Fact]
-    public void 损坏缓存_按无缓存处理()
+    public void 损坏缓存_返回状态未知提示()
     {
         var tempDir = TempDir();
         Directory.CreateDirectory(tempDir);
@@ -240,7 +248,9 @@ public class UpdateCheckerTests
 
         var result = checker.GetCachedInstructions();
 
-        Assert.Null(result);
+        Assert.NotNull(result);
+        Assert.Contains("更新状态未知", result);
+        Assert.Contains("无需调用 check_status 复查", result);
     }
 
     private static string TempDir() => Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N"));

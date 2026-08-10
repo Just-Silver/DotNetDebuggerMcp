@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Text.Json;
 
 namespace ILSpyMcp.Infrastructure;
@@ -39,18 +38,33 @@ public sealed class UpdateChecker
     }
 
     /// <summary>
-    /// 同步读磁盘缓存，返回有新版本时的注入提示文本；缓存缺失/损坏/已是新版一律返回 null（fail-silent，零网络）。
+    /// 判断 NuGet 最新版本是否高于当前程序集版本。 check_status 报告与握手注入共用此比较，避免版本比较规则两处独立实现后漂移。
+    /// </summary>
+    /// <param name="latestVersion">NuGet 查询到的最新版本号；为 null 时视为无法比较。</param>
+    /// <param name="currentVersion">当前程序集版本；为 null 时视为无法比较。</param>
+    /// <returns>最新版本解析成功且高于当前版本时返回 true。</returns>
+    public static bool IsNewerThanCurrent(string? latestVersion, Version? currentVersion)
+        => currentVersion is not null
+           && latestVersion is not null
+           && Version.TryParse(latestVersion, out var latest)
+           && latest > currentVersion;
+
+    /// <summary>
+    /// 同步读磁盘缓存（零网络），始终返回非 null 的注入提示文本：有新版本给升级建议、已是最新明确告知、无有效检查记录则如实说明状态未知，
+    /// 避免 agent 因未收到任何更新信息而误以为需要主动调用 check_status 复查（仅极端异常才返回 null 兜底）。
     /// </summary>
     public string? GetCachedInstructions()
     {
         try
         {
+            var current = AppConfig.CurrentVersion;
+            var currentText = current?.ToString(3) ?? "未知";
             var cache = ReadCache();
-            if (cache is null || string.IsNullOrEmpty(cache.Latest)) return null;
-            var current = Assembly.GetExecutingAssembly().GetName().Version;
-            if (current is null || !Version.TryParse(cache.Latest, out var latest)) return null;
-            if (latest <= current) return null;
-            return $"{AppConfig.NuGetPackageId}: 当前 {current.ToString(3)}，有新版本 {cache.Latest}。可执行 `dotnet tool update --global {AppConfig.NuGetPackageId}` 升级（升级属高风险操作，需用户确认执行）。";
+            if (cache is null || string.IsNullOrEmpty(cache.Latest) || !Version.TryParse(cache.Latest, out _))
+                return $"{AppConfig.NuGetPackageId}: 当前 {currentText}，更新状态未知（尚无有效检查记录）。更新状态已由服务器自动检查，无需调用 check_status 复查。";
+            if (IsNewerThanCurrent(cache.Latest, current))
+                return $"{AppConfig.NuGetPackageId}: 当前 {currentText}，有新版本 {cache.Latest}。可执行 `dotnet tool update --global {AppConfig.NuGetPackageId}` 升级（升级属高风险操作，需用户确认执行）。更新状态已由服务器自动检查，无需调用 check_status 复查。";
+            return $"{AppConfig.NuGetPackageId}: 当前 {currentText}，已是最新版本。更新状态已由服务器自动检查，无需调用 check_status 复查。";
         }
         catch
         {

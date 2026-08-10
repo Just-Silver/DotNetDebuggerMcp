@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
@@ -40,6 +42,11 @@ internal static class AppConfig
     /// 本工具发布的 NuGet 包 id，check_status 用它查询是否有新版本。
     /// </summary>
     public const string NuGetPackageId = "ilspymcp";
+
+    /// <summary>
+    /// 当前程序集版本（NuGet 包版本来源）。 反编译工具与 check_status/握手注入统一经此获取当前版本，避免各处重复读取 Assembly 元数据。
+    /// </summary>
+    public static Version? CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version;
 
     /// <summary>
     /// NuGet flatcontainer 版本清单 API 前缀（拼上包 id 即得完整 URL）。

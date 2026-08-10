@@ -83,7 +83,7 @@ public class ILSpyMcpCmd
     /// <summary>
     /// 版本号文本（由 -v/--version 触发输出），与 NuGet 包版本保持一致。
     /// </summary>
-    public string Version => AppConfig.NuGetPackageId + " " + (System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown");
+    public string Version => AppConfig.NuGetPackageId + " " + (AppConfig.CurrentVersion?.ToString(3) ?? "unknown");
 
     /// <summary>
     /// 命令行分发：-c 走 check_status，-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
@@ -128,7 +128,8 @@ public class ILSpyMcpCmd
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
         builder.Services.AddMcpServer(o =>
         {
-            // 握手期同步读取磁盘缓存（零网络），有新版本提示时注入 ServerInstructions，让 agent 会话起始即可感知升级建议
+            // 握手期同步读取磁盘缓存（零网络），始终注入更新状态提示（有新版本/已是最新/状态未知），
+            // 让 agent 会话起始即可感知更新状态，避免其因零提示而手动调用 check_status 复查
             var notice = AppServices.Updater.GetCachedInstructions();
             if (notice is not null) o.ServerInstructions = notice;
         })

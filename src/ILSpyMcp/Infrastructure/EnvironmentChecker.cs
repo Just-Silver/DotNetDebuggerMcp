@@ -1,5 +1,3 @@
-using System.Reflection;
-
 namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
@@ -44,12 +42,9 @@ internal static class EnvironmentChecker
         var latest = await AppServices.Updater.RefreshIfStaleAsync();
         if (latest is not null)
         {
-            var current = Assembly.GetExecutingAssembly().GetName().Version;
+            var current = AppConfig.CurrentVersion;
             var currentText = current?.ToString(3) ?? "未知";
-            var hasNewer = current is not null
-                && Version.TryParse(latest, out var latestVer)
-                && latestVer > current;
-            lines.Add(hasNewer
+            lines.Add(UpdateChecker.IsNewerThanCurrent(latest, current)
                 ? $"{AppConfig.NuGetPackageId}: 当前 {currentText}，NuGet 最新 {latest}。可执行 `dotnet tool update --global {AppConfig.NuGetPackageId}` 升级。"
                 : $"{AppConfig.NuGetPackageId}: 当前 {currentText}，已是最新版本。");
         }
