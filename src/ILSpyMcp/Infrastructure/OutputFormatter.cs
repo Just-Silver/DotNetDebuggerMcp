@@ -3,7 +3,13 @@ using System.Text;
 namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
+/// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述、参数串），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞。
+/// </summary>
+public sealed record FormatContext(string AssemblyPath, string Target, string Parameters, bool IsListing = false);
+
+/// <summary>
 /// 标准输出结果格式化：默认返回前 200 行，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片（单次最多 500 行）。
+/// 传入 <see cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/参数/内容），给 agent 明确代码归属与当前切片位置。
 /// </summary>
 public static class OutputFormatter
 {
@@ -39,20 +45,28 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 统一入口：指定了 lines 参数则按行号范围切片，否则返回前 DefaultMaxLines 行。
+    /// 统一入口：指定了 lines 参数则按行号范围切片，否则返回前 DefaultMaxLines 行；提供 context 时前置头部信息块。
     /// </summary>
     /// <param name="lines">反编译结果行列表。</param>
     /// <param name="linesParam">lines 参数原文；空字符串时返回前 200 行。</param>
-    /// <returns>带行号的格式化文本。</returns>
-    public static string Format(List<string> lines, string linesParam)
+    /// <param name="context">头部信息块上下文；为 null 时不加头部（保持既有行为）。</param>
+    /// <returns>带行号的格式化文本（含可选头部信息块）。</returns>
+    public static string Format(List<string> lines, string linesParam, FormatContext? context = null)
     {
-        if (!string.IsNullOrEmpty(linesParam))
-        {
-            var (start, end, error) = ParseLines(linesParam);
-            if (error is not null) return error;
-            return SliceLines(lines, start, end);
-        }
-        return FormatHead(lines);
+        var body = string.IsNullOrEmpty(linesParam) ? FormatHead(lines) : FormatSlice(lines, linesParam);
+        if (context is null) return body;
+        var header = BuildHeader(context, lines, linesParam);
+        return string.IsNullOrEmpty(body) ? header : $"{header}\n{body}";
+    }
+
+    /// <summary>
+    /// 按行号范围切片；非法格式/边界返回错误提示。
+    /// </summary>
+    private static string FormatSlice(List<string> lines, string linesParam)
+    {
+        var (start, end, error) = ParseLines(linesParam);
+        if (error is not null) return error;
+        return SliceLines(lines, start, end);
     }
 
     /// <summary>
@@ -117,7 +131,7 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 按 codegraph 风格给每行添加行号前缀（`行号\t内容`），行号从 start 起；统一用 \n 换行避免 \r 残留。
+    /// 给每行添加行号前缀（`行号\t内容`），行号从 start 起；统一用 \n 换行避免 \r 残留。
     /// </summary>
     /// <param name="lines">待标注行号的行列表。</param>
     /// <param name="start">首行行号（1-based）。</param>
@@ -130,5 +144,36 @@ public static class OutputFormatter
             sb.Append(start + i).Append('\t').Append(lines[i]).Append('\n');
         }
         return sb.ToString().TrimEnd('\n');
+    }
+
+    /// <summary>
+    /// 生成头部信息块：程序集 / 目标 / 参数 / 内容 四行 + 分隔线。头部为纯文本、不带行号前缀，避免与源码行号混淆。
+    /// </summary>
+    private static string BuildHeader(FormatContext ctx, List<string> lines, string linesParam)
+    {
+        var sb = new StringBuilder();
+        sb.Append("程序集: ").Append(ctx.AssemblyPath).Append('\n');
+        sb.Append("目标:   ").Append(ctx.Target).Append('\n');
+        if (!string.IsNullOrEmpty(ctx.Parameters)) sb.Append("参数:   ").Append(ctx.Parameters).Append('\n');
+        sb.Append("内容:   ").Append(DescribeContent(ctx, lines.Count, linesParam));
+        sb.Append("\n---");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 描述内容规模与当前切片范围：反编译按「行」、列类型按「匹配实体」，两者皆以行为单位分页。
+    /// </summary>
+    private static string DescribeContent(FormatContext ctx, int total, string linesParam)
+    {
+        var unit = ctx.IsListing ? "个匹配实体" : "行";
+        var baseText = $"共 {total} {unit}";
+        if (string.IsNullOrEmpty(linesParam))
+        {
+            return total > DefaultMaxLines ? $"{baseText}，当前显示前 {DefaultMaxLines} 行" : baseText;
+        }
+        var (start, end, error) = ParseLines(linesParam);
+        if (error is not null) return baseText;
+        var shownEnd = Math.Min(Math.Min(end, start + LinesRangeMax - 1), total);
+        return $"{baseText}，当前显示 {start}-{shownEnd} 行";
     }
 }

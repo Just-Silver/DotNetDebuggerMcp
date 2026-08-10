@@ -13,6 +13,18 @@ namespace ILSpyMcp.Tools;
 public static class ListTypesTool
 {
     /// <summary>
+    /// list 字母到实体类别英文名的映射，用于头部目标描述。
+    /// </summary>
+    private static readonly IReadOnlyDictionary<char, string> CategoryNames = new Dictionary<char, string>
+    {
+        ['c'] = "class",
+        ['i'] = "interface",
+        ['s'] = "struct",
+        ['d'] = "delegate",
+        ['e'] = "enum",
+    };
+
+    /// <summary>
     /// 列出指定类别的实体类型，经共享管道缓存与 lines 分页。
     /// </summary>
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
@@ -36,10 +48,22 @@ public static class ListTypesTool
         if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
 
         // 由参数结构统一派生命令行与缓存签名，杜绝命令/签名两处手写导致缓存 key 错配
-        var command = new ToolCommand(ToolCommand.DefaultExecutable, Path.GetFullPath(assembly),
+        var assemblyFull = Path.GetFullPath(assembly);
+        var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
             new ToolParameter("-l", list));
 
+        // 头部信息块：程序集绝对路径 + 类别描述（含英文名）+ 启用的参数串（Args 末尾为程序集路径，仅取参数段）
+        var context = new FormatContext(assemblyFull,
+            $"实体类别 {DescribeCategories(list)}",
+            string.Join(' ', command.Args.Take(command.Args.Count - 1)),
+            IsListing: true);
+
         // 走共享执行管道：缓存命中 → 回源 → lines 分页（list 结果体量小，永不超限，仅取文本）
-        return (await AppServices.Pipeline.ExecuteAsync(assembly, command, lines, TimeSpan.FromSeconds(timeoutSeconds))).Text;
+        return (await AppServices.Pipeline.ExecuteAsync(assembly, command, lines, TimeSpan.FromSeconds(timeoutSeconds), context: context)).Text;
     }
+
+    /// <summary>
+    /// 将 list 字母组合转为「字母(英文名)」描述，如 "csi" → "c(class), i(interface), s(struct)"。
+    /// </summary>
+    private static string DescribeCategories(string list) => string.Join(", ", list.Select(ch => $"{ch}({CategoryNames[ch]})"));
 }

@@ -68,11 +68,11 @@ public static class DecompileToDirTool
         try
         {
             var count = Directory.GetFiles(outputFull, "*", SearchOption.AllDirectories).Length;
-            return $"已写入 {outputFull}（{count} 个文件）";
+            return $"已写入 {outputFull}（{count} 个文件，来源 {assemblyFull}）";
         }
         catch
         {
-            return $"已写入 {outputFull}";
+            return $"已写入 {outputFull}（来源 {assemblyFull}）";
         }
     }
 }

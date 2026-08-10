@@ -70,7 +70,9 @@ public class ToolPreflightTests
         try
         {
             var result = await DecompileTool.Decompile(assembly: AssemblyPath, typeName: "System.String");
-            Assert.Equal("1\ta\n2\tb", result);
+            Assert.StartsWith("程序集: ", result); // 头部信息块在前
+            Assert.Contains("目标:   类型 System.String", result);
+            Assert.EndsWith("1\ta\n2\tb", result); // 源码带行号在尾部
             Assert.Equal(2, fake.CallCount); // 1 次安装检测 + 1 次反编译
         }
         finally
@@ -87,7 +89,8 @@ public class ToolPreflightTests
         try
         {
             var result = await DecompileTool.Decompile(assembly: AssemblyPath, typeName: "System.String", timeoutSeconds: 99);
-            Assert.Equal("1\ta", result);
+            Assert.StartsWith("程序集: ", result);
+            Assert.EndsWith("1\ta", result);
             Assert.Equal(TimeSpan.FromSeconds(99), fake.Timeout);
         }
         finally
@@ -119,7 +122,9 @@ public class ToolPreflightTests
         try
         {
             var result = await ListTypesTool.ListTypes(assembly: AssemblyPath, list: "c", timeoutSeconds: 45);
-            Assert.Equal("1\ta", result);
+            Assert.StartsWith("程序集: ", result);
+            Assert.Contains("实体类别 c(class)", result);
+            Assert.EndsWith("1\ta", result);
             Assert.Equal(TimeSpan.FromSeconds(45), fake.Timeout);
         }
         finally
@@ -156,7 +161,8 @@ public class ToolPreflightTests
         try
         {
             var result = await ListTypesTool.ListTypes(assembly: AssemblyPath, list: "c");
-            Assert.Equal("1\ta", result);
+            Assert.StartsWith("程序集: ", result);
+            Assert.EndsWith("1\ta", result);
             Assert.Equal(2, fake.CallCount); // 1 次安装检测 + 1 次类型列表
         }
         finally

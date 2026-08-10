@@ -114,8 +114,9 @@ public sealed class ToolPipeline
     /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前 200 行。</param>
     /// <param name="timeout">本次回源超时；为 null 时用全局默认超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="context">头部信息块上下文；提供时结果前置程序集/目标/参数说明。</param>
     /// <returns>管道执行结果：格式化后的反编译文本或错误提示。</returns>
-    public async Task<ToolPipelineResult> ExecuteAsync(string assembly, ToolCommand command, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default)
+    public async Task<ToolPipelineResult> ExecuteAsync(string assembly, ToolCommand command, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
     {
         CacheKey key;
         try
@@ -149,7 +150,7 @@ public sealed class ToolPipeline
             }
         }
 
-        return new ToolPipelineResult(OutputFormatter.Format(cached, lines));
+        return new ToolPipelineResult(OutputFormatter.Format(cached, lines, context));
     }
 
     /// <summary>

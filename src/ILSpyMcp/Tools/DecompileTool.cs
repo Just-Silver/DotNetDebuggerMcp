@@ -42,12 +42,18 @@ public static class DecompileTool
         if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
 
         // 由参数结构统一派生命令行与缓存签名，杜绝命令/签名两处手写导致缓存 key 错配
-        var command = new ToolCommand(ToolCommand.DefaultExecutable, Path.GetFullPath(assembly),
+        var assemblyFull = Path.GetFullPath(assembly);
+        var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
             ToolParameter.Optional("-t", typeName),
             ToolParameter.Optional("-m", member),
             ToolParameter.Optional("-lv", languageVersion));
 
+        // 头部信息块：程序集绝对路径 + 目标 + 启用的参数串（Args 末尾为程序集路径，仅取参数段）
+        var context = new FormatContext(assemblyFull,
+            string.IsNullOrEmpty(member) ? $"类型 {typeName}" : $"成员 {member}",
+            string.Join(' ', command.Args.Take(command.Args.Count - 1)));
+
         // 走共享执行管道：缓存命中 → 回源 → lines 分页；stdout 超限时 ProcessRunner 直接返回错误提示
-        return (await AppServices.Pipeline.ExecuteAsync(assembly, command, lines, TimeSpan.FromSeconds(timeoutSeconds))).Text;
+        return (await AppServices.Pipeline.ExecuteAsync(assembly, command, lines, TimeSpan.FromSeconds(timeoutSeconds), context: context)).Text;
     }
 }

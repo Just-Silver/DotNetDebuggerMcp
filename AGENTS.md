@@ -8,6 +8,7 @@
 - 工具方法返回 `Task<string>`，一切错误（参数校验、ilspycmd 退出码非 0）均返回提示文本，不抛异常。
 - stdout 只承载 MCP 协议消息；日志必须走 stderr（`Program.cs` 已配置，勿改）。
 - 工具的 `[Description]` 与所有提示用中文，必填参数标注「（必填）」。
+- **更新版本号必须同步改两处**：`src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 与 `src/ILSpyMcp/.mcp/server.json`。注意 server.json 里 `version` 出现两次（顶层 `version` 与 `packages[0].version`），都要改成一致。`-v/--version` 输出版本取程序集版本（由 csproj 生成），但 NuGet MCP 注册信息读 server.json，两处不同步会导致发布后展示的版本不一致。
 
 ## 结构
 
@@ -39,7 +40,8 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
 
 ## 输出约定
 
-- 结果按 codegraph 风格标注行号（`行号\t内容`），切片时行号基于原始位置
+- 结果前置头部信息块（`程序集/目标/参数/内容` 四行 + `---` 分隔线，纯文本不带行号），由工具经 `FormatContext` 传入、`OutputFormatter` 生成，给 agent 明确的代码归属与当前切片位置；`decompile_to_dir` 成功提示含「来源 <assembly>」
+- 头部之下按行号标注（`行号\t内容`），切片时行号基于原始位置
 - 默认返回前 200 行，`lines="start-end"` 按行号范围分页（单次最多 500 行）
 - stdout 反编译结果超过 `AppConfig.MaxOutputBytes`（64MB）时 `ProcessRunner` 直接返回「超过上限，建议改用 decompile_to_dir」错误提示，不入缓存；只有 `decompile_to_dir` 能拿到完整结果。测试超限行为可临时调小该常量（记得还原）
 

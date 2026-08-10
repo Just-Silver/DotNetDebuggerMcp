@@ -155,4 +155,63 @@ public class OutputFormatterTests
         Assert.Contains("1\tline1", result);
         Assert.DoesNotContain("501\tline501", result);
     }
+
+    [Fact]
+    public void Format_带context_前置头部信息块()
+    {
+        var lines = Enumerable.Range(1, 3).Select(i => $"line{i}").ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.StartsWith("程序集: D:\\a\\b.dll\n目标:   类型 System.String\n参数:   -t System.String\n内容:   共 3 行\n---\n1\tline1", result);
+        Assert.EndsWith("1\tline1\n2\tline2\n3\tline3", result);
+    }
+
+    [Fact]
+    public void Format_带context且超限_内容行标注前200行()
+    {
+        var lines = Enumerable.Range(1, 250).Select(i => $"line{i}").ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.Contains("内容:   共 250 行，当前显示前 200 行", result);
+        Assert.Contains("已截断", result);
+    }
+
+    [Fact]
+    public void Format_带context且lines切片_内容行标注当前范围()
+    {
+        var lines = Enumerable.Range(1, 600).Select(i => $"line{i}").ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
+
+        var result = OutputFormatter.Format(lines, "200-400", ctx);
+
+        Assert.Contains("内容:   共 600 行，当前显示 200-400 行", result);
+        Assert.Contains("200\tline200", result);
+    }
+
+    [Fact]
+    public void Format_带listing_context_空结果_内容显示共0个匹配实体()
+    {
+        var ctx = new FormatContext(@"D:\a\b.dll", "实体类别 d(delegate)", "-l d", IsListing: true);
+
+        var result = OutputFormatter.Format(new List<string>(), "", ctx);
+
+        Assert.Contains("内容:   共 0 个匹配实体", result);
+        Assert.EndsWith("---", result);
+        Assert.DoesNotContain("1\t", result);
+    }
+
+    [Fact]
+    public void Format_无context_保持原有行为不加头部()
+    {
+        var lines = Enumerable.Range(1, 3).Select(i => $"line{i}").ToList();
+
+        var result = OutputFormatter.Format(lines, "");
+
+        Assert.Equal("1\tline1\n2\tline2\n3\tline3", result);
+        Assert.DoesNotContain("程序集:", result);
+    }
 }

@@ -33,6 +33,42 @@ public class ToolPipelineTests
     }
 
     [Fact]
+    public async Task 缓存命中_结果仍带头部上下文()
+    {
+        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
+        var pipeline = Create(fake);
+        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
+        var context = new FormatContext(@"D:\x\a.dll", "类型 System.String", "-t System.String");
+
+        var first = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
+        var second = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
+
+        Assert.Equal(1, fake.CallCount); // 命中缓存，不再回源
+        Assert.StartsWith("程序集: ", first.Text);
+        Assert.StartsWith("程序集: ", second.Text);
+        Assert.EndsWith("1\ta\n2\tb", first.Text);
+        Assert.EndsWith("1\ta\n2\tb", second.Text);
+    }
+
+    [Fact]
+    public async Task 缓存条目_仅含纯净行列表不含头部()
+    {
+        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
+        var cache = new DecompileCache();
+        var pipeline = Create(fake, cache);
+        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
+        var context = new FormatContext(@"D:\x\a.dll", "类型 System.String", "-t System.String");
+
+        var result = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
+
+        Assert.StartsWith("程序集: ", result.Text); // 对外输出带头部
+        var key = cache.BuildKey(AssemblyPath, command.Signature);
+        var cached = cache.Get(key);
+        Assert.NotNull(cached);
+        Assert.Equal(new[] { "a", "b" }, cached); // 缓存内是纯净行，头部只在渲染期
+    }
+
+    [Fact]
     public async Task 不同签名_各自独立回源()
     {
         var fake = new FakeProcessRunner { Stdout = "x\n" };
