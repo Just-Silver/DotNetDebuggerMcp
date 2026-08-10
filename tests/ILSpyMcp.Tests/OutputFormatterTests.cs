@@ -181,11 +181,11 @@ public class OutputFormatterTests
     public void Format_带context_前置头部信息块()
     {
         var lines = Enumerable.Range(1, 3).Select(i => $"line{i}").ToList();
-        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
 
         var result = OutputFormatter.Format(lines, "", ctx);
 
-        Assert.StartsWith("程序集: D:\\a\\b.dll\n目标:   类型 System.String\n参数:   -t System.String\n总行数:   3 行\n当前输出: 1-3（3 行）\n---\n1\tline1", result);
+        Assert.StartsWith("程序集: D:\\a\\b.dll\n目标:   类型 System.String\n总行数:   3 行\n当前输出: 1-3（3 行）\n---\n1\tline1", result);
         Assert.EndsWith("1\tline1\n2\tline2\n3\tline3", result);
     }
 
@@ -193,7 +193,7 @@ public class OutputFormatterTests
     public void Format_带context且超限_头部标注总量与前200行_截断提示不含重复行数()
     {
         var lines = Enumerable.Range(1, 250).Select(i => $"line{i}").ToList();
-        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
 
         var result = OutputFormatter.Format(lines, "", ctx);
 
@@ -207,7 +207,7 @@ public class OutputFormatterTests
     public void Format_带context且lines切片_头部标注总量与当前范围()
     {
         var lines = Enumerable.Range(1, 600).Select(i => $"line{i}").ToList();
-        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
 
         var result = OutputFormatter.Format(lines, "200-400", ctx);
 
@@ -220,7 +220,7 @@ public class OutputFormatterTests
     public void Format_带context且lines越界_头部标注当前输出无效()
     {
         var lines = Enumerable.Range(1, 3).Select(i => $"line{i}").ToList();
-        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", "-t System.String");
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
 
         var result = OutputFormatter.Format(lines, "5-6", ctx);
 
@@ -232,7 +232,7 @@ public class OutputFormatterTests
     [Fact]
     public void Format_带listing_context_空结果_头部标注匹配实体与总行数()
     {
-        var ctx = new FormatContext(@"D:\a\b.dll", "实体类别 c(class)", "-l c", IsListing: true);
+        var ctx = new FormatContext(@"D:\a\b.dll", "实体类别 c(class)", IsListing: true);
 
         var result = OutputFormatter.Format(new List<string>(), "", ctx);
 
@@ -247,7 +247,7 @@ public class OutputFormatterTests
     public void Format_带listing_context_非空结果_匹配实体与总行数并存()
     {
         var lines = Enumerable.Range(1, 2).Select(i => $"C{i}").ToList();
-        var ctx = new FormatContext(@"D:\a\b.dll", "实体类别 c(class)", "-l c", IsListing: true);
+        var ctx = new FormatContext(@"D:\a\b.dll", "实体类别 c(class)", IsListing: true);
 
         var result = OutputFormatter.Format(lines, "", ctx);
 

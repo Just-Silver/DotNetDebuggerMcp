@@ -52,11 +52,8 @@ public static class ListTypesTool
         var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
             new ToolParameter("-l", list));
 
-        // 头部信息块：程序集绝对路径 + 类别描述（含英文名）+ 启用的参数串（Args 末尾为程序集路径，仅取参数段）
-        var context = new FormatContext(assemblyFull,
-            $"实体类别 {DescribeCategories(list)}",
-            string.Join(' ', command.Args.Take(command.Args.Count - 1)),
-            IsListing: true);
+        // 头部信息块：程序集绝对路径 + 类别描述（含英文名，参数不展示——agent 面对的是 MCP 命名参数）
+        var context = new FormatContext(assemblyFull, $"实体类别 {DescribeCategories(list)}", IsListing: true);
 
         // 走共享执行管道：缓存命中 → 回源 → lines 分页（list 结果体量小，永不超限，仅取文本）
         return (await AppServices.Pipeline.ExecuteAsync(assembly, command, lines, TimeSpan.FromSeconds(timeoutSeconds), context: context)).Text;

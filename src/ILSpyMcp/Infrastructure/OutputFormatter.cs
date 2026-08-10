@@ -3,13 +3,13 @@ using System.Text;
 namespace ILSpyMcp.Infrastructure;
 
 /// <summary>
-/// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述、参数串），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞。
+/// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞。
 /// </summary>
-public sealed record FormatContext(string AssemblyPath, string Target, string Parameters, bool IsListing = false);
+public sealed record FormatContext(string AssemblyPath, string Target, bool IsListing = false);
 
 /// <summary>
 /// 标准输出结果格式化：默认返回前 200 行，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片（单次最多 500 行）。
-    /// 传入 <see cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/参数/总量/当前输出），给 agent 明确代码归属与当前切片位置。
+    /// 传入 <see cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/总量/当前输出），给 agent 明确代码归属与当前切片位置。
 /// </summary>
 public static class OutputFormatter
 {
@@ -148,7 +148,7 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 生成头部信息块：程序集 / 目标 / 参数 三行 + 总量与当前输出字段行 + 分隔线。
+    /// 生成头部信息块：程序集 / 目标 两行 + 总量与当前输出字段行 + 分隔线。
     /// 总量：反编译为「总行数」，列类型同时给出「匹配实体」与「总行数」（每行一个实体，行数=实体数）；当前输出统一按「行」定位。
     /// 头部为纯文本、不带行号前缀，避免与源码行号混淆。
     /// </summary>
@@ -157,7 +157,6 @@ public static class OutputFormatter
         var sb = new StringBuilder();
         sb.Append("程序集: ").Append(ctx.AssemblyPath).Append('\n');
         sb.Append("目标:   ").Append(ctx.Target).Append('\n');
-        if (!string.IsNullOrEmpty(ctx.Parameters)) sb.Append("参数:   ").Append(ctx.Parameters).Append('\n');
         sb.Append(DescribeStats(ctx, lines.Count)).Append('\n');
         sb.Append(DescribeCurrent(linesParam, lines.Count));
         sb.Append("\n---");

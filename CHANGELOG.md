@@ -4,6 +4,12 @@
 
 版本号与 `src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 保持一致；发布时 `<PackageReleaseNotes>` 自动提取当前版本对应段落。
 
+## [Unreleased]
+
+### Fixed
+
+- 移除头部信息块的「参数」行：agent 面对的是 MCP 命名参数，ilspycmd 内部命令行参数（如 `-m token`、`-t`、`-l`）对 agent 无意义且会误导
+
 ## [1.1.0] - 2026-08-10
 
 ### Added

@@ -45,10 +45,8 @@ public static class DecompileTool
             ToolParameter.Optional("-t", typeName),
             ToolParameter.Optional("-lv", languageVersion));
 
-        // 头部信息块：程序集绝对路径 + 目标 + 启用的参数串（Args 末尾为程序集路径，仅取参数段）
-        var context = new FormatContext(assemblyFull,
-            $"类型 {typeName}",
-            string.Join(' ', command.Args.Take(command.Args.Count - 1)));
+        // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数，ilspycmd 命令行参数对 agent 无意义）
+        var context = new FormatContext(assemblyFull, $"类型 {typeName}");
 
         // 走共享执行管道：缓存命中 → 回源 → lines 分页；stdout 超限时 ProcessRunner 直接返回错误提示
         return (await AppServices.Pipeline.ExecuteAsync(assembly, command, lines, TimeSpan.FromSeconds(timeoutSeconds), context: context)).Text;

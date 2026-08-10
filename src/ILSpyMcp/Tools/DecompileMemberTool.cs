@@ -57,10 +57,9 @@ public static class DecompileMemberTool
                 ToolParameter.Optional("-lv", languageVersion)))
             .ToArray();
 
-        // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）+ 参数串（Args 末尾为程序集路径，仅取参数段）
-        var context = new FormatContext(assemblyFull,
-            $"类型 {typeName} 的成员 {memberName}（{matches.Count} 个匹配）",
-            string.Join(' ', commands[0].Args.Take(commands[0].Args.Count - 1)));
+        // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）。不展示参数——对外工具没有 -m/token 概念，
+        // 暴露内部 token 或 ilspycmd 参数会误导 agent（agent 面对的是 MCP 命名参数）
+        var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员 {memberName}（{matches.Count} 个匹配）");
 
         // 走共享执行管道：各成员缓存/回源后合并，统一行号与 lines 分页
         return (await AppServices.Pipeline.ExecuteMergedAsync(assembly, commands, lines, TimeSpan.FromSeconds(timeoutSeconds), context: context)).Text;

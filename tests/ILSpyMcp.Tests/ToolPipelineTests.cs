@@ -38,7 +38,7 @@ public class ToolPipelineTests
         var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
         var pipeline = Create(fake);
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-        var context = new FormatContext(@"D:\x\a.dll", "类型 System.String", "-t System.String");
+        var context = new FormatContext(@"D:\x\a.dll", "类型 System.String");
 
         var first = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
         var second = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
@@ -57,7 +57,7 @@ public class ToolPipelineTests
         var cache = new DecompileCache();
         var pipeline = Create(fake, cache);
         var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-        var context = new FormatContext(@"D:\x\a.dll", "类型 System.String", "-t System.String");
+        var context = new FormatContext(@"D:\x\a.dll", "类型 System.String");
 
         var result = await pipeline.ExecuteAsync(AssemblyPath, command, "", context: context);
 

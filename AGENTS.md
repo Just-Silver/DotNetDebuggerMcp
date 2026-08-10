@@ -13,7 +13,7 @@
 ## 结构
 
 - `src/ILSpyMcp/` — MCP 服务器（net10.0、PackAsTool、框架依赖；运行期需 .NET 10 运行时）
-  - `Tools/` — DecompileTool / DecompileMemberTool / ListTypesTool / DecompileToDirTool（`ILSpyMcp.Tools`）：`[McpServerToolType]` 静态类，只做参数校验与命令组装，经共享服务执行。每个工具都带 `timeoutSeconds` 参数（默认 30s，大程序集可调大，校验仅要求 ≥1 的正整数，无上限）。注意 `decompile_to_dir` 不经缓存管道，直接经 `AppServices.Process` 执行（`ToolPipelineResult` 无 Oversized 字段，仅 `Text`）；另三个工具走 `ToolPipeline`；`decompile_member` 按成员名子串在指定类型内搜索并反编译（纯元数据读取定位，token 直用于 `-m`，多匹配合并行号连续）
+  - `Tools/` — DecompileTool / DecompileMemberTool / ListTypesTool / DecompileToDirTool（`ILSpyMcp.Tools`）：`[McpServerToolType]` 静态类，只做参数校验与命令组装，经共享服务执行。每个工具都带 `timeoutSeconds` 参数（默认 30s，大程序集可调大，校验仅要求 ≥1 的正整数，无上限）。注意 `decompile_to_dir` 不经缓存管道，直接经 `AppServices.Process` 执行（`ToolPipelineResult` 无 Oversized 字段，仅 `Text`）；另三个工具走 `ToolPipeline`。`decompile` 仅类型级反编译（`typeName` 必填，成员级由 decompile_member 承接）；`decompile_member` 按成员名子串在指定类型内搜索并反编译（纯元数据读取定位，**只传 `-m <token>`**——ilspycmd 的 `-t` 与 `-m` 互斥，token 全局唯一；多匹配合并行号连续）
   - `Infrastructure/`（`ILSpyMcp.Infrastructure`）— 执行基础设施：
     - `AppServices.cs` — 进程级共享单例（进程执行器、缓存、执行管道、安装检测），避免各工具独立持有实例；测试经 `ConfigureForTest`/`ResetForTest` 注入 fake
     - `ProcessRunner.cs` — 通用子进程执行（args[0] 为可执行名，超时终止进程树，失败返回提示不抛异常）；stdout 流式读取并有 `AppConfig.MaxOutputBytes`（=64MB）上限，超过即终止并返回"建议改用 decompile_to_dir"提示，防 OOM
@@ -35,13 +35,22 @@ dotnet test tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj --filter "FullyQualifiedN
 dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # 调全部工具做端到端验证
 ```
 
+- CLI 调试（改完 server 代码用 Debug 构建的 exe 快速验证，行为与 MCP 工具一致，是验证新行为的主要手段）：
+  ```bash
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -t <TypeName>      # 反编译类型
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -t <TypeName> -mn <成员名子串>  # 按名搜成员
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -l c               # 列 class（c/i/s/d/e 可组合）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -o <dir>           # 写盘（-p 项目形式）
+  ```
+  其他选项：`-ln start-end` 按行分页、`-lv` 语言版本、`--timeout` 秒数
 - 运行期依赖 `ilspycmd` 需全局安装（`dotnet tool install --global ilspycmd`），未安装时工具返回安装提示
 - 修改逻辑后：build 通过 + 单元测试通过 + 运行 Client 确认输出样式
+- 重新生成测试程序集：`powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1`（注意 `BigMethod` 用数组链而非常量链——否则 Release 编译常量折叠会让方法只剩几行，无法触发 600 行截断）
 - 本地调试注意：根 `opencode.json` 把本仓库自身的 MCP server 绑定到 `src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe`，改完 server 代码需重新 build 并重启 opencode 才生效；会话内 `ilspy_*` 工具反映旧二进制，验证新行为请以 Client 输出为准
 
 ## 输出约定
 
-- 结果前置头部信息块（`程序集/目标/参数` 三行 + 总量字段 + `当前输出` 字段 + `---` 分隔线，纯文本不带行号），由工具经 `FormatContext` 传入、`OutputFormatter` 生成，给 agent 明确的代码归属、总体规模与当前切片位置；`decompile_to_dir` 成功提示含「来源 <assembly>」
+- 结果前置头部信息块（`程序集/目标` 两行 + 总量字段 + `当前输出` 字段 + `---` 分隔线，纯文本不带行号），由工具经 `FormatContext` 传入、`OutputFormatter` 生成，给 agent 明确的代码归属、总体规模与当前切片位置。**不展示参数行**——agent 面对的是 MCP 命名参数，ilspycmd 内部命令行参数（如 `-m token`、`-t`、`-l`）会误导 agent；`decompile_to_dir` 成功提示含「来源 <assembly>」
 - 总量：反编译为 `总行数: N 行`；列类型同时给出 `匹配实体: N 个` 与 `总行数: N 行`（每行一个实体，行数=实体数）。`当前输出` 统一按行（如 `1-200（200 行，已截断）`），空结果为 `无`、越界为 `无效（起始行 X 超出总行数 Y）`
 - `decompile_member` 头部目标描述为 `类型 X 的成员 <memberName>（N 个匹配）`；多成员匹配合并输出（行号连续、总行数基于合并结果），无匹配返回「类型 X 中未找到名称包含 Y 的成员」、类型不存在返回「未找到类型 X」
 - 头部之下按行号标注（`行号\t内容`），切片时行号基于原始位置
@@ -51,4 +60,4 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
 ## 验证注意
 
 - `ProcessRunnerTests` 覆盖 ReadCappedAsync 超限/取消/边界；真实超限验证可用 xUnit 直连 `ToolPipeline` + `ProcessRunner` 反编译 `tests/TestData` 下 dll 的 `ILSpyMcp.Samples.BigClass`（600+ 行，调小上限即触发）
-- 单测里经 `ToolPipeline` 的 assembly 路径解析基准是测试进程 CWD（`bin/Debug/net10.0`），相对路径需从 `AppContext.BaseDirectory` 上溯仓库根再拼 `tests\TestData\ILSpyMcp.TestSamples.dll`（5 层 `..`）
+- 单测里经 `ToolPipeline` 的 assembly 路径解析基准是测试进程 CWD（`bin/Debug/net10.0`）；访问 `tests/TestData` 下 dll 用 `TestDataPaths.TestSamplesDll` 帮助类（`tests/ILSpyMcp.Tests/TestDataPaths.cs`，自动上溯仓库根 5 层 `..`），MemberResolver 单测则直接用 `typeof(OutputFormatter).Assembly.Location`（主项目程序集，无需 TestData）
