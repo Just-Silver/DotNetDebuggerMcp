@@ -4,7 +4,7 @@
 
 版本号与 `src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 保持一致；发布时 `<PackageReleaseNotes>` 自动提取当前版本对应段落。未发布的变更统一记录在 `[Unreleased]`，发布时再转为带日期的版本段落。
 
-## [Unreleased]
+## [1.1.0] - 2026-08-10
 
 ### Added
 

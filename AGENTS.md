@@ -25,7 +25,7 @@
   - `Validation/`（`ILSpyMcp.Validation`）— `ArgumentValidators.cs` 共享参数校验；`ToolPreflight.cs` 安装检测 + assembly 校验的前置检查
 - `src/ILSpyMcp.Client/` — 端到端验证客户端：场景拆分为 `DecompileCases` / `DecompileMemberCases` / `ListTypesCases` / `DecompileToDirCases`（各工具全参数覆盖）与 `ClientRunner`（连接/执行/输出）、`TestDataHelper`（自动发现测试 dll 并共享类型/成员标识），`Program.cs` 仅做入口
 - `tests/ILSpyMcp.Tests/` — xUnit 单元测试（缓存/管道/格式化/校验/进程执行，fake 注入 `IProcessRunner`）
-- `tests/TestData/` — 验证用程序集（生成的 `ILSpyMcp.TestSamples.dll`：601 个 class 触发 list_types 的 500 行上限截断，`BigClass`（含 BigMethod 600+ 行与 BigHelper/BigHelper2）触发 decompile 截断/分页与 decompile_member 多匹配；dll 与生成脚本 `generate-testdata.ps1` 入库，可重新生成；Client 经 `TestDataHelper` 自动发现目录下 dll 并对全部工具参数做端到端验证）
+- `tests/TestData/` — 验证用程序集（生成的 `ILSpyMcp.TestSamples.dll`：601 个 class = Class0001-0600 + BigClass，list_types 输出还含编译器生成的 `<Module>`，共 602 行，同时触发 200 行默认截断与 500 行分页上限；`BigClass` 含 BigMethod 600+ 行与 BigHelper/BigHelper2，触发 decompile 截断/分页与 decompile_member 多匹配；dll 与生成脚本 `generate-testdata.ps1` 入库，可重新生成；Client 经 `TestDataHelper` 自动发现目录下 dll 并对全部工具参数做端到端验证）
 
 ## 命令
 
@@ -36,6 +36,7 @@ dotnet test tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj --filter "FullyQualifiedN
 dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # 调全部工具做端到端验证
 ```
 
+- Client 端到端会以 Release 自启动 server 项目（`dotnet run --project src/ILSpyMcp/ILSpyMcp.csproj -c Release`，无需预先单独构建 server），运行后自动清理写盘产物 `tests/.ilspymcp-client-out/`（已在 .gitignore）；运行期需 ilspycmd 在 PATH（CI 显式把 `%USERPROFILE%\.dotnet\tools` 前置到 PATH）
 - CLI 调试（改完 server 代码用 Debug 构建的 exe 快速验证，行为与 MCP 工具一致，是验证新行为的主要手段）：
   ```bash
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -t <TypeName>      # 反编译类型
