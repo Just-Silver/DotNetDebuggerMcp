@@ -13,7 +13,7 @@
     <!-- Set recommended package metadata -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageId>ilspymcp</PackageId>
-    <PackageVersion>1.0.1</PackageVersion>
+    <Version>1.0.1</Version>
     <ToolCommandName>ilspymcp</ToolCommandName>
     <Authors>Just-Silver</Authors>
     <RepositoryType>git</RepositoryType>
@@ -32,6 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="McMaster.Extensions.Hosting.CommandLine" Version="5.1.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageReference Include="ModelContextProtocol" Version="2.1.0" />
   </ItemGroup>

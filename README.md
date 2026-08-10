@@ -52,6 +52,20 @@ dotnet tool uninstall --global ilspymcp
 
 配置完成后重启 opencode，工具以 `ilspy_*` 前缀暴露。
 
+## 命令行调试
+
+`ilspymcp` 直接运行即进入 MCP 服务器模式；也可传入参数以命令行形式执行与 MCP 工具相同的功能，便于调试：
+
+```bash
+ilspymcp -v                                  # 查看版本号（等价 --version）
+ilspymcp -h                                  # 查看帮助（等价 --help）
+ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program      # 反编译单个类型（带行号，等价 ilspy_decompile）
+ilspymcp -a bin/Debug/MyApp.dll -l csi               # 列出实体类型（等价 ilspy_list_types）
+ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories   # 反编译写盘（等价 ilspy_decompile_to_dir）
+```
+
+常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-m|--member`（成员）、`-l|--list`（类型类别）、`-o|--outputdir`（输出目录）、`-p|--project`（项目形式）、`--nested-directories`（嵌套目录）、`-lv|--languageversion`（C# 版本）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）。
+
 ## 工具
 
 | MCP 工具 | 用途 |
