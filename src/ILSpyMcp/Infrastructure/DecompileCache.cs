@@ -146,7 +146,7 @@ public sealed class DecompileCache
 
     private sealed class CacheEntry
     {
-        public List<string> Lines;
+        public List<string> Lines = null!;
         public long TotalBytes;
         public LinkedListNode<CacheKey>? Node;
     }

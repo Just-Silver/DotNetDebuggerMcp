@@ -4,7 +4,7 @@
 
 ## 环境要求
 
-- [.NET SDK 10](https://dotnet.microsoft.com/download)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
 
 ## 安装
 
