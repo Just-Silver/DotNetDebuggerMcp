@@ -33,22 +33,22 @@ internal static class AppServices
     public static InstallChecker Installer = new(Process);
 
     /// <summary>
-    /// 共享 NuGet 包版本查询（check_status 用它检查 ilspymcp 是否有新版本）。
+    /// 共享 NuGet 包版本查询（环境自检用它检查 ilspymcp 是否有新版本）。
     /// </summary>
     public static NuGetClient NuGet = new();
 
     /// <summary>
-    /// 共享新版本检查与注入文本组装：check_status 与 MCP 握手（ServerInstructions 注入）共用同一磁盘缓存，
-    /// 缓存文件跨进程共享（重启不丢、避免每次会话都联网复查）。
+    /// 共享新版本检查与注入文本组装：环境自检（CLI -c）与 MCP 握手（ServerInstructions 注入）共用同一磁盘缓存，
+    /// 缓存文件跨进程共享（重启不丢、避免每次会话都联网复查）。网络查询复用 <see cref="NuGet"/> 共享实例。
     /// </summary>
-    public static UpdateChecker Updater = new();
+    public static UpdateChecker Updater = new(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
 
     /// <summary>
-    /// check_status 的环境自检报告：会话内只真实检查一次（安装/版本变化需重启 CLI 才生效），后续直接复用缓存文本。
-    /// 单飞保证并发首次调用只执行一次完整检查。
+    /// 环境自检报告：会话内只真实检查一次（安装/版本变化需重启 CLI 才生效），后续直接复用缓存文本。
+    /// 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入 UpdateCheck 层，避免反向引用。
     /// </summary>
     public static Lazy<Task<string>> StatusReport =
-        new(EnvironmentChecker.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+        new(() => EnvironmentChecker.BuildReportAsync(Installer, Updater), LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>
     /// 测试注入：以指定进程执行器（与可选缓存）重建 Cache/Pipeline/Installer，使工具层可在不启动真实子进程的情况下测试。
@@ -62,8 +62,9 @@ internal static class AppServices
         Pipeline = new ToolPipeline(Process, Cache);
         Installer = new InstallChecker(Process);
         NuGet = new NuGetClient();
-        Updater = new UpdateChecker(Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N")));
-        StatusReport = new Lazy<Task<string>>(EnvironmentChecker.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+        Updater = new UpdateChecker(Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N")),
+            queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
+        StatusReport = new Lazy<Task<string>>(() => EnvironmentChecker.BuildReportAsync(Installer, Updater), LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
@@ -76,7 +77,7 @@ internal static class AppServices
         Pipeline = new ToolPipeline(Process, Cache);
         Installer = new InstallChecker(Process);
         NuGet = new NuGetClient();
-        Updater = new UpdateChecker();
-        StatusReport = new Lazy<Task<string>>(EnvironmentChecker.BuildReportAsync, LazyThreadSafetyMode.ExecutionAndPublication);
+        Updater = new UpdateChecker(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
+        StatusReport = new Lazy<Task<string>>(() => EnvironmentChecker.BuildReportAsync(Installer, Updater), LazyThreadSafetyMode.ExecutionAndPublication);
     }
 }

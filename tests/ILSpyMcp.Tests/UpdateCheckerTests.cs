@@ -21,10 +21,10 @@ public class UpdateCheckerTests
     {
         var tempDir = TempDir();
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"99.0.0\"]}") };
-        AppServices.NuGet = new NuGetClient(handler);
+        var nuget = new NuGetClient(handler);
         try
         {
-            var checker = new UpdateChecker(tempDir);
+            var checker = new UpdateChecker(tempDir, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
 
             var latest = await checker.RefreshIfStaleAsync();
 
@@ -45,10 +45,10 @@ public class UpdateCheckerTests
         var tempDir = TempDir();
         var fixedTime = T0;
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"99.0.0\"]}") };
-        AppServices.NuGet = new NuGetClient(handler);
+        var nuget = new NuGetClient(handler);
         try
         {
-            var checker = new UpdateChecker(tempDir, () => fixedTime);
+            var checker = new UpdateChecker(tempDir, () => fixedTime, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
 
             var first = await checker.RefreshIfStaleAsync();
             var second = await checker.RefreshIfStaleAsync();
@@ -69,10 +69,10 @@ public class UpdateCheckerTests
         var tempDir = TempDir();
         var fixedTime = T0;
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"99.0.0\"]}") };
-        AppServices.NuGet = new NuGetClient(handler);
+        var nuget = new NuGetClient(handler);
         try
         {
-            var checker = new UpdateChecker(tempDir, () => fixedTime);
+            var checker = new UpdateChecker(tempDir, () => fixedTime, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
 
             await checker.RefreshIfStaleAsync();
             Assert.Equal(1, handler.CallCount);
@@ -95,10 +95,10 @@ public class UpdateCheckerTests
         var tempDir = TempDir();
         var fixedTime = T0;
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"2.0.0\"]}") };
-        AppServices.NuGet = new NuGetClient(handler);
+        var nuget = new NuGetClient(handler);
         try
         {
-            var checker = new UpdateChecker(tempDir, () => fixedTime);
+            var checker = new UpdateChecker(tempDir, () => fixedTime, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
 
             var first = await checker.RefreshIfStaleAsync();
             Assert.Equal("2.0.0", first);
@@ -122,10 +122,10 @@ public class UpdateCheckerTests
         var tempDir = TempDir();
         var fixedTime = T0;
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"2.0.0\"]}") };
-        AppServices.NuGet = new NuGetClient(handler);
+        var nuget = new NuGetClient(handler);
         try
         {
-            var checker = new UpdateChecker(tempDir, () => fixedTime);
+            var checker = new UpdateChecker(tempDir, () => fixedTime, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
 
             await checker.RefreshIfStaleAsync();
             fixedTime = fixedTime.AddHours(25);
@@ -151,10 +151,10 @@ public class UpdateCheckerTests
         var tempDir = TempDir();
         var fixedTime = T0;
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"2.0.0\"]}") };
-        AppServices.NuGet = new NuGetClient(handler);
+        var nuget = new NuGetClient(handler);
         try
         {
-            var checker = new UpdateChecker(tempDir, () => fixedTime);
+            var checker = new UpdateChecker(tempDir, () => fixedTime, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
 
             await checker.RefreshIfStaleAsync();
             fixedTime = fixedTime.AddHours(25);
@@ -190,10 +190,10 @@ public class UpdateCheckerTests
     {
         var tempDir = TempDir();
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"99.0.0\"]}") };
-        AppServices.NuGet = new NuGetClient(handler);
+        var nuget = new NuGetClient(handler);
         try
         {
-            var checker = new UpdateChecker(tempDir);
+            var checker = new UpdateChecker(tempDir, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
 
             var latest = await checker.RefreshIfStaleAsync();
             Assert.Equal("99.0.0", latest);
@@ -216,10 +216,10 @@ public class UpdateCheckerTests
     {
         var tempDir = TempDir();
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"0.0.1\"]}") };
-        AppServices.NuGet = new NuGetClient(handler);
+        var nuget = new NuGetClient(handler);
         try
         {
-            var checker = new UpdateChecker(tempDir);
+            var checker = new UpdateChecker(tempDir, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
 
             var latest = await checker.RefreshIfStaleAsync();
             Assert.Equal("0.0.1", latest);

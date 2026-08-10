@@ -44,9 +44,9 @@ public sealed record ToolParameter(string Flag, string? Value)
 public sealed class ToolCommand
 {
     /// <summary>
-    /// 默认 ilspycmd 可执行文件名。
+    /// 默认 ilspycmd 可执行文件名（与 <see cref="AppConfig.IlspyCmdExecutable"/> 同源，安装检测与工具命令共用）。
     /// </summary>
-    public const string DefaultExecutable = "ilspycmd";
+    public const string DefaultExecutable = AppConfig.IlspyCmdExecutable;
 
     /// <summary>
     /// 构造一次调用：由可执行名、程序集路径与启用的参数生成纯参数列表与缓存签名。 调用方至少应提供一个启用的参数，否则签名为空（同程序集不同参数将共享缓存）。

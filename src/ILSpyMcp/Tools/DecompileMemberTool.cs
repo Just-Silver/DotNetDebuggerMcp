@@ -2,6 +2,7 @@ using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Pipeline;
+using ILSpyMcp.Services;
 using ILSpyMcp.Validation;
 using ModelContextProtocol.Server;
 

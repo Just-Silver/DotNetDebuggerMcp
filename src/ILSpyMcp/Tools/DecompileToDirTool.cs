@@ -1,6 +1,7 @@
 using ILSpyMcp.Configuration;
 using ILSpyMcp.Pipeline;
 using ILSpyMcp.Processes;
+using ILSpyMcp.Services;
 using ILSpyMcp.Validation;
 using ModelContextProtocol.Server;
 using System.ComponentModel;

@@ -87,7 +87,7 @@ public class ILSpyMcpCmd
     public string Version => AppConfig.NuGetPackageId + " " + (AppConfig.CurrentVersion?.ToString(3) ?? "unknown");
 
     /// <summary>
-    /// 命令行分发：-c 走 check_status，-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// 命令行分发：-c 走环境自检，-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string languageVersion, string entityTypes,
@@ -96,6 +96,9 @@ public class ILSpyMcpCmd
     {
         if (check)
         {
+            // CLI -c 是主动调试入口：先刷新 NuGet 磁盘缓存（TTL/退避内不联网、失败静默降级），再组装报告，
+            // 避免无缓存记录时 NuGet 段永远留白；握手路径不 await（后台刷新供下次会话），这里等结果
+            await AppServices.Updater.RefreshIfStaleAsync();
             return await CheckTool.CheckStatus();
         }
         if (!string.IsNullOrEmpty(outputDir))
@@ -127,9 +130,17 @@ public class ILSpyMcpCmd
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
-        // 握手期先执行环境自检（ilspycmd 安装/版本 + NuGet 更新状态），报告由 StatusReport 会话内缓存、与 check_status 工具同源；
+        // 握手期先执行环境自检（ilspycmd 安装/版本 + NuGet 更新状态），报告由 StatusReport 会话内缓存、与 CLI -c 同源；
         // NuGet 段同步读磁盘缓存，无有效检查记录时留白。报告注入 ServerInstructions，让 agent 会话起始即可感知环境状态
-        var report = await AppServices.StatusReport.Value;
+        string report;
+        try
+        {
+            report = await AppServices.StatusReport.Value;
+        }
+        catch
+        {
+            report = ""; // 环境自检异常不阻断 MCP 启动：降级为不注入提示，核心反编译功能不受影响
+        }
         builder.Services.AddMcpServer(o =>
         {
             if (!string.IsNullOrEmpty(report)) o.ServerInstructions = report;

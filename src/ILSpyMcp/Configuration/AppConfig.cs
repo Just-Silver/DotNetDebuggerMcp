@@ -39,12 +39,12 @@ internal static class AppConfig
     public static readonly Version RequiredIlspyCmdVersion = new(11, 0);
 
     /// <summary>
-    /// 本工具发布的 NuGet 包 id，check_status 用它查询是否有新版本。
+    /// 本工具发布的 NuGet 包 id，环境自检（CLI -c/握手注入）用它查询是否有新版本。
     /// </summary>
     public const string NuGetPackageId = "ilspymcp";
 
     /// <summary>
-    /// 当前程序集版本（NuGet 包版本来源）。 反编译工具与 check_status/握手注入统一经此获取当前版本，避免各处重复读取 Assembly 元数据。
+    /// 当前程序集版本（NuGet 包版本来源）。 反编译工具与环境自检/握手注入统一经此获取当前版本，避免各处重复读取 Assembly 元数据。
     /// </summary>
     public static Version? CurrentVersion => Assembly.GetExecutingAssembly().GetName().Version;
 
@@ -69,7 +69,12 @@ internal static class AppConfig
     public static readonly TimeSpan UpdateCheckFailureBackoff = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// NuGet 新版本检查磁盘缓存文件名（位于 <see cref="UpdateChecker"/> 的缓存目录下）。
+    /// ilspycmd 可执行文件名（工具命令与安装检测共用同一来源，避免两处手写漂移）。
+    /// </summary>
+    public const string IlspyCmdExecutable = "ilspycmd";
+
+    /// <summary>
+    /// NuGet 新版本检查磁盘缓存文件名（位于 <see cref="ILSpyMcp.UpdateCheck.UpdateChecker"/> 的缓存目录下）。
     /// </summary>
     public const string UpdateCheckCacheFileName = "update-check.json";
 }

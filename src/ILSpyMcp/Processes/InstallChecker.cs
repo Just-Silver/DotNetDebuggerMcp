@@ -1,5 +1,4 @@
 using ILSpyMcp.Configuration;
-using ILSpyMcp.Pipeline;
 
 namespace ILSpyMcp.Processes;
 
@@ -59,7 +58,7 @@ public sealed class InstallChecker
     /// </summary>
     private async Task<(bool Installed, Version? Version)> RunCheckAsync()
     {
-        var result = await _process.RunAsync(ToolCommand.DefaultExecutable, new[] { "-v" }, Environment.CurrentDirectory, AppConfig.CheckTimeout);
+        var result = await _process.RunAsync(AppConfig.IlspyCmdExecutable, new[] { "-v" }, Environment.CurrentDirectory, AppConfig.CheckTimeout);
         if (result.Code != 0) return (false, null);
         return (true, ParseVersion(result.Stdout));
     }
