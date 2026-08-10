@@ -50,4 +50,19 @@ internal static class AppConfig
     /// NuGet 新版本检查的超时上限；超时/网络失败时静默跳过该检查项（不影响反编译功能）。
     /// </summary>
     public static readonly TimeSpan NuGetCheckTimeout = TimeSpan.FromSeconds(8);
+
+    /// <summary>
+    /// NuGet 新版本检查成功的缓存有效期：成功查到一次后，该时限内不再联网复查（跨进程共享、重启不丢）。
+    /// </summary>
+    public static readonly TimeSpan UpdateCheckSuccessTtl = TimeSpan.FromHours(24);
+
+    /// <summary>
+    /// NuGet 新版本检查失败的冷却期：失败后该时限内不再重试，避免断网/限流环境下每个会话都干等网络超时。
+    /// </summary>
+    public static readonly TimeSpan UpdateCheckFailureBackoff = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// NuGet 新版本检查磁盘缓存文件名（位于 <see cref="UpdateChecker"/> 的缓存目录下）。
+    /// </summary>
+    public const string UpdateCheckCacheFileName = "update-check.json";
 }
