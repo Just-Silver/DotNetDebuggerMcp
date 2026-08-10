@@ -173,7 +173,7 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 当前输出字段：本次返回的行号范围与数量（统一按行，对应 codegraph 正文的行定位）；空结果、越界、超上限时附说明。
+    /// 当前输出字段：本次返回的行号范围与数量（统一按行定位）；空结果、越界、超上限时附说明。
     /// </summary>
     private static string DescribeCurrent(string linesParam, int total)
     {
