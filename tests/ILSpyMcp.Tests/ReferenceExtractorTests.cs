@@ -55,12 +55,14 @@ public class ReferenceExtractorTests
     [Fact]
     public void ToolPipeline_方法返回与字段_收集内部类型()
     {
-        // ExecuteAsync 返回 Task<ToolPipelineResult>（归约收集 ToolPipelineResult），字段类型 IProcessRunner/DecompileCache
+        // ExecuteAsync 返回 Task<ToolPipelineResult>；字段 _cache: DecompileCache、_inflight: ConcurrentDictionary<CacheKey,...>
+        // （泛型实例化归约收集 CacheKey）；进程内改造后不再引用 IProcessRunner
         using var scope = new MetadataScope(AssemblyPath);
         var result = Extract(scope.Reader, "ILSpyMcp.Pipeline.ToolPipeline");
         Assert.Contains("ILSpyMcp.Pipeline.ToolPipelineResult", result);
         Assert.Contains("ILSpyMcp.Caching.DecompileCache", result);
-        Assert.Contains("ILSpyMcp.Processes.IProcessRunner", result);
+        Assert.Contains("ILSpyMcp.Caching.CacheKey", result);
+        Assert.DoesNotContain("ILSpyMcp.Processes.IProcessRunner", result);
     }
 
     [Fact]

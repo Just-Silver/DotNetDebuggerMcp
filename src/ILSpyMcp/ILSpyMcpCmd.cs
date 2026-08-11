@@ -95,9 +95,9 @@ public class ILSpyMcpCmd
     public int TimeoutSeconds { get; } = AppConfig.DefaultTimeoutSeconds;
 
     /// <summary>
-    /// 检查运行环境是否可用：ilspycmd 是否安装/版本是否满足要求（&gt;= 11）、当前 ilspymcp 是否有新版本。无需 -a。
+    /// 检查运行环境是否可用：内置反编译引擎版本 + 当前 ilspymcp 是否有新版本。无需 -a。
     /// </summary>
-    [Option("-c|--check", "检查运行环境：ilspycmd 是否安装、版本是否满足要求（>= 11，-m 单成员反编译所需）、当前 ilspymcp 是否有新版本。结果会话内缓存，仅首次真实检查。", CommandOptionType.NoValue)]
+    [Option("-c|--check", "检查运行环境：内置反编译引擎版本（进程内 ICSharpCode.Decompiler，无需外部安装）+ 当前 ilspymcp 是否有新版本。结果会话内缓存，仅首次真实检查。", CommandOptionType.NoValue)]
     public bool Check { get; }
 
     /// <summary>
@@ -171,7 +171,7 @@ public class ILSpyMcpCmd
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
-        // 握手期先执行环境自检（ilspycmd 安装/版本 + NuGet 更新状态），报告由 StatusReport 会话内缓存、与 CLI -c 同源； NuGet
+        // 握手期先执行环境自检（内置反编译引擎版本 + NuGet 更新状态），报告由 StatusReport 会话内缓存、与 CLI -c 同源； NuGet
         // 段同步读磁盘缓存，无有效检查记录时留白。报告注入 ServerInstructions，让 agent 会话起始即可感知环境状态
         string report;
         try

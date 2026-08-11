@@ -1,5 +1,6 @@
 using ILSpyMcp.Caching;
 using ILSpyMcp.Configuration;
+using ILSpyMcp.Decompiler;
 using ILSpyMcp.Pipeline;
 using ILSpyMcp.Processes;
 using ILSpyMcp.UpdateCheck;
@@ -7,15 +8,11 @@ using ILSpyMcp.UpdateCheck;
 namespace ILSpyMcp.Services;
 
 /// <summary>
-/// 进程级共享服务容器：缓存、执行管道、安装检测全会话单例，避免每个工具各自持有独立实例。 测试可经 <see cref="ConfigureForTest"/> 替换进程执行器与缓存。
+/// 进程级共享服务容器：缓存、执行管道、进程内反编译服务、NuGet 查询全会话单例，避免每个工具各自持有独立实例。 测试可经
+/// <see cref="ConfigureForTest"/> 替换缓存。
 /// </summary>
 internal static class AppServices
 {
-    /// <summary>
-    /// 共享子进程执行器（可替换：测试经 <see cref="ConfigureForTest"/> 注入 fake）。
-    /// </summary>
-    public static IProcessRunner Process = new ProcessRunner();
-
     /// <summary>
     /// 共享反编译结果缓存（LRU，上限 <see cref="AppConfig.MaxCacheBytes"/>）（可替换：测试经 <see
     /// cref="ConfigureForTest"/> 注入小缓存）。
@@ -23,14 +20,14 @@ internal static class AppServices
     public static DecompileCache Cache = new();
 
     /// <summary>
-    /// 共享执行管道（缓存 → 回源 → 分页），工具经此调用 ilspycmd。
+    /// 共享执行管道（缓存 → 进程内反编译回源 → 分页），反编译类工具经此调用。
     /// </summary>
-    public static ToolPipeline Pipeline = new(Process, Cache);
+    public static ToolPipeline Pipeline = new(Cache);
 
     /// <summary>
-    /// 共享 ilspycmd 安装检测（会话内缓存一次）。
+    /// 共享进程内反编译服务（InProcessDecompiler 方法均为静态，实例供统一入口与后续扩展）。
     /// </summary>
-    public static InstallChecker Installer = new(Process);
+    public static InProcessDecompiler Decompiler = new();
 
     /// <summary>
     /// 共享 NuGet 包版本查询（环境自检用它检查 ilspymcp 是否有新版本）。
@@ -44,26 +41,30 @@ internal static class AppServices
     public static UpdateChecker Updater = new(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
 
     /// <summary>
-    /// 环境自检报告：会话内只真实检查一次（安装/版本变化需重启 CLI 才生效），后续直接复用缓存文本。 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入 UpdateCheck 层，避免反向引用。
+    /// 环境自检报告：会话内只真实组装一次，后续直接复用缓存文本。 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入 UpdateCheck 层，避免反向引用。
     /// </summary>
     public static Lazy<Task<string>> StatusReport =
-        new(() => EnvironmentChecker.BuildReportAsync(Installer, Updater), LazyThreadSafetyMode.ExecutionAndPublication);
+        new(() => EnvironmentChecker.BuildReportAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>
-    /// 测试注入：以指定进程执行器（与可选缓存）重建 Cache/Pipeline/Installer，使工具层可在不启动真实子进程的情况下测试。
+    /// 待 Task 6 删除：ilspycmd 安装检测器——仅 <see cref="ILSpyMcp.Validation.ToolPreflight"/> 仍引用（本单元已移除全部工具对
+    /// ToolPreflight 的调用），反编译已改进程内、不再需要安装检测；保留字段以维持 ToolPreflight 可编译，删除 ToolPreflight 时一并移除。
     /// </summary>
-    /// <param name="process">测试用进程执行器（fake）。</param>
-    /// <param name="cache">测试用缓存；缺省为默认 <see cref="AppConfig.MaxCacheBytes"/> 上限的缓存。</param>
-    internal static void ConfigureForTest(IProcessRunner process, DecompileCache? cache = null)
+    public static InstallChecker Installer = new(new ProcessRunner());
+
+    /// <summary>
+    /// 测试注入：以指定缓存（缺省为默认 <see cref="AppConfig.MaxCacheBytes"/> 上限的缓存）重建 Cache/Pipeline， 使工具层可在可控
+    /// 缓存状态下测试。
+    /// </summary>
+    /// <param name="cache">测试用缓存；缺省为默认上限的缓存。</param>
+    internal static void ConfigureForTest(DecompileCache? cache = null)
     {
-        Process = process;
         Cache = cache ?? new DecompileCache();
-        Pipeline = new ToolPipeline(Process, Cache);
-        Installer = new InstallChecker(Process);
+        Pipeline = new ToolPipeline(Cache);
         NuGet = new NuGetClient();
         Updater = new UpdateChecker(Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N")),
             queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
-        StatusReport = new Lazy<Task<string>>(() => EnvironmentChecker.BuildReportAsync(Installer, Updater), LazyThreadSafetyMode.ExecutionAndPublication);
+        StatusReport = new Lazy<Task<string>>(() => EnvironmentChecker.BuildReportAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
@@ -71,12 +72,10 @@ internal static class AppServices
     /// </summary>
     internal static void ResetForTest()
     {
-        Process = new ProcessRunner();
         Cache = new DecompileCache();
-        Pipeline = new ToolPipeline(Process, Cache);
-        Installer = new InstallChecker(Process);
+        Pipeline = new ToolPipeline(Cache);
         NuGet = new NuGetClient();
         Updater = new UpdateChecker(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
-        StatusReport = new Lazy<Task<string>>(() => EnvironmentChecker.BuildReportAsync(Installer, Updater), LazyThreadSafetyMode.ExecutionAndPublication);
+        StatusReport = new Lazy<Task<string>>(() => EnvironmentChecker.BuildReportAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
     }
 }

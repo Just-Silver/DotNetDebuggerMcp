@@ -1,11 +1,10 @@
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Pipeline;
-using ILSpyMcp.Processes;
 
 namespace ILSpyMcp.Services;
 
 /// <summary>
-/// 工具执行共享辅助：统一「程序集路径安全解析」与「管道/子进程调用」样板，避免各工具重复手写并在细节上漂移。
+/// 工具执行共享辅助：统一「程序集路径安全解析」与「执行管道调用」样板，避免各工具重复手写并在细节上漂移。
 /// </summary>
 internal static class ToolExecutor
 {
@@ -40,10 +39,4 @@ internal static class ToolExecutor
     /// </summary>
     public static async Task<string> RunMergedAsync(IReadOnlyList<ToolCommand> commands, string lines, TimeSpan timeout, CancellationToken cancellationToken, FormatContext context)
         => (await AppServices.Pipeline.ExecuteMergedAsync(commands, lines, timeout, cancellationToken, context)).Text;
-
-    /// <summary>
-    /// 直接经子进程执行写盘（decompile_to_dir，不经缓存）；退出码非 0 由调用方处理 stderr 提示。
-    /// </summary>
-    public static Task<ProcessResult> RunProcessAsync(ToolCommand command, string cwd, TimeSpan timeout, CancellationToken cancellationToken)
-        => AppServices.Process.RunAsync(command.Executable, command.Args, cwd, timeout, cancellationToken);
 }

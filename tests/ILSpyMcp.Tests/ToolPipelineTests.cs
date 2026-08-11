@@ -1,300 +1,332 @@
 using ILSpyMcp.Caching;
-using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
+using ILSpyMcp.Metadata;
 using ILSpyMcp.Pipeline;
+using ILSpyMcp.Services;
 using Xunit;
 
 namespace ILSpyMcp.Tests;
 
+/// <summary>
+/// 共享执行管道用例：进程内 InProcessDecompiler 回源 + 缓存命中/并发单飞/lines 分页/合并/超时语义。
+/// 经 <see cref="AppServices.ConfigureForTest"/> 注入小缓存与真实进程内反编译（反编译 tests/TestData 下测试程序集），
+/// 验证缓存与格式化行为。与 CheckToolTests 同属 AppServices collection，串行执行避免静态状态竞态。
+/// </summary>
+[Collection("AppServices")]
 public class ToolPipelineTests
 {
-    private static readonly string AssemblyPath = typeof(ToolPipelineTests).Assembly.Location;
+    private const string TypeMembers = "ILSpyMcp.Samples.Members";
+    private const string TypeProps = "ILSpyMcp.Samples.Props";
+    private const string TypeBigClass = "ILSpyMcp.Samples.BigClass";
+    private const string TypeNoSuch = "No.Such.Type";
+
+    private static readonly string SamplesDll = TestDataPaths.TestSamplesDll;
+
+    /// <summary>
+    /// 以 1MB 小缓存重建 AppServices（Cache/Pipeline 同源），测试结束恢复默认。
+    /// </summary>
+    private static void Init()
+    {
+        AppServices.ConfigureForTest(new DecompileCache(1 * 1024 * 1024));
+    }
+
+    /// <summary>
+    /// 类型反编译请求对应的缓存 key（用于断言缓存是否写入/命中）。
+    /// </summary>
+    private static CacheKey KeyForType(string typeName)
+        => AppServices.Cache.BuildKey(SamplesDll, new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, typeName)).Signature);
+
+    /// <summary>
+    /// 经共享管道反编译指定类型（默认前 200 行），带头部信息块上下文（与工具层行为一致）。
+    /// </summary>
+    private static async Task<ToolPipelineResult> ExecuteTypeAsync(string typeName, string lines = "")
+    {
+        var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, typeName));
+        var context = new FormatContext(SamplesDll, $"类型 {typeName}");
+        return await AppServices.Pipeline.ExecuteAsync(command, lines, context: context);
+    }
 
     [Fact]
     public async Task 首次调用_回源并返回格式化结果()
     {
-        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
-        var pipeline = Create(fake);
+        Init();
+        try
+        {
+            var result = await ExecuteTypeAsync(TypeMembers);
 
-        var result = await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "");
-
-        Assert.Equal(1, fake.CallCount);
-        Assert.Equal("1\ta\n2\tb", result.Text);
+            Assert.StartsWith("程序集: ", result.Text); // 头部信息块在前
+            Assert.Contains($"目标:   类型 {TypeMembers}", result.Text);
+            Assert.Contains("class Members", result.Text); // 进程内真实反编译产物
+            Assert.Contains("1\t", result.Text); // 源码带行号
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
     public async Task 二次调用_命中缓存不再回源()
     {
-        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
-        var pipeline = Create(fake);
-        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
+        Init();
+        try
+        {
+            var key = KeyForType(TypeBigClass);
+            Assert.Null(AppServices.Cache.Get(key)); // 首调前无缓存
 
-        await pipeline.ExecuteAsync(command, "");
-        await pipeline.ExecuteAsync(command, "");
+            var first = await ExecuteTypeAsync(TypeBigClass);
+            Assert.NotNull(AppServices.Cache.Get(key)); // 首调已写缓存
+            Assert.True(AppServices.Cache.Get(key)!.Count > 200); // 缓存内是全量行，供后续 lines 切片复用
 
-        Assert.Equal(1, fake.CallCount);
+            var second = await ExecuteTypeAsync(TypeBigClass);
+            Assert.StartsWith("程序集: ", second.Text); // 缓存命中同样带头部上下文
+            Assert.Equal(first.Text, second.Text);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
-    public async Task 缓存命中_结果仍带头部上下文()
+    public async Task 超时结果_不入缓存且后续可重试()
     {
-        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
-        var pipeline = Create(fake);
-        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-        var context = new FormatContext(@"D:\x\a.dll", "类型 System.String");
+        Init();
+        try
+        {
+            var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, TypeBigClass));
+            var key = AppServices.Cache.BuildKey(SamplesDll, command.Signature);
 
-        var first = await pipeline.ExecuteAsync(command, "", context: context);
-        var second = await pipeline.ExecuteAsync(command, "", context: context);
+            var miss = await AppServices.Pipeline.ExecuteAsync(command, "", TimeSpan.Zero);
+            Assert.Contains("反编译失败", miss.Text); // 零超时 → 超时提示转错误
+            Assert.Null(AppServices.Cache.Get(key)); // 超时不写缓存
 
-        Assert.Equal(1, fake.CallCount); // 命中缓存，不再回源
-        Assert.StartsWith("程序集: ", first.Text);
-        Assert.StartsWith("程序集: ", second.Text);
-        Assert.EndsWith("1\ta\n2\tb", first.Text);
-        Assert.EndsWith("1\ta\n2\tb", second.Text);
+            var hit = await AppServices.Pipeline.ExecuteAsync(command, "", TimeSpan.FromSeconds(60));
+            Assert.DoesNotContain("反编译失败", hit.Text); // 重试成功
+            Assert.NotNull(AppServices.Cache.Get(key));
+
+            var cached = await AppServices.Pipeline.ExecuteAsync(command, "", TimeSpan.Zero);
+            Assert.Equal(hit.Text, cached.Text); // 命中缓存，不再受零超时影响
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
-    public async Task 缓存条目_仅含纯净行列表不含头部()
+    public async Task 不同类型_各自独立回源()
     {
-        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
-        var cache = new DecompileCache();
-        var pipeline = Create(fake, cache);
-        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-        var context = new FormatContext(@"D:\x\a.dll", "类型 System.String");
+        Init();
+        try
+        {
+            await ExecuteTypeAsync(TypeMembers);
+            await ExecuteTypeAsync(TypeProps);
 
-        var result = await pipeline.ExecuteAsync(command, "", context: context);
-
-        Assert.StartsWith("程序集: ", result.Text); // 对外输出带头部
-        var key = cache.BuildKey(AssemblyPath, command.Signature);
-        var cached = cache.Get(key);
-        Assert.NotNull(cached);
-        Assert.Equal(new[] { "a", "b" }, cached); // 缓存内是纯净行，头部只在渲染期
+            Assert.NotNull(AppServices.Cache.Get(KeyForType(TypeMembers)));
+            Assert.NotNull(AppServices.Cache.Get(KeyForType(TypeProps)));
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
-    public async Task 不同签名_各自独立回源()
+    public async Task 默认返回前200行_超出提示截断()
     {
-        var fake = new FakeProcessRunner { Stdout = "x\n" };
-        var pipeline = Create(fake);
+        Init();
+        try
+        {
+            var result = await ExecuteTypeAsync(TypeBigClass);
 
-        await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig1")), "");
-        await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig2")), "");
-
-        Assert.Equal(2, fake.CallCount);
+            Assert.Contains("已截断", result.Text);
+            Assert.Contains("可用 lines", result.Text);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
     public async Task 指定lines_按行号切片()
     {
-        var fake = new FakeProcessRunner { Stdout = "a\nb\nc\n" };
-        var pipeline = Create(fake);
-
-        var result = await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "2-3");
-
-        Assert.Equal("2\tb\n3\tc", result.Text);
-    }
-
-    [Fact]
-    public async Task 退出码非0_返回错误提示不抛异常()
-    {
-        var fake = new FakeProcessRunner { Code = 1, Stderr = "boom" };
-        var pipeline = Create(fake);
-
-        var result = await pipeline.ExecuteAsync(new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig")), "");
-
-        Assert.Contains("ilspycmd 退出码: 1", result.Text);
-        Assert.Contains("boom", result.Text);
-    }
-
-    [Fact]
-    public async Task 并发同key_只回源一次()
-    {
-        var fake = new FakeProcessRunner { Stdout = "a\n", Delay = TimeSpan.FromMilliseconds(50) };
-        var pipeline = Create(fake);
-        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-
-        var tasks = Enumerable.Range(0, 20).Select(_ => pipeline.ExecuteAsync(command, "")).ToArray();
-        var results = await Task.WhenAll(tasks);
-
-        Assert.Equal(1, fake.CallCount);
-        Assert.All(results, r => Assert.Equal("1\ta", r.Text));
-    }
-
-    [Fact]
-    public async Task 指定timeout_传给子进程执行器()
-    {
-        var fake = new FakeProcessRunner { Stdout = "a\n" };
-        var pipeline = Create(fake);
-        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-
-        await pipeline.ExecuteAsync(command, "", TimeSpan.FromSeconds(99));
-
-        Assert.Equal(TimeSpan.FromSeconds(99), fake.Timeout);
-    }
-
-    [Fact]
-    public async Task 未指定timeout_使用全局默认超时()
-    {
-        var fake = new FakeProcessRunner { Stdout = "a\n" };
-        var pipeline = Create(fake);
-        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-
-        await pipeline.ExecuteAsync(command, "");
-
-        Assert.Equal(AppConfig.DefaultTimeout, fake.Timeout);
-    }
-
-    [Fact]
-    public async Task 回源失败后_再次调用会重试()
-    {
-        var fake = new FakeProcessRunner { Stdout = "a\n" };
-        var pipeline = Create(fake);
-        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-
-        fake.Code = 1;
-        var first = await pipeline.ExecuteAsync(command, "");
-        Assert.Contains("退出码", first.Text);
-
-        fake.Code = 0;
-        var second = await pipeline.ExecuteAsync(command, "");
-        Assert.Equal(2, fake.CallCount);
-        Assert.Equal("1\ta", second.Text);
-    }
-
-    [Fact]
-    public void ToolCommand_命令行与签名由参数结构统一派生()
-    {
-        var cmd = new ToolCommand("tool", AssemblyPath,
-            new ToolParameter("-t", "A"),
-            ToolParameter.Switch("-p", true),
-            ToolParameter.Optional("-lv", ""));
-
-        Assert.Equal("tool", cmd.Executable);
-        Assert.Equal(AssemblyPath, cmd.Assembly);
-        Assert.Equal(new[] { "-t", "A", "-p", AssemblyPath }, cmd.Args);
-        Assert.Equal("-t\u001FA\u001F-p", cmd.Signature);
-    }
-
-    [Fact]
-    public void ToolCommand_不同参数同值_签名互不相同()
-    {
-        var viaType = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A"));
-        var viaMember = new ToolCommand("tool", AssemblyPath, new ToolParameter("-m", "A"));
-
-        Assert.Equal(new[] { "-t", "A", AssemblyPath }, viaType.Args);
-        Assert.Equal(new[] { "-m", "A", AssemblyPath }, viaMember.Args);
-        Assert.NotEqual(viaType.Signature, viaMember.Signature);
-    }
-
-    [Fact]
-    public async Task BuildKey抛异常_返回提示文本不抛异常()
-    {
-        // 绕过 ToolPreflight 直接调 pipeline，传空路径触发 Path.GetFullPath 抛 ArgumentException
-        var fake = new FakeProcessRunner { Stdout = "a\n" };
-        var pipeline = Create(fake);
-
-        var result = await pipeline.ExecuteAsync(new ToolCommand("tool", "", new ToolParameter("-t", "sig")), "");
-
-        Assert.Contains("反编译失败", result.Text);
-        Assert.Equal(0, fake.CallCount); // 未进入回源
-    }
-
-    [Fact]
-    public async Task CancellationToken_原样传给子进程执行器()
-    {
-        var fake = new FakeProcessRunner { Stdout = "a\n" };
-        var pipeline = Create(fake);
-        var command = new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "sig"));
-        using var cts = new CancellationTokenSource();
-
-        await pipeline.ExecuteAsync(command, "", null, cts.Token);
-
-        Assert.Equal(cts.Token, fake.LastToken);
-    }
-
-    [Fact]
-    public async Task ExecuteMergedAsync_多条命令_合并行号连续()
-    {
-        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
-        var pipeline = Create(fake);
-        var commands = new[]
+        Init();
+        try
         {
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")),
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
-        };
+            var result = await ExecuteTypeAsync(TypeBigClass, lines: "400-500");
 
-        var result = await pipeline.ExecuteMergedAsync(commands, "");
+            Assert.Contains("\n400\t", result.Text); // 切片从请求起始行号标注（头部信息块后）
+            Assert.Contains($"目标:   类型 {TypeBigClass}", result.Text); // 头部信息块仍前置
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
 
-        Assert.Equal(2, fake.CallCount); // 每条命令各回源一次
-        Assert.Equal("1\ta\n2\tb\n3\ta\n4\tb", result.Text); // 合并后行号连续
+    [Fact]
+    public async Task 未找到类型_返回提示不抛异常()
+    {
+        Init();
+        try
+        {
+            var result = await ExecuteTypeAsync(TypeNoSuch);
+
+            Assert.Contains($"未找到类型 {TypeNoSuch}", result.Text);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task 空程序集路径_返回提示不抛异常()
+    {
+        Init();
+        try
+        {
+            // 绕过工具层校验直接调 pipeline，空路径触发 BuildKey 的 Path.GetFullPath 抛异常
+            var command = new ToolCommand("", new DecompileRequest(DecompileKind.Type, "X"));
+            var result = await AppServices.Pipeline.ExecuteAsync(command, "");
+
+            Assert.Contains("反编译失败", result.Text);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task 并发同key_全部返回相同结果()
+    {
+        Init();
+        try
+        {
+            var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, TypeBigClass));
+            var tasks = Enumerable.Range(0, 8).Select(_ => AppServices.Pipeline.ExecuteAsync(command, "")).ToArray();
+            var results = await Task.WhenAll(tasks);
+
+            Assert.All(results, r => Assert.Equal(results[0].Text, r.Text));
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteMergedAsync_多条成员命令_分隔行计入行号且结果一致()
+    {
+        Init();
+        try
+        {
+            var (found, matches, _) = MemberResolver.FindMembers(SamplesDll, TypeBigClass, "BigHelper");
+            Assert.True(found);
+            var commands = matches
+                .Select(m => new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, m.Token)) { DisplayName = $"{m.Name} ({m.Token})" })
+                .ToArray();
+            Assert.NotEmpty(commands);
+
+            var result = await AppServices.Pipeline.ExecuteMergedAsync(commands, "");
+
+            Assert.StartsWith("1\t=== BigHelper (", result.Text); // 分隔行计入行号且为首行
+            Assert.Contains("=== BigHelper2 (", result.Text);
+            Assert.Contains("BigHelper", result.Text);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
     public async Task ExecuteMergedAsync_再次调用_各命令均命中缓存()
     {
-        var fake = new FakeProcessRunner { Stdout = "a\n" };
-        var pipeline = Create(fake);
-        var commands = new[]
+        Init();
+        try
         {
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")),
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
-        };
+            var (_, matches, _) = MemberResolver.FindMembers(SamplesDll, TypeBigClass, "BigHelper");
+            var commands = matches
+                .Select(m => new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, m.Token)))
+                .ToArray();
 
-        await pipeline.ExecuteMergedAsync(commands, "");
-        await pipeline.ExecuteMergedAsync(commands, "");
+            var first = await AppServices.Pipeline.ExecuteMergedAsync(commands, "");
+            var second = await AppServices.Pipeline.ExecuteMergedAsync(commands, "");
 
-        Assert.Equal(2, fake.CallCount); // 首次两条各回源一次，二次全部缓存命中
+            Assert.Equal(first.Text, second.Text);
+            foreach (var cmd in commands)
+            {
+                Assert.NotNull(AppServices.Cache.Get(AppServices.Cache.BuildKey(SamplesDll, cmd.Signature)));
+            }
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
-    public async Task ExecuteMergedAsync_带DisplayName_每条命令前插入分隔行()
+    public async Task 同一成员不同子串查询_共享缓存()
     {
-        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
-        var pipeline = Create(fake);
-        var commands = new[]
+        Init();
+        try
         {
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")) { DisplayName = "成员A" },
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")) { DisplayName = "成员B" },
-        };
+            var (_, viaFull, _) = MemberResolver.FindMembers(SamplesDll, TypeBigClass, "BigHelper");
+            var (_, viaPart, _) = MemberResolver.FindMembers(SamplesDll, TypeBigClass, "BigHe");
+            var full = viaFull.First(m => m.Name == "BigHelper");
+            var part = viaPart.First(m => m.Name == "BigHelper");
+            Assert.Equal(full.Token, part.Token); // 同一成员 token 相同
 
-        var result = await pipeline.ExecuteMergedAsync(commands, "");
+            var cmdFull = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, full.Token));
+            var cmdPart = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, part.Token));
+            Assert.Equal(cmdFull.Signature, cmdPart.Signature); // 签名相同 → 共享缓存 key（原语义保留）
 
-        Assert.Equal(2, fake.CallCount); // 分隔行在合并期插入，不产生额外回源
-        Assert.Equal("1\t=== 成员A ===\n2\ta\n3\tb\n4\t=== 成员B ===\n5\ta\n6\tb", result.Text); // 分隔行计入行号，合并后连续
+            var r1 = await AppServices.Pipeline.ExecuteAsync(cmdFull, "");
+            var r2 = await AppServices.Pipeline.ExecuteAsync(cmdPart, "");
+
+            Assert.Equal(r1.Text, r2.Text);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
-    public async Task ExecuteMergedAsync_部分命令无DisplayName_仅带名者插入分隔行()
+    public async Task WholeModule_反编译整个程序集()
     {
-        var fake = new FakeProcessRunner { Stdout = "a\n" };
-        var pipeline = Create(fake);
-        var commands = new[]
+        Init();
+        try
         {
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")) { DisplayName = "成员A" },
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
-        };
+            var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.WholeModule, ""));
+            var context = new FormatContext(SamplesDll, "整个程序集");
+            var result = await AppServices.Pipeline.ExecuteAsync(command, "", context: context);
 
-        var result = await pipeline.ExecuteMergedAsync(commands, "");
-
-        Assert.Equal("1\t=== 成员A ===\n2\ta\n3\ta", result.Text); // 无 DisplayName 的命令不插分隔行
+            Assert.Contains("using System", result.Text); // 整模块反编译产物（using 头）
+            Assert.Contains("已截断", result.Text); // 652 个类型远超 200 行默认上限
+            Assert.DoesNotContain("反编译失败", result.Text);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
     }
 
     [Fact]
-    public async Task ExecuteMergedAsync_任一条失败_返回错误提示()
+    public void ToolCommand_签名由Kind与Target派生()
     {
-        var fake = new FakeProcessRunner { Code = 1, Stderr = "boom" };
-        var pipeline = Create(fake);
-        var commands = new[]
-        {
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")),
-            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
-        };
+        var type = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "A"));
+        var member = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, "0x06000005"));
+        var whole = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.WholeModule, ""));
 
-        var result = await pipeline.ExecuteMergedAsync(commands, "");
-
-        Assert.Contains("ilspycmd 退出码: 1", result.Text);
+        Assert.Equal("type\u001FA", type.Signature);
+        Assert.Equal("member\u001F0x06000005", member.Signature);
+        Assert.Equal("whole-module", whole.Signature);
+        Assert.Equal(SamplesDll, type.Assembly);
+        Assert.Equal(DecompileKind.Member, member.Request.Kind);
     }
-
-    private static ToolPipeline Create(FakeProcessRunner fake, DecompileCache? cache = null)
-                                                            => new(fake, cache ?? new DecompileCache());
 }

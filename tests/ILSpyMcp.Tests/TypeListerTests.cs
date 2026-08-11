@@ -85,11 +85,14 @@ public class TypeListerTests
     }
 
     [Fact]
-    public void 主程序集_无delegate与enum_返回空列表()
+    public void 主程序集_列出enum_含DecompileKind()
     {
+        // 主程序集原无 enum/delegate，进程内改造后新增 ILSpyMcp.Pipeline.DecompileKind 枚举，验证类别字母 e
         WithReader(MainAssemblyPath, reader =>
         {
-            Assert.Empty(TypeLister.ListTypes(reader, "de"));
+            var entries = TypeLister.ListTypes(reader, "e").ToDictionary(e => e.FullName, e => e.Category);
+
+            Assert.Equal('e', entries["ILSpyMcp.Pipeline.DecompileKind"]);
         });
     }
 }

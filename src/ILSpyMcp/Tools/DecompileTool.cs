@@ -33,22 +33,21 @@ public static class DecompileTool
         [Description("本次反编译回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
-        // 前置检查：ilspycmd 已安装且 assembly 参数有效；未通过直接返回提示
-        if (await ToolPreflight.CheckAsync(assembly) is { } preflightError) return preflightError;
+        // 参数校验：assembly 必填且文件存在（进程内反编译，无安装前置）
+        if (!ArgumentValidators.ValidateAssembly(assembly, out var assemblyError)) return assemblyError;
         // 参数校验：typeName 必填（成员级反编译由 decompile_member 承接）
         if (!ArgumentValidators.ValidateRequired(typeName, "请指定 typeName 参数；全量反编译请使用 decompile_to_dir 工具并指定 outputDir，按成员名搜索请使用 decompile_member。", out var argError)) return argError;
         // 参数校验：timeoutSeconds 必须为正整数（不允许永不超时）
         if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
 
-        // 由参数结构统一派生命令行与缓存签名，杜绝命令/签名两处手写导致缓存 key 错配
+        // 由程序集路径 + 反编译请求统一派生缓存签名，杜绝签名两处手写导致缓存 key 错配
         if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
-        var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
-            ToolParameter.Optional("-t", typeName));
+        var command = new ToolCommand(assemblyFull, new DecompileRequest(DecompileKind.Type, typeName));
 
-        // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数，ilspycmd 命令行参数对 agent 无意义）
+        // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, $"类型 {typeName}");
 
-        // 走共享执行管道：缓存命中 → 回源 → lines 分页；stdout 超限时 ProcessRunner 直接返回错误提示
+        // 走共享执行管道：缓存命中 → 进程内反编译回源 → lines 分页；超时/取消返回提示文本
         return await ToolExecutor.RunPipelineAsync(command, lines, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken, context);
     }
 }

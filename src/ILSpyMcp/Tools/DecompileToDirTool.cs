@@ -1,5 +1,5 @@
 using ILSpyMcp.Configuration;
-using ILSpyMcp.Pipeline;
+using ILSpyMcp.Decompiler;
 using ILSpyMcp.Services;
 using ILSpyMcp.Validation;
 using ModelContextProtocol.Server;
@@ -19,7 +19,7 @@ public static class DecompileToDirTool
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="outputDir">输出目录；反编译结果写入该目录而非标准输出（必填）。</param>
     /// <param name="typeName">指定则仅反编译该全限定类型名；省略则反编译整个程序集。</param>
-    /// <param name="nestedDirectories">输出到目录时按命名空间使用嵌套目录（默认 true）。</param>
+    /// <param name="nestedDirectories">输出到目录时按命名空间使用嵌套目录（默认 true；当前单文件写盘下无实际效果，保留兼容）。</param>
     /// <param name="timeoutSeconds">本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
@@ -29,38 +29,27 @@ public static class DecompileToDirTool
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("输出目录；反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
         [Description("指定则仅反编译该全限定类型名，例如 System.String；省略则反编译整个程序集")] string typeName = "",
-        [Description("输出到目录时按命名空间使用嵌套目录（默认 true）")] bool nestedDirectories = true,
+        [Description("输出到目录时按命名空间使用嵌套目录（默认 true；当前单文件写盘下无实际效果，保留兼容）")] bool nestedDirectories = true,
         [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
-        // 前置检查：ilspycmd 已安装且 assembly 参数有效；未通过直接返回提示
-        if (await ToolPreflight.CheckAsync(assembly) is { } preflightError) return preflightError;
+        // 参数校验：assembly 必填且文件存在（进程内反编译，无安装前置）
+        if (!ArgumentValidators.ValidateAssembly(assembly, out var assemblyError)) return assemblyError;
         // 参数校验：outputDir 必填且路径合法
         if (!ArgumentValidators.ValidateOutputDir(outputDir, out var argError)) return argError;
         // 参数校验：timeoutSeconds 必须为正整数（不允许永不超时）
         if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
 
-        // 由参数结构统一生成命令行（本工具不经缓存，签名字段不使用）
         var cwd = Environment.CurrentDirectory;
         if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
         var outputFull = Path.GetFullPath(outputDir, cwd);
-        var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
-            new ToolParameter("-o", outputFull),
-            ToolParameter.Optional("-t", typeName),
-            ToolParameter.Switch("--nested-directories", nestedDirectories));
+        var timeoutHint = $"反编译写盘超时（超过 {timeoutSeconds} 秒），已放弃本次写盘；可调大 timeoutSeconds 后重试";
 
-        // 执行反编译写盘；退出码非 0 时返回 stderr，成功则返回输出目录与文件计数（超时由 timeoutSeconds 参数控制，默认 30s）
-        var result = await ToolExecutor.RunProcessAsync(command, cwd, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken);
-        if (result.Code != 0) return $"ilspycmd 退出码: {result.Code}{Environment.NewLine}{result.Stderr}";
-        // 枚举输出目录下文件总数供 agent 决策后续动作；枚举失败时退回基础提示，不拖垮工具
-        try
-        {
-            var count = Directory.GetFiles(outputFull, "*", SearchOption.AllDirectories).Length;
-            return $"已写入 {outputFull}（{count} 个文件，来源 {assemblyFull}）";
-        }
-        catch
-        {
-            return $"已写入 {outputFull}（来源 {assemblyFull}）";
-        }
+        // 进程内反编译写盘：单文件 {typeName 空 ? 程序集名 : typeName}.decompiled.cs；超时/取消返回提示文本，不抛异常
+        return await InProcessDecompiler.RunWithTimeoutAsync(
+            () => InProcessDecompiler.DecompileToDir(assemblyFull, outputFull, string.IsNullOrEmpty(typeName) ? null : typeName),
+            TimeSpan.FromSeconds(timeoutSeconds),
+            cancellationToken,
+            timeoutHint);
     }
 }

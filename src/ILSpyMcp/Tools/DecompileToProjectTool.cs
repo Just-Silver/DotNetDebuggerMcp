@@ -1,5 +1,5 @@
 using ILSpyMcp.Configuration;
-using ILSpyMcp.Pipeline;
+using ILSpyMcp.Decompiler;
 using ILSpyMcp.Services;
 using ILSpyMcp.Validation;
 using ModelContextProtocol.Server;
@@ -31,34 +31,23 @@ public static class DecompileToProjectTool
         [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
-        // 前置检查：ilspycmd 已安装且 assembly 参数有效；未通过直接返回提示
-        if (await ToolPreflight.CheckAsync(assembly) is { } preflightError) return preflightError;
+        // 参数校验：assembly 必填且文件存在（进程内反编译，无安装前置）
+        if (!ArgumentValidators.ValidateAssembly(assembly, out var assemblyError)) return assemblyError;
         // 参数校验：outputDir 必填且路径合法
         if (!ArgumentValidators.ValidateOutputDir(outputDir, out var argError)) return argError;
         // 参数校验：timeoutSeconds 必须为正整数（不允许永不超时）
         if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
 
-        // 由参数结构统一生成命令行（本工具不经缓存，签名字段不使用）
         var cwd = Environment.CurrentDirectory;
         if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
         var outputFull = Path.GetFullPath(outputDir, cwd);
-        var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
-            new ToolParameter("-o", outputFull),
-            new ToolParameter("-p", null), // 项目形式：每个类型一个源码文件
-            ToolParameter.Switch("--nested-directories", nestedDirectories));
+        var timeoutHint = $"反编译写盘超时（超过 {timeoutSeconds} 秒），已放弃本次写盘；可调大 timeoutSeconds 后重试";
 
-        // 执行反编译写盘；退出码非 0 时返回 stderr，成功则返回输出目录与文件计数（超时由 timeoutSeconds 参数控制，默认 30s）
-        var result = await ToolExecutor.RunProcessAsync(command, cwd, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken);
-        if (result.Code != 0) return $"ilspycmd 退出码: {result.Code}{Environment.NewLine}{result.Stderr}";
-        // 枚举输出目录下文件总数供 agent 决策后续动作；枚举失败时退回基础提示，不拖垮工具
-        try
-        {
-            var count = Directory.GetFiles(outputFull, "*", SearchOption.AllDirectories).Length;
-            return $"已写入 {outputFull}（{count} 个文件，来源 {assemblyFull}）";
-        }
-        catch
-        {
-            return $"已写入 {outputFull}（来源 {assemblyFull}）";
-        }
+        // 进程内项目模式写盘：{程序集名}.csproj + 每类型一个源码文件；超时/取消返回提示文本，不抛异常
+        return await InProcessDecompiler.RunWithTimeoutAsync(
+            () => InProcessDecompiler.DecompileToProject(assemblyFull, outputFull, nestedDirectories),
+            TimeSpan.FromSeconds(timeoutSeconds),
+            cancellationToken,
+            timeoutHint);
     }
 }

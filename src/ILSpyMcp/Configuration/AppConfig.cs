@@ -13,8 +13,8 @@ internal static class AppConfig
     public const long MaxCacheBytes = 64 * 1024 * 1024;
 
     /// <summary>
-    /// 子进程 stdout 读取的累计字节上限；超过即终止进程并返回提示，防止单类型反编译巨型输出（OOM）拖垮整个 MCP 进程。 取值与缓存上限一致：超过此值的结果不缓存也不返回给
-    /// agent，由 agent 改用 decompile_to_dir 反编译到本地目录。
+    /// 单次反编译生成文本的字符数上限：进程内反编译完成后检查，超过即返回「建议改用 decompile_to_dir」提示且该结果不入缓存，
+    /// 防止巨型反编译输出（OOM）拖垮整个 MCP 进程。取值与缓存上限一致。
     /// </summary>
     public const long MaxOutputBytes = MaxCacheBytes;
 
@@ -39,7 +39,8 @@ internal static class AppConfig
     public const string NuGetVersionListUrlPrefix = "https://api.nuget.org/v3-flatcontainer/";
 
     /// <summary>
-    /// ilspycmd 可执行文件名（工具命令与安装检测共用同一来源，避免两处手写漂移）。
+    /// 待 Task 6 删除：ilspycmd 可执行文件名——仅 <see cref="ILSpyMcp.Processes.InstallChecker"/> 仍引用（反编译已改进程内、
+    /// 不再有子进程命令，本常量已无生产用途）；保留以维持 InstallChecker 可编译，删除 InstallChecker 时一并移除。
     /// </summary>
     public const string IlspyCmdExecutable = "ilspycmd";
 
@@ -54,14 +55,10 @@ internal static class AppConfig
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(DefaultTimeoutSeconds);
 
     /// <summary>
-    /// ilspycmd 安装检测子进程的超时上限（快速失败，避免拖慢首次工具调用）。
+    /// 待 Task 6 删除：ilspycmd 安装检测子进程的超时上限——仅 <see cref="ILSpyMcp.Processes.InstallChecker"/> 仍引用（反编译已
+    /// 改进程内、不再有安装检测，本常量已无生产用途）；保留以维持 InstallChecker 可编译，删除 InstallChecker 时一并移除。
     /// </summary>
     public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(15);
-
-    /// <summary>
-    /// ilspycmd 最低要求的版本：单成员反编译（-m）在 11.0 起提供，低于此版本 decompile_member 不可用。
-    /// </summary>
-    public static readonly Version RequiredIlspyCmdVersion = new(11, 0);
 
     /// <summary>
     /// NuGet 新版本检查的超时上限；超时/网络失败时静默跳过该检查项（不影响反编译功能）。

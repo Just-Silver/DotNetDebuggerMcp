@@ -39,8 +39,8 @@ public static class DecompileMemberTool
         [Description("本次反编译回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
-        // 前置检查：ilspycmd 已安装且 assembly 参数有效；未通过直接返回提示
-        if (await ToolPreflight.CheckAsync(assembly) is { } preflightError) return preflightError;
+        // 参数校验：assembly 必填且文件存在（进程内反编译，无安装前置）
+        if (!ArgumentValidators.ValidateAssembly(assembly, out var assemblyError)) return assemblyError;
         // 参数校验：typeName 与 memberName 均必填
         if (!ArgumentValidators.ValidateMemberNameSearch(typeName, memberName, out var argError)) return argError;
         // 参数校验：timeoutSeconds 必须为正整数（不允许永不超时）
@@ -58,16 +58,15 @@ public static class DecompileMemberTool
             return message;
         }
 
-        // 匹配数超过上限：不反编译，仅返回成员签名清单（纯元数据秒回），避免为海量匹配逐一启动 ilspycmd 子进程
+        // 匹配数超过上限：不反编译，仅返回成员签名清单（纯元数据秒回），避免为海量匹配逐一启动反编译
         if (matches.Count > AppConfig.MaxMemberMatches) return RenderSignatureList(assemblyFull, typeName, memberName, matches, lines);
 
-        // 每个匹配成员一条命令：token 全局唯一，ilspycmd 的 -t 与 -m 互斥，故仅传 -m <token>；各命令独立缓存 key，同一成员不同子串查询共享缓存
+        // 每个匹配成员一条命令：token 全局唯一，同一成员不同子串查询 token 相同 → 缓存签名相同 → 共享缓存；各命令独立缓存 key
         var commands = matches
-            .Select(m => new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
-                new ToolParameter("-m", m.Token)) { DisplayName = $"{m.Name} ({m.Token})" })
+            .Select(m => new ToolCommand(assemblyFull, new DecompileRequest(DecompileKind.Member, m.Token)) { DisplayName = $"{m.Name} ({m.Token})" })
             .ToArray();
 
-        // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）。不展示参数——对外工具没有 -m/token 概念， 暴露内部 token 或 ilspycmd 参数会误导
+        // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）。不展示参数——对外工具没有 token 概念， 暴露内部 token 或反编译细节会误导
         // agent（agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员 {memberName}（{matches.Count} 个匹配）");
 

@@ -9,7 +9,7 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// 串行化使用 <see cref="AppServices"/> 静态状态的测试类（CheckToolTests / ToolPreflightTests）， 避免跨类并行执行时相互覆盖注入的
+/// 串行化使用 <see cref="AppServices"/> 静态状态的测试类（CheckToolTests / ToolPipelineTests / ToolPreflightTests）， 避免跨类并行执行时相互覆盖注入的
 /// fake 造成竞态。
 /// </summary>
 [CollectionDefinition("AppServices", DisableParallelization = true)]
@@ -19,57 +19,15 @@ public sealed class AppServicesTestCollection;
 public class CheckToolTests
 {
     [Fact]
-    public async Task ilspycmd未安装_报告存在缺口与安装提示()
+    public async Task 报告包含引擎版本段与就绪状态()
     {
         await RunWithAsync(
-            new FakeProcessRunner { Code = 1 },
-            cachedLatest: null,
-            async text =>
-            {
-                Assert.Contains("环境状态: 存在缺口", text);
-                Assert.Contains("ilspycmd: 未安装", text);
-                Assert.Contains("dotnet tool install --global ilspycmd", text);
-            });
-    }
-
-    [Fact]
-    public async Task 版本低于要求_报告不可用与升级提示()
-    {
-        await RunWithAsync(
-            new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 10.0.0\n" },
-            cachedLatest: null,
-            async text =>
-            {
-                Assert.Contains("环境状态: 存在缺口", text);
-                Assert.Contains("10.0.0 < 11.0", text);
-                Assert.Contains("dotnet tool update --global ilspycmd", text);
-            });
-    }
-
-    [Fact]
-    public async Task 版本满足要求_报告就绪与可用()
-    {
-        await RunWithAsync(
-            new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" },
             cachedLatest: null,
             async text =>
             {
                 Assert.Contains("环境状态: 就绪", text);
-                Assert.Contains("11.0.0.9335 >= 11.0", text);
-                Assert.Contains("成员反编译（-m）: 可用", text);
-            });
-    }
-
-    [Fact]
-    public async Task 无缓存_NuGet段留白()
-    {
-        await RunWithAsync(
-            new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" },
-            cachedLatest: null,
-            async text =>
-            {
-                Assert.DoesNotContain("ilspymcp", text);
-                Assert.Contains("环境状态: 就绪", text);
+                Assert.Contains("反编译引擎: 内置 ICSharpCode.Decompiler", text);
+                Assert.DoesNotContain("ilspymcp", text); // 无有效检查记录 NuGet 段留白
             });
     }
 
@@ -77,7 +35,6 @@ public class CheckToolTests
     public async Task NuGet有新版本_报告升级提示()
     {
         await RunWithAsync(
-            new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" },
             cachedLatest: "2.0.0",
             async text =>
             {
@@ -91,7 +48,6 @@ public class CheckToolTests
     public async Task NuGet已是最新_报告已是最新()
     {
         await RunWithAsync(
-            new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" },
             cachedLatest: "1.1.0",
             async text =>
             {
@@ -101,20 +57,16 @@ public class CheckToolTests
     }
 
     [Fact]
-    public async Task 会话缓存_第二次调用不再执行检查()
+    public async Task 会话缓存_第二次调用复用同一报告()
     {
-        var fake = new FakeProcessRunner { Code = 0, Stdout = "ilspycmd: 11.0.0.9335\n" };
-        AppServices.ConfigureForTest(fake);
-        var cacheDir = TempDir();
-        WriteCacheFile(cacheDir, "1.1.0");
-        AppServices.Updater = new UpdateChecker(cacheDir);
+        AppServices.ConfigureForTest();
         try
         {
-            await CheckTool.CheckStatus();
-            var second = await CheckTool.CheckStatus();
+            var first = AppServices.StatusReport.Value;
+            var second = AppServices.StatusReport.Value;
 
-            Assert.Equal(1, fake.CallCount);
-            Assert.Contains("环境状态: 就绪", second);
+            Assert.Same(first, second); // StatusReport 会话内缓存，仅首次真实组装
+            Assert.Contains("反编译引擎: 内置 ICSharpCode.Decompiler", await first);
         }
         finally
         {
@@ -123,12 +75,12 @@ public class CheckToolTests
     }
 
     /// <summary>
-    /// 注入 fake 进程执行器，并将 Updater 指向预写缓存（或空目录）的临时目录，验证环境自检（CLI -c/握手注入）报告组装。 NuGet 段经 <see
+    /// 注入小缓存（进程内引擎无需安装检测），并将 Updater 指向预写缓存（或空目录）的临时目录，验证环境自检（CLI -c/握手注入）报告组装。 NuGet 段经 <see
     /// cref="UpdateChecker.GetCachedNuGetLine"/> 同步读缓存，故不注入网络 handler。
     /// </summary>
-    private static async Task RunWithAsync(FakeProcessRunner fake, string? cachedLatest, Func<string, Task> assert)
+    private static async Task RunWithAsync(string? cachedLatest, Func<string, Task> assert)
     {
-        AppServices.ConfigureForTest(fake);
+        AppServices.ConfigureForTest();
         var cacheDir = TempDir();
         if (cachedLatest is not null) WriteCacheFile(cacheDir, cachedLatest);
         AppServices.Updater = new UpdateChecker(cacheDir);
