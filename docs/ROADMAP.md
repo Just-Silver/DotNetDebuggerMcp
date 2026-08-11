@@ -6,9 +6,9 @@
 
 **状态**：pending（v2.0 只做签名级引用，不做本项）
 
-**要做什么**：在现有「签名级引用」（成员签名/基类/接口/特性中的内部类型引用）之上，增加**方法调用边**——扫描方法体 IL 的 `call`/`callvirt`/`newobj`/`ldftn` 等指令，提取程序集内部的调用关系，形成行为级调用图。
+**要做什么**：在现有「签名级引用」（成员签名/基类/接口/特性中的内部类型引用）之上，增加**方法调用边**——扫描方法体 IL 的 `call`/`callvirt`/`newobj`/`ldftn` 等指令，提取程序集内部的调用关系，形成行为级调用图。早期建议即设想此「方法体级引用」：遍历 `MethodBody` 中的 `MemberRef`/`TypeRef`/`MethodSpec`，只统计本程序集内部类型（避免 BCL 噪声），输出复用现有行号/分页/头部块格式。
 
-**为什么暂不做**（难点，详见 `docs/ilspymcp_建议.md` §4 与审查结论）：
+**为什么暂不做**（难点与早期建议评估结论）：
 
 1. **手写 IL 解码**：`MethodBodyBlock` 只给字节流，需自行解析全部 opcode operand（`switch`、`calli` 签名 token、`ldtoken` 等可变长度编码），写错即漏边/错边。
 2. **引用解析链长**：`MemberRef` owner 可能是 `TypeRef`/`TypeDef`/`TypeSpec`；泛型实例化（`Dictionary<string, List<int>>`）需层层 `SignatureDecoder`；同程序集引用编译器通常发 `TypeRef`，「内部类型」判定要沿 ResolutionScope 链回溯。
