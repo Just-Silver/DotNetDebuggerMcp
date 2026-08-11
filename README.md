@@ -61,12 +61,16 @@ ilspymcp -v                                  # 查看版本号（等价 --versio
 ilspymcp -h                                  # 查看帮助（等价 --help）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program      # 反编译单个类型（带行号，等价 ilspy_decompile）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Main  # 按成员名子串搜成员（等价 ilspy_decompile_member）
+ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -s   # 输出成员签名（等价 ilspy_signature）
+ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc  # 继承/接口关系（等价 ilspy_hierarchy）
+ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -d   # 成员签名内部引用（等价 ilspy_dependencies）
 ilspymcp -a bin/Debug/MyApp.dll -l csi               # 列出实体类型（等价 ilspy_list_types）
-ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories   # 反编译写盘（等价 ilspy_decompile_to_dir）
+ilspymcp -a bin/Debug/MyApp.dll -o src --nested-directories   # 反编译写盘（等价 ilspy_decompile_to_dir）
+ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories   # 项目形式反编译写盘（等价 ilspy_decompile_to_project）
 ilspymcp -c                                          # 环境自检（CLI 调试用，无需 -a；MCP 会话起始已自动注入环境状态报告）
 ```
 
-常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-mn|--membername`（按名搜索成员）、`-l|--list`（类型类别）、`-o|--outputdir`（输出目录）、`-p|--project`（项目形式）、`--nested-directories`（嵌套目录）、`-lv|--languageversion`（C# 版本）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）、`-c|--check`（环境自检）。
+常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-mn|--membername`（按名搜索成员）、`-s|--signatures`（成员签名，配合 `-t`）、`-hc|--hierarchy`（继承/接口，配合 `-t`）、`-d|--dependencies`（内部引用，配合 `-t`）、`-l|--list`（类型类别）、`-o|--outputdir`（输出目录）、`-p|--project`（项目形式，需配合 `-o`）、`--nested-directories`（嵌套目录）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）、`-c|--check`（环境自检）。
 
 ## 工具
 
@@ -74,10 +78,14 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 | ---- | ---- |
 | `ilspy_decompile` | 反编译单个类型到标准输出，输出带行号标注，支持按行号范围分页拉取 |
 | `ilspy_decompile_member` | 按成员名子串在指定类型内搜索并反编译匹配的成员，输出带行号标注，支持分页拉取 |
+| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或单个类型） |
+| `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件） |
 | `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），输出带行号标注 |
-| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量/项目/单类型；`typeName` 仅非项目模式生效） |
+| `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图 |
+| `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型 |
+| `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用 |
 
-`ilspy_decompile`、`ilspy_decompile_member` 与 `ilspy_list_types` 默认仅输出前 200 行，可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir` 结果写盘、不做行数截断。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效；`ilspycmd` 未安装时仅提示，不代为执行。MCP 会话启动握手时自动执行环境自检（ilspycmd 安装/版本、ilspymcp 更新状态）并注入会话起始提示，无需单独调用检查工具。
+`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature` 与 `ilspy_hierarchy` 默认仅输出前 200 行，前两者可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做行数截断。`ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies` 为纯元数据读取，秒回且无需安装 ilspycmd；反编译类工具依赖 ilspycmd，未安装时仅提示，不代为执行。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效。MCP 会话启动握手时自动执行环境自检（ilspycmd 安装/版本、ilspymcp 更新状态）并注入会话起始提示，无需单独调用检查工具。
 
 ### 工具参数
 
@@ -85,22 +93,31 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 | ---- | ---- | ---- | ---- |
 | `ilspy_decompile` | `assembly` | 程序集文件路径（.dll/.exe），可为相对当前工作目录的路径 | 是 |
 | | `typeName` | 仅反编译指定全限定类型名，例如 `System.String` | 是 |
-| | `languageVersion` | C# 语言版本，如 `CSharp8_0`、`CSharp12_0`、`CSharp13_0`、`Latest`；省略使用 ilspycmd 默认 | 否 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`（1-based 含两端，单次最多 500 行），如 `200-400`；省略返回前 200 行 | 否 |
+| | `timeoutSeconds` | 本次反编译回源超时秒数（默认 30） | 否 |
 | `ilspy_decompile_member` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 在指定类型内搜索成员，全限定类型名，例如 `System.Text.Json.JsonSerializer` | 是 |
 | | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；匹配到的成员全部反编译 | 是 |
-| | `languageVersion` | C# 语言版本；省略使用 ilspycmd 默认 | 否 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
+| | `timeoutSeconds` | 本次反编译回源超时秒数（默认 30） | 否 |
+| `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
+| | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
+| | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集 | 否 |
+| | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录（默认 true） | 否 |
+| | `timeoutSeconds` | 本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大） | 否 |
+| `ilspy_decompile_to_project` | `assembly` | 程序集文件路径 | 是 |
+| | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
+| | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录（默认 true） | 否 |
+| | `timeoutSeconds` | 本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大） | 否 |
 | `ilspy_list_types` | `assembly` | 程序集文件路径 | 是 |
 | | `list` | 实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 `csi` | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
-| `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
-| | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
-| | `project` | 以可编译项目形式反编译（每个类型一个源码文件，默认 false） | 否 |
-| | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集（仅 `project=false` 时生效；`project=true` 时项目模式忽略此参数并全量输出） | 否 |
-| | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录（默认 true） | 否 |
-| | `languageVersion` | C# 语言版本；省略使用 ilspycmd 默认 | 否 |
+| `ilspy_signature` | `assembly` | 程序集文件路径 | 是 |
+| | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Formatting.OutputFormatter` | 是 |
+| `ilspy_hierarchy` | `assembly` | 程序集文件路径 | 是 |
+| | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Processes.ProcessRunner` | 是 |
+| `ilspy_dependencies` | `assembly` | 程序集文件路径 | 是 |
+| | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Caching.DecompileCache` | 是 |
 
 ## 使用示例
 
@@ -112,6 +129,9 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 - **项目形式 + 嵌套目录**：> 以可编译项目形式反编译 `bin/Debug/MyApp.dll` 到 `src`，并按命名空间嵌套目录
 - **单个类型**：> 反编译 `bin/Debug/MyApp.dll` 中的 `MyApp.Program` 类型
 - **按名搜索成员**：> 在 `bin/Debug/MyApp.dll` 的 `MyApp.Program` 中搜索名称包含 `Main` 的成员并反编译
+- **成员签名（API 地图）**：> 列出 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的全部成员签名
+- **继承关系**：> 查看 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的基类链、接口与继承者
+- **内部引用**：> 查询 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的成员签名引用了哪些内部类型、以及哪些类型引用了它
 - **按行拉取**：> 反编译 `bin/Debug/MyApp.dll` 中的 `MyApp.Program`，读取第 200-400 行
 
 ## License
