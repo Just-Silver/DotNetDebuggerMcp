@@ -4,6 +4,8 @@
 
 版本号与 `src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 保持一致；发布时 `<PackageReleaseNotes>` 自动提取当前版本对应段落。未发布的变更统一记录在 `[Unreleased]`，发布时再转为带日期的版本段落。
 
+本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
+
 ## [Unreleased]
 
 ### Added
@@ -26,31 +28,21 @@
 - 类型全名统一与 ilspycmd `-l` 输出对齐：命名空间.类型、嵌套用 `+`、泛型带 arity（如 `GenericBox\`1`），`-t` 同时接受 `+` 与 `.` 嵌套分隔符
 - CLI 新增 `-s/--signatures`、`-hc/--hierarchy`、`-d/--dependencies`；移除 `-lv/--languageversion`；`-p` 改走 decompile_to_project
 
-### Removed
-
-- `ArgumentValidators.ValidateLanguageVersion` 校验方法（languageVersion 参数已整体移除）
-
 ## [1.1.2] - 2026-08-11
 
 ### Added
 
 - 环境自检新增 NuGet 更新检查：检查 ilspymcp 是否有新版本，结果落盘跨进程共享（成功 TTL 24h、失败 1h 退避、失败保留旧值），避免每次会话都联网复查
 - MCP 握手期经 `ServerInstructions` 注入完整环境自检报告（ilspycmd 安装/版本 + NuGet 更新状态），agent 会话起始即可感知环境；握手后台异步刷新 NuGet 磁盘缓存供下次会话
-- 版本比较共用 `IsNewerThanCurrent` 静态方法（环境自检报告与握手注入两处调同一规则），防版本比较规则漂移
 
 ### Changed
 
 - **check_status 不再暴露为 MCP 工具**（破坏性变更）：环境自检报告改由握手期注入 `ServerInstructions`，agent 无需手动调用；`CheckStatus` 保留供 CLI `-c/--check` 调试
-- 源码按功能拆分命名空间（原 `Infrastructure` 拆为 `Configuration`/`Services`/`Pipeline`/`Processes`/`Caching`/`Formatting`/`Metadata`/`UpdateCheck`），消除 `Infrastructure` 大杂烩
-- 解除命名空间循环依赖：`UpdateChecker` 构造注入查询委托、`EnvironmentChecker` 依赖经参数传入、`ToolExecutor` 移入 Services 层、`InstallChecker` 改用 `AppConfig.IlspyCmdExecutable` 常量，依赖方向单向化（Services → 各功能层 → Tools）
 - CLI `-c/--check` 调用前先刷新 NuGet 缓存（TTL/退避内不联网），无缓存记录时 NuGet 段不再永远留白
-- 多行提示/报告文本统一改用 `Environment.NewLine`（环境自检报告、ilspycmd 退出码错误提示、Client 终端输出），跨平台换行正确
 
 ### Fixed
 
 - 握手期 `StatusReport` 环境自检异常不再阻断 MCP 启动：降级为空注入提示，核心反编译功能不受影响
-- `GetCachedNuGetLine` 复用已解析版本（`IsNewerThanCurrent` 新增 `Version` 重载），消除重复 TryParse
-- 修复 `AppConfig` XML cref 无法解析（改用全限定名）与文件尾缺失换行
 
 ## [1.1.1] - 2026-08-10
 
@@ -69,18 +61,8 @@
 - MCP 工具（decompile / list_types）输出前置头部信息块（程序集/目标/内容），明确代码归属与当前切片位置，缓存命中时同样携带
 - decompile_to_dir 成功提示并入来源程序集
 
-### Changed
-
-- 消除 Infrastructure → Tools 交叉依赖：环境自检报告组装下沉至 Infrastructure 的 EnvironmentChecker，AppServices 不再反向引用工具层
-- ToolCommand 显式持有 Assembly 属性，执行管道签名收敛，杜绝「管道实参」与「命令内路径」双份程序集数据导致缓存 key 错配
-- 工具执行样板收敛至共享 ToolExecutor（统一路径解析与管道/子进程调用），消除各工具重复代码与细节漂移
-- check_status 环境自检：InstallChecker 的安装状态与版本解析合并为同一检查任务，消除先读版本为空的时序契约
-
 ### Fixed
 
 - 移除头部信息块的「参数」行：agent 面对的是 MCP 命名参数，ilspycmd 内部命令行参数（如 `-m token`、`-t`、`-l`）对 agent 无意义且会误导
 - 修复 list_types 空结果（如列出不存在的实体类别）静默无提示的问题
-- 修复 .mcp/server.json 缩进错乱
 - Program.cs 增加 MCP 装配期异常兜底（启动失败时 stderr 中文提示 + 非零退出码，不再暴露崩溃堆栈）
-- 删除冗余的 AppServices.DefaultTimeout（统一使用 AppConfig.DefaultTimeout）
-- 测试仓库根探测改为逐级上溯查找 ILSpyMcp.slnx，消除硬编码上溯层数

@@ -12,6 +12,7 @@
 - **有默认值的工具参数，`[Description]` 必须注明默认值**（如「默认 30」「默认 true」「缺省返回前 200 行」「省略使用 ilspycmd 默认」），否则 agent 无从感知当前默认行为。
 - **每个工具方法带 `CancellationToken cancellationToken = default` 参数**（反编译类放在 `timeoutSeconds` 之后，元数据类放在末尾）：SDK 识别为取消令牌并注入、**不暴露为 MCP 参数**（不要写 `[Description]`），客户端取消调用时沿 Pipeline/ProcessRunner 终止 ilspycmd 子进程。勿删。
 - **更新版本号必须同步改三处**：`src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>`、`src/ILSpyMcp/.mcp/server.json`（顶层 `version` 与 `packages[0].version` 两处都要改一致）、`CHANGELOG.md`（发布前把 `[Unreleased]` 内容转成 `## [<version>] - <date>` 段）。`-v/--version` 输出版本取程序集版本（由 csproj 生成），但 NuGet MCP 注册信息读 server.json，不同步会导致发布后展示版本不一致。**CHANGELOG 变更统一记在 `[Unreleased]` 段**；发布打 `v*` tag 时 CI 从 CHANGELOG.md 提取 `## [<version>]` 段落注入 `PackageReleaseNotes`，缺段会导致发布失败（防静默无说明）。
+- **CHANGELOG 只写使用者（agent/CLI）可见的变更**（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）——它是 NuGet `PackageReleaseNotes` 的展示文案，不是开发流水账；内部重构、实现细节、测试改动等一律不写（git 提交记录已足够）。某版本只有内部变更时写一行「内部重构与细节调整，无用户可见变化」占位，保住 CI「缺段即失败」的防静默机制。
 
 ## 结构
 
