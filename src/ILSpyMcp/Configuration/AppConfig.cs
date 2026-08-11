@@ -39,12 +39,6 @@ internal static class AppConfig
     public const string NuGetVersionListUrlPrefix = "https://api.nuget.org/v3-flatcontainer/";
 
     /// <summary>
-    /// 待 Task 6 删除：ilspycmd 可执行文件名——仅 <see cref="ILSpyMcp.Processes.InstallChecker"/> 仍引用（反编译已改进程内、
-    /// 不再有子进程命令，本常量已无生产用途）；保留以维持 InstallChecker 可编译，删除 InstallChecker 时一并移除。
-    /// </summary>
-    public const string IlspyCmdExecutable = "ilspycmd";
-
-    /// <summary>
     /// NuGet 新版本检查磁盘缓存文件名（位于 <see cref="ILSpyMcp.UpdateCheck.UpdateChecker"/> 的缓存目录下）。
     /// </summary>
     public const string UpdateCheckCacheFileName = "update-check.json";
@@ -53,12 +47,6 @@ internal static class AppConfig
     /// 全局操作默认超时（由 <see cref="DefaultTimeoutSeconds"/> 派生）。
     /// </summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(DefaultTimeoutSeconds);
-
-    /// <summary>
-    /// 待 Task 6 删除：ilspycmd 安装检测子进程的超时上限——仅 <see cref="ILSpyMcp.Processes.InstallChecker"/> 仍引用（反编译已
-    /// 改进程内、不再有安装检测，本常量已无生产用途）；保留以维持 InstallChecker 可编译，删除 InstallChecker 时一并移除。
-    /// </summary>
-    public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(15);
 
     /// <summary>
     /// NuGet 新版本检查的超时上限；超时/网络失败时静默跳过该检查项（不影响反编译功能）。

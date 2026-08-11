@@ -11,9 +11,9 @@ namespace ILSpyMcp.Tests;
 /// </summary>
 public class TypeListerTests
 {
-    // 生成测试程序集：601 个 class（Class0001-0600 + BigClass）+ 编译器生成的 <Module>
+    // 生成测试程序集：601 个 class（Class0001-0600 + BigClass）+ interface（IAnimal 等）+ 编译器生成的 <Module>
     private static readonly string TestSamplesPath = TestDataPaths.TestSamplesDll;
-    // 主项目程序集：含 interface（IProcessRunner）、struct（ToolPipelineResult 等）、嵌套类型与编译器生成类型
+    // 主项目程序集：含 struct（ToolPipelineResult 等）、enum、嵌套类型与编译器生成类型
     private static readonly string MainAssemblyPath = typeof(OutputFormatter).Assembly.Location;
 
     /// <summary>
@@ -51,14 +51,14 @@ public class TypeListerTests
     }
 
     [Fact]
-    public void 主程序集_列出class与interface_类别字母正确()
+    public void 列出class与interface_类别字母正确()
     {
-        WithReader(MainAssemblyPath, reader =>
+        WithReader(TestSamplesPath, reader =>
         {
             var entries = TypeLister.ListTypes(reader, "ci").ToDictionary(e => e.FullName, e => e.Category);
 
-            Assert.Equal('i', entries["ILSpyMcp.Processes.IProcessRunner"]);
-            Assert.Equal('c', entries["ILSpyMcp.Formatting.OutputFormatter"]);
+            Assert.Equal('i', entries["ILSpyMcp.Samples.IAnimal"]);
+            Assert.Equal('c', entries["ILSpyMcp.Samples.BigClass"]);
         });
     }
 

@@ -8,7 +8,7 @@ namespace ILSpyMcp.Tests;
 
 public class HierarchyTests
 {
-    // 主项目程序集（作为测试依赖复制到 bin），含接口实现 ProcessRunner : IProcessRunner；纯元数据读取
+    // 主项目程序集（作为测试依赖复制到 bin），含 class/struct/enum 等；纯元数据读取
     private static readonly string AssemblyPath = typeof(OutputFormatter).Assembly.Location;
 
     /// <summary>
@@ -43,22 +43,22 @@ public class HierarchyTests
     }
 
     [Fact]
-    public void GetInterfaces_ProcessRunner_含IProcessRunner()
+    public void GetInterfaces_Dog_含IAnimal()
     {
-        // ProcessRunner : IProcessRunner，接口为同程序集 TypeDefinition
-        using var scope = new MetadataScope(AssemblyPath);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Processes.ProcessRunner");
-        Assert.Contains("ILSpyMcp.Processes.IProcessRunner", Hierarchy.GetInterfaces(scope.Reader, type));
+        // Dog : IAnimal，接口为同程序集 TypeDefinition
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.Dog");
+        Assert.Contains("ILSpyMcp.Samples.IAnimal", Hierarchy.GetInterfaces(scope.Reader, type));
     }
 
     [Fact]
-    public void GetDescendants_IProcessRunner_含ProcessRunner()
+    public void GetDescendants_IAnimal_含Dog()
     {
-        // 反向：程序集内实现 IProcessRunner 接口的类型（直接接口相等）
-        using var scope = new MetadataScope(AssemblyPath);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Processes.IProcessRunner");
+        // 反向：程序集内实现 IAnimal 接口的类型（直接接口相等）
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.IAnimal");
         var fullName = MetadataNaming.FullName(scope.Reader, type);
-        Assert.Contains("ILSpyMcp.Processes.ProcessRunner", Hierarchy.GetDescendants(scope.Reader, type, fullName));
+        Assert.Contains("ILSpyMcp.Samples.Dog", Hierarchy.GetDescendants(scope.Reader, type, fullName));
     }
 
     [Fact]
@@ -77,8 +77,8 @@ public class HierarchyTests
     public void GetBaseChain_接口_仅含自身()
     {
         // 接口的 BaseType 为 nil，基类链只含接口自身
-        using var scope = new MetadataScope(AssemblyPath);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Processes.IProcessRunner");
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.IAnimal");
         var fullName = MetadataNaming.FullName(scope.Reader, type);
         Assert.Equal(new[] { fullName }, Hierarchy.GetBaseChain(scope.Reader, type));
     }

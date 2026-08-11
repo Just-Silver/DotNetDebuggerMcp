@@ -9,7 +9,7 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// 串行化使用 <see cref="AppServices"/> 静态状态的测试类（CheckToolTests / ToolPipelineTests / ToolPreflightTests）， 避免跨类并行执行时相互覆盖注入的
+/// 串行化使用 <see cref="AppServices"/> 静态状态的测试类（CheckToolTests / ToolPipelineTests）， 避免跨类并行执行时相互覆盖注入的
 /// fake 造成竞态。
 /// </summary>
 [CollectionDefinition("AppServices", DisableParallelization = true)]

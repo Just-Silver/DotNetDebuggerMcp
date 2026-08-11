@@ -2,7 +2,6 @@ using ILSpyMcp.Caching;
 using ILSpyMcp.Configuration;
 using ILSpyMcp.Decompiler;
 using ILSpyMcp.Pipeline;
-using ILSpyMcp.Processes;
 using ILSpyMcp.UpdateCheck;
 
 namespace ILSpyMcp.Services;
@@ -45,12 +44,6 @@ internal static class AppServices
     /// </summary>
     public static Lazy<Task<string>> StatusReport =
         new(() => EnvironmentChecker.BuildReportAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
-
-    /// <summary>
-    /// 待 Task 6 删除：ilspycmd 安装检测器——仅 <see cref="ILSpyMcp.Validation.ToolPreflight"/> 仍引用（本单元已移除全部工具对
-    /// ToolPreflight 的调用），反编译已改进程内、不再需要安装检测；保留字段以维持 ToolPreflight 可编译，删除 ToolPreflight 时一并移除。
-    /// </summary>
-    public static InstallChecker Installer = new(new ProcessRunner());
 
     /// <summary>
     /// 测试注入：以指定缓存（缺省为默认 <see cref="AppConfig.MaxCacheBytes"/> 上限的缓存）重建 Cache/Pipeline， 使工具层可在可控
