@@ -255,6 +255,24 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
+    /// 判定文本是否为 InProcessDecompiler 生成的错误提示（而非反编译结果）。 供执行管道在写缓存前排除错误提示——错误提示不入缓存，
+    /// 同 key 后续调用可重试。覆盖全部错误提示形态：反编译异常兜底、未找到类型、输出超限、非法/越界 token。 超时提示（timeoutHint）
+    /// 由调用方另行判定（本方法不命中该类文本），无需重复处理。新增错误提示时必须同步扩展本判定，否则会被管道误当正常结果写入缓存。
+    /// </summary>
+    /// <param name="text">反编译入口返回的文本。</param>
+    /// <returns>是错误提示返回 true；反编译结果返回 false。</returns>
+    public static bool IsErrorResult(string text)
+    {
+        // 全部错误提示前缀：Execute/RunWithTimeoutAsync 的「反编译失败：」兜底、未找到类型、输出超限、
+        // 「元数据 token …未引用…」越界、以及以引号开头的非法 token 提示（正常反编译文本不可能以这些开头）
+        return text.StartsWith("反编译失败：", StringComparison.Ordinal)
+            || text.StartsWith("未找到类型 ", StringComparison.Ordinal)
+            || text.StartsWith("反编译输出超过上限", StringComparison.Ordinal)
+            || text.StartsWith("元数据 token ", StringComparison.Ordinal)
+            || text.StartsWith("\"", StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 文本输出超 <see cref="AppConfig.MaxOutputBytes"/> 字符数时返回改用写盘提示，否则原样返回。
     /// </summary>
     /// <param name="text">反编译生成的文本。</param>

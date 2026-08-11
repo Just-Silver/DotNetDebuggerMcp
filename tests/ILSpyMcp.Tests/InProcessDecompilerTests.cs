@@ -256,6 +256,29 @@ public class InProcessDecompilerTests
     }
 
     /// <summary>
+    /// IsErrorResult 必须识别全部错误提示形态（超限/未找到/非法 token/越界 token/反编译失败兜底），且不误判正常反编译文本。
+    /// 超限分支受 <see cref="ILSpyMcp.Configuration.AppConfig.MaxOutputBytes"/>（64MB 字符）限制难以在管道层直接触发，此处以真实超限提示文本
+    /// 覆盖 IsErrorResult 对超限形态的判定（管道层仅依赖本判定做「错误不入缓存」决策）。
+    /// </summary>
+    [Theory]
+    [InlineData("反编译输出超过上限，建议改用 decompile_to_dir", true)]
+    [InlineData("未找到类型 No.Such.Type", true)]
+    [InlineData("\"abc\" 不是有效的元数据 token，应为 0x 开头的十六进制格式，如 0x06000005", true)]
+    [InlineData("元数据 token 0x06FFFFFF 未引用本模块的类型或成员", true)]
+    [InlineData("反编译失败：IO 错误（x）", true)]
+    [InlineData("反编译失败：无访问权限（x）", true)]
+    [InlineData("反编译失败：程序集格式无效（x）", true)]
+    [InlineData("反编译失败：x", true)]
+    [InlineData("using System;\npublic class A { }", false)]
+    [InlineData("namespace Foo { }", false)]
+    [InlineData("public class Empty { }", false)]
+    [InlineData("", false)]
+    public void IsErrorResult_识别全部错误提示形态_不误判反编译结果(string text, bool isError)
+    {
+        Assert.Equal(isError, InProcessDecompiler.IsErrorResult(text));
+    }
+
+    /// <summary>
     /// 供 DecompileType 嵌套定位用例使用的主程序集嵌套类型（与 InProcessDecompiler 同程序集，运行时存在）。
     /// </summary>
     private sealed class TestNested

@@ -183,6 +183,29 @@ public class ToolPipelineTests
     }
 
     [Fact]
+    public async Task 未找到类型_错误提示不入缓存且后续可重试()
+    {
+        Init();
+        try
+        {
+            var key = KeyForType(TypeNoSuch);
+            Assert.Null(AppServices.Cache.Get(key));
+
+            var first = await ExecuteTypeAsync(TypeNoSuch);
+            Assert.Contains($"未找到类型 {TypeNoSuch}", first.Text); // 错误提示（非反编译结果，走错误转提示路径）
+            Assert.Null(AppServices.Cache.Get(key)); // 错误提示不入缓存
+
+            var second = await ExecuteTypeAsync(TypeNoSuch);
+            Assert.Equal(first.Text, second.Text); // 同 key 再次回源结果一致（非从缓存读出）
+            Assert.Null(AppServices.Cache.Get(key)); // 仍未入缓存，后续可重试
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
     public async Task 空程序集路径_返回提示不抛异常()
     {
         Init();

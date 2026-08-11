@@ -186,7 +186,7 @@ public sealed class ToolPipeline
         try
         {
             cached = await lazy.Value;
-            // 能走到这里说明回源未抛异常（超时/取消等已在 RunSourceAsync 转为异常），结果必为正常反编译文本，直接写缓存
+            // 能走到这里说明回源未抛异常（超时/取消/错误提示等已在 RunSourceAsync 转为异常），结果必为正常反编译文本，直接写缓存
             _cache.Put(key, cached);
             return cached;
         }
@@ -198,7 +198,7 @@ public sealed class ToolPipeline
 
     /// <summary>
     /// 回源反编译：经 <see cref="InProcessDecompiler.RunWithTimeoutAsync"/> 在后台线程执行进程内反编译并拆分行列表；
-    /// 超时/取消时返回的超时提示识别后抛异常（走「错误转提示」路径且不入缓存，同 key 后续调用仍可重试）。
+    /// 超时/取消提示与反编译返回的错误提示（未找到类型/超限/非法 token 等）均识别后抛异常（走「错误转提示」路径且不入缓存，同 key 后续调用仍可重试）。
     /// </summary>
     /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
     /// <param name="timeout">本次回源超时。</param>
@@ -218,6 +218,8 @@ public sealed class ToolPipeline
         var text = await InProcessDecompiler.RunWithTimeoutAsync(work, timeout, cancellationToken, timeoutHint);
         // 超时/取消时 RunWithTimeoutAsync 原样返回 timeoutHint：识别并抛异常走错误提示路径，避免把超时提示误当反编译结果写入缓存
         if (text == timeoutHint) throw new InvalidOperationException(timeoutHint);
+        // 反编译返回的错误提示（未找到类型/输出超限/非法或越界 token 等）同样不入缓存：抛异常由调用方转为提示文本，同 key 后续调用可重试
+        if (InProcessDecompiler.IsErrorResult(text)) throw new InvalidOperationException(text);
         return OutputFormatter.SplitLines(text);
     }
 }
