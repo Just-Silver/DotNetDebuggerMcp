@@ -1,7 +1,7 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// list_types 工具的全部端到端验证场景：list 单值/组合 / lines / 非法值 / 缺参校验。
+/// list_types 工具的全部端到端验证场景：list 单值/组合 / lines / 编译器生成类型过滤 / 非法值 / 缺参校验。
 /// </summary>
 public static class ListTypesCases
 {
@@ -19,10 +19,14 @@ public static class ListTypesCases
         new ToolCallCase("list_types", "list + lines 按行号切片",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["lines"] = "1-5" },
             ExpectedContains: "1\t", MustNotContain: "at System"),
-        // 自定义超时参数应被接受
-        new ToolCallCase("list_types", "list + timeoutSeconds（自定义超时）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["timeoutSeconds"] = 45 },
-            ExpectedContains: TestDataHelper.ListedClassName, MustNotContain: "at System"),
+        // 编译器生成类型（<Module> 等名含 <）默认过滤，不应出现于输出
+        new ToolCallCase("list_types", "编译器生成过滤（<Module> 不出现）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c" },
+            ExpectedContains: TestDataHelper.ListedClassName, MustNotContain: "<Module>"),
+        // 更严断言：编译器生成类型名均含 < 而 C# 标识符不允许 <，过滤后整段输出不应出现 <
+        new ToolCallCase("list_types", "编译器生成类型全过滤（输出不含 <）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c" },
+            ExpectedContains: TestDataHelper.ListedClassName, MustNotContain: "<"),
         // 非法 list 应返回中文校验提示而非异常堆栈
         new ToolCallCase("list_types", "非法 list（应返回校验提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "xyz" },

@@ -8,27 +8,25 @@ using System.ComponentModel;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 将 .NET 程序集（dll/exe）反编译写入指定目录（全量或单个类型）。结果写入磁盘而非标准输出，不做行数截断。
+/// 将 .NET 程序集（dll/exe）以可编译项目形式反编译写入指定目录。结果写入磁盘而非标准输出，不做行数截断。
 /// </summary>
 [McpServerToolType]
-public static class DecompileToDirTool
+public static class DecompileToProjectTool
 {
     /// <summary>
-    /// 反编译程序集写入指定目录（全量或单个类型），不经过缓存。
+    /// 以可编译项目形式反编译整个程序集写入指定目录（每个类型一个源码文件），不经过缓存。
     /// </summary>
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="outputDir">输出目录；反编译结果写入该目录而非标准输出（必填）。</param>
-    /// <param name="typeName">指定则仅反编译该全限定类型名；省略则反编译整个程序集。</param>
     /// <param name="nestedDirectories">输出到目录时按命名空间使用嵌套目录（默认 true）。</param>
     /// <param name="timeoutSeconds">本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
     [McpServerTool]
-    [Description("将 .NET 程序集（dll/exe）反编译写入指定目录（全量或指定单个类型）。结果写入磁盘而非标准输出，不做行数截断；读取源码请使用 opencode 内置工具。typeName 指定则仅反编译该类型，省略则反编译整个程序集。")]
-    public static async Task<string> DecompileToDir(
+    [Description("以可编译项目形式反编译整个程序集到指定目录（每个类型一个源码文件）。结果写入磁盘而非标准输出，不做行数截断；读取源码请使用 opencode 内置工具。nestedDirectories 默认 true（按命名空间嵌套目录）；timeoutSeconds 默认 30。")]
+    public static async Task<string> DecompileToProject(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("输出目录；反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
-        [Description("指定则仅反编译该全限定类型名，例如 System.String；省略则反编译整个程序集")] string typeName = "",
         [Description("输出到目录时按命名空间使用嵌套目录（默认 true）")] bool nestedDirectories = true,
         [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
@@ -46,7 +44,7 @@ public static class DecompileToDirTool
         var outputFull = Path.GetFullPath(outputDir, cwd);
         var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
             new ToolParameter("-o", outputFull),
-            ToolParameter.Optional("-t", typeName),
+            new ToolParameter("-p", null), // 项目形式：每个类型一个源码文件
             ToolParameter.Switch("--nested-directories", nestedDirectories));
 
         // 执行反编译写盘；退出码非 0 时返回 stderr，成功则返回输出目录与文件计数（超时由 timeoutSeconds 参数控制，默认 30s）

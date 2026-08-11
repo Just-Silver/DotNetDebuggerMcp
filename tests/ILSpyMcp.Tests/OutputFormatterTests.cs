@@ -266,4 +266,41 @@ public class OutputFormatterTests
         Assert.Equal("1\tline1\n2\tline2\n3\tline3", result);
         Assert.DoesNotContain("程序集:", result);
     }
+
+    [Fact]
+    public void ContainsIlUnresolved_含IL注释_返回true()
+    {
+        var lines = new List<string> { "public void M()", "    //IL_0001: nop", "}" };
+        Assert.True(OutputFormatter.ContainsIlUnresolved(lines));
+    }
+
+    [Fact]
+    public void ContainsIlUnresolved_无IL注释_返回false()
+    {
+        var lines = new List<string> { "public void M()", "}" };
+        Assert.False(OutputFormatter.ContainsIlUnresolved(lines));
+    }
+
+    [Fact]
+    public void Format_含IL未解析注释_头部分隔线前追加提示()
+    {
+        var lines = new List<string> { "public void M()", "    //IL_0001: call [dynamic]" };
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.X");
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.Contains("提示: 输出含 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考", result);
+        Assert.Contains("提示: 输出含 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考\n---", result); // 提示在分隔线之前
+    }
+
+    [Fact]
+    public void Format_无context_含IL注释也不加提示()
+    {
+        var lines = new List<string> { "    //IL_0001: nop" };
+
+        var result = OutputFormatter.Format(lines, "");
+
+        Assert.Equal("1\t    //IL_0001: nop", result); // 无头部时提示不生效
+        Assert.DoesNotContain("仅供结构参考", result);
+    }
 }

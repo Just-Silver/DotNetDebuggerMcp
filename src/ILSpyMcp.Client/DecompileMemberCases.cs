@@ -1,7 +1,8 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// decompile_member 工具的全部端到端验证场景：按名搜索单成员/多成员/无匹配/类型不存在/缺参与非法参数校验。
+/// decompile_member 工具的全部端到端验证场景：按名搜索单成员/多成员/分隔头/访问器排除/相近名/无匹配/类型不存在/缺参校验。
+/// 匹配数超上限（&gt;20）仅返回签名清单的分支不在本文件设场景——TestSamples 无超过 20 个方法的类，该分支已由 CLI 冒烟覆盖。
 /// </summary>
 public static class DecompileMemberCases
 {
@@ -15,6 +16,18 @@ public static class DecompileMemberCases
         new ToolCallCase("decompile_member", "memberName 多匹配（Big 命中 3 个成员合并输出）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["memberName"] = "Big" },
             ExpectedContains: "3 个匹配", MustNotContain: "at System"),
+        // 多匹配合并输出的各成员体前应有 === 名字 (token) === 分隔行（同参数，经管道缓存命中前序结果）
+        new ToolCallCase("decompile_member", "多匹配分隔头（=== 名字 (token) ===）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["memberName"] = "Big" },
+            ExpectedContains: "===", MustNotContain: "at System"),
+        // 默认排除属性/事件访问器：Members 的 get_Count 被排除后无名称含 "get" 的成员，返回未找到提示
+        new ToolCallCase("decompile_member", "访问器排除（get_Count 不参与匹配）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.MembersTypeName, ["memberName"] = "get" },
+            ExpectedContains: "未找到名称包含", MustNotContain: "at System", ExpectSuccess: false),
+        // 拼错成员名：无匹配时返回相近成员名提示（BigMethd 编辑距离 1 → BigMethod）
+        new ToolCallCase("decompile_member", "相近名提示（BigMethd → BigMethod）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["memberName"] = "BigMethd" },
+            ExpectedContains: "相近成员", MustNotContain: "at System", ExpectSuccess: false),
         // 大小写不敏感：bigmethod 应命中 BigMethod
         new ToolCallCase("decompile_member", "memberName 大小写不敏感",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["memberName"] = "bigmethod" },
@@ -35,9 +48,5 @@ public static class DecompileMemberCases
         new ToolCallCase("decompile_member", "缺 memberName（应返回校验提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName },
             ExpectedContains: "请指定 memberName", MustNotContain: "at System", ExpectSuccess: false),
-        // 非法语言版本应返回中文校验提示
-        new ToolCallCase("decompile_member", "非法 languageVersion（应返回校验提示）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["memberName"] = "BigMethod", ["languageVersion"] = "Foo" },
-            ExpectedContains: "languageVersion 无效", MustNotContain: "at System", ExpectSuccess: false),
     };
 }

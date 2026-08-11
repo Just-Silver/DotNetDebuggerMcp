@@ -110,6 +110,14 @@ public static class OutputFormatter
     }
 
     /// <summary>
+    /// 检测反编译文本是否含未解析的 //IL_ 注释（动态类型/异常路径等无法可靠反编译的片段），供头部信息块提示仅结构参考。
+    /// </summary>
+    /// <param name="lines">纯净行列表（未加行号前）。</param>
+    /// <returns>任一纯净行包含子串 "//IL_" 即返回 true。</returns>
+    public static bool ContainsIlUnresolved(List<string> lines)
+        => lines.Any(l => l.Contains("//IL_", StringComparison.Ordinal));
+
+    /// <summary>
     /// 计算结果总字节数（每行长度 + 换行符），用于截断提示；DecompileCache 复用其统计缓存占用。
     /// </summary>
     /// <param name="lines">反编译结果行列表。</param>
@@ -148,7 +156,7 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 生成头部信息块：程序集 / 目标 两行 + 总量与当前输出字段行 + 分隔线。
+    /// 生成头部信息块：程序集 / 目标 两行 + 总量与当前输出字段行 + 分隔线；输出含 //IL_ 未解析注释时在分隔线前附提示行。
     /// 总量：反编译为「总行数」，列类型同时给出「匹配实体」与「总行数」（每行一个实体，行数=实体数）；当前输出统一按「行」定位。 头部为纯文本、不带行号前缀，避免与源码行号混淆。
     /// </summary>
     private static string BuildHeader(FormatContext ctx, List<string> lines, string linesParam)
@@ -158,6 +166,7 @@ public static class OutputFormatter
         sb.Append("目标:   ").Append(ctx.Target).Append('\n');
         sb.Append(DescribeStats(ctx, lines.Count)).Append('\n');
         sb.Append(DescribeCurrent(linesParam, lines.Count));
+        if (ContainsIlUnresolved(lines)) sb.Append('\n').Append("提示: 输出含 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考");
         sb.Append("\n---");
         return sb.ToString();
     }

@@ -4,6 +4,32 @@
 
 版本号与 `src/ILSpyMcp/ILSpyMcp.csproj` 的 `<Version>` 保持一致；发布时 `<PackageReleaseNotes>` 自动提取当前版本对应段落。未发布的变更统一记录在 `[Unreleased]`，发布时再转为带日期的版本段落。
 
+## [Unreleased]
+
+### Added
+
+- 新增元数据层结构查询组件与工具（纯 PEReader 秒回、无需 ilspycmd 安装）：
+  - `signature`：输出类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图
+  - `hierarchy`：输出基类链（上溯到 System.Object）/实现的接口/程序集内直接继承或实现它的类型
+  - `dependencies`：输出成员签名（方法参数/返回、字段/属性/事件类型）引用的程序集内部类型及反向引用（不做 IL 方法体扫描）
+  - `decompile_to_project`：以可编译项目形式反编译整个程序集写盘（从 decompile_to_dir 拆出）
+- `decompile_member` 合并输出各成员前插入 `=== 名字 (token) ===` 分隔行，消除「散落方法体片段」无法归属的问题；匹配数超过上限（20）时仅返回成员签名清单、不启动子进程；无匹配时返回相近成员名提示；默认排除属性/事件访问器
+- 输出含 `//IL_` 未解析注释时，头部信息块追加「动态类型/异常路径，仅供结构参考」提示，避免 agent 误当源码
+- `list_types` 改用元数据层实现：默认过滤编译器生成类型（`<Module>`、async 状态机、lambda 显示类等），不再依赖 ilspycmd 安装
+
+### Changed
+
+- **工具参数瘦身（破坏性变更）**：全部工具移除 `languageVersion` 参数；`decompile_to_dir` 移除 `project` 参数（改由 `decompile_to_project` 承接）；`list_types` 移除 `timeoutSeconds`（纯元数据秒回）
+- `list_types` 输出不再包含编译器生成类型（行为变化）
+- `decompile_member` 默认不再返回属性/事件访问器（行为变化）
+- 元数据工具（list_types/signature/hierarchy/dependencies）不再要求 ilspycmd 已安装
+- 类型全名统一与 ilspycmd `-l` 输出对齐：命名空间.类型、嵌套用 `+`、泛型带 arity（如 `GenericBox\`1`），`-t` 同时接受 `+` 与 `.` 嵌套分隔符
+- CLI 新增 `-s/--signatures`、`-hc/--hierarchy`、`-d/--dependencies`；移除 `-lv/--languageversion`；`-p` 改走 decompile_to_project
+
+### Removed
+
+- `ArgumentValidators.ValidateLanguageVersion` 校验方法（languageVersion 参数已整体移除）
+
 ## [1.1.2] - 2026-08-11
 
 ### Added

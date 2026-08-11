@@ -247,6 +247,39 @@ public class ToolPipelineTests
     }
 
     [Fact]
+    public async Task ExecuteMergedAsync_带DisplayName_每条命令前插入分隔行()
+    {
+        var fake = new FakeProcessRunner { Stdout = "a\nb\n" };
+        var pipeline = Create(fake);
+        var commands = new[]
+        {
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")) { DisplayName = "成员A" },
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")) { DisplayName = "成员B" },
+        };
+
+        var result = await pipeline.ExecuteMergedAsync(commands, "");
+
+        Assert.Equal(2, fake.CallCount); // 分隔行在合并期插入，不产生额外回源
+        Assert.Equal("1\t=== 成员A ===\n2\ta\n3\tb\n4\t=== 成员B ===\n5\ta\n6\tb", result.Text); // 分隔行计入行号，合并后连续
+    }
+
+    [Fact]
+    public async Task ExecuteMergedAsync_部分命令无DisplayName_仅带名者插入分隔行()
+    {
+        var fake = new FakeProcessRunner { Stdout = "a\n" };
+        var pipeline = Create(fake);
+        var commands = new[]
+        {
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "A")) { DisplayName = "成员A" },
+            new ToolCommand("tool", AssemblyPath, new ToolParameter("-t", "B")),
+        };
+
+        var result = await pipeline.ExecuteMergedAsync(commands, "");
+
+        Assert.Equal("1\t=== 成员A ===\n2\ta\n3\ta", result.Text); // 无 DisplayName 的命令不插分隔行
+    }
+
+    [Fact]
     public async Task ExecuteMergedAsync_任一条失败_返回错误提示()
     {
         var fake = new FakeProcessRunner { Code = 1, Stderr = "boom" };

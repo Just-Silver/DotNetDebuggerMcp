@@ -15,19 +15,22 @@ try
     await runner.RunAsync(DecompileCases.All(dll));
     await runner.RunAsync(DecompileMemberCases.All(dll));
     await runner.RunAsync(ListTypesCases.All(dll));
+    await runner.RunAsync(SignatureCases.All(dll));
+    await runner.RunAsync(HierarchyCases.All(dll));
+    await runner.RunAsync(DependenciesCases.All(dll));
     await runner.RunAsync(DecompileToDirCases.All(dll, outDir));
 
-    // 产物断言：decompile_to_dir 场景执行后、清理前校验 outDir 下确实写入了 .cs 文件
+    // 产物断言：decompile_to_dir / decompile_to_project 场景执行后、清理前校验 outDir 下确实写入了 .cs 文件
     var csCount = Directory.Exists(outDir)
         ? Directory.GetFiles(outDir, "*.cs", SearchOption.AllDirectories).Length
         : 0;
     if (csCount > 0)
     {
-        Console.WriteLine($"{Environment.NewLine}[PASS] decompile_to_dir 产物校验：{outDir} 下共 {csCount} 个 .cs 文件");
+        Console.WriteLine($"{Environment.NewLine}[PASS] decompile_to_dir/decompile_to_project 产物校验：{outDir} 下共 {csCount} 个 .cs 文件");
     }
     else
     {
-        Console.WriteLine($"{Environment.NewLine}[FAIL] decompile_to_dir 产物校验：{outDir} 下未发现 .cs 文件");
+        Console.WriteLine($"{Environment.NewLine}[FAIL] decompile_to_dir/decompile_to_project 产物校验：{outDir} 下未发现 .cs 文件");
         artifactFailures++;
     }
 }

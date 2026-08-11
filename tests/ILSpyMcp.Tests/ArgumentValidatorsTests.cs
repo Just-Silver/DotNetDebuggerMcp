@@ -159,41 +159,6 @@ public class ArgumentValidatorsTests : IDisposable
         Assert.Null(error);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void ValidateLanguageVersion_空或空白_视为未指定校验通过(string value)
-    {
-        var ok = ArgumentValidators.ValidateLanguageVersion(value, out var error);
-        Assert.True(ok);
-        Assert.Null(error);
-    }
-
-    [Theory]
-    [InlineData("CSharp8_0")]
-    [InlineData("CSharp12_0")]
-    [InlineData("CSharp15_0")]
-    [InlineData("CSharp16_0")]
-    [InlineData("Preview")]
-    [InlineData("Latest")]
-    public void ValidateLanguageVersion_合法值_校验通过(string value)
-    {
-        var ok = ArgumentValidators.ValidateLanguageVersion(value, out var error);
-        Assert.True(ok);
-        Assert.Null(error);
-    }
-
-    [Theory]
-    [InlineData("abc")]
-    [InlineData("csharp12_0")]
-    [InlineData("CSharpLatest")]
-    public void ValidateLanguageVersion_明显非法值_返回错误提示(string value)
-    {
-        var ok = ArgumentValidators.ValidateLanguageVersion(value, out var error);
-        Assert.False(ok);
-        Assert.Contains("languageVersion 无效", error!);
-    }
-
     [Fact]
     public void ValidateOutputDir_为空_返回错误提示()
     {

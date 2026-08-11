@@ -21,7 +21,6 @@ public static class DecompileTool
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">要反编译的全限定类型名，例如 System.String（必填）。</param>
     /// <param name="lines">按行号范围读取反编译结果，格式 "start-end"（1-based 含两端，单次最多 500 行）；缺省返回前 200 行。</param>
-    /// <param name="languageVersion">C# 语言版本，如 CSharp12_0、Latest；省略使用 ilspycmd 默认。</param>
     /// <param name="timeoutSeconds">本次反编译回源超时秒数（默认 30）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的反编译结果或错误提示文本。</returns>
@@ -31,7 +30,6 @@ public static class DecompileTool
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("要反编译的全限定类型名，例如 System.String（必填）")] string typeName = "",
         [Description("按行号范围读取反编译结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"；缺省返回前 200 行")] string lines = "",
-        [Description("C# 语言版本，如 CSharp12_0、Latest；省略使用 ilspycmd 默认")] string languageVersion = "",
         [Description("本次反编译回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
@@ -39,16 +37,13 @@ public static class DecompileTool
         if (await ToolPreflight.CheckAsync(assembly) is { } preflightError) return preflightError;
         // 参数校验：typeName 必填（成员级反编译由 decompile_member 承接）
         if (!ArgumentValidators.ValidateRequired(typeName, "请指定 typeName 参数；全量反编译请使用 decompile_to_dir 工具并指定 outputDir，按成员名搜索请使用 decompile_member。", out var argError)) return argError;
-        // 参数校验：languageVersion 可选但需合法
-        if (!ArgumentValidators.ValidateLanguageVersion(languageVersion, out var lvError)) return lvError;
         // 参数校验：timeoutSeconds 必须为正整数（不允许永不超时）
         if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
 
         // 由参数结构统一派生命令行与缓存签名，杜绝命令/签名两处手写导致缓存 key 错配
         if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
         var command = new ToolCommand(ToolCommand.DefaultExecutable, assemblyFull,
-            ToolParameter.Optional("-t", typeName),
-            ToolParameter.Optional("-lv", languageVersion));
+            ToolParameter.Optional("-t", typeName));
 
         // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数，ilspycmd 命令行参数对 agent 无意义）
         var context = new FormatContext(assemblyFull, $"类型 {typeName}");

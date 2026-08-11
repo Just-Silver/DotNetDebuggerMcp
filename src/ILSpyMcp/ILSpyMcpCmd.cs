@@ -35,10 +35,22 @@ public class ILSpyMcpCmd
     public string MemberName { get; } = null!;
 
     /// <summary>
-    /// C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest。
+    /// 输出指定类型全部成员签名（API 地图），需配合 -t。
     /// </summary>
-    [Option("-lv|--languageversion <version>", "C# 语言版本，如 CSharp8_0、CSharp12_0、CSharp13_0、Latest。", CommandOptionType.SingleValue)]
-    public string LanguageVersion { get; } = null!;
+    [Option("-s|--signatures", "输出指定类型全部成员签名（配合 -t）。", CommandOptionType.NoValue)]
+    public bool Signatures { get; }
+
+    /// <summary>
+    /// 输出指定类型继承/接口关系，需配合 -t。
+    /// </summary>
+    [Option("-hc|--hierarchy", "输出指定类型继承/接口关系（配合 -t）。", CommandOptionType.NoValue)]
+    public bool Hierarchy { get; }
+
+    /// <summary>
+    /// 输出指定类型成员签名内部引用，需配合 -t。
+    /// </summary>
+    [Option("-d|--dependencies", "输出指定类型成员签名内部引用（配合 -t）。", CommandOptionType.NoValue)]
+    public bool Dependencies { get; }
 
     /// <summary>
     /// 列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 csi。
@@ -88,12 +100,13 @@ public class ILSpyMcpCmd
     public string Version => AppConfig.NuGetPackageId + " " + (AppConfig.CurrentVersion?.ToString(3) ?? "unknown");
 
     /// <summary>
-    /// 命令行分发：-c 走环境自检，-o 走 decompile_to_dir，-l 走 list_types，-mn 走 decompile_member，否则走
-    /// decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// 命令行分发：-c 走环境自检，-p 走 decompile_to_project，-o 走 decompile_to_dir，-s/-hc/-d 分别走 signature/hierarchy/
+    /// dependencies，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
-        string assembly, string typeName, string memberName, string languageVersion, string entityTypes,
-        string outputDir, bool project, bool nestedDirectories, string lines, int timeoutSeconds, bool check,
+        string assembly, string typeName, string memberName, string entityTypes,
+        string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies,
+        string lines, int timeoutSeconds, bool check,
         CancellationToken cancellationToken = default)
     {
         if (check)
@@ -102,19 +115,35 @@ public class ILSpyMcpCmd
             await AppServices.Updater.RefreshIfStaleAsync();
             return await CheckTool.CheckStatus();
         }
+        if (project && !string.IsNullOrEmpty(outputDir))
+        {
+            return await DecompileToProjectTool.DecompileToProject(assembly, outputDir, nestedDirectories, timeoutSeconds, cancellationToken);
+        }
         if (!string.IsNullOrEmpty(outputDir))
         {
-            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, project, typeName, nestedDirectories, languageVersion, timeoutSeconds, cancellationToken);
+            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, typeName, nestedDirectories, timeoutSeconds, cancellationToken);
+        }
+        if (signatures)
+        {
+            return await SignatureTool.Signature(assembly, typeName, cancellationToken);
+        }
+        if (hierarchy)
+        {
+            return await HierarchyTool.Hierarchy(assembly, typeName, cancellationToken);
+        }
+        if (dependencies)
+        {
+            return await DependenciesTool.Dependencies(assembly, typeName, cancellationToken);
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {
-            return await ListTypesTool.ListTypes(assembly, entityTypes, lines, timeoutSeconds, cancellationToken);
+            return await ListTypesTool.ListTypes(assembly, entityTypes, lines, cancellationToken);
         }
         if (!string.IsNullOrEmpty(memberName))
         {
-            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, lines, languageVersion, timeoutSeconds, cancellationToken);
+            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, lines, timeoutSeconds, cancellationToken);
         }
-        return await DecompileTool.Decompile(assembly, typeName, lines, languageVersion, timeoutSeconds, cancellationToken);
+        return await DecompileTool.Decompile(assembly, typeName, lines, timeoutSeconds, cancellationToken);
     }
 
     /// <summary>
@@ -125,8 +154,9 @@ public class ILSpyMcpCmd
         if (!string.IsNullOrEmpty(Assembly) || Check)
         {
             Console.WriteLine(await DispatchCliAsync(
-                Assembly, TypeName, MemberName, LanguageVersion, EntityTypes,
-                OutputDir, Project, NestedDirectories, Lines, TimeoutSeconds, Check));
+                Assembly, TypeName, MemberName, EntityTypes,
+                OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies,
+                Lines, TimeoutSeconds, Check));
             return 0;
         }
 

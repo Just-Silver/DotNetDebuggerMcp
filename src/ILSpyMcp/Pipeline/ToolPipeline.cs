@@ -95,6 +95,12 @@ public sealed class ToolCommand
     /// 传递给可执行文件的纯参数列表（含末尾程序集路径，不含可执行文件名）。
     /// </summary>
     public IReadOnlyList<string> Args { get; }
+
+    /// <summary>
+    /// 可选展示名：ExecuteMergedAsync 合并输出时在每条命令结果前插入 `=== {DisplayName} ===` 分隔行（供 agent 分辨成员体归属）。
+    /// 为空/null 时合并行为不变（不插分隔行）；仅影响合并展示，不参与缓存签名。
+    /// </summary>
+    public string? DisplayName { get; set; }
 }
 
 /// <summary>
@@ -163,6 +169,7 @@ public sealed class ToolPipeline
             {
                 return new ToolPipelineResult($"反编译失败：{ex.Message}");
             }
+            if (!string.IsNullOrEmpty(command.DisplayName)) merged.Add($"=== {command.DisplayName} ===");
             merged.AddRange(source);
         }
         return new ToolPipelineResult(OutputFormatter.Format(merged, lines, context));

@@ -1,7 +1,7 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// decompile 工具的全部端到端验证场景：typeName / lines / languageVersion / timeoutSeconds / 缺参与非法参数校验。
+/// decompile 工具的全部端到端验证场景：typeName / lines / timeoutSeconds / 缺参与非法参数校验。
 /// </summary>
 public static class DecompileCases
 {
@@ -15,16 +15,6 @@ public static class DecompileCases
         new ToolCallCase("decompile", "typeName + lines 按行号分页",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["lines"] = "200-400" },
             ExpectedContains: "200\t", MustNotContain: "at System"),
-        // 限制输出长度后应定位到第 1 行
-        new ToolCallCase("decompile", "typeName + languageVersion + lines（限制输出长度）",
-            new Dictionary<string, object?>
-            {
-                ["assembly"] = dll,
-                ["typeName"] = TestDataHelper.TypeName,
-                ["languageVersion"] = "Latest",
-                ["lines"] = "1-10",
-            },
-            ExpectedContains: "1\t", MustNotContain: "at System"),
         // 自定义超时参数应被接受
         new ToolCallCase("decompile", "typeName + timeoutSeconds（自定义超时）",
             new Dictionary<string, object?>
@@ -38,10 +28,6 @@ public static class DecompileCases
         new ToolCallCase("decompile", "非法 timeoutSeconds（应返回校验提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["timeoutSeconds"] = 0 },
             ExpectedContains: "timeoutSeconds 必须为正整数", MustNotContain: "at System", ExpectSuccess: false),
-        // 非法语言版本应返回中文校验提示而非异常堆栈
-        new ToolCallCase("decompile", "非法 languageVersion（应返回校验提示）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["languageVersion"] = "Foo" },
-            ExpectedContains: "languageVersion 无效", MustNotContain: "at System", ExpectSuccess: false),
         // 缺参：先缺 assembly，返回「请指定 assembly」校验提示
         new ToolCallCase("decompile", "缺参（应返回校验提示）",
             new Dictionary<string, object?>(),

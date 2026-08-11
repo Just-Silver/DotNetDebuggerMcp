@@ -17,6 +17,31 @@ public static class TestDataHelper
     public const string ListedClassName = "ILSpyMcp.Samples.Class0001";
 
     /// <summary>
+    /// 继承链派生类（hierarchy 基类链正向/BaseClass 反向验证）。
+    /// </summary>
+    public const string DerivedTypeName = "ILSpyMcp.Samples.DerivedClass";
+
+    /// <summary>
+    /// 接口类型（hierarchy 反向实现者验证）。
+    /// </summary>
+    public const string InterfaceTypeName = "ILSpyMcp.Samples.IAnimal";
+
+    /// <summary>
+    /// 属性/字段/事件/方法齐全的类型（signature 访问器合并与 decompile_member 访问器排除验证）。
+    /// </summary>
+    public const string MembersTypeName = "ILSpyMcp.Samples.Members";
+
+    /// <summary>
+    /// 泛型类型（signature 泛型参数与泛型方法验证）。
+    /// </summary>
+    public const string GenericTypeName = "ILSpyMcp.Samples.GenericBox`1";
+
+    /// <summary>
+    /// 成员签名引用内部类型（dependencies 正向引用验证）。
+    /// </summary>
+    public const string UsesTypeName = "ILSpyMcp.Samples.Uses";
+
+    /// <summary>
     /// 仓库根目录（含 ILSpyMcp.slnx），随仓库整体移动自动适配。
     /// </summary>
     public static string RepoRoot { get; } = FindRepoRoot();

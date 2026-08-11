@@ -118,25 +118,6 @@ public class ToolPreflightTests
     }
 
     [Fact]
-    public async Task ListTypes_指定timeoutSeconds_透传超时并返回结果()
-    {
-        var fake = new FakeProcessRunner { Code = 0, Stdout = "a\n" };
-        AppServices.ConfigureForTest(fake);
-        try
-        {
-            var result = await ListTypesTool.ListTypes(assembly: AssemblyPath, list: "c", timeoutSeconds: 45);
-            Assert.StartsWith("程序集: ", result);
-            Assert.Contains("实体类别 c(class)", result);
-            Assert.EndsWith("1\ta", result);
-            Assert.Equal(TimeSpan.FromSeconds(45), fake.Timeout);
-        }
-        finally
-        {
-            AppServices.ResetForTest();
-        }
-    }
-
-    [Fact]
     public async Task DecompileToDir_指定timeoutSeconds_透传超时并返回写入提示()
     {
         var fake = new FakeProcessRunner { Code = 0 };
@@ -157,7 +138,7 @@ public class ToolPreflightTests
     }
 
     [Fact]
-    public async Task ListTypes_注入fake_返回类型列表()
+    public async Task ListTypes_不依赖子进程_返回元数据类型列表()
     {
         var fake = new FakeProcessRunner { Code = 0, Stdout = "a\n" };
         AppServices.ConfigureForTest(fake);
@@ -165,8 +146,10 @@ public class ToolPreflightTests
         {
             var result = await ListTypesTool.ListTypes(assembly: AssemblyPath, list: "c");
             Assert.StartsWith("程序集: ", result);
-            Assert.EndsWith("1\ta", result);
-            Assert.Equal(2, fake.CallCount); // 1 次安装检测 + 1 次类型列表
+            Assert.Contains("实体类别 c(class)", result);
+            Assert.Contains("ILSpyMcp.Tests.ToolPreflightTests", result); // 真实元数据输出（测试程序集内的 class）
+            Assert.DoesNotContain("<Module>", result); // 编译器生成类型已过滤
+            Assert.Equal(0, fake.CallCount); // 纯元数据读取，不调子进程（无需 ilspycmd）
         }
         finally
         {

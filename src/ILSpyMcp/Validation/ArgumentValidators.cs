@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.RegularExpressions;
 
 namespace ILSpyMcp.Validation;
 
@@ -89,35 +88,6 @@ public static class ArgumentValidators
         }
         error = null;
         return true;
-    }
-
-    /// <summary>
-    /// 校验 languageVersion 参数：空/空白视为未指定；非空须为 CSharp 版本（如 CSharp12_0）、Preview 或 Latest。 未知但格式合法的
-    /// CSharp 版本（如 CSharp16_0）放行兜底，防止版本漂移误杀。
-    /// </summary>
-    /// <param name="value">C# 语言版本，缺省为空字符串。</param>
-    /// <param name="error">校验失败时的错误提示；通过时为 null。</param>
-    /// <returns>通过返回 true；失败返回 false 且 <paramref name="error"/> 非空。</returns>
-    public static bool ValidateLanguageVersion(string value, [NotNullWhen(false)] out string? error)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            error = null;
-            return true;
-        }
-        if (value is "Preview" or "Latest")
-        {
-            error = null;
-            return true;
-        }
-        // 正则同时命中已知与未知 CSharp 版本（如 CSharp16_0），实现版本漂移兜底
-        if (Regex.IsMatch(value, @"^CSharp\d+_\d+$"))
-        {
-            error = null;
-            return true;
-        }
-        error = $"languageVersion 无效：\"{value}\"。合法值为 CSharp 版本（如 CSharp12_0）、Preview 或 Latest。";
-        return false;
     }
 
     /// <summary>
