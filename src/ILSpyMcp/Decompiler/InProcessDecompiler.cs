@@ -11,7 +11,7 @@ using System.Reflection.Metadata.Ecma335;
 namespace ILSpyMcp.Decompiler;
 
 /// <summary>
-/// 进程内反编译服务：以 ICSharpCode.Decompiler 库在进程内完成反编译，替代子进程调用 ilspycmd。
+/// 进程内反编译服务：以 ICSharpCode.Decompiler 库在进程内完成反编译。
 /// 每次调用独立构建 PEFile + UniversalAssemblyResolver + DecompilerSettings + CSharpDecompiler，用完即释放；
 /// 全部入口 try/catch 兜底返回中文提示，不抛异常（纯元数据定位用 ILSpyMcp.Metadata.MetadataNaming）。
 /// </summary>
@@ -85,7 +85,7 @@ public sealed class InProcessDecompiler
                 return $"\"{trimmed}\" 不是有效的元数据 token，应为 0x 开头的十六进制格式，如 0x06000005";
             }
 
-            // 按 token 的 Kind 校验 row 数防越界（与 ilspycmd TryResolveMember 的 token 分支一致）
+            // 按 token 的 Kind 校验 row 数防越界
             var candidate = MetadataTokens.EntityHandle(tokenValue);
             int rowNumber = tokenValue & 0x00ffffff;
             int rowCount = candidate.Kind switch
@@ -173,7 +173,7 @@ public sealed class InProcessDecompiler
             };
             var projectDecompiler = new WholeProjectDecompiler(settings, resolver, null, resolver, null);
             // append: false 以截断模式打开 csproj：向已存在该文件的目录重跑时清空旧内容，避免 File.OpenWrite 的 OpenOrCreate
-            // 语义残留旧尾部字节导致生成损坏的 XML（参考 ilspycmd 用 File.OpenWrite，但其仅覆盖首次创建场景）
+            // 语义残留旧尾部字节导致生成损坏的 XML
             using (var projectFileWriter = new StreamWriter(projectFileName, append: false))
             {
                 projectDecompiler.DecompileProject(module, outputDir, projectFileWriter);

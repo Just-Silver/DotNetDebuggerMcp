@@ -1,6 +1,6 @@
 # ilspymcp
 
-基于 [ilspycmd](https://github.com/icsharpcode/ilspy) 的 .NET 反编译 MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中可直接将 .NET 程序集（dll/exe）反编译为 C# 源码、列出类型，或把整个程序集反编译写入指定目录。
+内置 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy) 反编译引擎的 .NET 反编译 MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中可直接将 .NET 程序集（dll/exe）反编译为 C# 源码、列出类型，或把整个程序集反编译写入指定目录。反编译引擎随包内置，安装本工具即可开箱即用，无需额外安装其他反编译工具。
 
 ## 环境要求
 
@@ -8,15 +8,9 @@
 
 ## 安装
 
-### 前置条件：安装 `ilspycmd`
-
-本工具运行期依赖 `ilspycmd`，需先安装：
-
-```bash
-dotnet tool install --global ilspycmd
-```
-
 ### 安装 `ilspymcp`
+
+反编译引擎（ICSharpCode.Decompiler）已随包内置，无需额外安装反编译工具：
 
 ```bash
 dotnet tool install --global ilspymcp
@@ -68,7 +62,7 @@ ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg  # 方法体调用关系（
 ilspymcp -a bin/Debug/MyApp.dll -l csi               # 列出实体类型（等价 ilspy_list_types）
 ilspymcp -a bin/Debug/MyApp.dll -o src --nested-directories   # 反编译写盘（等价 ilspy_decompile_to_dir）
 ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories   # 项目形式反编译写盘（等价 ilspy_decompile_to_project）
-ilspymcp -c                                          # 环境自检（CLI 调试用，无需 -a；MCP 会话起始已自动注入环境状态报告）
+ilspymcp -c                                          # 环境自检（CLI 调试用，无需 -a；报告内置反编译引擎版本 + ilspymcp 更新状态，MCP 会话起始已自动注入环境状态报告）
 ```
 
 常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-mn|--membername`（按名搜索成员）、`-s|--signatures`（成员签名，配合 `-t`）、`-hc|--hierarchy`（继承/接口，配合 `-t`）、`-d|--dependencies`（内部引用，配合 `-t`）、`-cg|--callgraph`（方法体调用关系，配合 `-t`）、`-l|--list`（类型类别）、`-o|--outputdir`（输出目录）、`-p|--project`（项目形式，需配合 `-o`）、`--nested-directories`（嵌套目录）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）、`-c|--check`（环境自检）。
@@ -87,7 +81,7 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用 |
 | `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补） |
 
-`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy`、`ilspy_dependencies` 与 `ilspy_call_graph` 默认仅输出前 200 行，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做行数截断。`ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies`/`ilspy_call_graph` 为纯元数据读取，秒回且无需安装 ilspycmd；反编译类工具依赖 ilspycmd，未安装时仅提示，不代为执行。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效。MCP 会话启动握手时自动执行环境自检（ilspycmd 安装/版本、ilspymcp 更新状态）并注入会话起始提示，无需单独调用检查工具。
+`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy`、`ilspy_dependencies` 与 `ilspy_call_graph` 默认仅输出前 200 行，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做行数截断。全部工具均使用内置反编译引擎（进程内 ICSharpCode.Decompiler），安装本工具即可开箱即用；其中 `ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies`/`ilspy_call_graph` 为纯元数据读取，秒回。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效。MCP 会话启动握手时自动执行环境自检（内置反编译引擎版本、ilspymcp 更新状态）并注入会话起始提示，无需单独调用检查工具。
 
 ### 工具参数
 
@@ -96,21 +90,21 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 | `ilspy_decompile` | `assembly` | 程序集文件路径（.dll/.exe），可为相对当前工作目录的路径 | 是 |
 | | `typeName` | 仅反编译指定全限定类型名，例如 `System.String` | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`（1-based 含两端，单次最多 500 行），如 `200-400`；省略返回前 200 行 | 否 |
-| | `timeoutSeconds` | 本次反编译回源超时秒数（默认 30） | 否 |
+| | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试 | 否 |
 | `ilspy_decompile_member` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 在指定类型内搜索成员，全限定类型名，例如 `System.Text.Json.JsonSerializer` | 是 |
 | | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；匹配到的成员全部反编译，匹配数超过 20 时仅返回成员签名清单 | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
-| | `timeoutSeconds` | 本次反编译回源超时秒数（默认 30） | 否 |
+| | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试 | 否 |
 | `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
 | | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集 | 否 |
-| | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录（默认 true） | 否 |
-| | `timeoutSeconds` | 本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大） | 否 |
+| | `nestedDirectories` | 指定则按命名空间嵌套目录输出；当前单文件输出模式下该参数不产生效果（默认 true） | 否 |
+| | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试 | 否 |
 | `ilspy_decompile_to_project` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
 | | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录（默认 true） | 否 |
-| | `timeoutSeconds` | 本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大） | 否 |
+| | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试 | 否 |
 | `ilspy_list_types` | `assembly` | 程序集文件路径 | 是 |
 | | `list` | 实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 `csi` | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
@@ -118,7 +112,7 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Formatting.OutputFormatter` | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 | `ilspy_hierarchy` | `assembly` | 程序集文件路径 | 是 |
-| | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Processes.ProcessRunner` | 是 |
+| | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Formatting.OutputFormatter` | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 | `ilspy_dependencies` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Caching.DecompileCache` | 是 |

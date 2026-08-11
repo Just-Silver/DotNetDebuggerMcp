@@ -3,13 +3,13 @@ using System.Reflection.Metadata;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 类型全名渲染与定位：命名格式与 ilspycmd -l 输出严格对齐（命名空间.类型，嵌套用 +，泛型带 arity 如 GenericBox`1），
-/// 保证 list_types/signature/hierarchy 输出的名字可直接用于 ilspycmd -t 与 decompile_member 定位（-t 同时接受 + 与 . 两种嵌套分隔符）。
+/// 类型全名渲染与定位：统一类型全名格式（命名空间.类型，嵌套用 +，泛型带 arity 如 GenericBox`1），
+/// 保证 list_types/signature/hierarchy 输出的名字可直接用于反编译工具与 decompile_member 定位（定位同时接受 + 与 . 两种嵌套分隔符）。
 /// </summary>
 public static class MetadataNaming
 {
     /// <summary>
-    /// 渲染 TypeDefinition 的全限定名，与 ilspycmd -l 一致：命名空间.类型，嵌套类型用 + 连接（Outer+Inner），泛型带 arity（GenericBox`1）。
+    /// 渲染 TypeDefinition 的全限定名：命名空间.类型，嵌套类型用 + 连接（Outer+Inner），泛型带 arity（GenericBox`1）。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待渲染的类型定义。</param>
@@ -28,8 +28,8 @@ public static class MetadataNaming
 
     /// <summary>
     /// 在程序集内按用户输入定位 TypeDefinition；未找到返回 null。
-    /// 输入可含 ilspycmd 两种嵌套分隔符（Probe.Outer+Inner 或 Probe.Outer.Inner）——匹配前将 + 统一归一化为 . 后比较。
-    /// 注意：命名空间与嵌套分隔的歧义（A.B.C 是命名空间 A.B 的类型 C，还是命名空间 A 的类型 B 的嵌套 C）与 ilspycmd 行为一致，取枚举序首个命中。
+    /// 输入可含两种嵌套分隔符（Probe.Outer+Inner 或 Probe.Outer.Inner）——匹配前将 + 统一归一化为 . 后比较。
+    /// 注意：命名空间与嵌套分隔的歧义（A.B.C 是命名空间 A.B 的类型 C，还是命名空间 A 的类型 B 的嵌套 C）取枚举序首个命中。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="input">用户输入的类型全名，如 "Probe.Outer+Inner"。</param>

@@ -5,8 +5,8 @@ using System.Reflection.Metadata;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 纯元数据「继承/接口关系」：给定类型，输出基类链、实现的接口与程序集内直接继承/实现它的类型，供 hierarchy 工具使用，
-/// 不依赖 ilspycmd 安装。基类链/接口的解析句柄可能为 TypeDefinition（同程序集）或 TypeReference（外部），统一按全名比较。
+/// 纯元数据「继承/接口关系」：给定类型，输出基类链、实现的接口与程序集内直接继承/实现它的类型，供 hierarchy 工具使用。
+/// 基类链/接口的解析句柄可能为 TypeDefinition（同程序集）或 TypeReference（外部），统一按全名比较。
 /// </summary>
 public static class Hierarchy
 {

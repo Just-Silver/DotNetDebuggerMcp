@@ -8,7 +8,7 @@ using Microsoft.Extensions.Hosting;
 namespace ILSpyMcp;
 
 /// <summary>
-/// 命令行入口（McMaster.CommandLineUtils，与 ilspycmd 实现方式一致）。 无业务参数时启动 MCP 服务器（stdio 传输）；传入 -a/--assembly
+/// 命令行入口（McMaster.CommandLineUtils）。 无业务参数时启动 MCP 服务器（stdio 传输）；传入 -a/--assembly
 /// 等参数时 以命令行形式直接执行反编译/列类型/写盘，复用与 MCP 工具相同的校验与执行逻辑，便于调试。
 /// -v/--version 输出版本号，-h/--help 输出帮助信息。
 /// </summary>

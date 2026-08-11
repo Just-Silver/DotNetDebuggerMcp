@@ -5,7 +5,7 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 一个匹配成员：方法名与其元数据 token（可直接用于 ilspycmd -m）。
+/// 一个匹配成员：方法名与其元数据 token（可直接用于进程内成员反编译）。
 /// </summary>
 /// <param name="Name">方法名（元数据原始名，含 get_/set_ 访问器与 .ctor）。</param>
 /// <param name="Token">元数据 token，格式 0x06000005。</param>
@@ -41,7 +41,7 @@ public readonly record struct MemberSearchResult(bool TypeFound, IReadOnlyList<M
 
 /// <summary>
 /// 成员名搜索：纯元数据读取（PEReader + MetadataReader），不加载程序集、不反编译 IL。 经 <see cref="MetadataNaming.FindType"/>
-/// 按输入定位 TypeDefinition（+ 与 . 嵌套分隔均可），枚举其全部方法并按名字子串匹配，返回可直用于 ilspycmd -m 的 token。
+/// 按输入定位 TypeDefinition（+ 与 . 嵌套分隔均可），枚举其全部方法并按名字子串匹配，返回可直用于进程内成员反编译的 token。
 /// 默认排除属性/事件访问器方法，无匹配时给出相近成员名供调用方拼「未找到」提示。
 /// </summary>
 public static class MemberResolver

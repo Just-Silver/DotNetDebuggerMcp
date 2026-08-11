@@ -100,7 +100,7 @@ public static class OutputFormatter
     /// <summary>
     /// 按 \n 或 \r\n 拆分行，去掉末尾空行；行内 \r 残留一并去除。
     /// </summary>
-    /// <param name="text">子进程输出原文。</param>
+    /// <param name="text">反编译结果原文。</param>
     /// <returns>去除末尾空行与 \r 残留的行列表。</returns>
     public static List<string> SplitLines(string text)
     {

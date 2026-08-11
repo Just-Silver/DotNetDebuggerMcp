@@ -91,7 +91,7 @@ public static class ArgumentValidators
     }
 
     /// <summary>
-    /// 校验 outputDir 参数：必填；路径非法或已存在同名文件时返回错误提示；目录不存在允许（ilspycmd 会自动创建）。
+    /// 校验 outputDir 参数：必填；路径非法或已存在同名文件时返回错误提示；目录不存在允许（写盘时会自动创建）。
     /// </summary>
     /// <param name="outputDir">输出目录，缺省为空字符串。</param>
     /// <param name="error">校验失败时的错误提示；通过时为 null。</param>

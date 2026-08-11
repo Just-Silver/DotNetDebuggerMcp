@@ -7,9 +7,9 @@ namespace ILSpyMcp.Metadata;
 
 /// <summary>
 /// 纯元数据「方法体调用图」：扫描类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli），
-/// 提取程序集内部被调用的类型（跨程序集类型不计、编译器生成类型不计），供 call_graph 工具使用，不依赖 ilspycmd 安装。
+/// 提取程序集内部被调用的类型（跨程序集类型不计、编译器生成类型不计），供 call_graph 工具使用。
 /// 与 ReferenceExtractor 的签名级引用互补：本类基于方法体执行流而非成员签名。
-/// IL 解码采用 ECMA-335 操作数表（与 ilspycmd -il 输出一致）：只精确读取 metadata token 操作数，其余指令按表跳过；
+/// IL 解码采用 ECMA-335 操作数表：只精确读取 metadata token 操作数，其余指令按表跳过；
 /// 同程序集成员调用编译器通常发 MethodDef/FieldDef 直接 token，MemberRef 兜底沿 ResolutionScope 回溯判定内部。
 /// </summary>
 public static class CallGraphExtractor
@@ -360,7 +360,7 @@ public static class CallGraphExtractor
     }
 
     /// <summary>
-    /// 单字节 opcode 操作数表（0x00-0xFF），数据对照 ECMA-335 III.C.4（与 ilspycmd/Mono.Cecil 一致）。
+    /// 单字节 opcode 操作数表（0x00-0xFF），数据对照 ECMA-335 III.C.4。
     /// </summary>
     private static readonly int[] OneByteOperands = BuildOneByteOperands();
 

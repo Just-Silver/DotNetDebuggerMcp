@@ -19,7 +19,7 @@ public static class DecompileToDirTool
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="outputDir">输出目录；反编译结果写入该目录而非标准输出（必填）。</param>
     /// <param name="typeName">指定则仅反编译该全限定类型名；省略则反编译整个程序集。</param>
-    /// <param name="nestedDirectories">输出到目录时按命名空间使用嵌套目录（默认 true；当前单文件写盘下无实际效果，保留兼容）。</param>
+    /// <param name="nestedDirectories">指定则按命名空间嵌套目录输出；当前单文件输出模式下该参数不产生效果（默认 true）。</param>
     /// <param name="timeoutSeconds">本次反编译写盘超时秒数（默认 30，全量写盘大程序集可调大）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
@@ -29,7 +29,7 @@ public static class DecompileToDirTool
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("输出目录；反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
         [Description("指定则仅反编译该全限定类型名，例如 System.String；省略则反编译整个程序集")] string typeName = "",
-        [Description("输出到目录时按命名空间使用嵌套目录（默认 true；当前单文件写盘下无实际效果，保留兼容）")] bool nestedDirectories = true,
+        [Description("指定则按命名空间嵌套目录输出；当前单文件输出模式下该参数不产生效果（默认 true）")] bool nestedDirectories = true,
         [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {

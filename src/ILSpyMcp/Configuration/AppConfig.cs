@@ -24,7 +24,7 @@ internal static class AppConfig
     public const int DefaultTimeoutSeconds = 30;
 
     /// <summary>
-    /// decompile_member 单次匹配成员数上限：超过此值时不再逐一反编译，仅返回成员签名清单（纯元数据秒回），避免为海量匹配启动过多子进程。
+    /// decompile_member 单次匹配成员数上限：超过此值时不再逐一反编译，仅返回成员签名清单（纯元数据秒回），避免为海量匹配做无谓反编译。
     /// </summary>
     public const int MaxMemberMatches = 20;
 

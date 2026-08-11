@@ -4,8 +4,8 @@ using System.Reflection.Metadata;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 纯元数据「类型列表」：按类别组合枚举程序集的实体类型（跳过编译器生成类型），供 list_types 工具使用，不依赖 ilspycmd 安装。
-/// 类别判定与 ilspycmd -l 对齐：enum/delegate 按基类全名判定，interface 按元数据标志判定，struct 为基类 System.ValueType 且非 interface（enum 已先排除），其余为 class。
+/// 纯元数据「类型列表」：按类别组合枚举程序集的实体类型（跳过编译器生成类型），供 list_types 工具使用。
+/// 类别判定规则：enum/delegate 按基类全名判定，interface 按元数据标志判定，struct 为基类 System.ValueType 且非 interface（enum 已先排除），其余为 class。
 /// </summary>
 public static class TypeLister
 {
