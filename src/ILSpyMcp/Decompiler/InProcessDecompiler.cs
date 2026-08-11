@@ -172,7 +172,9 @@ public sealed class InProcessDecompiler
                 UseNestedDirectoriesForNamespaces = nestedDirectories,
             };
             var projectDecompiler = new WholeProjectDecompiler(settings, resolver, null, resolver, null);
-            using (var projectFileWriter = new StreamWriter(File.OpenWrite(projectFileName)))
+            // append: false 以截断模式打开 csproj：向已存在该文件的目录重跑时清空旧内容，避免 File.OpenWrite 的 OpenOrCreate
+            // 语义残留旧尾部字节导致生成损坏的 XML（参考 ilspycmd 用 File.OpenWrite，但其仅覆盖首次创建场景）
+            using (var projectFileWriter = new StreamWriter(projectFileName, append: false))
             {
                 projectDecompiler.DecompileProject(module, outputDir, projectFileWriter);
             }

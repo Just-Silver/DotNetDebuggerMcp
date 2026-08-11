@@ -190,6 +190,33 @@ public class InProcessDecompilerTests
     }
 
     [Fact]
+    public void DecompileToProject_已存在csproj时重跑_旧尾部被截断XML完整()
+    {
+        // 回归：File.OpenWrite 的 OpenOrCreate 语义不截断，向已含更长 csproj 的目录重跑会残留旧尾部字节生成损坏 XML。
+        // 旧文件刻意做成远超新生成内容的长度并带尾部标记，重跑后断言标记不残留且 XML 完整可解析。
+        var dir = NewTempDir();
+        try
+        {
+            InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false);
+            var csproj = Path.Combine(dir, "ILSpyMcp.TestSamples.csproj");
+            File.WriteAllText(csproj, new string(' ', 200000) + "GARBAGE_TRAILING_MARKER");
+
+            var result = InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false);
+
+            Assert.Contains("已写入", result);
+            var content = File.ReadAllText(csproj);
+            Assert.DoesNotContain("GARBAGE_TRAILING_MARKER", content); // 旧尾部字节被截断
+            var xml = new System.Xml.XmlDocument();
+            xml.Load(csproj); // 若旧尾部字节残留则 XML 解析失败
+            Assert.Equal("Project", xml.DocumentElement?.Name);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
     public async Task RunWithTimeoutAsync_正常完成_返回work结果()
     {
         var result = await InProcessDecompiler.RunWithTimeoutAsync(
