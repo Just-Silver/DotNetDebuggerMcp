@@ -31,5 +31,9 @@ public static class SignatureCases
         new ToolCallCase("signature", "缺 typeName（应返回校验提示）",
             new Dictionary<string, object?> { ["assembly"] = dll },
             ExpectedContains: "请指定 typeName", MustNotContain: "at System", ExpectSuccess: false),
+        // lines 分页：BigClass 多个成员签名，lines="1-2" 应返回指定行切片且不报未知参数
+        new ToolCallCase("signature", "BigClass lines=\"1-2\" 分页",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["lines"] = "1-2" },
+            ExpectedContains: "BigMethod(", MustNotContain: "at System"),
     };
 }

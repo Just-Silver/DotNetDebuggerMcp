@@ -85,7 +85,7 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 | `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型 |
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用 |
 
-`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature` 与 `ilspy_hierarchy` 默认仅输出前 200 行，前两者可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做行数截断。`ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies` 为纯元数据读取，秒回且无需安装 ilspycmd；反编译类工具依赖 ilspycmd，未安装时仅提示，不代为执行。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效。MCP 会话启动握手时自动执行环境自检（ilspycmd 安装/版本、ilspymcp 更新状态）并注入会话起始提示，无需单独调用检查工具。
+`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy` 与 `ilspy_dependencies` 默认仅输出前 200 行，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做行数截断。`ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies` 为纯元数据读取，秒回且无需安装 ilspycmd；反编译类工具依赖 ilspycmd，未安装时仅提示，不代为执行。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效。MCP 会话启动握手时自动执行环境自检（ilspycmd 安装/版本、ilspymcp 更新状态）并注入会话起始提示，无需单独调用检查工具。
 
 ### 工具参数
 
@@ -97,7 +97,7 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 | | `timeoutSeconds` | 本次反编译回源超时秒数（默认 30） | 否 |
 | `ilspy_decompile_member` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 在指定类型内搜索成员，全限定类型名，例如 `System.Text.Json.JsonSerializer` | 是 |
-| | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；匹配到的成员全部反编译 | 是 |
+| | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；匹配到的成员全部反编译，匹配数超过 20 时仅返回成员签名清单 | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 | | `timeoutSeconds` | 本次反编译回源超时秒数（默认 30） | 否 |
 | `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
@@ -114,10 +114,13 @@ ilspymcp -c                                          # 环境自检（CLI 调试
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 | `ilspy_signature` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Formatting.OutputFormatter` | 是 |
+| | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 | `ilspy_hierarchy` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Processes.ProcessRunner` | 是 |
+| | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 | `ilspy_dependencies` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Caching.DecompileCache` | 是 |
+| | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前 200 行 | 否 |
 
 ## 使用示例
 

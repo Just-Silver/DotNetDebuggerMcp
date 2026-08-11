@@ -48,5 +48,13 @@ public static class DecompileMemberCases
         new ToolCallCase("decompile_member", "缺 memberName（应返回校验提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName },
             ExpectedContains: "请指定 memberName", MustNotContain: "at System", ExpectSuccess: false),
+        // 匹配数超上限（>20）：ManyOverloads 有 21 个 Do 重载，仅返回签名清单（每行 签名 [token]）不反编译
+        new ToolCallCase("decompile_member", "匹配数超限仅返回签名清单（ManyOverloads 21 个 Do）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.ManyOverloads", ["memberName"] = "Do" },
+            ExpectedContains: "超过上限", MustNotContain: "at System"),
+        // 超限签名清单同样支持 lines 分页：lines="1-2" 应返回前两行清单而非全部 21 行
+        new ToolCallCase("decompile_member", "超限签名清单 lines=\"1-2\" 分页",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.ManyOverloads", ["memberName"] = "Do", ["lines"] = "1-2" },
+            ExpectedContains: "当前输出: 1-2", MustNotContain: "at System"),
     };
 }

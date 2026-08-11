@@ -30,7 +30,7 @@ public static class DecompileMemberTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>匹配成员反编译合并结果（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("按成员名子串在指定类型内搜索并反编译匹配的成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。匹配到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；匹配数超过 20 时仅返回成员签名清单不反编译。结果默认只返回前 200 行，可用 lines 参数分页；无匹配时返回相近成员名提示。")]
+    [Description("按成员名子串在指定类型内搜索并反编译匹配的成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。匹配到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；匹配数超过 20 时仅返回成员签名清单（每行 签名 [token]）不反编译。结果默认只返回前 200 行，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
     public static async Task<string> DecompileMember(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("在指定类型内搜索成员，全限定类型名，例如 System.Text.Json.JsonSerializer（必填）")] string typeName = "",
@@ -59,7 +59,7 @@ public static class DecompileMemberTool
         }
 
         // 匹配数超过上限：不反编译，仅返回成员签名清单（纯元数据秒回），避免为海量匹配逐一启动 ilspycmd 子进程
-        if (matches.Count > AppConfig.MaxMemberMatches) return RenderSignatureList(assemblyFull, typeName, memberName, matches);
+        if (matches.Count > AppConfig.MaxMemberMatches) return RenderSignatureList(assemblyFull, typeName, memberName, matches, lines);
 
         // 每个匹配成员一条命令：token 全局唯一，ilspycmd 的 -t 与 -m 互斥，故仅传 -m <token>；各命令独立缓存 key，同一成员不同子串查询共享缓存
         var commands = matches
@@ -77,9 +77,9 @@ public static class DecompileMemberTool
 
     /// <summary>
     /// 匹配数超限时仅返回成员签名清单：重新打开程序集做纯元数据读取，凡 token 属于匹配集合的成员渲染一行签名并附 token。
-    /// 按 token（而非方法名）匹配，避免同名重载成员被名字集合去重而丢失。
+    /// 按 token（而非方法名）匹配，避免同名重载成员被名字集合去重而丢失。清单同样受 lines 分页控制（缺省返回前 200 行）。
     /// </summary>
-    private static string RenderSignatureList(string assemblyFull, string typeName, string memberName, IReadOnlyList<MemberMatch> matches)
+    private static string RenderSignatureList(string assemblyFull, string typeName, string memberName, IReadOnlyList<MemberMatch> matches, string lines)
     {
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员 {memberName}（{matches.Count} 个匹配，超过上限 {AppConfig.MaxMemberMatches}，仅列出签名）");
         try
@@ -92,17 +92,17 @@ public static class DecompileMemberTool
             var type = reader.GetTypeDefinition(typeHandle.Value);
 
             var tokens = matches.Select(m => m.Token).ToHashSet();
-            var lines = new List<string>();
+            var signatureLines = new List<string>();
             foreach (var methodHandle in type.GetMethods())
             {
                 var token = $"0x{MetadataTokens.GetToken(methodHandle):x8}";
                 if (!tokens.Contains(token)) continue;
                 var method = reader.GetMethodDefinition(methodHandle);
                 var signature = SignatureRenderer.RenderMemberSignature(reader, type, method);
-                lines.Add($"{signature}  [{token}]");
+                signatureLines.Add($"{signature}  [{token}]");
             }
-            // 超限清单通常不大，不暴露 lines 分页，直接前 200 行格式化
-            return OutputFormatter.Format(lines, "", context);
+            // 清单可能超过 200 行，统一走 lines 分页（缺省截断前 200 行，超限可用 lines 续读）
+            return OutputFormatter.Format(signatureLines, lines, context);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
         {

@@ -107,4 +107,23 @@ public class SignatureToolTests
         Assert.DoesNotContain("get_", result);
         Assert.Contains("private int ILSpyMcp.Samples.IThing.Value { get; }", result);
     }
+
+    [Fact]
+    public async Task Signature_lines合法范围_返回切片行号()
+    {
+        // BigClass 含 BigMethod/BigHelper/BigHelper2 等多个成员签名，lines="1-2" 应返回带行号的前两行且不提示截断
+        // 头部信息块前置，body 首行为 "1\t..."
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", lines: "1-2");
+
+        Assert.Contains("\n1\t", result);
+        Assert.DoesNotContain("已截断", result);
+    }
+
+    [Fact]
+    public async Task Signature_lines非法格式_返回格式提示()
+    {
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", lines: "abc");
+
+        Assert.Contains("lines 参数格式应为", result);
+    }
 }

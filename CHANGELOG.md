@@ -6,6 +6,17 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Added
+
+- `signature`/`hierarchy`/`dependencies` 新增 `lines` 分页参数：结果超过 200 行时可按行号范围拉取后续（格式 `start-end`，单次最多 500 行），CLI 对应 `-s/-hc/-d` 同步支持 `-ln`
+
+### Fixed
+
+- `signature`/`hierarchy`/`dependencies` 超过 200 行被截断后无法续读（此前未暴露 `lines` 参数，截断即不可达），现可用 `lines` 分页拉取完整结果
+- `decompile_member` 匹配数超限（>20）时返回的成员签名清单超过 200 行同样无法续读，现超限清单也支持 `lines` 分页
+
 ## [1.1.3] - 2026-08-11
 
 ### Added

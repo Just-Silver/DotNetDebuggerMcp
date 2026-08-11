@@ -21,13 +21,15 @@ public static class SignatureTool
     /// </summary>
     /// <param name="assembly">要读取成员签名的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">目标类型的全限定名（必填），格式与 list_types 输出一致。</param>
+    /// <param name="lines">按行号范围读取结果，格式 "start-end"；缺省返回前 200 行。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的成员签名列表或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作为 API 地图：字段含访问级别与 static/readonly/const，属性合并 get/set 访问器、事件以 event 形式，泛型类型带泛型参数、方法带泛型参数。纯元数据秒回、无需 ilspycmd 安装。typeName 为类型全名，格式与 list_types 输出一致（可直接复制）。结果默认只返回前 200 行。")]
+    [Description("输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作为 API 地图：字段含访问级别与 static/readonly/const，属性合并 get/set 访问器、事件以 event 形式，泛型类型带泛型参数、方法带泛型参数。纯元数据秒回、无需 ilspycmd 安装。typeName 为类型全名，格式与 list_types 输出一致（可直接复制）。结果默认只返回前 200 行，可用 lines 参数按行号范围拉取后续。")]
     public static Task<string> Signature(
         [Description("要读取成员签名的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("目标类型的全限定名（必填），格式与 list_types 输出一致，例如 ILSpyMcp.Formatting.OutputFormatter")] string typeName = "",
+        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"；缺省返回前 200 行")] string lines = "",
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（本工具纯元数据读取，不做 ilspycmd 安装检测）
@@ -50,9 +52,9 @@ public static class SignatureTool
             var reader = pe.GetMetadataReader();
             var typeHandle = MetadataNaming.FindType(reader, typeName);
             if (typeHandle is null) return Task.FromResult($"未找到类型 {typeName}");
-            var lines = SignatureRenderer.RenderTypeSignatures(reader, reader.GetTypeDefinition(typeHandle.Value));
-            if (lines.Count == 0) return Task.FromResult($"类型 {typeName} 无成员签名");
-            return Task.FromResult(OutputFormatter.Format(lines.ToList(), "", context));
+            var signatureLines = SignatureRenderer.RenderTypeSignatures(reader, reader.GetTypeDefinition(typeHandle.Value));
+            if (signatureLines.Count == 0) return Task.FromResult($"类型 {typeName} 无成员签名");
+            return Task.FromResult(OutputFormatter.Format(signatureLines.ToList(), lines, context));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
         {

@@ -125,15 +125,15 @@ public class ILSpyMcpCmd
         }
         if (signatures)
         {
-            return await SignatureTool.Signature(assembly, typeName, cancellationToken);
+            return await SignatureTool.Signature(assembly, typeName, lines, cancellationToken);
         }
         if (hierarchy)
         {
-            return await HierarchyTool.Hierarchy(assembly, typeName, cancellationToken);
+            return await HierarchyTool.Hierarchy(assembly, typeName, lines, cancellationToken);
         }
         if (dependencies)
         {
-            return await DependenciesTool.Dependencies(assembly, typeName, cancellationToken);
+            return await DependenciesTool.Dependencies(assembly, typeName, lines, cancellationToken);
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {
