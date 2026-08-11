@@ -18,6 +18,7 @@ try
     await runner.RunAsync(SignatureCases.All(dll));
     await runner.RunAsync(HierarchyCases.All(dll));
     await runner.RunAsync(DependenciesCases.All(dll));
+    await runner.RunAsync(CallGraphCases.All(dll));
     await runner.RunAsync(DecompileToDirCases.All(dll, outDir));
 
     // 产物断言：decompile_to_dir / decompile_to_project 场景执行后、清理前校验 outDir 下确实写入了 .cs 文件

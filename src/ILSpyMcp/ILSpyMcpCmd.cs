@@ -53,6 +53,12 @@ public class ILSpyMcpCmd
     public bool Dependencies { get; }
 
     /// <summary>
+    /// 输出指定类型方法体调用关系，需配合 -t。
+    /// </summary>
+    [Option("-cg|--callgraph", "输出指定类型方法体调用关系（配合 -t）。", CommandOptionType.NoValue)]
+    public bool CallGraph { get; }
+
+    /// <summary>
     /// 列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 csi。
     /// </summary>
     [Option("-l|--list <entity-types>", "列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum；可组合多个字母，如 csi。", CommandOptionType.SingleValue)]
@@ -100,12 +106,12 @@ public class ILSpyMcpCmd
     public string Version => AppConfig.NuGetPackageId + " " + (AppConfig.CurrentVersion?.ToString(3) ?? "unknown");
 
     /// <summary>
-    /// 命令行分发：-c 走环境自检，-p 走 decompile_to_project，-o 走 decompile_to_dir，-s/-hc/-d 分别走 signature/hierarchy/
-    /// dependencies，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// 命令行分发：-c 走环境自检，-p 走 decompile_to_project，-o 走 decompile_to_dir，-s/-hc/-d/-cg 分别走 signature/hierarchy/
+    /// dependencies/call_graph，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string entityTypes,
-        string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies,
+        string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies, bool callGraph,
         string lines, int timeoutSeconds, bool check,
         CancellationToken cancellationToken = default)
     {
@@ -135,6 +141,10 @@ public class ILSpyMcpCmd
         {
             return await DependenciesTool.Dependencies(assembly, typeName, lines, cancellationToken);
         }
+        if (callGraph)
+        {
+            return await CallGraphTool.CallGraph(assembly, typeName, lines, cancellationToken);
+        }
         if (!string.IsNullOrEmpty(entityTypes))
         {
             return await ListTypesTool.ListTypes(assembly, entityTypes, lines, cancellationToken);
@@ -155,7 +165,7 @@ public class ILSpyMcpCmd
         {
             Console.WriteLine(await DispatchCliAsync(
                 Assembly, TypeName, MemberName, EntityTypes,
-                OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies,
+                OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies, CallGraph,
                 Lines, TimeoutSeconds, Check));
             return 0;
         }

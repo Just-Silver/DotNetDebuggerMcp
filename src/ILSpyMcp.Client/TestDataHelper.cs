@@ -42,6 +42,11 @@ public static class TestDataHelper
     public const string UsesTypeName = "ILSpyMcp.Samples.Uses";
 
     /// <summary>
+    /// 方法体调用内部方法（call_graph 正向调用验证）。
+    /// </summary>
+    public const string CallerTypeName = "ILSpyMcp.Samples.Caller";
+
+    /// <summary>
     /// 仓库根目录（含 ILSpyMcp.slnx），随仓库整体移动自动适配。
     /// </summary>
     public static string RepoRoot { get; } = FindRepoRoot();

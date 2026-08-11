@@ -45,7 +45,7 @@ public sealed class ClientRunner
         foreach (var tool in tools) Console.WriteLine($"- {tool.Name}");
 
         var names = tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
-        var pass = tools.Count >= 8
+        var pass = tools.Count >= 9
             && names.Contains("decompile")
             && names.Contains("decompile_member")
             && names.Contains("list_types")
@@ -53,10 +53,11 @@ public sealed class ClientRunner
             && names.Contains("decompile_to_project")
             && names.Contains("signature")
             && names.Contains("hierarchy")
-            && names.Contains("dependencies");
+            && names.Contains("dependencies")
+            && names.Contains("call_graph");
         if (pass)
         {
-            Console.WriteLine("[PASS] 工具数量 >= 8 且含 decompile/decompile_member/list_types/decompile_to_dir/decompile_to_project/signature/hierarchy/dependencies");
+            Console.WriteLine("[PASS] 工具数量 >= 9 且含 decompile/decompile_member/list_types/decompile_to_dir/decompile_to_project/signature/hierarchy/dependencies/call_graph");
         }
         else
         {
