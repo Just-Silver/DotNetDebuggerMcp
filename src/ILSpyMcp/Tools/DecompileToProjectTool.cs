@@ -23,7 +23,7 @@ public static class DecompileToProjectTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
     [McpServerTool]
-    [Description("以可编译项目形式反编译整个程序集到指定目录（每个类型一个源码文件）。结果写入磁盘而非标准输出，不做行数截断；读取源码请使用 opencode 内置工具。nestedDirectories 默认 true（按命名空间嵌套目录）；timeoutSeconds 默认 30。")]
+    [Description("以可编译项目形式反编译整个程序集到指定目录（每个类型一个源码文件）。结果写入磁盘而非标准输出，不做行数截断；写盘完成后可直接读取输出目录下的源码文件。nestedDirectories 默认 true（按命名空间嵌套目录）；timeoutSeconds 默认 30。")]
     public static async Task<string> DecompileToProject(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("输出目录；反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
