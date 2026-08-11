@@ -1,6 +1,6 @@
 name: build-and-publish
 
-# 触发：推送 master 分支、手动触发，或推送 v* 版本标签时构建；打 tag 才发布 NuGet 包
+# 触发：推送 master 分支、手动触发，或推送 v* 版本标签时构建；打 tag 才发布 NuGet 包并创建 GitHub Release
 on:
   push:
     branches: [master]
@@ -11,7 +11,7 @@ jobs:
   build:
     runs-on: windows-latest
     permissions:
-      contents: read
+      contents: write # 创建 GitHub Release 并上传 nupkg 资产
       id-token: write # 允许 GitHub 为本 job 颁发 OIDC 令牌（NuGet 受信任发布用，无需 API key）
 
     env:
@@ -31,9 +31,9 @@ jobs:
       - name: Test
         run: dotnet test tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj -c Release --no-build
 
-      # 仅版本标签（v*）时打包并发布到 NuGet（框架依赖，无需 -r）。
-      # PackageReleaseNotes 从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]），缺失则构建失败，防止静默无说明发布。
-      - name: Pack
+      # 仅版本标签（v*）时打包并发布。先从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]）作为 GitHub Release 正文
+      # 写入 release-body.md（缺失则构建失败，防止静默无说明发布）；NuGet 包本身不再内嵌日志，PackageReleaseNotes 改为指向 GitHub Release 页链接。
+      - name: Extract release notes
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
@@ -46,7 +46,15 @@ jobs:
           $next = $notes.IndexOf("`n## ")
           if ($next -ge 0) { $notes = $notes.Substring(0, $next) }
           $notes = $notes.Trim()
-          dotnet pack src/ILSpyMcp/ILSpyMcp.csproj -c Release --no-build -o artifacts "-p:PackageReleaseNotes=$notes"
+          Set-Content -Path 'release-body.md' -Value $notes -Encoding utf8
+
+      # 框架依赖打包，无需 -r。
+      - name: Pack
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
+          dotnet pack src/ILSpyMcp/ILSpyMcp.csproj -c Release --no-build -o artifacts "-p:PackageReleaseNotes=https://github.com/Just-Silver/ILSpyMcp/releases/tag/v$tag"
 
       # OIDC 交换出短期 NuGet API 密钥（有效期 1 小时，勿提前获取）
       - name: NuGet login (OIDC -> temp API key)
@@ -62,3 +70,13 @@ jobs:
         run: |
           $nupkg = Get-ChildItem artifacts/*.nupkg | Select-Object -First 1
           dotnet nuget push $nupkg.FullName --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+
+      # NuGet 发布成功后创建 GitHub Release：正文复用 CHANGELOG 当前版本段，资产携带 nupkg，正式版（不标记 prerelease）
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: release-body.md
+          files: artifacts/*.nupkg
