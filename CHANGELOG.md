@@ -28,6 +28,13 @@
 - 类型全名统一与 ilspycmd `-l` 输出对齐：命名空间.类型、嵌套用 `+`、泛型带 arity（如 `GenericBox\`1`），`-t` 同时接受 `+` 与 `.` 嵌套分隔符
 - CLI 新增 `-s/--signatures`、`-hc/--hierarchy`、`-d/--dependencies`；移除 `-lv/--languageversion`；`-p` 改走 decompile_to_project
 
+### Fixed
+
+- `hierarchy` 修复泛型基类/泛型接口（TypeSpecification 实例化）丢失：泛型类型现可正确输出基类链（泛型定义在程序集内时继续上溯）、实现的泛型接口与程序集内实现者
+- `signature` 修复多项渲染错误：接口实现方法不再误渲染 `sealed`（编译器将隐式接口实现标为 sealed virtual newslot，源码为普通方法）；静态属性补齐 `static`；泛型类构造函数名去掉 arity（`SimpleClient`1<T>` → `SimpleClient<T>`）；索引器渲染为 `this[参数]` 而非 `Item`
+- `signature`/`decompile_member` 不再重复渲染显式接口属性/事件访问器（方法名为 `Ns.IFoo.get_Value` 时此前既当方法行又当属性行重复输出）
+- `list_types` 修复嵌套编译器生成类型漏网：`<PrivateImplementationDetails>` 的嵌套 `__StaticArrayInitTypeSize` 短名不含 `<`，此前会混入输出；现按全名（含嵌套外层链）判定
+
 ## [1.1.2] - 2026-08-11
 
 ### Added

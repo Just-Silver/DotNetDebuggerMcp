@@ -91,12 +91,17 @@ public static class MemberResolver
 
     /// <summary>
     /// 判断方法名是否为属性/事件访问器（get_X/set_X/add_/remove_）——与 SignatureRenderer.IsAccessorName 同逻辑。
+    /// 显式接口实现的访问器名为 Ns.IFoo.get_Value（含 '.'），一并排除。
     /// </summary>
     private static bool IsAccessorName(string name)
         => name.StartsWith("get_", StringComparison.Ordinal)
         || name.StartsWith("set_", StringComparison.Ordinal)
         || name.StartsWith("add_", StringComparison.Ordinal)
-        || name.StartsWith("remove_", StringComparison.Ordinal);
+        || name.StartsWith("remove_", StringComparison.Ordinal)
+        || name.Contains(".get_", StringComparison.Ordinal)
+        || name.Contains(".set_", StringComparison.Ordinal)
+        || name.Contains(".add_", StringComparison.Ordinal)
+        || name.Contains(".remove_", StringComparison.Ordinal);
 
     /// <summary>
     /// 两个字符串的最长公共前缀长度。

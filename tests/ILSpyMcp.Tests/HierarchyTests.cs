@@ -96,4 +96,51 @@ public class HierarchyTests
             chain);
         Assert.Equal(chain.Count, chain.Distinct().Count());
     }
+
+    [Fact]
+    public void GetBaseChain_Level4_四层链完整()
+    {
+        // Level4 -> Level3 -> Level2 -> Level1 -> System.Object
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.Level4");
+
+        Assert.Equal(
+            new[]
+            {
+                "ILSpyMcp.Samples.Level4",
+                "ILSpyMcp.Samples.Level3",
+                "ILSpyMcp.Samples.Level2",
+                "ILSpyMcp.Samples.Level1",
+                "System.Object",
+            },
+            Hierarchy.GetBaseChain(scope.Reader, type));
+    }
+
+    [Fact]
+    public void GetInterfaces_IntComparer_泛型接口实例化被解析()
+    {
+        // IntComparer : IMyComparer<int>——接口是 TypeSpecification 泛型实例化，必须能被解析而非丢弃
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.IntComparer");
+
+        Assert.Contains("ILSpyMcp.Samples.IMyComparer<int>", Hierarchy.GetInterfaces(scope.Reader, type));
+    }
+
+    [Fact]
+    public void GetDescendants_AbstractShape_直接子类为Circle()
+    {
+        // 后代语义为「直接继承」：AbstractShape 的直接子类是 Circle；SealedCircle : Circle 不在其列
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.AbstractShape");
+        var fullName = MetadataNaming.FullName(scope.Reader, type);
+        var descendants = Hierarchy.GetDescendants(scope.Reader, type, fullName);
+
+        Assert.Contains("ILSpyMcp.Samples.Circle", descendants);
+        Assert.DoesNotContain("ILSpyMcp.Samples.SealedCircle", descendants);
+
+        // Circle 的直接子类才是 SealedCircle
+        var circle = Resolve(scope.Reader, "ILSpyMcp.Samples.Circle");
+        var circleFullName = MetadataNaming.FullName(scope.Reader, circle);
+        Assert.Contains("ILSpyMcp.Samples.SealedCircle", Hierarchy.GetDescendants(scope.Reader, circle, circleFullName));
+    }
 }

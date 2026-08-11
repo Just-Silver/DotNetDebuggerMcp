@@ -107,4 +107,19 @@ public class MemberResolverTests
         Assert.True(plusFound);
         Assert.True(dotFound);
     }
+
+    [Fact]
+    public void FindMembers_ThingImpl_显式接口属性访问器被排除()
+    {
+        // 显式接口属性访问器元数据名为 ILSpyMcp.Samples.IThing.get_Value（含 '.'），默认必须排除；
+        // 搜索 "Value" 不应命中访问器方法（仅剩显式接口普通方法 Foo 不含 value 子串，故应无匹配）
+        var (typeFound, matches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.ThingImpl", "Value");
+
+        Assert.True(typeFound);
+        Assert.DoesNotContain(matches, m => m.Name.Contains("get_Value"));
+
+        // 搜索 "Foo" 应命中显式接口普通方法本身（非访问器，不排除）
+        var (_, fooMatches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.ThingImpl", "Foo");
+        Assert.Contains(fooMatches, m => m.Name == "ILSpyMcp.Samples.IThing.Foo");
+    }
 }

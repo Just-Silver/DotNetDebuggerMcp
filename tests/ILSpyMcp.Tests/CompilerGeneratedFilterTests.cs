@@ -51,16 +51,42 @@ public class CompilerGeneratedFilterTests
         using var pe = new PEReader(fs);
         var reader = pe.GetMetadataReader();
 
-        // 名称不含 '<' 的类型不应被误判为编译器生成（CompilerGeneratedAttribute 兜底仅命中真带特性的类型）
+        // 判定语义为「全名含 '<'」：全名不含 '<' 的类型（含普通嵌套类型）不应被误判为编译器生成
         foreach (var handle in reader.TypeDefinitions)
         {
             var type = reader.GetTypeDefinition(handle);
-            var name = reader.GetString(type.Name);
-            if (name.Contains('<')) continue;
+            if (MetadataNaming.FullName(reader, type).Contains('<')) continue;
             if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type))
             {
                 Assert.Fail($"普通类型被误判为编译器生成：{MetadataNaming.FullName(reader, type)}");
             }
         }
+    }
+
+    [Fact]
+    public void 嵌套编译器生成类型_短名不含尖括号也判定为生成()
+    {
+        // <PrivateImplementationDetails>+__StaticArrayInitTypeSize=NN 的嵌套类型短名不含 '<'，
+        // 但外层链含 '<'（编译时常量数组下沉产物），按全名判定必须命中——验证修复前的漏网场景
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+
+        TypeDefinitionHandle? found = null;
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(handle);
+            if (reader.GetString(type.Name).StartsWith("__StaticArrayInitTypeSize", StringComparison.Ordinal))
+            {
+                found = handle;
+                break;
+            }
+        }
+
+        Assert.True(found is not null, "测试程序集应含 <PrivateImplementationDetails>+__StaticArrayInitTypeSize 嵌套类型");
+        var nested = reader.GetTypeDefinition(found!.Value);
+        Assert.DoesNotContain('<', reader.GetString(nested.Name)); // 短名确实不含 <
+        Assert.True(CompilerGeneratedFilter.IsCompilerGenerated(reader, nested), "嵌套编译器生成类型应判定为生成");
+        Assert.Contains("__StaticArrayInitTypeSize", MetadataNaming.FullName(reader, nested));
     }
 }

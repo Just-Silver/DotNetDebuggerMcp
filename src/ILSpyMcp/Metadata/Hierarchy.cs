@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+using System.Reflection;
 using System.Reflection.Metadata;
 
 namespace ILSpyMcp.Metadata;
@@ -9,8 +11,9 @@ namespace ILSpyMcp.Metadata;
 public static class Hierarchy
 {
     /// <summary>
-    /// 基类链：从 type 沿 BaseType 上溯到 System.Object（含两端），返回全名列表。顶层类型链以 System.Object 为终点，
-    /// 解析不到时（接口 BaseType 为 nil、跨程序集基类不可再上溯）在已解析处停止；畸形程序集基类循环时提前终止。
+    /// 基类链：从 type 沿 BaseType 上溯到 System.Object（含两端），返回全名列表。泛型基类（TypeSpecification 实例化，
+    /// 如 Derived&lt;T&gt; : Base&lt;T&gt;）渲染为带泛型参数的全名，且定义在程序集内时继续沿其上溯；
+    /// TypeReference（外部类型，如 System.Object）为链终点；畸形程序集基类循环时提前终止。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待查询的类型定义。</param>
@@ -28,20 +31,28 @@ public static class Hierarchy
 
             var baseHandle = current.BaseType;
             if (baseHandle.IsNil) break;
-            // 基类在程序集内（TypeDef）继续上溯；TypeReference（如 System.Object）即链终点，加入后停止
-            if (baseHandle.Kind != HandleKind.TypeDefinition)
+            if (baseHandle.Kind == HandleKind.TypeDefinition)
             {
-                var baseName = ResolveType(reader, baseHandle);
-                if (baseName is not null) chain.Add(baseName);
-                break;
+                // 基类在程序集内（TypeDef）继续上溯
+                current = reader.GetTypeDefinition((TypeDefinitionHandle)baseHandle);
+                continue;
             }
-            current = reader.GetTypeDefinition((TypeDefinitionHandle)baseHandle);
+            // TypeReference（外部类型）与 TypeSpecification（泛型基类实例化）均按全名加入；
+            // 泛型基类定义在程序集内时继续上溯其基类链，否则停止
+            var (baseName, baseDef) = ResolveType(reader, baseHandle, GetGenericParameterNames(reader, current.GetGenericParameters()));
+            if (baseName is not null) chain.Add(baseName);
+            if (baseDef is { } defHandle)
+            {
+                current = reader.GetTypeDefinition(defHandle);
+                continue;
+            }
+            break;
         }
         return chain;
     }
 
     /// <summary>
-    /// 类型实现的接口全名列表（InterfaceImplementations 表，含显式实现）。
+    /// 类型实现的接口全名列表（InterfaceImplementations 表，含显式实现）。泛型接口实例化按带泛型参数的全名渲染。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待查询的类型定义。</param>
@@ -49,10 +60,11 @@ public static class Hierarchy
     public static IReadOnlyList<string> GetInterfaces(MetadataReader reader, TypeDefinition type)
     {
         var result = new List<string>();
+        var typeParams = GetGenericParameterNames(reader, type.GetGenericParameters());
         foreach (var handle in type.GetInterfaceImplementations())
         {
             var impl = reader.GetInterfaceImplementation(handle);
-            var resolved = ResolveType(reader, impl.Interface);
+            var (resolved, _) = ResolveType(reader, impl.Interface, typeParams);
             if (resolved is not null) result.Add(resolved);
         }
         return result;
@@ -61,6 +73,8 @@ public static class Hierarchy
     /// <summary>
     /// 程序集内「直接继承 type 或实现其接口」的类型全名列表（跳过编译器生成类型与 type 自身），按元数据枚举序。
     /// 注意语义：仅收集直接基类/直接接口等于 type 的类型；基类链上更深的上游不在此列（调用方可用 GetBaseChain 判定）。
+    /// 泛型基类/接口（TypeSpecification 实例化）按底层泛型定义类型比较，因此 QueryableProvider`2 : QueryableProvider`1
+    /// 能正确归入 QueryableProvider`1 的后代。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待查询的类型定义。</param>
@@ -76,14 +90,19 @@ public static class Hierarchy
             var candidateName = MetadataNaming.FullName(reader, candidate);
             if (candidateName == typeFullName) continue;
 
-            if (ResolveType(reader, candidate.BaseType) == typeFullName)
+            var candidateParams = GetGenericParameterNames(reader, candidate.GetGenericParameters());
+            var (baseName, baseDef) = ResolveType(reader, candidate.BaseType, candidateParams);
+            var baseDefName = baseDef is { } bd ? MetadataNaming.FullName(reader, reader.GetTypeDefinition(bd)) : null;
+            if (baseName == typeFullName || baseDefName == typeFullName)
             {
                 result.Add(candidateName);
                 continue;
             }
             foreach (var implHandle in candidate.GetInterfaceImplementations())
             {
-                if (ResolveType(reader, reader.GetInterfaceImplementation(implHandle).Interface) == typeFullName)
+                var (ifaceName, ifaceDef) = ResolveType(reader, reader.GetInterfaceImplementation(implHandle).Interface, candidateParams);
+                var ifaceDefName = ifaceDef is { } id ? MetadataNaming.FullName(reader, reader.GetTypeDefinition(id)) : null;
+                if (ifaceName == typeFullName || ifaceDefName == typeFullName)
                 {
                     result.Add(candidateName);
                     break;
@@ -94,18 +113,123 @@ public static class Hierarchy
     }
 
     /// <summary>
-    /// 解析类型句柄为全名：TypeDefinition 用 <see cref="MetadataNaming.FullName"/>；TypeReference 取 命名空间.名
-    /// （嵌套沿 ResolutionScope 递归拼接，用 + 分隔）；其余（TypeSpecification 等）返回 null。
+    /// 解析类型句柄为全名与底层类型定义句柄：TypeDefinition 返回自身；TypeReference 取 命名空间.名
+    /// （嵌套沿 ResolutionScope 递归拼接，用 + 分隔），底层定义不可得；TypeSpecification（泛型实例化等）解码签名取全名，
+    /// 若泛型定义是程序集内类型则一并返回其句柄（供基类链继续上溯、后代比较）；其余返回 (null, null)。
     /// </summary>
-    private static string? ResolveType(MetadataReader reader, EntityHandle handle)
+    private static (string? Name, TypeDefinitionHandle? Definition) ResolveType(MetadataReader reader, EntityHandle handle, string[] typeParams)
     {
-        if (handle.IsNil) return null;
+        if (handle.IsNil) return (null, null);
         return handle.Kind switch
         {
-            HandleKind.TypeDefinition => MetadataNaming.FullName(reader, reader.GetTypeDefinition((TypeDefinitionHandle)handle)),
-            HandleKind.TypeReference => ResolveTypeReference(reader, (TypeReferenceHandle)handle),
-            _ => null,
+            HandleKind.TypeDefinition => (MetadataNaming.FullName(reader, reader.GetTypeDefinition((TypeDefinitionHandle)handle)), (TypeDefinitionHandle)handle),
+            HandleKind.TypeReference => (ResolveTypeReference(reader, (TypeReferenceHandle)handle), null),
+            HandleKind.TypeSpecification => ResolveTypeSpecification(reader, (TypeSpecificationHandle)handle, typeParams),
+            _ => (null, null),
         };
+    }
+
+    /// <summary>
+    /// 解码 TypeSpecification 签名为类型全名；泛型实例化签名解码期间记录其底层泛型定义句柄（若为程序集内类型）。
+    /// </summary>
+    private static (string? Name, TypeDefinitionHandle? Definition) ResolveTypeSpecification(MetadataReader reader, TypeSpecificationHandle handle, string[] typeParams)
+    {
+        try
+        {
+            var provider = new TypeSignatureProvider(reader);
+            var name = reader.GetTypeSpecification(handle).DecodeSignature(provider, typeParams);
+            return (name, provider.LastDefinition);
+        }
+        catch (BadImageFormatException)
+        {
+            return (null, null);
+        }
+    }
+
+    /// <summary>
+    /// 读取类型级泛型参数名数组（如 T），供 TypeSpecification 签名解码按索引渲染参数名。
+    /// </summary>
+    private static string[] GetGenericParameterNames(MetadataReader reader, GenericParameterHandleCollection handles)
+    {
+        var names = new string[handles.Count];
+        for (var i = 0; i < handles.Count; i++)
+            names[i] = reader.GetString(reader.GetGenericParameter(handles[i]).Name);
+        return names;
+    }
+
+    /// <summary>
+    /// 类型签名解码器：把 TypeSpecification 的签名编码渲染为全名字符串，并在遇到程序集内泛型定义（TypeDefinition）时
+    /// 记录其句柄到 <see cref="LastDefinition"/>，供基类链上溯与后代比较。只关注泛型实例化等类型编码，
+    /// 方法级泛型参数按占位渲染（基类/接口签名不涉及）。
+    /// </summary>
+    private sealed class TypeSignatureProvider : ISignatureTypeProvider<string, string[]>
+    {
+        private readonly MetadataReader _reader;
+
+        public TypeSignatureProvider(MetadataReader reader) => _reader = reader;
+
+        /// <summary>签名解码中最近一次遇到的程序集内类型定义句柄（泛型实例化的底层定义）。</summary>
+        public TypeDefinitionHandle? LastDefinition { get; private set; }
+
+        public string GetPrimitiveType(PrimitiveTypeCode typeCode)
+            => typeCode switch
+            {
+                PrimitiveTypeCode.Void => "void",
+                PrimitiveTypeCode.Boolean => "bool",
+                PrimitiveTypeCode.Byte => "byte",
+                PrimitiveTypeCode.SByte => "sbyte",
+                PrimitiveTypeCode.Char => "char",
+                PrimitiveTypeCode.Int16 => "short",
+                PrimitiveTypeCode.UInt16 => "ushort",
+                PrimitiveTypeCode.Int32 => "int",
+                PrimitiveTypeCode.UInt32 => "uint",
+                PrimitiveTypeCode.Int64 => "long",
+                PrimitiveTypeCode.UInt64 => "ulong",
+                PrimitiveTypeCode.Single => "float",
+                PrimitiveTypeCode.Double => "double",
+                PrimitiveTypeCode.String => "string",
+                PrimitiveTypeCode.Object => "object",
+                _ => $"<{typeCode}>",
+            };
+
+        public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
+        {
+            LastDefinition = handle;
+            return MetadataNaming.FullName(reader, reader.GetTypeDefinition(handle));
+        }
+
+        public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
+            => ResolveTypeReference(reader, handle);
+
+        public string GetTypeFromSpecification(MetadataReader reader, string[] genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
+            => reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);
+
+        public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments)
+        {
+            // genericType 形如 ILSpyMcp.Samples.GenericBase`1，去掉尾部 arity 后接 <参数列表>
+            var backtick = genericType.IndexOf('`');
+            var baseName = backtick >= 0 ? genericType[..backtick] : genericType;
+            return $"{baseName}<{string.Join(", ", typeArguments)}>";
+        }
+
+        public string GetGenericTypeParameter(string[] genericContext, int index)
+            => index >= 0 && index < genericContext.Length ? genericContext[index] : $"T{index}";
+
+        public string GetGenericMethodParameter(string[] genericContext, int index) => $"M{index}";
+
+        public string GetArrayType(string elementType, ArrayShape shape) => $"{elementType}[{new string(',', Math.Max(0, shape.Rank - 1))}]";
+
+        public string GetSZArrayType(string elementType) => $"{elementType}[]";
+
+        public string GetByReferenceType(string elementType) => $"ref {elementType}";
+
+        public string GetPointerType(string elementType) => $"{elementType}*";
+
+        public string GetPinnedType(string elementType) => elementType;
+
+        public string GetModifiedType(string modifier, string unmodifiedType, bool isRequired) => unmodifiedType;
+
+        public string GetFunctionPointerType(MethodSignature<string> signature) => "delegate*";
     }
 
     /// <summary>

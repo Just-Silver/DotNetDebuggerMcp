@@ -13,10 +13,12 @@ public static class CompilerGeneratedFilter
 {
     /// <summary>
     /// 判定类型是否为编译器生成类型。
+    /// 按全名判定而非仅短名：编译器生成的嵌套类型（如 &lt;PrivateImplementationDetails&gt;+__StaticArrayInitTypeSize=12）
+    /// 短名不含 '&lt;'，但其外层链含 '&lt;'；C# 标识符不允许 '&lt;'，全名含 '&lt;' 双向精确。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待判定的类型定义。</param>
     /// <returns>编译器生成类型返回 true。</returns>
     public static bool IsCompilerGenerated(MetadataReader reader, TypeDefinition type)
-        => reader.GetString(type.Name).Contains('<');
+        => MetadataNaming.FullName(reader, type).Contains('<');
 }

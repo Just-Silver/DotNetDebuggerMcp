@@ -80,7 +80,13 @@ public static class SignatureRenderer
     /// <param name="typeParams">类型级泛型参数名数组。</param>
     /// <returns>如 "GenericBox&lt;T&gt;"。</returns>
     private static string BuildCtorDisplayName(MetadataReader reader, TypeDefinition type, string[] typeParams)
-        => reader.GetString(type.Name) + (typeParams.Length > 0 ? $"<{string.Join(", ", typeParams)}>" : "");
+    {
+        // 元数据名含 arity（如 SimpleClient`1），去掉反引号后缀再拼类型参数名；非泛型类型无反引号
+        var raw = reader.GetString(type.Name);
+        var backtick = raw.IndexOf('`');
+        var baseName = backtick >= 0 ? raw[..backtick] : raw;
+        return baseName + (typeParams.Length > 0 ? $"<{string.Join(", ", typeParams)}>" : "");
+    }
 
     /// <summary>
     /// 渲染字段签名：访问级别 + [static/readonly/const] + 类型 + 名字。
@@ -101,8 +107,9 @@ public static class SignatureRenderer
     }
 
     /// <summary>
-    /// 渲染方法签名：访问级别 + [static/abstract/virtual/override/sealed] + 返回类型 + 名字(+泛型参数) + 参数列表。
+    /// 渲染方法签名：访问级别 + [static/abstract/virtual/override/sealed override] + 返回类型 + 名字(+泛型参数) + 参数列表。
     /// 构造函数/静态构造函数用类型名代替 .ctor/.cctor（无返回类型）。
+    /// NewSlot+Final（sealed virtual newslot）是编译器对隐式接口实现的标记，C# 源码为普通方法，不渲染任何修饰符。
     /// </summary>
     private static string RenderMethod(MetadataReader reader, MethodDefinition method, Provider provider, string[] typeParams, string ctorDisplayName)
     {
@@ -120,7 +127,11 @@ public static class SignatureRenderer
         else if ((attrs & MethodAttributes.Virtual) != 0)
         {
             if ((attrs & MethodAttributes.Abstract) != 0) mods.Add("abstract");
-            else if ((attrs & MethodAttributes.NewSlot) != 0) mods.Add((attrs & MethodAttributes.Final) != 0 ? "sealed" : "virtual");
+            else if ((attrs & MethodAttributes.NewSlot) != 0)
+            {
+                // NewSlot+Final = 编译器生成的接口实现方法（隐式/显式），源码无 sealed/virtual 修饰符，不输出
+                if ((attrs & MethodAttributes.Final) == 0) mods.Add("virtual");
+            }
             else mods.Add((attrs & MethodAttributes.Final) != 0 ? "sealed override" : "override"); // override 表现为 Virtual 置位而 NewSlot 未置位
         }
 
@@ -145,7 +156,21 @@ public static class SignatureRenderer
             (false, true) => "{ set; }",
             (false, false) => "{ }",
         };
-        return $"{AccessorAccessLevel(reader, accessors.Getter, accessors.Setter)} {sig.ReturnType} {reader.GetString(property.Name)} {body}";
+        // 索引器元数据名为 Item 且带索引参数，渲染为 this[参数类型列表] 便于识别；普通属性用元数据名
+        var name = sig.ParameterTypes.Length > 0
+            ? $"this[{string.Join(", ", sig.ParameterTypes)}]"
+            : reader.GetString(property.Name);
+        var staticMod = IsPropertyStatic(reader, accessors) ? "static " : "";
+        return $"{AccessorAccessLevel(reader, accessors.Getter, accessors.Setter)} {staticMod}{sig.ReturnType} {name} {body}";
+    }
+
+    /// <summary>
+    /// 属性是否静态：元数据属性表不含 static 标志，由访问器方法（get/set）的 Static 决定。
+    /// </summary>
+    private static bool IsPropertyStatic(MetadataReader reader, PropertyAccessors accessors)
+    {
+        var handle = !accessors.Getter.IsNil ? accessors.Getter : accessors.Setter;
+        return !handle.IsNil && (reader.GetMethodDefinition(handle).Attributes & MethodAttributes.Static) != 0;
     }
 
     /// <summary>
@@ -205,7 +230,13 @@ public static class SignatureRenderer
         => name.StartsWith("get_", StringComparison.Ordinal)
         || name.StartsWith("set_", StringComparison.Ordinal)
         || name.StartsWith("add_", StringComparison.Ordinal)
-        || name.StartsWith("remove_", StringComparison.Ordinal);
+        || name.StartsWith("remove_", StringComparison.Ordinal)
+        // 显式接口实现的访问器方法元数据名为 Ns.IFoo.get_Value（含 '.'），同样属属性/事件访问器需排除；
+        // C# 用户方法名不允许 '.'（仅显式接口实现含 '.'），不会误伤
+        || name.Contains(".get_", StringComparison.Ordinal)
+        || name.Contains(".set_", StringComparison.Ordinal)
+        || name.Contains(".add_", StringComparison.Ordinal)
+        || name.Contains(".remove_", StringComparison.Ordinal);
 
     private static string AccessLevel(MethodAttributes access)
         => access switch
