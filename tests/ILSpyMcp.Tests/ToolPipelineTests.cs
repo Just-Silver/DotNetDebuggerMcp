@@ -8,9 +8,9 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// 共享执行管道用例：进程内 InProcessDecompiler 回源 + 缓存命中/并发单飞/lines 分页/合并/超时语义。
-/// 经 <see cref="AppServices.ConfigureForTest"/> 注入小缓存与真实进程内反编译（反编译 tests/TestData 下测试程序集），
-/// 验证缓存与格式化行为。与 CheckToolTests 同属 AppServices collection，串行执行避免静态状态竞态。
+/// 共享执行管道用例：缓存命中/并发单飞/lines 分页/合并/超时语义。多数用例经 <see cref="AppServices.ConfigureForTest"/>
+/// 注入小缓存走真实进程内反编译（tests/TestData 下测试程序集）；依赖可观测回源次数或制造失败的用例（并发单飞、合并失败、超时）
+/// 直接以本地 ToolPipeline + 反编译探针验证，不依赖真实反编译。与 CheckToolTests 同属 AppServices collection，串行执行避免静态状态竞态。
 /// </summary>
 [Collection("AppServices")]
 public class ToolPipelineTests
@@ -91,27 +91,36 @@ public class ToolPipelineTests
     [Fact]
     public async Task 超时结果_不入缓存且后续可重试()
     {
-        Init();
+        // 反编译探针经门闩阻塞模拟慢反编译：零超时必超时且后台不残留真实反编译（只等待门闩，随后放行即结束）
+        var gate = new ManualResetEventSlim(initialState: true);
+        var cache = new DecompileCache();
+        var probe = new Func<ToolCommand, string>(_ =>
+        {
+            gate.Wait();
+            return "public class TimedOut { }";
+        });
+        var pipeline = new ToolPipeline(cache, probe);
+        var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "TimedOut"));
+        var key = cache.BuildKey(command.Assembly, command.Signature);
+
+        gate.Reset(); // 阻塞探针：首调（零超时）必超时
         try
         {
-            var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, TypeBigClass));
-            var key = AppServices.Cache.BuildKey(SamplesDll, command.Signature);
-
-            var miss = await AppServices.Pipeline.ExecuteAsync(command, "", TimeSpan.Zero);
+            var miss = await pipeline.ExecuteAsync(command, "", TimeSpan.Zero);
             Assert.Contains("反编译失败", miss.Text); // 零超时 → 超时提示转错误
-            Assert.Null(AppServices.Cache.Get(key)); // 超时不写缓存
-
-            var hit = await AppServices.Pipeline.ExecuteAsync(command, "", TimeSpan.FromSeconds(60));
-            Assert.DoesNotContain("反编译失败", hit.Text); // 重试成功
-            Assert.NotNull(AppServices.Cache.Get(key));
-
-            var cached = await AppServices.Pipeline.ExecuteAsync(command, "", TimeSpan.Zero);
-            Assert.Equal(hit.Text, cached.Text); // 命中缓存，不再受零超时影响
+            Assert.Null(cache.Get(key)); // 超时不写缓存
         }
         finally
         {
-            AppServices.ResetForTest();
+            gate.Set(); // 放行后台探针，避免残留阻塞线程
         }
+
+        var hit = await pipeline.ExecuteAsync(command, "", TimeSpan.FromSeconds(60));
+        Assert.DoesNotContain("反编译失败", hit.Text); // 重试成功
+        Assert.NotNull(cache.Get(key));
+
+        var cached = await pipeline.ExecuteAsync(command, "", TimeSpan.Zero);
+        Assert.Equal(hit.Text, cached.Text); // 命中缓存，不再受零超时影响
     }
 
     [Fact]
@@ -224,21 +233,25 @@ public class ToolPipelineTests
     }
 
     [Fact]
-    public async Task 并发同key_全部返回相同结果()
+    public async Task 并发同key_仅回源一次且结果一致()
     {
-        Init();
-        try
+        // 计数探针：并发单飞回归护栏——同 key 并发者只允许触发一次回源，否则 CallCount 断言失败
+        int callCount = 0;
+        var cache = new DecompileCache();
+        var probe = new Func<ToolCommand, string>(_ =>
         {
-            var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, TypeBigClass));
-            var tasks = Enumerable.Range(0, 8).Select(_ => AppServices.Pipeline.ExecuteAsync(command, "")).ToArray();
-            var results = await Task.WhenAll(tasks);
+            Interlocked.Increment(ref callCount);
+            return "public class Concurrent { public void M() { } }";
+        });
+        var pipeline = new ToolPipeline(cache, probe);
+        var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "Concurrent"));
 
-            Assert.All(results, r => Assert.Equal(results[0].Text, r.Text));
-        }
-        finally
-        {
-            AppServices.ResetForTest();
-        }
+        var tasks = Enumerable.Range(0, 8).Select(_ => pipeline.ExecuteAsync(command, "")).ToArray();
+        var results = await Task.WhenAll(tasks);
+
+        Assert.All(results, r => Assert.Equal(results[0].Text, r.Text)); // 并发者结果一致
+        Assert.Equal(1, callCount); // 并发单飞：同 key 仅回源一次（8 并发者各回源一次会让本断言失败）
+        Assert.NotNull(cache.Get(cache.BuildKey(command.Assembly, command.Signature))); // 回源结果已写缓存
     }
 
     [Fact]
@@ -264,6 +277,26 @@ public class ToolPipelineTests
         {
             AppServices.ResetForTest();
         }
+    }
+
+    [Fact]
+    public async Task ExecuteMergedAsync_任一命令失败_整体返回错误且不输出部分结果()
+    {
+        // 探针按目标名区分成功/失败命令：验证合并执行任一命令失败即整体返回错误、丢弃已成功的部分结果
+        var cache = new DecompileCache();
+        var probe = new Func<ToolCommand, string>(cmd =>
+            cmd.Request.Target == "Bad" ? "未找到类型 Bad" : $"public class {cmd.Request.Target} {{ }}");
+        var pipeline = new ToolPipeline(cache, probe);
+        var ok = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "Ok")) { DisplayName = "Ok" };
+        var bad = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "Bad")) { DisplayName = "Bad" };
+
+        var result = await pipeline.ExecuteMergedAsync(new[] { ok, bad }, "");
+
+        Assert.Contains("反编译失败", result.Text); // 任一命令失败即整体返回错误提示
+        Assert.Contains("未找到类型 Bad", result.Text);
+        Assert.DoesNotContain("=== Ok ===", result.Text); // 已成功的部分不输出（合并列表整体丢弃）
+        Assert.DoesNotContain("public class Ok", result.Text);
+        Assert.Null(cache.Get(cache.BuildKey(bad.Assembly, bad.Signature))); // 失败命令的错误提示不入缓存，可重试
     }
 
     [Fact]

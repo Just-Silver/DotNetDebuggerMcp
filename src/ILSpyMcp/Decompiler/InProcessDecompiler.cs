@@ -42,7 +42,8 @@ public sealed class InProcessDecompiler
         }
         catch (OperationCanceledException)
         {
-            // Task.Delay(timeout, cancellationToken) 在取消触发时抛 OperationCanceledException，统一按超时处理
+            // 防御性兜底：Task.WhenAny 对取消的 delay 直接返回（不抛，await WhenAny 也不观察其结果异常），
+            // 此处仅兜底 work 自身抛出的 OperationCanceledException，统一按超时处理
             return timeoutHint;
         }
         catch (Exception ex)
@@ -261,7 +262,7 @@ public sealed class InProcessDecompiler
     /// </summary>
     /// <param name="text">反编译入口返回的文本。</param>
     /// <returns>是错误提示返回 true；反编译结果返回 false。</returns>
-    public static bool IsErrorResult(string text)
+    internal static bool IsErrorResult(string text)
     {
         // 全部错误提示前缀：Execute/RunWithTimeoutAsync 的「反编译失败：」兜底、未找到类型、输出超限、
         // 「元数据 token …未引用…」越界、以及以引号开头的非法 token 提示（正常反编译文本不可能以这些开头）

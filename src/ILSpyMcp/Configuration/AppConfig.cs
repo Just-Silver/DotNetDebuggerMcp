@@ -13,8 +13,8 @@ internal static class AppConfig
     public const long MaxCacheBytes = 64 * 1024 * 1024;
 
     /// <summary>
-    /// 单次反编译生成文本的字符数上限：进程内反编译完成后检查，超过即返回「建议改用 decompile_to_dir」提示且该结果不入缓存，
-    /// 防止巨型反编译输出（OOM）拖垮整个 MCP 进程。取值与缓存上限一致。
+    /// 单次反编译生成文本的字符数上限：进程内反编译完成后检查，超过即返回「建议改用 decompile_to_dir」提示且该结果不入缓存
+    /// （仅在生成完成后阻止超限文本返回与入缓存，不限制生成过程本身）。取值与缓存上限一致。
     /// </summary>
     public const long MaxOutputBytes = MaxCacheBytes;
 

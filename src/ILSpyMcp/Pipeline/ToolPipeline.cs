@@ -97,13 +97,19 @@ public sealed class ToolCommand
 public sealed class ToolPipeline
 {
     private readonly DecompileCache _cache;
+    private readonly Func<ToolCommand, string> _decompile;
     private readonly ConcurrentDictionary<CacheKey, Lazy<Task<List<string>>>> _inflight = new();
 
     /// <summary>
-    /// 以共享缓存构造执行管道。
+    /// 以共享缓存与反编译探针构造执行管道。
     /// </summary>
     /// <param name="cache">共享反编译缓存。</param>
-    public ToolPipeline(DecompileCache cache) => _cache = cache;
+    /// <param name="decompile">反编译探针：给定调用描述返回反编译文本或错误提示；缺省经 <see cref="InProcessDecompiler"/> 静态入口按 Kind 分发。</param>
+    public ToolPipeline(DecompileCache cache, Func<ToolCommand, string>? decompile = null)
+    {
+        _cache = cache;
+        _decompile = decompile ?? DecompileStatic;
+    }
 
     /// <summary>
     /// 执行一次反编译调用：缓存命中直接返回；未命中则并发单飞回源（Lazy 保证同 key 只启动一次进程内反编译）后写缓存。 指定 lines
@@ -197,8 +203,8 @@ public sealed class ToolPipeline
     }
 
     /// <summary>
-    /// 回源反编译：经 <see cref="InProcessDecompiler.RunWithTimeoutAsync"/> 在后台线程执行进程内反编译并拆分行列表；
-    /// 超时/取消提示与反编译返回的错误提示（未找到类型/超限/非法 token 等）均识别后抛异常（走「错误转提示」路径且不入缓存，同 key 后续调用仍可重试）。
+    /// 回源反编译：经 <see cref="InProcessDecompiler.RunWithTimeoutAsync"/> 在后台线程执行反编译探针并拆分行列表；
+    /// 超时/取消提示与探针返回的错误提示（未找到类型/超限/非法 token 等）均识别后抛异常（走「错误转提示」路径且不入缓存，同 key 后续调用仍可重试）。
     /// </summary>
     /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
     /// <param name="timeout">本次回源超时。</param>
@@ -206,20 +212,31 @@ public sealed class ToolPipeline
     /// <returns>反编译结果行列表。</returns>
     private async Task<List<string>> RunSourceAsync(ToolCommand command, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        var request = command.Request;
-        Func<string> work = request.Kind switch
-        {
-            DecompileKind.Type => () => InProcessDecompiler.DecompileType(command.Assembly, request.Target),
-            DecompileKind.Member => () => InProcessDecompiler.DecompileMember(command.Assembly, request.Target),
-            DecompileKind.WholeModule => () => InProcessDecompiler.DecompileWholeModule(command.Assembly),
-            _ => throw new ArgumentOutOfRangeException(nameof(request), $"未知反编译请求类型 {request.Kind}"),
-        };
         var timeoutHint = $"反编译超时（超过 {timeout.TotalSeconds:0.#} 秒），已放弃本次反编译；可调大 timeoutSeconds 或改用 decompile_to_dir";
-        var text = await InProcessDecompiler.RunWithTimeoutAsync(work, timeout, cancellationToken, timeoutHint);
+        // 探针返回反编译文本或错误提示（未找到类型/超限/非法 token 等）；超时/取消语义由 RunWithTimeoutAsync 处理，不在此处展开
+        var text = await InProcessDecompiler.RunWithTimeoutAsync(() => _decompile(command), timeout, cancellationToken, timeoutHint);
         // 超时/取消时 RunWithTimeoutAsync 原样返回 timeoutHint：识别并抛异常走错误提示路径，避免把超时提示误当反编译结果写入缓存
         if (text == timeoutHint) throw new InvalidOperationException(timeoutHint);
-        // 反编译返回的错误提示（未找到类型/输出超限/非法或越界 token 等）同样不入缓存：抛异常由调用方转为提示文本，同 key 后续调用可重试
+        // 探针返回的错误提示（未找到类型/输出超限/非法或越界 token 等）同样不入缓存：抛异常由调用方转为提示文本，同 key 后续调用可重试
         if (InProcessDecompiler.IsErrorResult(text)) throw new InvalidOperationException(text);
         return OutputFormatter.SplitLines(text);
+    }
+
+    /// <summary>
+    /// 默认反编译探针：按 <see cref="DecompileKind"/> 分发到 <see cref="InProcessDecompiler"/> 静态入口（类型/成员/整模块）。
+    /// 生产路径恒走本实现；测试可注入替代探针（计数回源次数/制造失败）验证并发单飞与错误分支。
+    /// </summary>
+    /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
+    /// <returns>反编译文本或错误提示。</returns>
+    private static string DecompileStatic(ToolCommand command)
+    {
+        var request = command.Request;
+        return request.Kind switch
+        {
+            DecompileKind.Type => InProcessDecompiler.DecompileType(command.Assembly, request.Target),
+            DecompileKind.Member => InProcessDecompiler.DecompileMember(command.Assembly, request.Target),
+            DecompileKind.WholeModule => InProcessDecompiler.DecompileWholeModule(command.Assembly),
+            _ => throw new ArgumentOutOfRangeException(nameof(request), $"未知反编译请求类型 {request.Kind}"),
+        };
     }
 }

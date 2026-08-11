@@ -1,6 +1,5 @@
 using ILSpyMcp.Caching;
 using ILSpyMcp.Configuration;
-using ILSpyMcp.Decompiler;
 using ILSpyMcp.Pipeline;
 using ILSpyMcp.UpdateCheck;
 
@@ -22,11 +21,6 @@ internal static class AppServices
     /// 共享执行管道（缓存 → 进程内反编译回源 → 分页），反编译类工具经此调用。
     /// </summary>
     public static ToolPipeline Pipeline = new(Cache);
-
-    /// <summary>
-    /// 共享进程内反编译服务（InProcessDecompiler 方法均为静态，实例供统一入口与后续扩展）。
-    /// </summary>
-    public static InProcessDecompiler Decompiler = new();
 
     /// <summary>
     /// 共享 NuGet 包版本查询（环境自检用它检查 ilspymcp 是否有新版本）。
