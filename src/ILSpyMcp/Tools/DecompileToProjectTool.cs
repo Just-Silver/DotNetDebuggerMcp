@@ -45,7 +45,7 @@ public static class DecompileToProjectTool
 
         // 进程内项目模式写盘：{程序集名}.csproj + 每类型一个源码文件；超时/取消返回提示文本，不抛异常
         return await InProcessDecompiler.RunWithTimeoutAsync(
-            () => InProcessDecompiler.DecompileToProject(assemblyFull, outputFull, nestedDirectories),
+            ct => InProcessDecompiler.DecompileToProject(assemblyFull, outputFull, nestedDirectories, ct),
             TimeSpan.FromSeconds(timeoutSeconds),
             cancellationToken,
             timeoutHint);

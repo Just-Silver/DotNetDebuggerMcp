@@ -47,7 +47,7 @@ public static class DecompileToDirTool
 
         // 进程内反编译写盘：单文件 {typeName 空 ? 程序集名 : typeName}.decompiled.cs；超时/取消返回提示文本，不抛异常
         return await InProcessDecompiler.RunWithTimeoutAsync(
-            () => InProcessDecompiler.DecompileToDir(assemblyFull, outputFull, string.IsNullOrEmpty(typeName) ? null : typeName),
+            ct => InProcessDecompiler.DecompileToDir(assemblyFull, outputFull, string.IsNullOrEmpty(typeName) ? null : typeName, ct),
             TimeSpan.FromSeconds(timeoutSeconds),
             cancellationToken,
             timeoutHint);
