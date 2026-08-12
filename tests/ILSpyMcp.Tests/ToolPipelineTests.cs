@@ -94,7 +94,7 @@ public class ToolPipelineTests
         // 反编译探针经门闩阻塞模拟慢反编译：零超时必超时且后台不残留真实反编译（只等待门闩，随后放行即结束）
         var gate = new ManualResetEventSlim(initialState: true);
         var cache = new DecompileCache();
-        var probe = new Func<ToolCommand, string>(_ =>
+        var probe = new Func<ToolCommand, CancellationToken, string>((_, _) =>
         {
             gate.Wait();
             return "public class TimedOut { }";
@@ -238,7 +238,7 @@ public class ToolPipelineTests
         // 计数探针：并发单飞回归护栏——同 key 并发者只允许触发一次回源，否则 CallCount 断言失败
         int callCount = 0;
         var cache = new DecompileCache();
-        var probe = new Func<ToolCommand, string>(_ =>
+        var probe = new Func<ToolCommand, CancellationToken, string>((_, _) =>
         {
             Interlocked.Increment(ref callCount);
             return "public class Concurrent { public void M() { } }";
@@ -284,7 +284,7 @@ public class ToolPipelineTests
     {
         // 探针按目标名区分成功/失败命令：验证合并执行任一命令失败即整体返回错误、丢弃已成功的部分结果
         var cache = new DecompileCache();
-        var probe = new Func<ToolCommand, string>(cmd =>
+        var probe = new Func<ToolCommand, CancellationToken, string>((cmd, _) =>
             cmd.Request.Target == "Bad" ? "未找到类型 Bad" : $"public class {cmd.Request.Target} {{ }}");
         var pipeline = new ToolPipeline(cache, probe);
         var ok = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "Ok")) { DisplayName = "Ok" };

@@ -220,7 +220,7 @@ public class InProcessDecompilerTests
     public async Task RunWithTimeoutAsync_正常完成_返回work结果()
     {
         var result = await InProcessDecompiler.RunWithTimeoutAsync(
-            () => "反编译完成",
+            _ => "反编译完成",
             TimeSpan.FromSeconds(5),
             CancellationToken.None,
             "反编译超时，请重试");
@@ -232,7 +232,7 @@ public class InProcessDecompilerTests
     public async Task RunWithTimeoutAsync_超时_返回超时提示()
     {
         var result = await InProcessDecompiler.RunWithTimeoutAsync(
-            () => { Thread.Sleep(3000); return "迟到结果"; },
+            _ => { Thread.Sleep(3000); return "迟到结果"; },
             TimeSpan.FromMilliseconds(100),
             CancellationToken.None,
             "反编译超时，请重试");
@@ -245,7 +245,7 @@ public class InProcessDecompilerTests
     {
         using var cts = new CancellationTokenSource();
         var task = InProcessDecompiler.RunWithTimeoutAsync(
-            () => { Thread.Sleep(3000); return "迟到结果"; },
+            _ => { Thread.Sleep(3000); return "迟到结果"; },
             TimeSpan.FromSeconds(30),
             cts.Token,
             "反编译已取消");
@@ -255,6 +255,33 @@ public class InProcessDecompilerTests
         Assert.Equal("反编译已取消", await task);
     }
 
+    [Fact]
+    public async Task RunWithTimeoutAsync_取消令牌传入work_work收到取消信号返回取消结果()
+    {
+        // 验证令牌接线而非空跑：work 在收到取消信号前阻塞在 WaitOne，取消后置位 workSawSignal 并返回取消结果。
+        // 若令牌未真正传入 work（接线为空跑/误传 None），WaitOne 只能靠 30 秒兜底超时才返回，
+        // workSawSignal 在 5 秒等待窗口内不可能置位，断言失败；反之则证明 work 确实收到了取消信号。
+        using var cts = new CancellationTokenSource();
+        var workSawSignal = new ManualResetEventSlim();
+        var task = InProcessDecompiler.RunWithTimeoutAsync(
+            ct =>
+            {
+                ct.WaitHandle.WaitOne(TimeSpan.FromSeconds(30));
+                workSawSignal.Set();
+                return "反编译已取消";
+            },
+            TimeSpan.FromSeconds(30),
+            cts.Token,
+            "反编译已取消");
+        await Task.Delay(100);
+        cts.Cancel();
+
+        var result = await task;
+        // 取消后 work 线程尚需短暂时间完成置位（Task.WhenAny 可能先选中 delay 直接返回 timeoutHint），轮询等待以观察到信号
+        Assert.True(workSawSignal.Wait(TimeSpan.FromSeconds(5)), "work 未收到取消信号：取消令牌未真正传入 work（接线为空跑）");
+        Assert.Equal("反编译已取消", result);
+    }
+
     /// <summary>
     /// IsErrorResult 必须识别全部错误提示形态（超限/未找到/非法 token/越界 token/反编译失败兜底），且不误判正常反编译文本。
     /// 超限分支受 <see cref="ILSpyMcp.Configuration.AppConfig.MaxOutputBytes"/>（64MB 字符）限制难以在管道层直接触发，此处以真实超限提示文本
@@ -262,6 +289,7 @@ public class InProcessDecompilerTests
     /// </summary>
     [Theory]
     [InlineData("反编译输出超过上限，建议改用 decompile_to_dir", true)]
+    [InlineData("反编译已取消", true)]
     [InlineData("未找到类型 No.Such.Type", true)]
     [InlineData("\"abc\" 不是有效的元数据 token，应为 0x 开头的十六进制格式，如 0x06000005", true)]
     [InlineData("元数据 token 0x06FFFFFF 未引用本模块的类型或成员", true)]
