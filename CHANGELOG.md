@@ -15,7 +15,7 @@
 ### Changed
 
 - **不再依赖 ilspycmd（破坏性变更）**：反编译改为进程内 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)（内置版本 11.0.0.9335-rc，随 NuGet 包分发），安装 ilspymcp 后开箱即用，无需再全局安装 `ilspycmd`
-- **`timeoutSeconds` 语义变为「放弃等待」（破坏性变更）**：超时/取消返回提示文本且结果不入缓存，可调大 `timeoutSeconds` 后重试；进程内无法强杀，后台反编译任务经协作式取消中断，不再跑完占 CPU
+- **`timeoutSeconds` 语义变为「放弃等待」（破坏性变更）**：超时/取消返回提示文本且结果不入缓存，可调大 `timeoutSeconds` 后重试；进程内无法强杀，后台反编译任务经协作式取消中断
 - **标准输出截断从行数改为数据量**：默认返回前约 8 KB、`lines` 参数单次最多约 32 KB（`lines="start-end"` 行号分页不变）；头部「当前输出」增加返回量 KB 与截断原因，并新增「剩余」行告知剩余数据量与「可一次获取/需分次获取」的建议 `lines` 范围
 - 握手报告（CLI `-c/--check` 与 MCP 握手注入）不再报告 ilspycmd 安装/版本，改为仅报告 ilspymcp 更新状态（无有效检查记录时不注入）
 - `decompile_to_dir` 的 `nestedDirectories` 参数当前不产生效果（写盘为单文件布局，保留参数仅为向前兼容）
