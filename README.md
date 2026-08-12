@@ -88,21 +88,21 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_decompile` | `assembly` | 程序集文件路径（.dll/.exe），可为相对当前工作目录的路径 | 是 |
 | | `typeName` | 仅反编译指定全限定类型名，例如 `System.String` | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`（1-based 含两端，单次最多约 32 KB），如 `200-400`；省略返回前约 8 KB | 否 |
-| | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试 | 否 |
+| | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_member` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 在指定类型内搜索成员，全限定类型名，例如 `System.Text.Json.JsonSerializer` | 是 |
 | | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；匹配到的成员全部反编译，匹配数超过 20 时仅返回成员签名清单 | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
-| | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试 | 否 |
+| | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
 | | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集 | 否 |
 | | `nestedDirectories` | 指定则按命名空间嵌套目录输出；当前单文件输出模式下该参数不产生效果（默认 true） | 否 |
-| | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试 | 否 |
+| | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_to_project` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
 | | `nestedDirectories` | 输出到目录时按命名空间使用嵌套目录（默认 true） | 否 |
-| | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试 | 否 |
+| | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_list_types` | `assembly` | 程序集文件路径 | 是 |
 | | `list` | 实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 `csi` | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
