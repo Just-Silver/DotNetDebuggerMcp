@@ -83,9 +83,9 @@ public class ILSpyMcpCmd
     public bool NestedDirectories { get; }
 
     /// <summary>
-    /// 按行号范围读取结果，格式 start-end（1-based 含两端，单次最多 500 行）。
+    /// 按行号范围读取结果，格式 start-end（1-based 含两端，单次最多约 32 KB）。
     /// </summary>
-    [Option("-ln|--lines <start-end>", "按行号范围读取结果，格式 start-end（1-based 含两端，单次最多 500 行），如 200-400。", CommandOptionType.SingleValue)]
+    [Option("-ln|--lines <start-end>", "按行号范围读取结果，格式 start-end（1-based 含两端，单次最多约 32 KB），如 200-400。", CommandOptionType.SingleValue)]
     public string Lines { get; } = null!;
 
     /// <summary>

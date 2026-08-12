@@ -101,19 +101,20 @@ public class OutputFormatterTests
     }
 
     [Fact]
-    public void FormatHead_超限_只返回前200行并附截断提示()
+    public void FormatHead_长行按字符预算截断_返回行数远小于总量并附截断提示()
     {
-        var lines = Enumerable.Range(1, 250).Select(i => $"line{i}").ToList();
+        var lines = Enumerable.Range(1, 250).Select(i => new string('x', 100)).ToList();
         var result = OutputFormatter.FormatHead(lines);
         Assert.Contains("已截断", result);
-        Assert.DoesNotContain("KB", result);
-        Assert.StartsWith("1\tline1", result);
-        Assert.Contains("200\tline200", result);
-        Assert.DoesNotContain("201\tline201", result);
+        Assert.Contains("KB", result);
+        Assert.Contains("单次最多约 32 KB", result);
+        Assert.StartsWith("1\t", result);
+        Assert.Contains("78\t", result);
+        Assert.DoesNotContain("\n79\t", result);
     }
 
     [Fact]
-    public void FormatHead_恰好200行_不截断无截断提示()
+    public void FormatHead_恰好预算内_不截断无截断提示()
     {
         var lines = Enumerable.Range(1, 200).Select(i => $"line{i}").ToList();
         var result = OutputFormatter.FormatHead(lines);
@@ -146,34 +147,55 @@ public class OutputFormatterTests
     }
 
     [Fact]
-    public void SliceLines_请求超过单次上限500行_截断并提示剩余范围()
+    public void SliceLines_请求超过单次字符预算_截断并提示剩余范围()
     {
-        var lines = Enumerable.Range(1, 600).Select(i => $"line{i}").ToList();
-        var result = OutputFormatter.SliceLines(lines, 1, 600);
-        Assert.Contains("已截断", result);
-        Assert.Contains("500 行", result);
-        Assert.Contains("剩余 501-600", result);
-        Assert.Contains("1\tline1", result);
-        Assert.DoesNotContain("501\tline501", result);
-    }
-
-    [Fact]
-    public void SliceLines_请求范围超出总行数且超上限_剩余提示用真实行数()
-    {
-        var lines = Enumerable.Range(1, 503).Select(i => $"line{i}").ToList();
+        var lines = Enumerable.Range(1, 1000).Select(i => new string('x', 100)).ToList();
         var result = OutputFormatter.SliceLines(lines, 1, 1000);
-        Assert.Contains("已返回 1-500（500 行）", result);
-        Assert.Contains("剩余 501-503", result);
-        Assert.DoesNotContain("501-1000", result);
+        Assert.Contains("已截断", result);
+        Assert.Contains("已返回 1-313（313 行）", result);
+        Assert.Contains("剩余 314-1000", result);
+        Assert.StartsWith("1\t", result);
+        Assert.DoesNotContain("\n314\t", result);
     }
 
     [Fact]
-    public void SliceLines_请求范围超出总行数但不足500行_返回全部不报截断()
+    public void SliceLines_请求范围超出总行数且超预算_剩余提示用真实行数()
+    {
+        var lines = Enumerable.Range(1, 1000).Select(i => new string('x', 100)).ToList();
+        var result = OutputFormatter.SliceLines(lines, 1, 5000);
+        Assert.Contains("已返回 1-313（313 行）", result);
+        Assert.Contains("剩余 314-1000", result);
+        Assert.DoesNotContain("314-5000", result);
+    }
+
+    [Fact]
+    public void SliceLines_请求范围超出总行数但不足预算_返回全部不报截断()
     {
         var lines = Enumerable.Range(1, 100).Select(i => $"line{i}").ToList();
         var result = OutputFormatter.SliceLines(lines, 1, 1000);
         Assert.StartsWith("1\tline1", result);
         Assert.EndsWith("100\tline100", result);
+        Assert.DoesNotContain("已截断", result);
+    }
+
+    [Fact]
+    public void SliceLines_短行密集_行数软上限先触发()
+    {
+        var lines = Enumerable.Range(1, 2000).Select(i => new string('a', 5)).ToList();
+        var result = OutputFormatter.SliceLines(lines, 1, 2000);
+        Assert.Contains("已截断", result);
+        Assert.Contains("已返回 1-1900（1900 行）", result);
+        Assert.Contains("剩余 1901-2000", result);
+        Assert.DoesNotContain("\n1901\t", result);
+    }
+
+    [Fact]
+    public void SliceLines_单行超预算_至少返回1行()
+    {
+        var lines = new List<string> { new string('a', 100_000) };
+        var result = OutputFormatter.SliceLines(lines, 1, 100);
+        Assert.StartsWith("1\t", result);
+        Assert.Contains(new string('a', 100_000), result);
         Assert.DoesNotContain("已截断", result);
     }
 
@@ -185,20 +207,20 @@ public class OutputFormatterTests
 
         var result = OutputFormatter.Format(lines, "", ctx);
 
-        Assert.StartsWith("程序集: D:\\a\\b.dll\n目标:   类型 System.String\n总行数:   3 行\n当前输出: 1-3（3 行）\n---\n1\tline1", result);
+        Assert.StartsWith("程序集: D:\\a\\b.dll\n目标:   类型 System.String\n总行数:   3 行\n当前输出: 1-3（3 行，0.0 KB）\n---\n1\tline1", result);
         Assert.EndsWith("1\tline1\n2\tline2\n3\tline3", result);
     }
 
     [Fact]
-    public void Format_带context且超限_头部标注总量与前200行_截断提示不含重复行数()
+    public void Format_带context且超限_头部标注总量与截断范围_截断提示不含重复行数()
     {
-        var lines = Enumerable.Range(1, 250).Select(i => $"line{i}").ToList();
+        var lines = Enumerable.Range(1, 250).Select(i => new string('x', 100)).ToList();
         var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
 
         var result = OutputFormatter.Format(lines, "", ctx);
 
         Assert.Contains("总行数:   250 行", result);
-        Assert.Contains("当前输出: 1-200（200 行，已截断）", result);
+        Assert.Contains("当前输出: 1-78（78 行，7.9 KB，已截断：超过默认预算约 8 KB）", result);
         Assert.Contains("已截断", result);
         Assert.DoesNotContain("已截断：共 250 行", result);
     }
@@ -212,7 +234,8 @@ public class OutputFormatterTests
         var result = OutputFormatter.Format(lines, "200-400", ctx);
 
         Assert.Contains("总行数:   600 行", result);
-        Assert.Contains("当前输出: 200-400（201 行）", result);
+        Assert.Contains("当前输出: 200-400（201 行，2.4 KB）", result);
+        Assert.DoesNotContain("剩余:", result);
         Assert.Contains("200\tline200", result);
     }
 
@@ -227,6 +250,66 @@ public class OutputFormatterTests
         Assert.Contains("总行数:   3 行", result);
         Assert.Contains("当前输出: 无效（起始行 5 超出总行数 3）", result);
         Assert.Contains("超出总行数", result);
+    }
+
+    [Fact]
+    public void Format_带context且截断_剩余可一次获取()
+    {
+        var lines = Enumerable.Range(1, 200).Select(i => new string('x', 100)).ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.Contains("剩余:     122 行 / 约 12.5 KB，可一次获取：lines=\"79-200\"", result);
+    }
+
+    [Fact]
+    public void Format_带context且截断_建议的剩余范围照抄不二次截断()
+    {
+        var lines = Enumerable.Range(1, 200).Select(i => new string('x', 100)).ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.Contains("lines=\"79-200\"", result); // 头部建议的剩余范围
+        var sliced = OutputFormatter.SliceLines(lines, 79, 200); // 照抄建议的 lines 参数
+        Assert.DoesNotContain("已截断", sliced);
+        Assert.Contains("79\t", sliced);
+        Assert.Contains("200\t", sliced); // 尾部行到达 200
+    }
+
+    [Fact]
+    public void Format_带context且截断_剩余需分次获取()
+    {
+        var lines = Enumerable.Range(1, 1000).Select(i => new string('x', 100)).ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.Contains("剩余:     922 行 / 约 94.5 KB，超过单次预算（约 32 KB），需分次获取：先用 lines=\"79-390\"", result);
+    }
+
+    [Fact]
+    public void Format_带context_未截断_无剩余行()
+    {
+        var lines = Enumerable.Range(1, 3).Select(i => $"line{i}").ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.DoesNotContain("剩余:", result);
+        Assert.DoesNotContain("已截断", result);
+    }
+
+    [Fact]
+    public void Format_默认短类型全量返回_无截断无剩余()
+    {
+        var lines = Enumerable.Range(1, 10).Select(i => $"line{i}").ToList();
+
+        var result = OutputFormatter.Format(lines, "");
+
+        Assert.Equal("1\tline1\n2\tline2\n3\tline3\n4\tline4\n5\tline5\n6\tline6\n7\tline7\n8\tline8\n9\tline9\n10\tline10", result);
+        Assert.DoesNotContain("已截断", result);
     }
 
     [Fact]
@@ -253,7 +336,7 @@ public class OutputFormatterTests
 
         Assert.Contains("匹配实体: 2 个", result);
         Assert.Contains("总行数:   2 行", result);
-        Assert.Contains("当前输出: 1-2（2 行）", result);
+        Assert.Contains("当前输出: 1-2（2 行，0.0 KB）", result);
     }
 
     [Fact]

@@ -7,11 +7,11 @@ public static class DecompileCases
 {
     public static IReadOnlyList<ToolCallCase> All(string dll) => new[]
     {
-        // 超 200 行应触发截断提示；结果不得出现异常堆栈
-        new ToolCallCase("decompile", "typeName（超 200 行触发截断提示）",
+        // 超预算应触发截断提示；结果不得出现异常堆栈
+        new ToolCallCase("decompile", "typeName（超预算触发截断提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName },
             ExpectedContains: "已截断", MustNotContain: "at System"),
-        // 行号分页应定位到 200 行（NumberLines 从起始行号标注）
+        // 行号分页应定位到指定起始行（NumberLines 从起始行号标注）
         new ToolCallCase("decompile", "typeName + lines 按行号分页",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["lines"] = "200-400" },
             ExpectedContains: "200\t", MustNotContain: "at System"),

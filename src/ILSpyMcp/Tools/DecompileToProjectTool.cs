@@ -8,7 +8,7 @@ using System.ComponentModel;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 将 .NET 程序集（dll/exe）以可编译项目形式反编译写入指定目录。结果写入磁盘而非标准输出，不做行数截断。
+/// 将 .NET 程序集（dll/exe）以可编译项目形式反编译写入指定目录。结果写入磁盘而非标准输出，不做输出量截断。
 /// </summary>
 [McpServerToolType]
 public static class DecompileToProjectTool
@@ -23,7 +23,7 @@ public static class DecompileToProjectTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
     [McpServerTool]
-    [Description("以可编译项目形式反编译整个程序集到指定目录（每个类型一个源码文件）。结果写入磁盘而非标准输出，不做行数截断；写盘完成后可直接读取输出目录下的源码文件。nestedDirectories 默认 true（按命名空间嵌套目录）；timeoutSeconds 默认 30。")]
+    [Description("以可编译项目形式反编译整个程序集到指定目录（每个类型一个源码文件）。结果写入磁盘而非标准输出，不做输出量截断；写盘完成后可直接读取输出目录下的源码文件。nestedDirectories 默认 true（按命名空间嵌套目录）；timeoutSeconds 默认 30。")]
     public static async Task<string> DecompileToProject(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("输出目录；反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
@@ -45,7 +45,7 @@ public static class DecompileToProjectTool
 
         // 进程内项目模式写盘：{程序集名}.csproj + 每类型一个源码文件；超时/取消返回提示文本，不抛异常
         return await InProcessDecompiler.RunWithTimeoutAsync(
-            () => InProcessDecompiler.DecompileToProject(assemblyFull, outputFull, nestedDirectories),
+            ct => InProcessDecompiler.DecompileToProject(assemblyFull, outputFull, nestedDirectories, ct),
             TimeSpan.FromSeconds(timeoutSeconds),
             cancellationToken,
             timeoutHint);

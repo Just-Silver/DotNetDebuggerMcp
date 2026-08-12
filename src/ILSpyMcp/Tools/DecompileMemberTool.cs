@@ -14,7 +14,7 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 按成员名在指定类型内搜索并反编译匹配的成员：适合只知道方法名、给不出完整文档 ID 的场景。 匹配的多个成员全部反编译并合并输出（行号连续），默认返回前 200 行、可用 lines 分页； 匹配数超过上限时仅返回签名清单，不启动反编译。
+/// 按成员名在指定类型内搜索并反编译匹配的成员：适合只知道方法名、给不出完整文档 ID 的场景。 匹配的多个成员全部反编译并合并输出（行号连续），默认返回前约 8 KB、可用 lines 分页； 匹配数超过上限时仅返回签名清单，不启动反编译。
 /// </summary>
 [McpServerToolType]
 public static class DecompileMemberTool
@@ -25,18 +25,18 @@ public static class DecompileMemberTool
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">在指定类型内搜索成员，全限定类型名（必填）。</param>
     /// <param name="memberName">成员名子串，忽略大小写；匹配到的成员全部反编译（必填）。</param>
-    /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多 500 行）；缺省返回前 200 行。</param>
+    /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多约 32 KB）；缺省返回前约 8 KB。</param>
     /// <param name="timeoutSeconds">本次反编译回源超时秒数（默认 30）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>匹配成员反编译合并结果（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("按成员名子串在指定类型内搜索并反编译匹配的成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。匹配到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；匹配数超过 20 时仅返回成员签名清单（每行 签名 [token]）不反编译。结果默认只返回前 200 行，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
+    [Description("按成员名子串在指定类型内搜索并反编译匹配的成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。匹配到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；匹配数超过 20 时仅返回成员签名清单（每行 签名 [token]）不反编译。结果默认只返回前约 8 KB，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
     public static async Task<string> DecompileMember(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("在指定类型内搜索成员，全限定类型名，例如 System.Text.Json.JsonSerializer（必填）")] string typeName = "",
         [Description("成员名子串（忽略大小写），例如 SerializeAsync；匹配到的成员会全部反编译（必填）")] string memberName = "",
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多 500 行），例如 \"200-400\"；缺省返回前 200 行")] string lines = "",
-        [Description("本次反编译回源超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
+        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
+        [Description("本次反编译超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（进程内反编译，无安装前置）
@@ -76,7 +76,7 @@ public static class DecompileMemberTool
 
     /// <summary>
     /// 匹配数超限时仅返回成员签名清单：重新打开程序集做纯元数据读取，凡 token 属于匹配集合的成员渲染一行签名并附 token。
-    /// 按 token（而非方法名）匹配，避免同名重载成员被名字集合去重而丢失。清单同样受 lines 分页控制（缺省返回前 200 行）。
+    /// 按 token（而非方法名）匹配，避免同名重载成员被名字集合去重而丢失。清单同样受 lines 分页控制（缺省返回前约 8 KB）。
     /// </summary>
     private static string RenderSignatureList(string assemblyFull, string typeName, string memberName, IReadOnlyList<MemberMatch> matches, string lines)
     {
@@ -100,7 +100,7 @@ public static class DecompileMemberTool
                 var signature = SignatureRenderer.RenderMemberSignature(reader, type, method);
                 signatureLines.Add($"{signature}  [{token}]");
             }
-            // 清单可能超过 200 行，统一走 lines 分页（缺省截断前 200 行，超限可用 lines 续读）
+            // 清单可能超过预算，统一走 lines 分页（缺省截断前约 8 KB，超限可用 lines 续读）
             return OutputFormatter.Format(signatureLines, lines, context);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)

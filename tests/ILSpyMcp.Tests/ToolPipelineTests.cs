@@ -37,7 +37,7 @@ public class ToolPipelineTests
         => AppServices.Cache.BuildKey(SamplesDll, new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, typeName)).Signature);
 
     /// <summary>
-    /// 经共享管道反编译指定类型（默认前 200 行），带头部信息块上下文（与工具层行为一致）。
+    /// 经共享管道反编译指定类型（默认前约 8 KB），带头部信息块上下文（与工具层行为一致）。
     /// </summary>
     private static async Task<ToolPipelineResult> ExecuteTypeAsync(string typeName, string lines = "")
     {
@@ -94,7 +94,7 @@ public class ToolPipelineTests
         // 反编译探针经门闩阻塞模拟慢反编译：零超时必超时且后台不残留真实反编译（只等待门闩，随后放行即结束）
         var gate = new ManualResetEventSlim(initialState: true);
         var cache = new DecompileCache();
-        var probe = new Func<ToolCommand, string>(_ =>
+        var probe = new Func<ToolCommand, CancellationToken, string>((_, _) =>
         {
             gate.Wait();
             return "public class TimedOut { }";
@@ -142,7 +142,7 @@ public class ToolPipelineTests
     }
 
     [Fact]
-    public async Task 默认返回前200行_超出提示截断()
+    public async Task 默认返回超预算_超出提示截断()
     {
         Init();
         try
@@ -238,7 +238,7 @@ public class ToolPipelineTests
         // 计数探针：并发单飞回归护栏——同 key 并发者只允许触发一次回源，否则 CallCount 断言失败
         int callCount = 0;
         var cache = new DecompileCache();
-        var probe = new Func<ToolCommand, string>(_ =>
+        var probe = new Func<ToolCommand, CancellationToken, string>((_, _) =>
         {
             Interlocked.Increment(ref callCount);
             return "public class Concurrent { public void M() { } }";
@@ -284,7 +284,7 @@ public class ToolPipelineTests
     {
         // 探针按目标名区分成功/失败命令：验证合并执行任一命令失败即整体返回错误、丢弃已成功的部分结果
         var cache = new DecompileCache();
-        var probe = new Func<ToolCommand, string>(cmd =>
+        var probe = new Func<ToolCommand, CancellationToken, string>((cmd, _) =>
             cmd.Request.Target == "Bad" ? "未找到类型 Bad" : $"public class {cmd.Request.Target} {{ }}");
         var pipeline = new ToolPipeline(cache, probe);
         var ok = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "Ok")) { DisplayName = "Ok" };
@@ -363,7 +363,7 @@ public class ToolPipelineTests
             var result = await AppServices.Pipeline.ExecuteAsync(command, "", context: context);
 
             Assert.Contains("using System", result.Text); // 整模块反编译产物（using 头）
-            Assert.Contains("已截断", result.Text); // 652 个类型远超 200 行默认上限
+            Assert.Contains("已截断", result.Text); // 652 个类型远超默认输出预算
             Assert.DoesNotContain("反编译失败", result.Text);
         }
         finally
