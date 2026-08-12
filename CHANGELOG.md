@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-12
+
 ### Added
 
 - 新增 `call_graph` 工具：扫描指定类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn 等），输出被调用的程序集内部类型，以及程序集内方法体调用了它的类型（反向）。与 `dependencies` 的签名级引用互补，反映执行流中的实际调用；跨程序集类型与编译器生成类型（闭包/状态机）自动过滤。元数据秒回，支持 `lines` 分页；CLI 对应新增 `-cg` 选项
