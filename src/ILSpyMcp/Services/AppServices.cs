@@ -34,10 +34,10 @@ internal static class AppServices
     public static UpdateChecker Updater = new(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
 
     /// <summary>
-    /// 环境自检报告：会话内只真实组装一次，后续直接复用缓存文本。 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入 UpdateCheck 层，避免反向引用。
+    /// 环境自检状态：会话内只真实组装一次，后续直接复用缓存状态（CLI -c 与 MCP 握手按各自方式组装文本）。 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入 UpdateCheck 层，避免反向引用。
     /// </summary>
-    public static Lazy<Task<string>> StatusReport =
-        new(() => EnvironmentChecker.BuildReportAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
+    public static Lazy<Task<UpdateChecker.NuGetUpdateStatus?>> StatusReport =
+        new(() => EnvironmentChecker.BuildStatusAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>
     /// 测试注入：以指定缓存（缺省为默认 <see cref="AppConfig.MaxCacheBytes"/> 上限的缓存）重建 Cache/Pipeline， 使工具层可在可控
@@ -51,7 +51,7 @@ internal static class AppServices
         NuGet = new NuGetClient();
         Updater = new UpdateChecker(Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N")),
             queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
-        StatusReport = new Lazy<Task<string>>(() => EnvironmentChecker.BuildReportAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
+        StatusReport = new Lazy<Task<UpdateChecker.NuGetUpdateStatus?>>(() => EnvironmentChecker.BuildStatusAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     /// <summary>
@@ -63,6 +63,6 @@ internal static class AppServices
         Pipeline = new ToolPipeline(Cache);
         NuGet = new NuGetClient();
         Updater = new UpdateChecker(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
-        StatusReport = new Lazy<Task<string>>(() => EnvironmentChecker.BuildReportAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
+        StatusReport = new Lazy<Task<UpdateChecker.NuGetUpdateStatus?>>(() => EnvironmentChecker.BuildStatusAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
     }
 }

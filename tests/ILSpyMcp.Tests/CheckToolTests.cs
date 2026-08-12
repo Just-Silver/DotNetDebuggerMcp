@@ -55,7 +55,7 @@ public class CheckToolTests
     }
 
     [Fact]
-    public async Task 会话缓存_第二次调用复用同一报告()
+    public async Task 会话缓存_第二次调用复用同一状态()
     {
         AppServices.ConfigureForTest();
         try
@@ -64,12 +64,43 @@ public class CheckToolTests
             var second = AppServices.StatusReport.Value;
 
             Assert.Same(first, second); // StatusReport 会话内缓存，仅首次真实组装
-            Assert.Equal("", await first); // ConfigureForTest 默认 Updater 无缓存，报告为空
+            Assert.Null(await first); // ConfigureForTest 默认 Updater 无缓存，状态为 null
         }
         finally
         {
             AppServices.ResetForTest();
         }
+    }
+
+    [Fact]
+    public void 握手注入_有新版本_带主动告知指令()
+    {
+        var status = new UpdateChecker.NuGetUpdateStatus(HasNewVersion: true, Line: "ilspymcp: 当前 1.0.0，NuGet 最新 2.0.0。可执行 `dotnet tool update --global ilspymcp` 升级。");
+
+        var text = EnvironmentChecker.BuildHandshakeText(status);
+
+        Assert.Contains("主动告知用户", text);
+        Assert.Contains("NuGet 最新 2.0.0", text);
+        Assert.Contains("dotnet tool update --global ilspymcp", text);
+    }
+
+    [Fact]
+    public void 握手注入_已是最新_仅状态行不带指令()
+    {
+        var status = new UpdateChecker.NuGetUpdateStatus(HasNewVersion: false, Line: "ilspymcp: 当前 2.0.0，已是最新版本。");
+
+        var text = EnvironmentChecker.BuildHandshakeText(status);
+
+        Assert.DoesNotContain("主动告知用户", text);
+        Assert.Equal(status.Line, text);
+    }
+
+    [Fact]
+    public void 握手注入_无检查记录_返回空串()
+    {
+        var text = EnvironmentChecker.BuildHandshakeText(null);
+
+        Assert.Equal("", text);
     }
 
     /// <summary>

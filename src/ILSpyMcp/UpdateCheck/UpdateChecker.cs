@@ -52,9 +52,10 @@ public sealed class UpdateChecker
         => currentVersion is not null && latestVersion > currentVersion;
 
     /// <summary>
-    /// 同步读磁盘缓存（零网络），返回环境自检报告用的 NuGet 段整行：有新版本给升级建议、已是最新明确告知。 无有效检查记录（无缓存/损坏/版本无法解析）返回 null，报告该段留白——由握手后台刷新补位供下次会话，绝不阻塞握手。
+    /// 同步读磁盘缓存（零网络），返回 NuGet 更新状态：是否有新版本与报告行。 无有效检查记录（无缓存/损坏/版本无法解析）返回 null，
+    /// 报告该段留白——由握手后台刷新补位供下次会话，绝不阻塞握手。
     /// </summary>
-    public string? GetCachedNuGetLine()
+    public NuGetUpdateStatus? GetCachedNuGetStatus()
     {
         try
         {
@@ -62,15 +63,22 @@ public sealed class UpdateChecker
             var currentText = current?.ToString(3) ?? "未知";
             var cache = ReadCache();
             if (cache is null || string.IsNullOrEmpty(cache.Latest) || !Version.TryParse(cache.Latest, out var latest)) return null;
-            return IsNewerThanCurrent(latest, current)
+            var hasNew = IsNewerThanCurrent(latest, current);
+            var line = hasNew
                 ? $"{AppConfig.NuGetPackageId}: 当前 {currentText}，NuGet 最新 {cache.Latest}。可执行 `dotnet tool update --global {AppConfig.NuGetPackageId}` 升级。"
                 : $"{AppConfig.NuGetPackageId}: 当前 {currentText}，已是最新版本。";
+            return new NuGetUpdateStatus(hasNew, line);
         }
         catch
         {
             return null;
         }
     }
+
+    /// <summary>
+    /// 同步读磁盘缓存（零网络），返回环境自检报告用的 NuGet 段整行（CLI -c 输出）：有新版本给升级建议、已是最新明确告知。 无有效检查记录返回 null。
+    /// </summary>
+    public string? GetCachedNuGetLine() => GetCachedNuGetStatus()?.Line;
 
     /// <summary>
     /// 若缓存新鲜（成功 TTL 内或失败冷却期内）直接返回缓存结果不联网；否则联网查询最新稳定版并落盘，失败静默降级保留旧值。
@@ -132,6 +140,13 @@ public sealed class UpdateChecker
             // 只读目录/写盘失败静默吞掉，不影响功能
         }
     }
+
+    /// <summary>
+    /// NuGet 更新状态：是否有新版本与对应的报告行（握手注入据此区分指令式提示与背景信息）。
+    /// </summary>
+    /// <param name="HasNewVersion">NuGet 最新稳定版高于当前程序集版本。</param>
+    /// <param name="Line">中文报告行：有新版本给升级建议、已是最新明确告知。</param>
+    public sealed record NuGetUpdateStatus(bool HasNewVersion, string Line);
 
     /// <summary>
     /// 磁盘缓存结构：最近一次尝试时间、最近一次成功时间与查到的最新版本（成功/失败均可空）。

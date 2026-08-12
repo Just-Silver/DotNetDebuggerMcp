@@ -248,6 +248,50 @@ public class UpdateCheckerTests
         Assert.Null(result);
     }
 
+    [Fact]
+    public async Task 有更新时状态标记新版本()
+    {
+        var tempDir = TempDir();
+        var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"99.0.0\"]}") };
+        var nuget = new NuGetClient(handler);
+        try
+        {
+            var checker = new UpdateChecker(tempDir, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
+
+            await checker.RefreshIfStaleAsync();
+            var status = checker.GetCachedNuGetStatus();
+
+            Assert.NotNull(status);
+            Assert.True(status!.HasNewVersion);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task 已是最新时状态不标记新版本()
+    {
+        var tempDir = TempDir();
+        var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[\"0.0.1\"]}") };
+        var nuget = new NuGetClient(handler);
+        try
+        {
+            var checker = new UpdateChecker(tempDir, queryLatest: id => nuget.GetLatestStableVersionAsync(id));
+
+            await checker.RefreshIfStaleAsync();
+            var status = checker.GetCachedNuGetStatus();
+
+            Assert.NotNull(status);
+            Assert.False(status!.HasNewVersion);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
     private static string TempDir() => Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N"));
 
     private static string? ReadCacheLatest(string cacheDir)

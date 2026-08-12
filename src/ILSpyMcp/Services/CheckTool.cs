@@ -7,10 +7,11 @@ namespace ILSpyMcp.Services;
 public static class CheckTool
 {
     /// <summary>
-    /// 检查 ilspymcp 是否有新版本。结果会话内缓存，仅首次真实检查。
+    /// 检查 ilspymcp 是否有新版本。结果会话内缓存，仅首次真实检查。 输出保持为朴素状态行（CLI -c 供人阅读），指令式提示仅握手注入使用。
     /// </summary>
     public static async Task<string> CheckStatus()
     {
-        return await AppServices.StatusReport.Value;
+        var status = await AppServices.StatusReport.Value;
+        return status?.Line ?? "";
     }
 }

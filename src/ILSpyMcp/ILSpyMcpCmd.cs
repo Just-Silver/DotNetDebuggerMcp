@@ -1,6 +1,7 @@
 using ILSpyMcp.Configuration;
 using ILSpyMcp.Services;
 using ILSpyMcp.Tools;
+using ILSpyMcp.UpdateCheck;
 using McMaster.Extensions.CommandLineUtils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -171,12 +172,14 @@ public class ILSpyMcpCmd
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
-        // 握手期先执行更新检查（报告 ilspymcp 是否有新版本），报告由 StatusReport 会话内缓存、与 CLI -c 同源；
-        // 同步读磁盘缓存，无有效检查记录时返回空报告（不注入）。报告注入 ServerInstructions，让 agent 会话起始即可感知版本更新状态
+        // 握手期先执行更新检查（报告 ilspymcp 是否有新版本），状态由 StatusReport 会话内缓存、与 CLI -c 同源；
+        // 同步读磁盘缓存，无有效检查记录时返回空报告（不注入）。有新版本时注入文本带明确指令，要求 agent 在会话开始的回复中
+        // 主动告知用户并提供升级命令（陈述句会被 agent 当作背景信息而不转述）；已是最新时仅注入状态行。
         string report;
         try
         {
-            report = await AppServices.StatusReport.Value;
+            var status = await AppServices.StatusReport.Value;
+            report = EnvironmentChecker.BuildHandshakeText(status);
         }
         catch
         {
