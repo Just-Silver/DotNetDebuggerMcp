@@ -15,6 +15,10 @@ public static class DecompileCases
         new ToolCallCase("decompile", "typeName + lines 按行号分页",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["lines"] = "200-400" },
             ExpectedContains: "200\t", MustNotContain: "at System"),
+        // typeName 带 list_types 行首类别前缀（class Foo.Bar）可直接复制使用
+        new ToolCallCase("decompile", "typeName 带类别前缀（class BigClass）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "class " + TestDataHelper.TypeName },
+            ExpectedContains: "已截断", MustNotContain: "at System"),
         // 自定义超时参数应被接受
         new ToolCallCase("decompile", "typeName + timeoutSeconds（自定义超时）",
             new Dictionary<string, object?>

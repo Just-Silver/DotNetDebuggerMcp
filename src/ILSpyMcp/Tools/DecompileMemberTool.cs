@@ -23,30 +23,45 @@ public static class DecompileMemberTool
     /// 按成员名子串在指定类型内搜索并反编译匹配的成员，经共享管道缓存与 lines 分页。
     /// </summary>
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
-    /// <param name="typeName">在指定类型内搜索成员，全限定类型名（必填）。</param>
-    /// <param name="memberName">成员名子串，忽略大小写；匹配到的成员全部反编译（必填）。</param>
+    /// <param name="typeName">在指定类型内搜索成员，全限定类型名（token 分支下可不填）。</param>
+    /// <param name="memberName">成员名子串，忽略大小写；匹配到的成员全部反编译（token 分支下可不填）。</param>
+    /// <param name="token">非空时按元数据 token 直接反编译单个成员（如清单中的 0x06000005），忽略 memberName。</param>
     /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多约 32 KB）；缺省返回前约 8 KB。</param>
     /// <param name="timeoutSeconds">本次反编译回源超时秒数（默认 30）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>匹配成员反编译合并结果（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("按成员名子串在指定类型内搜索并反编译匹配的成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。匹配到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；匹配数超过 20 时仅返回成员签名清单（每行 签名 [token]）不反编译。结果默认只返回前约 8 KB，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
+    [Description("按成员名子串在指定类型内搜索并反编译匹配的成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。匹配到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；匹配数超过 20 时仅返回成员签名清单（每行 签名 [token]）不反编译。提供 token 参数时直接按元数据 token 反编译单个成员（忽略 memberName，typeName 可不填，清单与分隔行中的 token 均可直接用）。结果默认只返回前约 8 KB，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
     public static async Task<string> DecompileMember(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("在指定类型内搜索成员，全限定类型名，例如 System.Text.Json.JsonSerializer（必填）")] string typeName = "",
-        [Description("成员名子串（忽略大小写），例如 SerializeAsync；匹配到的成员会全部反编译（必填）")] string memberName = "",
+        [Description("在指定类型内搜索成员，全限定类型名，例如 System.Text.Json.JsonSerializer（必填；提供 token 时可不填）")] string typeName = "",
+        [Description("成员名子串（忽略大小写），例如 SerializeAsync；匹配到的成员会全部反编译（必填；提供 token 时可不填）")] string memberName = "",
+        [Description("指定则直接按元数据 token 反编译该成员（非必填，如清单中的 0x06000005）；提供时忽略 memberName，typeName 可不填")] string token = "",
         [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
         [Description("本次反编译超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（进程内反编译，无安装前置）
         if (!ArgumentValidators.ValidateAssembly(assembly, out var assemblyError)) return assemblyError;
-        // 参数校验：typeName 与 memberName 均必填
-        if (!ArgumentValidators.ValidateMemberNameSearch(typeName, memberName, out var argError)) return argError;
         // 参数校验：timeoutSeconds 必须为正整数（不允许永不超时）
         if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
 
         if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
+
+        // token 分支：非空时按元数据 token 直接反编译单个成员（token 全局唯一，无需 typeName 定位；头部保留 typeName 仅作目标描述）
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            if (!ArgumentValidators.ValidateToken(token, out var tokenError)) return tokenError;
+            var tokenContext = new FormatContext(assemblyFull, string.IsNullOrWhiteSpace(typeName)
+                ? $"成员 {token}（按 token 反编译）"
+                : $"类型 {typeName} 的成员 {token}（按 token 反编译）");
+            return await ToolExecutor.RunPipelineAsync(
+                new ToolCommand(assemblyFull, new DecompileRequest(DecompileKind.Member, token)),
+                lines, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken, tokenContext);
+        }
+
+        // 参数校验：typeName 与 memberName 均必填
+        if (!ArgumentValidators.ValidateMemberNameSearch(typeName, memberName, out var argError)) return argError;
 
         // 纯元数据读取定位类型并枚举方法，按名字子串匹配；未命中类型/无匹配成员时直接返回提示，无匹配且存在相近名时附相近成员名
         var (typeFound, matches, similarNames) = MemberResolver.FindMembers(assemblyFull, typeName, memberName);

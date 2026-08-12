@@ -191,4 +191,36 @@ public class ArgumentValidatorsTests : IDisposable
         Assert.True(ok);
         Assert.Null(error);
     }
+
+    [Theory]
+    [InlineData("0x06000005")]
+    [InlineData("0X06000005")] // 前缀大小写不敏感
+    public void ValidateToken_合法token_校验通过(string token)
+    {
+        var ok = ArgumentValidators.ValidateToken(token, out var error);
+        Assert.True(ok);
+        Assert.Null(error);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void ValidateToken_空或空白_返回必填提示(string token)
+    {
+        var ok = ArgumentValidators.ValidateToken(token, out var error);
+        Assert.False(ok);
+        Assert.Contains("请指定 token 参数", error!);
+    }
+
+    [Theory]
+    [InlineData("06000005")] // 缺 0x 前缀
+    [InlineData("0x")]       // 仅前缀无内容
+    [InlineData("0xGGGG")]   // 非十六进制
+    [InlineData("0x123456789")] // 超出 int 范围
+    public void ValidateToken_格式非法_返回格式提示(string token)
+    {
+        var ok = ArgumentValidators.ValidateToken(token, out var error);
+        Assert.False(ok);
+        Assert.Contains("不是有效的元数据 token", error!);
+    }
 }

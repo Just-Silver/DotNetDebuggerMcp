@@ -151,7 +151,7 @@ public class ILSpyMcpCmd
         }
         if (!string.IsNullOrEmpty(memberName))
         {
-            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, lines, timeoutSeconds, cancellationToken);
+            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, token: "", lines, timeoutSeconds, cancellationToken);
         }
         return await DecompileTool.Decompile(assembly, typeName, lines, timeoutSeconds, cancellationToken);
     }

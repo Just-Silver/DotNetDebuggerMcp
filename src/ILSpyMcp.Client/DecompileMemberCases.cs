@@ -1,8 +1,12 @@
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
+
 namespace ILSpyMcp.Client;
 
 /// <summary>
 /// decompile_member 工具的全部端到端验证场景：按名搜索单成员/多成员/分隔头/访问器排除/相近名/无匹配/类型不存在/缺参校验。
-/// 匹配数超上限（&gt;20）仅返回签名清单的分支不在本文件设场景——TestSamples 无超过 20 个方法的类，该分支已由 CLI 冒烟覆盖。
+/// 匹配数超上限（&gt;20）仅返回签名清单由 ManyOverloads（21 个 Do 重载）覆盖，清单 token 可经 token 参数直接反编译单个成员（闭环）。
 /// </summary>
 public static class DecompileMemberCases
 {
@@ -56,5 +60,41 @@ public static class DecompileMemberCases
         new ToolCallCase("decompile_member", "超限签名清单 lines=\"1-2\" 分页",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.ManyOverloads", ["memberName"] = "Do", ["lines"] = "1-2" },
             ExpectedContains: "当前输出: 1-2", MustNotContain: "at System"),
+        // token 参数：按元数据 token 直接反编译单个成员（ManyOverloads 第 1 个 Do 重载），验证超限清单 token 可闭环消费
+        new ToolCallCase("decompile_member", "token 参数直接反编译单个成员",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["token"] = FirstDoToken(dll) },
+            ExpectedContains: "按 token 反编译", MustNotContain: "at System"),
+        // 非法 token 应返回中文提示
+        new ToolCallCase("decompile_member", "非法 token（应返回提示）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["token"] = "0xZZZZ" },
+            ExpectedContains: "不是有效的元数据 token", MustNotContain: "at System", ExpectSuccess: false),
+        // typeName 带 list_types 行首类别前缀（class Foo.Bar）可直接复制使用
+        new ToolCallCase("decompile_member", "typeName 带类别前缀（class BigClass）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "class " + TestDataHelper.TypeName, ["memberName"] = "BigMethod" },
+            ExpectedContains: "已截断", MustNotContain: "at System"),
     };
+
+    /// <summary>
+    /// 取 TestSamples 中 ManyOverloads 第一个 Do 重载的元数据 token（与超限清单 token 同源，供 token 参数用例）。
+    /// </summary>
+    private static string FirstDoToken(string dll)
+    {
+        using var fs = File.OpenRead(dll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        foreach (var typeHandle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(typeHandle);
+            if (reader.GetString(type.Name) != "ManyOverloads") continue;
+            foreach (var methodHandle in type.GetMethods())
+            {
+                var method = reader.GetMethodDefinition(methodHandle);
+                if (reader.GetString(method.Name) == "Do")
+                {
+                    return $"0x{MetadataTokens.GetToken(methodHandle):x8}";
+                }
+            }
+        }
+        throw new InvalidOperationException("TestSamples 未找到 ManyOverloads.Do 成员");
+    }
 }

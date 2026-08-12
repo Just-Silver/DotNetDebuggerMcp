@@ -60,4 +60,30 @@ public class MetadataNamingTests
 
         Assert.Null(MetadataNaming.FindType(reader, "No.Such.Type"));
     }
+
+    [Theory]
+    [InlineData("class ILSpyMcp.Formatting.OutputFormatter")]
+    [InlineData("Class ILSpyMcp.Formatting.OutputFormatter")] // 前缀大小写不敏感
+    [InlineData("struct ILSpyMcp.Pipeline.ToolPipelineResult")]
+    [InlineData("enum ILSpyMcp.Pipeline.DecompileKind")]
+    public void FindType_行首类别前缀_定位成功(string input)
+    {
+        using var fs = File.OpenRead(AssemblyPath);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+
+        Assert.True(MetadataNaming.FindType(reader, input).HasValue);
+    }
+
+    [Fact]
+    public void FindType_前缀后无内容或不含空格_不误剥()
+    {
+        using var fs = File.OpenRead(AssemblyPath);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+
+        Assert.Null(MetadataNaming.FindType(reader, "class"));        // 前缀后无内容，不剥
+        Assert.Null(MetadataNaming.FindType(reader, "interfaceX"));   // 无空格分隔，不剥
+        Assert.Null(MetadataNaming.FindType(reader, "class No.Such"));// 剥前缀后类型仍不存在
+    }
 }

@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 namespace ILSpyMcp.Validation;
 
@@ -160,6 +161,30 @@ public static class ArgumentValidators
         if (list.Any(c => c is not ('c' or 'i' or 's' or 'd' or 'e')))
         {
             error = $"无效的 list 参数：\"{list}\"。合法值为 c/i/s/d/e 的组合，例如 \"csi\"。";
+            return false;
+        }
+        error = null;
+        return true;
+    }
+
+    /// <summary>
+    /// 校验 decompile_member 的 token 参数：0x 开头的十六进制（如 0x06000005）。行号是否越界由反编译引擎兜底校验。
+    /// </summary>
+    /// <param name="token">元数据 token，缺省为空字符串。</param>
+    /// <param name="error">校验失败时的错误提示；通过时为 null。</param>
+    /// <returns>通过返回 true；失败返回 false 且 <paramref name="error"/> 非空。</returns>
+    public static bool ValidateToken(string token, [NotNullWhen(false)] out string? error)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            error = "请指定 token 参数（元数据 token，0x 开头的十六进制，如 0x06000005）。";
+            return false;
+        }
+        var trimmed = token.Trim();
+        if (!trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            || !int.TryParse(trimmed.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _))
+        {
+            error = $"\"{trimmed}\" 不是有效的元数据 token，应为 0x 开头的十六进制格式，如 0x06000005";
             return false;
         }
         error = null;

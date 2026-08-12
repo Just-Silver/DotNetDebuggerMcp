@@ -8,6 +8,13 @@
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-08-12
+
+### Added
+
+- `decompile_member` 新增 `token` 参数：按元数据 token 直接反编译单个成员（匹配超限清单与多成员分隔行中的 token 可直接用于反编译，闭环使用）
+- `typeName` 参数兼容 `list_types` 行首类别前缀（如 `class Foo.Bar` 可直接复制使用，无需手动去掉前缀）
+
 ## [1.2.1] - 2026-08-12
 
 ### Changed
