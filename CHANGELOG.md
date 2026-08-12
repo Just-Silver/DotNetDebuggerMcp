@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-12
+
+### Changed
+
+- 反编译引擎升级至 v11 正式版（ICSharpCode.Decompiler 11.0.0.9375）：修复 reference assembly 反编译崩溃、项目导出遇成员失败时中止等若干反编译问题，输出更稳定
+
 ## [1.2.0] - 2026-08-12
 
 ### Added
