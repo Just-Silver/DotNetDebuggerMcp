@@ -19,15 +19,13 @@ public sealed class AppServicesTestCollection;
 public class CheckToolTests
 {
     [Fact]
-    public async Task 报告包含引擎版本段与就绪状态()
+    public async Task 无缓存记录_返回空报告()
     {
         await RunWithAsync(
             cachedLatest: null,
             async text =>
             {
-                Assert.Contains("环境状态: 就绪", text);
-                Assert.Contains("反编译引擎: 内置 ICSharpCode.Decompiler", text);
-                Assert.DoesNotContain("ilspymcp", text); // 无有效检查记录 NuGet 段留白
+                Assert.Equal("", text); // 无有效检查记录报告为空，握手不注入
             });
     }
 
@@ -66,7 +64,7 @@ public class CheckToolTests
             var second = AppServices.StatusReport.Value;
 
             Assert.Same(first, second); // StatusReport 会话内缓存，仅首次真实组装
-            Assert.Contains("反编译引擎: 内置 ICSharpCode.Decompiler", await first);
+            Assert.Equal("", await first); // ConfigureForTest 默认 Updater 无缓存，报告为空
         }
         finally
         {
@@ -75,7 +73,7 @@ public class CheckToolTests
     }
 
     /// <summary>
-    /// 注入小缓存（进程内引擎无需安装检测），并将 Updater 指向预写缓存（或空目录）的临时目录，验证环境自检（CLI -c/握手注入）报告组装。 NuGet 段经 <see
+    /// 将 Updater 指向预写缓存（或空目录）的临时目录，验证更新检查（CLI -c/握手注入）报告组装。 报告经 <see
     /// cref="UpdateChecker.GetCachedNuGetLine"/> 同步读缓存，故不注入网络 handler。
     /// </summary>
     private static async Task RunWithAsync(string? cachedLatest, Func<string, Task> assert)

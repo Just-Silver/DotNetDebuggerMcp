@@ -25,7 +25,7 @@ public static class DecompileTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的反编译结果或错误提示文本。</returns>
     [McpServerTool]
-    [Description("反编译 .NET 程序集（dll/exe）中指定的单个类型到标准输出。输出每行带行号标注，可直接引用具体行。结果默认只返回前 200 行，超过时可用 lines 参数按行号范围拉取后续（结果缓存在内存）。全量/项目反编译请使用 decompile_to_dir 工具，按成员名搜索请使用 decompile_member 工具。")]
+    [Description("反编译 .NET 程序集（dll/exe）中指定的单个类型到标准输出。输出每行带行号标注，可直接引用具体行。结果默认只返回前 200 行，超过时可用 lines 参数按行号范围拉取后续。全量/项目反编译请使用 decompile_to_dir 工具，按成员名搜索请使用 decompile_member 工具。")]
     public static async Task<string> Decompile(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("要反编译的全限定类型名，例如 System.String（必填）")] string typeName = "",

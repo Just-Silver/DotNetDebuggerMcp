@@ -10,14 +10,15 @@
 
 ### Added
 
-- 新增 `call_graph` 工具：扫描指定类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn 等），输出被调用的程序集内部类型，以及程序集内方法体调用了它的类型（反向）。与 `dependencies` 的签名级引用互补，反映执行流中的实际调用；跨程序集类型与编译器生成类型（闭包/状态机）自动过滤。纯元数据秒回，支持 `lines` 分页；CLI 对应新增 `-cg` 选项
+- 新增 `call_graph` 工具：扫描指定类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn 等），输出被调用的程序集内部类型，以及程序集内方法体调用了它的类型（反向）。与 `dependencies` 的签名级引用互补，反映执行流中的实际调用；跨程序集类型与编译器生成类型（闭包/状态机）自动过滤。元数据秒回，支持 `lines` 分页；CLI 对应新增 `-cg` 选项
 
 ### Changed
 
 - **不再依赖 ilspycmd（破坏性变更）**：反编译改为进程内 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)（内置版本 11.0.0.9335-rc，随 NuGet 包分发），安装 ilspymcp 后开箱即用，无需再全局安装 `ilspycmd`
 - **`timeoutSeconds` 语义变为「放弃等待」（破坏性变更）**：超时/取消不再终止反编译（进程内无法强杀），而是返回提示文本且结果不入缓存，可调大 `timeoutSeconds` 后重试；后台反编译线程跑完即弃
-- 环境自检（CLI `-c/--check` 与 MCP 握手注入）不再报告 ilspycmd 安装/版本，改为内置反编译引擎版本（ICSharpCode.Decompiler）+ ilspymcp 更新状态
+- 握手报告（CLI `-c/--check` 与 MCP 握手注入）不再报告 ilspycmd 安装/版本，改为仅报告 ilspymcp 更新状态（无有效检查记录时不注入）
 - `decompile_to_dir` 的 `nestedDirectories` 参数当前不产生效果（写盘为单文件布局，保留参数仅为向前兼容）
+- 工具描述与握手报告精简冗余措辞（移除「纯元数据」「内置」「结果缓存在内存」等实现细节表述），无功能变化
 
 ## [1.1.4] - 2026-08-11
 

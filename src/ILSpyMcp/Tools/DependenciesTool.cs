@@ -18,7 +18,7 @@ public static class DependenciesTool
 {
     /// <summary>
     /// 输出指定类型成员签名（方法参数/返回、字段、属性、事件类型）引用的程序集内部类型，以及程序集内引用它的类型：
-    /// 纯元数据读取（PEReader），秒回。正向与反向都只覆盖成员签名引用，不含继承关系（由 hierarchy 工具覆盖）。
+    /// 元数据读取（PEReader），秒回。正向与反向都只覆盖成员签名引用，不含继承关系（由 hierarchy 工具覆盖）。
     /// </summary>
     /// <param name="assembly">要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">类型全名，格式与 list_types 输出一致（命名空间.类型，嵌套用 + 或 .，泛型带 arity）（必填）。</param>
@@ -26,7 +26,7 @@ public static class DependenciesTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的内部类型引用关系或错误提示文本。</returns>
     [McpServerTool]
-    [Description("查询 .NET 程序集（dll/exe）中指定类型的成员签名内部引用：输出其成员签名（方法参数/返回、字段、属性、事件类型）引用的程序集内部类型（跨程序集类型不计），以及程序集内哪些类型的成员签名引用了它（反向扫描全部类型）。不含继承/接口关系——这类关系请用 hierarchy 工具。纯元数据秒回。typeName 为类型全名，格式与 list_types 输出一致，可直接复制使用。结果可能为空（某段无引用时输出（无）占位）；反向扫描需解码全部类型签名，大型程序集可能较慢。结果默认只返回前 200 行，可用 lines 参数按行号范围拉取后续。")]
+    [Description("查询 .NET 程序集（dll/exe）中指定类型的成员签名内部引用：输出其成员签名（方法参数/返回、字段、属性、事件类型）引用的程序集内部类型（跨程序集类型不计），以及程序集内哪些类型的成员签名引用了它（反向扫描全部类型）。不含继承/接口关系——这类关系请用 hierarchy 工具。秒回。typeName 为类型全名，格式与 list_types 输出一致，可直接复制使用。结果可能为空（某段无引用时输出（无）占位）；反向扫描需解码全部类型签名，大型程序集可能较慢。结果默认只返回前 200 行，可用 lines 参数按行号范围拉取后续。")]
     public static Task<string> Dependencies(
         [Description("要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("类型全名（必填），格式与 list_types 输出一致（命名空间.类型，嵌套类型用 + 或 . 分隔，泛型类型带 arity 如 GenericBox`1），例如 ILSpyMcp.Caching.DecompileCache")] string typeName = "",

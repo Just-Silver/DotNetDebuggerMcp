@@ -58,7 +58,7 @@ public static class DecompileMemberTool
             return message;
         }
 
-        // 匹配数超过上限：不反编译，仅返回成员签名清单（纯元数据秒回），避免为海量匹配逐一启动反编译
+        // 匹配数超过上限：不反编译，仅返回成员签名清单（元数据秒回），避免为海量匹配逐一启动反编译
         if (matches.Count > AppConfig.MaxMemberMatches) return RenderSignatureList(assemblyFull, typeName, memberName, matches, lines);
 
         // 每个匹配成员一条命令：token 全局唯一，同一成员不同子串查询 token 相同 → 缓存签名相同 → 共享缓存；各命令独立缓存 key
