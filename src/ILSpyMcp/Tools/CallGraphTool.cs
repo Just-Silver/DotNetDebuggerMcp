@@ -27,7 +27,7 @@ public static class CallGraphTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的方法体调用关系或错误提示文本。</returns>
     [McpServerTool]
-    [Description("查询 .NET 程序集（dll/exe）中指定类型的方法体调用关系：扫描其全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli），输出被调用的程序集内部类型（跨程序集类型不计、编译器生成类型不计），以及程序集内哪些类型的方法体调用了它（反向扫描全部类型）。与 dependencies 的成员签名引用不同，本工具反映的是执行流中的实际调用。秒回。typeName 为类型全名，格式与 list_types 输出一致，可直接复制使用。结果可能为空（某段无调用时输出（无）占位）；反向扫描需解码全部方法体 IL，大型程序集可能较慢。结果默认只返回前 200 行，可用 lines 参数按行号范围拉取后续。")]
+    [Description("查询 .NET 程序集（dll/exe）中指定类型的方法体调用关系：扫描其全部方法体的调用指令，输出被调用的程序集内部类型（跨程序集类型不计、编译器生成类型不计），以及程序集内哪些类型的方法体调用了它（反向扫描全部类型）。与 dependencies 的成员签名引用不同，本工具反映的是执行流中的实际调用。typeName 为类型全名，格式与 list_types 输出一致，可直接复制使用。结果可能为空（某段无调用时输出（无）占位）；反向扫描需解码全部方法体 IL，大型程序集可能较慢。结果默认只返回前 200 行，可用 lines 参数按行号范围拉取后续。")]
     public static Task<string> CallGraph(
         [Description("要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("类型全名（必填），格式与 list_types 输出一致（命名空间.类型，嵌套类型用 + 或 . 分隔，泛型类型带 arity 如 GenericBox`1），例如 ILSpyMcp.Caching.DecompileCache")] string typeName = "",

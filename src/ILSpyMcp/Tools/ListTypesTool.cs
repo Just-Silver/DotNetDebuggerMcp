@@ -37,7 +37,7 @@ public static class ListTypesTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的类型列表或错误提示文本。</returns>
     [McpServerTool]
-    [Description("列出 .NET 程序集（dll/exe）中指定类别的实体类型，秒回、默认过滤编译器生成类型（async 状态机、显示类等）。输出每行带行号标注，可直接引用具体行。结果默认只返回前 200 行，可用 lines 参数按行号范围拉取后续。")]
+    [Description("列出 .NET 程序集（dll/exe）中指定类别的实体类型，默认过滤编译器生成类型（async 状态机、显示类等）。输出每行带行号标注，可直接引用具体行。结果默认只返回前 200 行，可用 lines 参数按行号范围拉取后续。")]
     public static Task<string> ListTypes(
         [Description("要列类型的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum；可组合多个字母同时列出，例如 \"csi\"（必填）")] string list = "",
