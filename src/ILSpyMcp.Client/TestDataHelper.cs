@@ -12,7 +12,7 @@ public static class TestDataHelper
     public const string TypeName = "ILSpyMcp.Samples.BigClass";
 
     /// <summary>
-    /// list_types 默认只返回前 200 行，此处用一个排在最前、必然可见的 class 类型名。
+    /// list_types 默认只返回前约 8 KB，此处用一个排在最前、必然可见的 class 类型名。
     /// </summary>
     public const string ListedClassName = "ILSpyMcp.Samples.Class0001";
 

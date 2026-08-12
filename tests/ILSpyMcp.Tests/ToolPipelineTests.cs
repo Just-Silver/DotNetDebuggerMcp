@@ -37,7 +37,7 @@ public class ToolPipelineTests
         => AppServices.Cache.BuildKey(SamplesDll, new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, typeName)).Signature);
 
     /// <summary>
-    /// 经共享管道反编译指定类型（默认前 200 行），带头部信息块上下文（与工具层行为一致）。
+    /// 经共享管道反编译指定类型（默认前约 8 KB），带头部信息块上下文（与工具层行为一致）。
     /// </summary>
     private static async Task<ToolPipelineResult> ExecuteTypeAsync(string typeName, string lines = "")
     {
@@ -142,7 +142,7 @@ public class ToolPipelineTests
     }
 
     [Fact]
-    public async Task 默认返回前200行_超出提示截断()
+    public async Task 默认返回超预算_超出提示截断()
     {
         Init();
         try
@@ -363,7 +363,7 @@ public class ToolPipelineTests
             var result = await AppServices.Pipeline.ExecuteAsync(command, "", context: context);
 
             Assert.Contains("using System", result.Text); // 整模块反编译产物（using 头）
-            Assert.Contains("已截断", result.Text); // 652 个类型远超 200 行默认上限
+            Assert.Contains("已截断", result.Text); // 652 个类型远超默认输出预算
             Assert.DoesNotContain("反编译失败", result.Text);
         }
         finally

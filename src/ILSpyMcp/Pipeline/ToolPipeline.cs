@@ -113,10 +113,10 @@ public sealed class ToolPipeline
 
     /// <summary>
     /// 执行一次反编译调用：缓存命中直接返回；未命中则并发单飞回源（Lazy 保证同 key 只启动一次进程内反编译）后写缓存。 指定 lines
-    /// 时按行号切片，否则返回前 200 行；一切错误返回提示文本，不抛异常。
+    /// 时按行号切片，否则返回前约 8 KB；一切错误返回提示文本，不抛异常。
     /// </summary>
     /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
-    /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前 200 行。</param>
+    /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前约 8 KB。</param>
     /// <param name="timeout">本次回源超时；为 null 时用全局默认超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="context">头部信息块上下文；提供时结果前置程序集/目标说明。</param>
@@ -140,7 +140,7 @@ public sealed class ToolPipeline
     /// lines 分页/截断（总行数/当前输出均基于合并结果）。任一命令失败即返回错误提示，不抛异常。
     /// </summary>
     /// <param name="commands">多条调用描述（每个匹配成员一条，各自独立缓存）。</param>
-    /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前 200 行。</param>
+    /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前约 8 KB。</param>
     /// <param name="timeout">本次回源超时；为 null 时用全局默认超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="context">头部信息块上下文；提供时结果前置程序集/目标说明。</param>

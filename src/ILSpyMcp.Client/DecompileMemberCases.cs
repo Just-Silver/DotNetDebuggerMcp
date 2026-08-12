@@ -8,8 +8,8 @@ public static class DecompileMemberCases
 {
     public static IReadOnlyList<ToolCallCase> All(string dll) => new[]
     {
-        // 按名搜到 BigClass.BigMethod，应输出其签名与行号（600+ 行超 200 触发截断）
-        new ToolCallCase("decompile_member", "memberName 单匹配（BigMethod 超 200 行触发截断）",
+        // 按名搜到 BigClass.BigMethod，应输出其签名与行号（600+ 行超预算触发截断）
+        new ToolCallCase("decompile_member", "memberName 单匹配（BigMethod 超预算触发截断）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["memberName"] = "BigMethod" },
             ExpectedContains: "已截断", MustNotContain: "at System"),
         // 多个成员命中（BigMethod/BigHelper/BigHelper2）：合并输出，头部标注匹配数

@@ -8,7 +8,7 @@ using System.ComponentModel;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 将 .NET 程序集（dll/exe）反编译写入指定目录（全量或单个类型）。结果写入磁盘而非标准输出，不做行数截断。
+/// 将 .NET 程序集（dll/exe）反编译写入指定目录（全量或单个类型）。结果写入磁盘而非标准输出，不做输出量截断。
 /// </summary>
 [McpServerToolType]
 public static class DecompileToDirTool
@@ -24,7 +24,7 @@ public static class DecompileToDirTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
     [McpServerTool]
-    [Description("将 .NET 程序集（dll/exe）反编译写入指定目录（全量或指定单个类型）。结果写入磁盘而非标准输出，不做行数截断；写盘完成后可直接读取输出目录下的源码文件。typeName 指定则仅反编译该类型，省略则反编译整个程序集。")]
+    [Description("将 .NET 程序集（dll/exe）反编译写入指定目录（全量或指定单个类型）。结果写入磁盘而非标准输出，不做输出量截断；写盘完成后可直接读取输出目录下的源码文件。typeName 指定则仅反编译该类型，省略则反编译整个程序集。")]
     public static async Task<string> DecompileToDir(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("输出目录；反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
