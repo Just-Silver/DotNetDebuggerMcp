@@ -144,4 +144,62 @@ public class TypeListerTests
             Assert.Equal(unfiltered, withNull);
         });
     }
+
+    [Fact]
+    public void CountCategories_返回5类别计数_ByCategory总和等于实体数且Total为两者之和()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            var (byCategory, gen, total) = TypeLister.CountCategories(reader);
+
+            // 5 类别键齐全
+            foreach (var category in new[] { 'c', 'i', 's', 'd', 'e' }) Assert.Contains(category, byCategory.Keys);
+            // ByCategory 总和 = 实体数 = total - gen
+            var entity = byCategory.Values.Sum();
+            Assert.Equal(entity, total - gen);
+            Assert.Equal(entity + gen, total);
+        });
+    }
+
+    [Fact]
+    public void CountCategories_类别计数与ListTypes结果一致()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            var (byCategory, _, _) = TypeLister.CountCategories(reader);
+
+            foreach (var category in new[] { 'c', 'i', 's', 'd', 'e' })
+            {
+                var listed = TypeLister.ListTypes(reader, category.ToString()).Count;
+                Assert.Equal(listed, byCategory[category]);
+            }
+        });
+    }
+
+    [Fact]
+    public void CountCategories_测试程序集_class超过600且含interface()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            var (byCategory, gen, total) = TypeLister.CountCategories(reader);
+
+            Assert.True(byCategory['c'] >= 600, $"class 应 >= 600，实际 {byCategory['c']}");
+            Assert.True(byCategory['i'] >= 1, $"interface 应 >= 1，实际 {byCategory['i']}");
+            Assert.True(gen >= 0, $"编译器生成数应 >= 0，实际 {gen}");
+            Assert.True(total > byCategory['c'], "类型总数应包含编译器生成类型，大于 class 数");
+        });
+    }
+
+    [Fact]
+    public void CountCategories_主程序集_含struct与enum计数()
+    {
+        WithReader(MainAssemblyPath, reader =>
+        {
+            var (byCategory, _, _) = TypeLister.CountCategories(reader);
+
+            Assert.True(byCategory['s'] >= 1, $"struct 应 >= 1，实际 {byCategory['s']}");
+            Assert.True(byCategory['e'] >= 1, $"enum 应 >= 1，实际 {byCategory['e']}");
+            Assert.True(byCategory['c'] >= 1, $"class 应 >= 1，实际 {byCategory['c']}");
+        });
+    }
 }

@@ -33,6 +33,27 @@ public static class TypeLister
     }
 
     /// <summary>
+    /// 统计程序集的类型构成：按类别计数实体类型（跳过编译器生成类型），另计编译器生成类型数与全部类型总数，
+    /// 供 assembly_info 工具输出概览。类别键恒为 c/i/s/d/e 五个。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <returns>ByCategory 为 5 类别计数（class/interface/struct/delegate/enum，均已过滤编译器生成类型），
+    /// CompilerGenerated 为编译器生成类型数，Total = ByCategory 总和 + CompilerGenerated。</returns>
+    public static (IReadOnlyDictionary<char, int> ByCategory, int CompilerGenerated, int Total) CountCategories(MetadataReader reader)
+    {
+        var counts = new Dictionary<char, int> { ['c'] = 0, ['i'] = 0, ['s'] = 0, ['d'] = 0, ['e'] = 0 };
+        var gen = 0;
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(handle);
+            if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type)) { gen++; continue; }
+            counts[Classify(reader, type)]++;
+        }
+        var entity = counts.Values.Sum();
+        return (counts, gen, entity + gen);
+    }
+
+    /// <summary>
     /// 判定单个类型定义的实体类别字母。
     /// </summary>
     private static char Classify(MetadataReader reader, TypeDefinition type)

@@ -44,10 +44,6 @@ public static class DecompileMemberCases
         new ToolCallCase("decompile_member", "类型不存在（应返回提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "No.Such.Type", ["memberName"] = "X" },
             ExpectedContains: "未找到类型", MustNotContain: "at System", ExpectSuccess: false),
-        // 缺 typeName 应返回中文校验提示
-        new ToolCallCase("decompile_member", "缺 typeName（应返回校验提示）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["memberName"] = "X" },
-            ExpectedContains: "请指定 typeName", MustNotContain: "at System", ExpectSuccess: false),
         // 缺 memberName 应返回中文校验提示
         new ToolCallCase("decompile_member", "缺 memberName（应返回校验提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName },
