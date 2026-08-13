@@ -75,19 +75,16 @@ public static class MemberResolver
             if (!name.Contains(memberName, StringComparison.OrdinalIgnoreCase)) continue;
             matches.Add(new MemberMatch(name, $"0x{MetadataTokens.GetToken(methodHandle):x8}"));
         }
-        var similar = matches.Count == 0 ? FindSimilarNames(names, memberName) : Array.Empty<string>();
+        var similar = matches.Count == 0 ? SimilarNameMatcher.FindSimilar(names, memberName) : Array.Empty<string>();
         return new MemberSearchResult(true, matches, similar);
     }
 
     /// <summary>
     /// 无匹配时返回相近成员名：编辑距离 ≤ 2 或与查询名共享 ≥ 4 字符公共前缀，按名字序取前 5 个。
+    /// 判定算法统一走 <see cref="SimilarNameMatcher"/>（与类型名相近判定共用，避免两处实现漂移）。
     /// </summary>
     private static IReadOnlyList<string> FindSimilarNames(List<string> names, string query)
-        => names
-            .Where(n => LevenshteinDistance(n, query) <= 2 || CommonPrefixLength(n, query) >= 4)
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .Take(5)
-            .ToList();
+        => SimilarNameMatcher.FindSimilar(names, query);
 
     /// <summary>
     /// 判断方法名是否为属性/事件访问器（get_X/set_X/add_/remove_）——与 SignatureRenderer.IsAccessorName 同逻辑。
@@ -102,36 +99,4 @@ public static class MemberResolver
         || name.Contains(".set_", StringComparison.Ordinal)
         || name.Contains(".add_", StringComparison.Ordinal)
         || name.Contains(".remove_", StringComparison.Ordinal);
-
-    /// <summary>
-    /// 两个字符串的最长公共前缀长度。
-    /// </summary>
-    private static int CommonPrefixLength(string a, string b)
-    {
-        var n = Math.Min(a.Length, b.Length);
-        var i = 0;
-        while (i < n && a[i] == b[i]) i++;
-        return i;
-    }
-
-    /// <summary>
-    /// Levenshtein 编辑距离：插入/删除/替换各计 1，用于相近名判定（≤ 2 视为相近）。
-    /// </summary>
-    private static int LevenshteinDistance(string a, string b)
-    {
-        var prev = new int[b.Length + 1];
-        var curr = new int[b.Length + 1];
-        for (var j = 0; j <= b.Length; j++) prev[j] = j;
-        for (var i = 1; i <= a.Length; i++)
-        {
-            curr[0] = i;
-            for (var j = 1; j <= b.Length; j++)
-            {
-                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
-                curr[j] = Math.Min(Math.Min(curr[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
-            }
-            (prev, curr) = (curr, prev);
-        }
-        return prev[b.Length];
-    }
 }

@@ -71,7 +71,7 @@ public sealed class InProcessDecompiler
         return Execute(assemblyPath, cancellationToken, (module, decompiler) =>
         {
             var handle = MetadataNaming.FindType(module.Metadata, typeName);
-            if (handle is null) return $"未找到类型 {typeName}";
+            if (handle is null) return MetadataNaming.BuildNotFoundMessage(module.Metadata, typeName);
             return CheckOutputSize(decompiler.DecompileAsString(handle.Value));
         });
     }
@@ -165,8 +165,8 @@ public sealed class InProcessDecompiler
             }
             if (missing.Count > 0)
             {
-                // 单一类型未找到：保持既有错误提示形态（「未找到类型 」前缀会被 IsErrorResult 判为错误）
-                if (names.Length == 1) return $"未找到类型 {missing[0]}";
+                // 单一类型未找到：保持既有错误提示形态（「未找到类型 」前缀会被 IsErrorResult 判为错误），附相近类型名
+                if (names.Length == 1) return MetadataNaming.BuildNotFoundMessage(module.Metadata, missing[0]);
                 // 批量未找到：附于成功提示之后（不以「未找到类型 」开头，避免被 IsErrorResult 误判为错误）
                 var hint = BuildWriteSuccess(outputDir, assemblyPath);
                 return hint[..^1] + $"；未找到：{string.Join("、", missing)}）";

@@ -76,6 +76,31 @@ public class MetadataNamingTests
     }
 
     [Fact]
+    public void BuildNotFoundMessage_未找到时附相近类型名()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        var message = MetadataNaming.BuildNotFoundMessage(reader, "BigClas");  // 短名编辑距离 1 → BigClass
+
+        Assert.Contains("未找到类型 BigClas", message);
+        Assert.Contains("相近类型", message);
+        Assert.Contains("ILSpyMcp.Samples.BigClass", message);
+    }
+
+    [Fact]
+    public void BuildNotFoundMessage_无相近类型_保持原文案()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+
+        var message = MetadataNaming.BuildNotFoundMessage(reader, "No.Such.Type");
+
+        Assert.Equal("未找到类型 No.Such.Type", message);
+    }
+
+    [Fact]
     public void FindType_前缀后无内容或不含空格_不误剥()
     {
         using var fs = File.OpenRead(AssemblyPath);

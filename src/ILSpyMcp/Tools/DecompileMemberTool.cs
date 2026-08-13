@@ -67,7 +67,20 @@ public static class DecompileMemberTool
 
         // 纯元数据读取定位类型并枚举方法，按名字子串匹配；未命中类型/无匹配成员时直接返回提示，无匹配且存在相近名时附相近成员名
         var (typeFound, matches, similarNames) = MemberResolver.FindMembers(assemblyFull, typeName, memberName);
-        if (!typeFound) return $"未找到类型 {typeName}";
+        if (!typeFound)
+        {
+            // 类型未命中：重新打开程序集做纯元数据读取，附相近类型名（元数据秒回）
+            try
+            {
+                using var fs = File.OpenRead(assemblyFull);
+                using var pe = new PEReader(fs);
+                return MetadataNaming.BuildNotFoundMessage(pe.GetMetadataReader(), typeName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
+            {
+                return $"无法读取程序集元数据：{ex.Message}";
+            }
+        }
         if (matches.Count == 0)
         {
             var message = $"类型 {typeName} 中未找到名称包含 \"{memberName}\" 的成员";
@@ -109,7 +122,7 @@ public static class DecompileMemberTool
             using var pe = new PEReader(fs);
             var reader = pe.GetMetadataReader();
             var typeHandle = MetadataNaming.FindType(reader, typeName);
-            if (typeHandle is null) return $"未找到类型 {typeName}";
+            if (typeHandle is null) return MetadataNaming.BuildNotFoundMessage(reader, typeName);
             var type = reader.GetTypeDefinition(typeHandle.Value);
 
             var tokens = matches.Select(m => m.Token).ToHashSet();

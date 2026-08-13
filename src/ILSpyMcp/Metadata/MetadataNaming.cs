@@ -106,6 +106,47 @@ public static class MetadataNaming
     }
 
     /// <summary>
+    /// 在程序集全部非编译器生成类型中查找与输入相近的类型：类型全名或短名（最后一段）与查询名编辑距离 ≤ 2、
+    /// 或共享 ≥ 4 字符公共前缀即视为相近。返回全名（可直接复制用于定位），按名序排序取前 max 个。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <param name="input">用户输入的类型名（兼容 list_types 行首类别前缀，匹配前剥离）。</param>
+    /// <param name="max">最多返回个数（默认 5）。</param>
+    /// <returns>相近类型全名列表，可能为空。</returns>
+    public static List<string> FindSimilarTypeNames(MetadataReader reader, string input, int max = 5)
+    {
+        var query = StripCategoryPrefix(input);
+        var result = new List<string>();
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(handle);
+            if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type)) continue;
+            var fullName = FullName(reader, type);
+            // 全名与短名分别判定：短名命中便于用户只输短名（如 "BigClas"→"BigClass"）也能给出提示
+            if (SimilarNameMatcher.IsSimilar(fullName, query)
+                || SimilarNameMatcher.IsSimilar(reader.GetString(type.Name), query))
+            {
+                result.Add(fullName);
+            }
+        }
+        result.Sort(StringComparer.Ordinal);
+        return result.Count > max ? result.GetRange(0, max) : result;
+    }
+
+    /// <summary>
+    /// 组装「未找到类型」提示：有相近类型时输出 <c>未找到类型 X。相近类型：A、B、C</c>（全名、可直接复制用于定位），
+    /// 否则保持 <c>未找到类型 X</c> 原文本（提示文本保留原始输入）。供各工具/反编译入口的未找到分支统一使用。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <param name="input">用户输入的类型名。</param>
+    /// <returns>未找到提示文本。</returns>
+    public static string BuildNotFoundMessage(MetadataReader reader, string input)
+    {
+        var similar = FindSimilarTypeNames(reader, input);
+        return similar.Count > 0 ? $"未找到类型 {input}。相近类型：{string.Join("、", similar)}" : $"未找到类型 {input}";
+    }
+
+    /// <summary>
     /// 剥离 list_types 行首类别前缀（"class "/"interface "/"struct "/"delegate "/"enum "，忽略大小写，前缀后需仍有内容）。
     /// C# 关键字不可能作合法类型名前缀，故剥离安全；"interface1"/"structs" 等无空格分隔不受影响。
     /// </summary>

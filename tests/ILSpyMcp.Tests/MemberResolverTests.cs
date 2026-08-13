@@ -109,6 +109,23 @@ public class MemberResolverTests
     }
 
     [Fact]
+    public void SimilarNameMatcher_编辑距离与公共前缀_判定相近()
+    {
+        Assert.Equal(1, SimilarNameMatcher.LevenshteinDistance("BigClass", "BigClas"));
+        Assert.True(SimilarNameMatcher.IsSimilar("Format", "FormatZz"));     // 编辑距离 2（删除 Zz）
+        Assert.True(SimilarNameMatcher.IsSimilar("FormatHead", "FormatZz")); // 共享前缀 Format（6 字符）
+        Assert.False(SimilarNameMatcher.IsSimilar("SliceLines", "FormatZz")); // 前缀 0 且距离远超 2
+    }
+
+    [Fact]
+    public void SimilarNameMatcher_FindSimilar_按名序排序且最多max个()
+    {
+        var similar = SimilarNameMatcher.FindSimilar(new[] { "SliceLines", "FormatHead", "Format" }, "FormatZz", max: 2);
+
+        Assert.Equal(new[] { "Format", "FormatHead" }, similar); // 按名序，且受 max 限制
+    }
+
+    [Fact]
     public void FindMembers_ThingImpl_显式接口属性访问器被排除()
     {
         // 显式接口属性访问器元数据名为 ILSpyMcp.Samples.IThing.get_Value（含 '.'），默认必须排除；

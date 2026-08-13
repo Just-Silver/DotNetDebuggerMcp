@@ -55,7 +55,7 @@ public static class DependenciesTool
             using var pe = new PEReader(fs);
             var reader = pe.GetMetadataReader();
             var handle = MetadataNaming.FindType(reader, typeName);
-            if (handle is null) return Task.FromResult($"未找到类型 {typeName}");
+            if (handle is null) return Task.FromResult(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var type = reader.GetTypeDefinition(handle.Value);
 
             var fullName = MetadataNaming.FullName(reader, type);

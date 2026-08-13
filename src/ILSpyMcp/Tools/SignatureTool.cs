@@ -51,7 +51,7 @@ public static class SignatureTool
             using var pe = new PEReader(fs);
             var reader = pe.GetMetadataReader();
             var typeHandle = MetadataNaming.FindType(reader, typeName);
-            if (typeHandle is null) return Task.FromResult($"未找到类型 {typeName}");
+            if (typeHandle is null) return Task.FromResult(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var signatureLines = SignatureRenderer.RenderTypeSignatures(reader, reader.GetTypeDefinition(typeHandle.Value));
             if (signatureLines.Count == 0) return Task.FromResult($"类型 {typeName} 无成员签名");
             return Task.FromResult(OutputFormatter.Format(signatureLines.ToList(), lines, context));

@@ -52,6 +52,16 @@ public class SignatureToolTests
     }
 
     [Fact]
+    public async Task Signature_类型不存在_附相近类型名()
+    {
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "BigClas");
+
+        Assert.Contains("未找到类型", result);
+        Assert.Contains("相近类型", result);
+        Assert.Contains("ILSpyMcp.Samples.BigClass", result);
+    }
+
+    [Fact]
     public async Task Signature_缺typeName_返回必填提示()
     {
         var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "");

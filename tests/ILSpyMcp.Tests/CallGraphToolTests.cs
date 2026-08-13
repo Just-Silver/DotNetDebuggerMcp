@@ -46,6 +46,17 @@ public class CallGraphToolTests
     }
 
     [Fact]
+    public async Task CallGraph_类型不存在_附相近类型名()
+    {
+        // BigClas 短名编辑距离 1 → 提示应附相近类型 BigClass（全名）
+        var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, "BigClas");
+
+        Assert.Contains("未找到类型", result);
+        Assert.Contains("相近类型", result);
+        Assert.Contains("ILSpyMcp.Samples.BigClass", result);
+    }
+
+    [Fact]
     public async Task CallGraph_缺typeName_返回必填提示()
     {
         var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, "");
