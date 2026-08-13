@@ -175,6 +175,7 @@ public class ILSpyMcpCmd
         // 握手期先执行更新检查（报告 ilspymcp 是否有新版本），状态由 StatusReport 会话内缓存、与 CLI -c 同源；
         // 同步读磁盘缓存，无有效检查记录时返回空报告（不注入）。有新版本时注入文本带明确指令，要求 agent 在会话开始的回复中
         // 主动告知用户并提供升级命令（陈述句会被 agent 当作背景信息而不转述）；已是最新时仅注入状态行。
+        // 握手期始终注入 server 工作目录供相对路径（assembly/outputDir）解析，另附更新报告。
         string report;
         try
         {
@@ -185,14 +186,31 @@ public class ILSpyMcpCmd
         {
             report = ""; // 更新检查异常不阻断 MCP 启动：降级为不注入提示，核心反编译功能不受影响
         }
+        var serverInstructions = BuildServerInstructions(report);
         builder.Services.AddMcpServer(o =>
         {
-            if (!string.IsNullOrEmpty(report)) o.ServerInstructions = report;
+            if (!string.IsNullOrEmpty(serverInstructions)) o.ServerInstructions = serverInstructions;
         })
         .WithStdioServerTransport().WithToolsFromAssembly();
         // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新 NuGet 磁盘缓存供下一次会话使用，不 await 以免阻塞启动
         _ = AppServices.Updater.RefreshIfStaleAsync();
         await builder.Build().RunAsync();
         return 0;
+    }
+
+    /// <summary>
+    /// 组装握手期注入 <c>ServerInstructions</c> 的上下文文本：首行恒为 server 进程当前工作目录，
+    /// 供 agent 解析相对路径（assembly/outputDir）；其后可选追加 ilspymcp 更新报告（非空时换行拼接）。
+    /// </summary>
+    /// <param name="updateReport">更新报告文本（由 <see cref="EnvironmentChecker.BuildHandshakeText"/> 得到，可为空）。</param>
+    /// <returns>注入文本；首行为 CWD 行，报告为空时仍返回该行。</returns>
+    internal static string BuildServerInstructions(string? updateReport)
+    {
+        var text = $"当前工作目录: {Environment.CurrentDirectory}";
+        if (!string.IsNullOrEmpty(updateReport))
+        {
+            text += Environment.NewLine + updateReport;
+        }
+        return text;
     }
 }

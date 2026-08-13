@@ -42,7 +42,7 @@ dotnet tool uninstall --global ilspymcp
 }
 ```
 
-配置完成后重启 opencode，工具以 `ilspy_*` 前缀暴露。
+配置完成后重启 opencode，工具以 `ilspy_*` 前缀暴露。握手时 server 会在会话上下文注入当前工作目录，`assembly`/`outputDir` 的相对路径以此解析。
 
 ## 命令行调试
 
