@@ -23,5 +23,9 @@ public static class CallGraphCases
         new ToolCallCase("call_graph", "类型不存在（应返回提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "No.Such.Type" },
             ExpectedContains: "未找到类型", MustNotContain: "at System", ExpectSuccess: false),
+        // includeExternal=true：Caller.External 调 System.Console.WriteLine（跨程序集），外部段应含 System.Console 带程序集归属
+        new ToolCallCase("call_graph", "Caller includeExternal 外部段含 System.Console",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.CallerTypeName, ["includeExternal"] = true },
+            ExpectedContains: "System.Console [System.Console]", MustNotContain: "at System"),
     };
 }

@@ -7,10 +7,10 @@ namespace ILSpyMcp.Metadata;
 
 /// <summary>
 /// 纯元数据「方法体调用图」：扫描类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli），
-/// 提取程序集内部被调用的类型（跨程序集类型不计、编译器生成类型不计），供 call_graph 工具使用。
-/// 与 ReferenceExtractor 的签名级引用互补：本类基于方法体执行流而非成员签名。
+/// 提取程序集内部被调用的类型（编译器生成类型不计）与跨程序集外部类型（WithExternal 路径，带程序集归属），供 call_graph
+/// 工具使用。与 ReferenceExtractor 的签名级引用互补：本类基于方法体执行流而非成员签名。
 /// IL 解码采用 ECMA-335 操作数表：只精确读取 metadata token 操作数，其余指令按表跳过；
-/// 同程序集成员调用编译器通常发 MethodDef/FieldDef 直接 token，MemberRef 兜底沿 ResolutionScope 回溯判定内部。
+/// 同程序集成员调用编译器通常发 MethodDef/FieldDef 直接 token，MemberRef 兜底沿 ResolutionScope 回溯判定内部/外部。
 /// </summary>
 public static class CallGraphExtractor
 {
@@ -21,10 +21,24 @@ public static class CallGraphExtractor
     /// <param name="type">待扫描的类型定义。</param>
     /// <returns>内部类型全名列表；无内部调用时为空列表。</returns>
     public static IReadOnlyList<string> ExtractMethodBodyCallTypes(PEReader pe, TypeDefinition type)
+        => ExtractMethodBodyCallTypesWithExternal(pe, type).Internal;
+
+    /// <summary>
+    /// 提取指定类型全部方法体调用的程序集内部与跨程序集外部类型。内部集合语义与
+    /// <see cref="ExtractMethodBodyCallTypes"/> 完全一致；外部集合为方法体调用指令（MemberRef 兜底解析）中出现的跨程序集
+    /// 类型，条目格式 <c>全名 [程序集名]</c>（如 <c>System.Console [System.Console]</c>），程序集名取元数据
+    /// AssemblyReference.Name（纯元数据，不加载外部程序集），未知归属输出 <c>全名 [&lt;外部&gt;]</c>，按全名排序去重。
+    /// 编译器生成 target 过滤只对内部集合生效（外部类型非编译器生成）。
+    /// </summary>
+    /// <param name="pe">程序集 PE 读取器（方法体位于 PE 数据段，需经 PEReader 读取）。</param>
+    /// <param name="type">待扫描的类型定义。</param>
+    /// <returns>内部与外部类型集合；对应无调用时为空列表。</returns>
+    public static (IReadOnlyList<string> Internal, IReadOnlyList<string> External) ExtractMethodBodyCallTypesWithExternal(
+        PEReader pe, TypeDefinition type)
     {
         var scanner = new BodyScanner(pe);
         scanner.ScanType(type);
-        return scanner.Render();
+        return (scanner.Render(), scanner.RenderExternal());
     }
 
     /// <summary>
@@ -59,6 +73,7 @@ public static class CallGraphExtractor
         private readonly PEReader _pe;
         private readonly MetadataReader _reader;
         private readonly HashSet<TypeDefinitionHandle> _collected = new();
+        private readonly HashSet<string> _external = new(StringComparer.Ordinal);
         private readonly Provider _provider;
         private Dictionary<string, TypeDefinitionHandle>? _typeDefsByName;
 
@@ -66,7 +81,7 @@ public static class CallGraphExtractor
         {
             _pe = pe;
             _reader = pe.GetMetadataReader();
-            _provider = new Provider(_collected);
+            _provider = new Provider(_collected, _external);
         }
 
         public MetadataReader Reader => _reader;
@@ -74,7 +89,11 @@ public static class CallGraphExtractor
         /// <summary>
         /// 清空已收集集合，供反向扫描在候选类型间复用实例。
         /// </summary>
-        public void Clear() => _collected.Clear();
+        public void Clear()
+        {
+            _collected.Clear();
+            _external.Clear();
+        }
 
         /// <summary>
         /// 扫描一个类型定义的全部方法体（含访问器方法体，属性 getter 内的调用同样是该类型的行为调用）。
@@ -112,6 +131,16 @@ public static class CallGraphExtractor
                     result.Add(MetadataNaming.FullName(_reader, _reader.GetTypeDefinition(handle)));
                 }
             }
+            return result;
+        }
+
+        /// <summary>
+        /// 按全名排序输出去重后的外部类型集合（格式 全名 [程序集名]）。
+        /// </summary>
+        public List<string> RenderExternal()
+        {
+            var result = _external.ToList();
+            result.Sort(StringComparer.Ordinal);
             return result;
         }
 
@@ -214,7 +243,7 @@ public static class CallGraphExtractor
         }
 
         /// <summary>
-        /// 解析 MemberRef 的 parent：TypeDefinition 直收；TypeReference 沿 ResolutionScope 判定内部并映射回定义；
+        /// 解析 MemberRef 的 parent：TypeDefinition 直收；TypeReference 沿 ResolutionScope 判定内部并映射回定义、外部收集归属；
         /// TypeSpecification 解码泛型实参收集。
         /// </summary>
         private void CollectMemberParent(EntityHandle parent)
@@ -225,7 +254,7 @@ public static class CallGraphExtractor
                     CollectType((TypeDefinitionHandle)parent);
                     break;
                 case HandleKind.TypeReference:
-                    ResolveInternalTypeReference((TypeReferenceHandle)parent);
+                    CollectTypeReference((TypeReferenceHandle)parent);
                     break;
                 case HandleKind.TypeSpecification:
                     try
@@ -260,17 +289,25 @@ public static class CallGraphExtractor
         }
 
         /// <summary>
-        /// 把 TypeReference 判定为内部后映射回 TypeDef 句柄收集；TypeRef 名格式与 <see cref="MetadataNaming.FullName"/> 对齐
-        /// （命名空间.名，嵌套 + 分隔，泛型带 arity）。
+        /// 解析 MemberRef parent 的 TypeReference：内部类型映射回 TypeDef 句柄收集（编译器生成类型过滤）；跨程序集外部类型
+        /// 用 全名 [程序集名] 加入外部集合（外部类型非编译器生成，不做过滤）。归属判定与全名渲染共用 MetadataNaming 的
+        /// TypeReferenceScope/TypeReferenceFullName helper。
         /// </summary>
-        private void ResolveInternalTypeReference(TypeReferenceHandle handle)
+        private void CollectTypeReference(TypeReferenceHandle handle)
         {
-            var tr = _reader.GetTypeReference(handle);
-            if (!IsInternalScope(_reader, tr.ResolutionScope)) return;
-            var name = TypeReferenceFullName(_reader, handle);
-            if (name is not null && TryGetTypeDef(name, out var typeDef))
+            var (isInternal, assemblyName) = MetadataNaming.TypeReferenceScope(_reader, handle);
+            var name = MetadataNaming.TypeReferenceFullName(_reader, handle);
+            if (name is null) return; // 无法解析的类型引用：跳过
+            if (isInternal)
             {
-                CollectType(typeDef);
+                if (TryGetTypeDef(name, out var typeDef))
+                {
+                    CollectType(typeDef);
+                }
+            }
+            else
+            {
+                _external.Add(MetadataNaming.FormatExternal(name, assemblyName));
             }
         }
 
@@ -280,45 +317,6 @@ public static class CallGraphExtractor
             var type = _reader.GetTypeDefinition(handle);
             if (CompilerGeneratedFilter.IsCompilerGenerated(_reader, type)) return;
             _collected.Add(handle);
-        }
-
-        /// <summary>
-        /// 沿 TypeReference 的 ResolutionScope 链回溯判定是否本程序集（ModuleDefinition = 本模块即内部）。
-        /// </summary>
-        private static bool IsInternalScope(MetadataReader reader, EntityHandle scope)
-        {
-            while (true)
-            {
-                switch (scope.Kind)
-                {
-                    case HandleKind.ModuleDefinition:
-                        return true;
-                    case HandleKind.AssemblyReference:
-                    case HandleKind.ModuleReference:
-                        return false;
-                    case HandleKind.TypeReference: // 嵌套类型：沿外层继续上溯
-                        scope = reader.GetTypeReference((TypeReferenceHandle)scope).ResolutionScope;
-                        continue;
-                    default:
-                        return false;
-                }
-            }
-        }
-
-        /// <summary>
-        /// 渲染 TypeReference 全名（命名空间.名，嵌套沿 ResolutionScope 递归用 + 连接）。
-        /// </summary>
-        private static string? TypeReferenceFullName(MetadataReader reader, TypeReferenceHandle handle)
-        {
-            var tr = reader.GetTypeReference(handle);
-            var name = reader.GetString(tr.Name);
-            if (tr.ResolutionScope.Kind == HandleKind.TypeReference)
-            {
-                var outer = TypeReferenceFullName(reader, (TypeReferenceHandle)tr.ResolutionScope);
-                return outer is null ? null : $"{outer}+{name}";
-            }
-            var ns = reader.GetString(tr.Namespace);
-            return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
         }
 
         /// <summary>
@@ -434,14 +432,21 @@ public static class CallGraphExtractor
     private readonly record struct GenericContext(string[] TypeParameters, string[] MethodParameters);
 
     /// <summary>
-    /// 签名解码器：只为触发类型解析回调、收集程序集内部 TypeDefinition；返回字符串只是占位，不参与任何展示
-    /// （与 ReferenceExtractor.Provider 同构，用于 MethodSpec 泛型实参与 calli 函数指针签名）。
+    /// 签名解码器：只为触发类型解析回调、收集程序集内部 TypeDefinition 与跨程序集外部 TypeReference（格式 全名 [程序集名]）；
+    /// 返回字符串只是占位，不参与任何展示（与 ReferenceExtractor.Provider 同构，用于 MethodSpec 泛型实参、TypeSpecification
+    /// 父类型与 calli 函数指针签名）。内部类型的泛型实参经 GetTypeFromDefinition 收集，外部泛型实参/泛型实例化的外部类型
+    /// 经 GetTypeFromReference 收集——与内部集合语义对称。
     /// </summary>
     private sealed class Provider : ISignatureTypeProvider<string, GenericContext>
     {
         private readonly HashSet<TypeDefinitionHandle> _collected;
+        private readonly HashSet<string>? _external;
 
-        public Provider(HashSet<TypeDefinitionHandle> collected) => _collected = collected;
+        public Provider(HashSet<TypeDefinitionHandle> collected, HashSet<string>? external)
+        {
+            _collected = collected;
+            _external = external;
+        }
 
         public string GetPrimitiveType(PrimitiveTypeCode typeCode) => "";
 
@@ -451,7 +456,18 @@ public static class CallGraphExtractor
             return "";
         }
 
-        public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) => "";
+        public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
+        {
+            if (_external is not null)
+            {
+                var name = MetadataNaming.TypeReferenceFullName(reader, handle);
+                if (name is not null)
+                {
+                    _external.Add(MetadataNaming.FormatExternal(name, MetadataNaming.TypeReferenceScope(reader, handle).AssemblyName));
+                }
+            }
+            return "";
+        }
 
         public string GetTypeFromSpecification(MetadataReader reader, GenericContext genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
             => reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);

@@ -48,6 +48,13 @@ public class CallGraphExtractorTests
     private static List<string> Extract(MetadataScope scope, string typeFullName)
         => CallGraphExtractor.ExtractMethodBodyCallTypes(scope.Pe, GetType(scope.Reader, typeFullName)).ToList();
 
+    private static (List<string> Internal, List<string> External) ExtractWithExternal(MetadataScope scope, string typeFullName)
+    {
+        var (internalSet, external) = CallGraphExtractor.ExtractMethodBodyCallTypesWithExternal(
+            scope.Pe, GetType(scope.Reader, typeFullName));
+        return (internalSet.ToList(), external.ToList());
+    }
+
     [Fact]
     public void Caller_方法体调用内部方法_收集Callee()
     {
@@ -65,6 +72,31 @@ public class CallGraphExtractorTests
         var result = Extract(scope, "ILSpyMcp.Samples.Caller");
         Assert.DoesNotContain("System.Console", result);
         Assert.DoesNotContain("System.String", result);
+    }
+
+    [Fact]
+    public void Caller_WithExternal_外部集合含SystemConsole_内部集合不变()
+    {
+        // External 调 System.Console.WriteLine：WithExternal 收集 System.Console [System.Console]；
+        // 默认 ctor 调基类 Object..ctor 亦为 MemberRef 外部引用（System.Object）。内部集合与缺省 API 一致
+        using var scope = new MetadataScope();
+        var (internalSet, external) = ExtractWithExternal(scope, "ILSpyMcp.Samples.Caller");
+
+        Assert.Equal(Extract(scope, "ILSpyMcp.Samples.Caller"), internalSet);
+        Assert.Contains("System.Console [System.Console]", external);
+        Assert.Contains("System.Object [System.Runtime]", external);
+        Assert.DoesNotContain("System.Console", internalSet);
+    }
+
+    [Fact]
+    public void WithClosure_WithExternal_仅内部闭包调用_外部集合含Func()
+    {
+        // Make 返回 () => x + 1：闭包类型（编译器生成）过滤后内部为空，构造 System.Func<> 走外部收集
+        using var scope = new MetadataScope();
+        var (internalSet, external) = ExtractWithExternal(scope, "ILSpyMcp.Samples.WithClosure");
+
+        Assert.Empty(internalSet);
+        Assert.Contains("System.Func`1 [System.Runtime]", external);
     }
 
     [Fact]
