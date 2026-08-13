@@ -76,7 +76,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件，按命名空间嵌套目录） |
 | `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），支持按类型名子串过滤，输出带行号标注 |
 | `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图；每行行尾附成员 token，可直接用于 `ilspy_decompile_member` 的 `token` 参数 |
-| `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型 |
+| `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型；`includeIndirect=true` 时后代段含全部间接后代（接口的所有实现者、基类的所有子孙） |
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用 |
 | `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补） |
 
@@ -113,6 +113,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
 | `ilspy_hierarchy` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Formatting.OutputFormatter` | 是 |
+| | `includeIndirect` | 是否包含间接后代（如接口的所有实现者、基类的所有子孙），一次返回全部后代、免递归多次调用；默认 `false` | 否 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
 | `ilspy_dependencies` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Caching.DecompileCache` | 是 |

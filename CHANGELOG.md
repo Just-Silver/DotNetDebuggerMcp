@@ -11,6 +11,7 @@
 ### Added
 
 - `list_types` 新增 `nameContains` 名称子串过滤参数（忽略大小写，默认空=不过滤），大型程序集按名定位类型；CLI 同步提供 `-nc|--namecontains` 选项（配合 `-l`）
+- `hierarchy` 新增 `includeIndirect` 参数（默认 `false`）：为 true 时一次返回接口/基类的全部间接后代（如接口的所有实现者及其子类、基类的所有子孙），免 agent 递归多次调用
 
 ### Changed
 

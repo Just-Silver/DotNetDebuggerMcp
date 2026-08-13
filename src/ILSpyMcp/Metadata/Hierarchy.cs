@@ -113,6 +113,74 @@ public static class Hierarchy
     }
 
     /// <summary>
+    /// 程序集内「直接或间接继承 type 或实现其接口」的类型全名列表（跳过编译器生成类型与 type 自身），按元数据枚举序。
+    /// 与 <see cref="GetDescendants"/> 的差异：不止收集直接子类/直接接口实现者，还沿继承/实现链继续下钻，
+    /// 收集所有后代（如接口的全部（间接）实现者、基类的所有子孙），一次调用即返回完整后代集合，
+    /// 供 hierarchy includeIndirect 使用，免 agent 递归多次调用。
+    /// 实现：一次遍历构建「全名 → 直接父类/接口全名列表」邻接表
+    /// （邻接边同时收录显示名与底层泛型定义全名，保证泛型实例化比较与 <see cref="GetDescendants"/> 一致），
+    /// 从 type 出发 BFS 到收敛（HashSet 去重）。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <param name="type">待查询的类型定义。</param>
+    /// <param name="typeFullName">type 的规范全名（<see cref="MetadataNaming.FullName"/> 输出），用于基类/接口全名比较。</param>
+    /// <returns>全部（直接+间接）后代类型全名列表；无匹配时为空列表。</returns>
+    public static IReadOnlyList<string> GetDescendantsIncludingIndirect(MetadataReader reader, TypeDefinition type, string typeFullName)
+    {
+        // 一次遍历构建名称索引与邻接表：邻接值同时收录「显示名」（泛型实例化如 GenericBase<int>）与
+        // 「底层泛型定义全名」（如 GenericBase`1），使泛型基类/接口实例化能沿定义全名正确连边。
+        var adjacency = new Dictionary<string, List<string>>();
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var candidate = reader.GetTypeDefinition(handle);
+            if (CompilerGeneratedFilter.IsCompilerGenerated(reader, candidate)) continue;
+            var candidateName = MetadataNaming.FullName(reader, candidate);
+            if (candidateName == typeFullName) continue;
+
+            var parents = new List<string>();
+            var candidateParams = GetGenericParameterNames(reader, candidate.GetGenericParameters());
+            var (baseName, baseDef) = ResolveType(reader, candidate.BaseType, candidateParams);
+            if (baseName is not null) parents.Add(baseName);
+            if (baseDef is { } bd) parents.Add(MetadataNaming.FullName(reader, reader.GetTypeDefinition(bd)));
+            foreach (var implHandle in candidate.GetInterfaceImplementations())
+            {
+                var (ifaceName, ifaceDef) = ResolveType(reader, reader.GetInterfaceImplementation(implHandle).Interface, candidateParams);
+                if (ifaceName is not null) parents.Add(ifaceName);
+                if (ifaceDef is { } id) parents.Add(MetadataNaming.FullName(reader, reader.GetTypeDefinition(id)));
+            }
+            adjacency[candidateName] = parents;
+        }
+
+        // BFS 到收敛：从 typeFullName 出发，逐层把「直接父类/接口全名命中已发现集合」的类型收入结果。
+        var discovered = new HashSet<string> { typeFullName };
+        var queue = new Queue<string>();
+        queue.Enqueue(typeFullName);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            foreach (var (candidateName, parents) in adjacency)
+            {
+                if (discovered.Contains(candidateName)) continue;
+                if (!parents.Contains(current)) continue;
+                discovered.Add(candidateName);
+                queue.Enqueue(candidateName);
+            }
+        }
+        discovered.Remove(typeFullName);
+
+        // 按元数据枚举序返回（与 GetDescendants 一致）
+        var result = new List<string>();
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var candidate = reader.GetTypeDefinition(handle);
+            if (CompilerGeneratedFilter.IsCompilerGenerated(reader, candidate)) continue;
+            var candidateName = MetadataNaming.FullName(reader, candidate);
+            if (discovered.Contains(candidateName)) result.Add(candidateName);
+        }
+        return result;
+    }
+
+    /// <summary>
     /// 解析类型句柄为全名与底层类型定义句柄：TypeDefinition 返回自身；TypeReference 取 命名空间.名
     /// （嵌套沿 ResolutionScope 递归拼接，用 + 分隔），底层定义不可得；TypeSpecification（泛型实例化等）解码签名取全名，
     /// 若泛型定义是程序集内类型则一并返回其句柄（供基类链继续上溯、后代比较）；其余返回 (null, null)。

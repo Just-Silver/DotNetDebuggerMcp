@@ -142,7 +142,7 @@ public class ILSpyMcpCmd
         }
         if (hierarchy)
         {
-            return await HierarchyTool.Hierarchy(assembly, typeName, lines, cancellationToken);
+            return await HierarchyTool.Hierarchy(assembly, typeName, includeIndirect: false, lines, cancellationToken);
         }
         if (dependencies)
         {

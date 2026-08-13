@@ -1,7 +1,7 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// hierarchy 工具的全部端到端验证场景：派生类基类链 / 接口反向实现 / 实现类接口段 / 类型不存在。
+/// hierarchy 工具的全部端到端验证场景：派生类基类链 / 接口反向实现 / 实现类接口段 / includeIndirect 间接后代 / 类型不存在。
 /// </summary>
 public static class HierarchyCases
 {
@@ -22,6 +22,14 @@ public static class HierarchyCases
         new ToolCallCase("hierarchy", "Dog 接口段（含 IAnimal）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Dog" },
             ExpectedContains: "IAnimal", MustNotContain: "at System"),
+        // includeIndirect=true：接口 IWorker 的全部（间接）实现者应含 WorkerDerived（经 WorkerBase 间接实现）
+        new ToolCallCase("hierarchy", "IWorker includeIndirect=true 含间接实现者 WorkerDerived",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.IWorker", ["includeIndirect"] = true },
+            ExpectedContains: "WorkerDerived", MustNotContain: "at System"),
+        // includeIndirect 缺省（false）：Level1 只列直接后代 Level2，不应出现 Level3/Level4
+        new ToolCallCase("hierarchy", "Level1 默认 includeIndirect=false 仅直接后代",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Level1" },
+            ExpectedContains: "Level2", MustNotContain: "Level3"),
         // 类型不存在应返回中文提示而非异常堆栈
         new ToolCallCase("hierarchy", "类型不存在（应返回提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "No.Such.Type" },
