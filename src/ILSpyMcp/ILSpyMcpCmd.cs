@@ -114,7 +114,7 @@ public class ILSpyMcpCmd
 
     /// <summary>
     /// 命令行分发：-c 走环境自检，-p 走 decompile_to_project，-o 走 decompile_to_dir，-s/-hc/-d/-cg 分别走 signature/hierarchy/
-    /// dependencies/call_graph，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// dependencies/call_graph，-l 走 list_types（-nc 提供类型名子串过滤），-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string entityTypes, string nameContains,

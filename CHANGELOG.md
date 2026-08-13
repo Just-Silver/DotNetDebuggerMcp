@@ -10,7 +10,7 @@
 
 ### Added
 
-- `list_types` 新增 `nameContains` 名称子串过滤参数（忽略大小写，默认空=不过滤），大型程序集按名定位类型
+- `list_types` 新增 `nameContains` 名称子串过滤参数（忽略大小写，默认空=不过滤），大型程序集按名定位类型；CLI 同步提供 `-nc|--namecontains` 选项（配合 `-l`）
 
 ### Changed
 
