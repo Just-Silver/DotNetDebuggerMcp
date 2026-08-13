@@ -55,6 +55,25 @@ public class DecompileMemberToolTests
     }
 
     [Fact]
+    public async Task 省略typeName_跨程序集搜索并反编译匹配成员()
+    {
+        AppServices.ConfigureForTest();
+        try
+        {
+            // typeName 为空：跨程序集按成员名搜索，BigMethod 命中 BigClass.BigMethod
+            var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "BigMethod");
+
+            Assert.Contains("跨程序集", result);
+            Assert.Contains("#MEMBER", result);
+            Assert.Contains("ILSpyMcp.Samples.BigClass", result);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
     public async Task 缺token且缺memberName_返回校验提示()
     {
         AppServices.ConfigureForTest();

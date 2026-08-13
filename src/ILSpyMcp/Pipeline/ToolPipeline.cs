@@ -85,6 +85,12 @@ public sealed class ToolCommand
     public string? MemberToken { get; set; }
 
     /// <summary>
+    /// 可选成员所属类型全名：与 <see cref="MemberName"/>/<see cref="MemberToken"/> 同时提供时，JSON 分隔行附带 `type` 字段
+    /// （跨程序集搜索时供 agent 分辨成员归属）；仅影响合并展示，不参与缓存签名。
+    /// </summary>
+    public string? MemberType { get; set; }
+
+    /// <summary>
     /// 由 Kind+Target 派生缓存签名：类型/成员/整模块前缀 + \u001F + 目标（整模块目标为空，仅前缀）。
     /// </summary>
     /// <param name="request">反编译请求。</param>
@@ -176,7 +182,7 @@ public sealed class ToolPipeline
             }
             allCached &= fromCache;
             if (!string.IsNullOrEmpty(command.MemberName) && !string.IsNullOrEmpty(command.MemberToken))
-                merged.Add($"#MEMBER {OutputFormatter.MemberJson(command.MemberName, command.MemberToken)}");
+                merged.Add($"#MEMBER {OutputFormatter.MemberJson(command.MemberName, command.MemberToken, type: command.MemberType)}");
             else if (!string.IsNullOrEmpty(command.DisplayName)) merged.Add($"=== {command.DisplayName} ===");
             merged.AddRange(source);
         }

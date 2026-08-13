@@ -126,6 +126,14 @@ public class MemberResolverTests
     }
 
     [Fact]
+    public void FindMembersAcrossAssembly_跨类型子串匹配带所属类型()
+    {
+        var result = MemberResolver.FindMembersAcrossAssembly(TestDataPaths.TestSamplesDll, "BigMethod");
+        Assert.True(result.TypeFound);
+        Assert.Contains(result.Matches, m => m.Name == "BigMethod" && m.TypeName == "ILSpyMcp.Samples.BigClass");
+    }
+
+    [Fact]
     public void FindMembers_ThingImpl_显式接口属性访问器被排除()
     {
         // 显式接口属性访问器元数据名为 ILSpyMcp.Samples.IThing.get_Value（含 '.'），默认必须排除；

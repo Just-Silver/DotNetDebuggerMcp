@@ -136,11 +136,12 @@ public class ArgumentValidatorsTests : IDisposable
     }
 
     [Fact]
-    public void ValidateMemberNameSearch_缺typeName_返回提示()
+    public void ValidateMemberNameSearch_缺typeName_校验通过()
     {
+        // typeName 允许为空：省略时跨程序集搜索
         var ok = ArgumentValidators.ValidateMemberNameSearch("", "SerializeAsync", out var error);
-        Assert.False(ok);
-        Assert.Contains("typeName", error!);
+        Assert.True(ok);
+        Assert.Null(error);
     }
 
     [Fact]
@@ -149,6 +150,7 @@ public class ArgumentValidatorsTests : IDisposable
         var ok = ArgumentValidators.ValidateMemberNameSearch("System.Text.Json.JsonSerializer", "", out var error);
         Assert.False(ok);
         Assert.Contains("memberName", error!);
+        Assert.Contains("跨程序集", error!); // 提示说明省略 typeName 时跨程序集搜索
     }
 
     [Fact]

@@ -69,22 +69,17 @@ public static class ArgumentValidators
     }
 
     /// <summary>
-    /// 校验 decompile_member 的目标参数：typeName 与 memberName 均必填（在指定类型内按成员名子串搜索）。
+    /// 校验 decompile_member 的搜索参数：memberName 必填；typeName 允许为空（省略时跨程序集按成员名搜索）。
     /// </summary>
-    /// <param name="typeName">全限定类型名，缺省为空字符串。</param>
+    /// <param name="typeName">全限定类型名，可为空（跨程序集搜索）。</param>
     /// <param name="memberName">成员名子串，缺省为空字符串。</param>
     /// <param name="error">校验失败时的错误提示；通过时为 null。</param>
     /// <returns>通过返回 true；失败返回 false 且 <paramref name="error"/> 非空。</returns>
     public static bool ValidateMemberNameSearch(string typeName, string memberName, [NotNullWhen(false)] out string? error)
     {
-        if (string.IsNullOrWhiteSpace(typeName))
-        {
-            error = "请指定 typeName 参数（在指定类型内搜索成员）。";
-            return false;
-        }
         if (string.IsNullOrWhiteSpace(memberName))
         {
-            error = "请指定 memberName 参数（成员名子串，忽略大小写，例如 SerializeAsync）。";
+            error = "请指定 memberName 参数（成员名子串，忽略大小写；省略 typeName 时跨程序集搜索）。";
             return false;
         }
         error = null;

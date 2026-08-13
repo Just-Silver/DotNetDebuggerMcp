@@ -30,9 +30,9 @@ public class ILSpyMcpCmd
     public string TypeName { get; } = null!;
 
     /// <summary>
-    /// 在指定类型内按成员名子串搜索并反编译匹配的成员，需配合 -t。
+    /// 按成员名子串搜索并反编译匹配的成员：提供 -t 时在指定类型内搜索，省略 -t 时跨程序集搜索。
     /// </summary>
-    [Option("-mn|--membername <substring>", "在指定类型内按成员名子串搜索并反编译匹配的成员（需配合 -t 指定类型）。", CommandOptionType.SingleValue)]
+    [Option("-mn|--membername <substring>", "在指定类型内按成员名子串搜索并反编译匹配的成员（省略 -t 时跨程序集搜索）。", CommandOptionType.SingleValue)]
     public string MemberName { get; } = null!;
 
     /// <summary>

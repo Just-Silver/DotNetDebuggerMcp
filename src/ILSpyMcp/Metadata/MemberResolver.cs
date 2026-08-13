@@ -5,11 +5,12 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 一个匹配成员：方法名与其元数据 token（可直接用于进程内成员反编译）。
+/// 一个匹配成员：方法名、元数据 token（可直接用于进程内成员反编译）与其所属类型全名。
 /// </summary>
 /// <param name="Name">方法名（元数据原始名，含 get_/set_ 访问器与 .ctor）。</param>
 /// <param name="Token">元数据 token，格式 0x06000005。</param>
-public readonly record struct MemberMatch(string Name, string Token);
+/// <param name="TypeName">所属类型全名（命名空间.类型，嵌套用 +，泛型带 arity）——跨程序集搜索时供 agent 分辨成员归属。</param>
+public readonly record struct MemberMatch(string Name, string Token, string TypeName);
 
 /// <summary>
 /// 成员搜索聚合结果：类型是否命中、匹配成员列表、相近成员名。
@@ -64,6 +65,7 @@ public static class MemberResolver
         if (typeHandle is null) return new MemberSearchResult(false, Array.Empty<MemberMatch>(), Array.Empty<string>());
 
         var type = reader.GetTypeDefinition(typeHandle.Value);
+        var fullTypeName = MetadataNaming.FullName(reader, type);
         var matches = new List<MemberMatch>();
         var names = new List<string>();
         foreach (var methodHandle in type.GetMethods())
@@ -73,7 +75,40 @@ public static class MemberResolver
             if (!includeAccessors && IsAccessorName(name)) continue;
             names.Add(name);
             if (!name.Contains(memberName, StringComparison.OrdinalIgnoreCase)) continue;
-            matches.Add(new MemberMatch(name, $"0x{MetadataTokens.GetToken(methodHandle):x8}"));
+            matches.Add(new MemberMatch(name, $"0x{MetadataTokens.GetToken(methodHandle):x8}", fullTypeName));
+        }
+        var similar = matches.Count == 0 ? SimilarNameMatcher.FindSimilar(names, memberName) : Array.Empty<string>();
+        return new MemberSearchResult(true, matches, similar);
+    }
+
+    /// <summary>
+    /// 在程序集全部非编译器生成类型的全部方法中按名字子串搜索（忽略大小写），返回匹配成员及其所属类型全名。
+    /// 供 decompile_member 省略 typeName 时的跨程序集搜索；默认排除属性/事件访问器，无匹配时给出相近成员名。
+    /// </summary>
+    /// <param name="assemblyPath">程序集绝对路径。</param>
+    /// <param name="memberName">成员名子串，忽略大小写。</param>
+    /// <returns>TypeFound 恒为 true（按程序集整体搜索）；Matches 为匹配成员列表（可能为空）；SimilarNames 仅当 Matches 为空时非空。</returns>
+    public static MemberSearchResult FindMembersAcrossAssembly(string assemblyPath, string memberName)
+    {
+        using var fs = File.OpenRead(assemblyPath);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        var matches = new List<MemberMatch>();
+        var names = new List<string>();
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(handle);
+            if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type)) continue;
+            var typeName = MetadataNaming.FullName(reader, type);
+            foreach (var methodHandle in type.GetMethods())
+            {
+                var method = reader.GetMethodDefinition(methodHandle);
+                var name = reader.GetString(method.Name);
+                if (IsAccessorName(name)) continue;
+                names.Add(name);
+                if (!name.Contains(memberName, StringComparison.OrdinalIgnoreCase)) continue;
+                matches.Add(new MemberMatch(name, $"0x{MetadataTokens.GetToken(methodHandle):x8}", typeName));
+            }
         }
         var similar = matches.Count == 0 ? SimilarNameMatcher.FindSimilar(names, memberName) : Array.Empty<string>();
         return new MemberSearchResult(true, matches, similar);

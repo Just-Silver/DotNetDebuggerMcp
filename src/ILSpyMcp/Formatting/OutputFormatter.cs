@@ -67,15 +67,16 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 渲染成员 JSON 分隔行内容（不含 #MEMBER 前缀）：{name, token[, signature]}。供 decompile_member 多匹配分隔行与超限
+    /// 渲染成员 JSON 分隔行内容（不含 #MEMBER 前缀）：{name, token[, signature][, type]}。供 decompile_member 多匹配分隔行与超限
     /// 签名清单共用，agent 免解析文本分隔线直接取 name/token。用 UnsafeRelaxedJsonEscaping 避免成员名含中文时 \uXXXX 转义
     /// 导致 token 膨胀。
     /// </summary>
     /// <param name="name">成员名。</param>
     /// <param name="token">成员 token（如 0x060004b2）。</param>
     /// <param name="signature">成员签名；超限清单提供，普通分隔行为 null。</param>
-    /// <returns>JSON 对象文本，如 {"name":"BigHelper","token":"0x060004b2"}。</returns>
-    public static string MemberJson(string name, string token, string? signature = null)
+    /// <param name="type">成员所属类型全名；跨程序集搜索时提供（供 agent 分辨成员归属），普通分隔行为 null。</param>
+    /// <returns>JSON 对象文本，如 {"name":"BigHelper","token":"0x060004b2","type":"Ns.BigClass"}。</returns>
+    public static string MemberJson(string name, string token, string? signature = null, string? type = null)
     {
         var sb = new StringBuilder("{\"name\":");
         AppendJsonString(sb, name);
@@ -85,6 +86,11 @@ public static class OutputFormatter
         {
             sb.Append(",\"signature\":");
             AppendJsonString(sb, signature);
+        }
+        if (type is not null)
+        {
+            sb.Append(",\"type\":");
+            AppendJsonString(sb, type);
         }
         sb.Append('}');
         return sb.ToString();
