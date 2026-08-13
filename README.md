@@ -92,7 +92,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_decompile_member` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 在指定类型内搜索成员，全限定类型名，例如 `System.Text.Json.JsonSerializer`（提供 `token` 时可不填） | 否 |
 | | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；匹配到的成员全部反编译，匹配数超过 20 时仅返回成员签名清单（提供 `token` 时可不填） | 否 |
-| | `token` | 按元数据 token 直接反编译单个成员（如超限签名清单或多成员分隔行中的 `0x06000005`）；提供时忽略 `memberName`，`typeName` 可不填 | 否 |
+| | `token` | 按元数据 token 直接反编译单个成员（如超限签名清单或多成员分隔行 `#MEMBER {"name","token"}` 中的 `0x06000005`）；提供时忽略 `memberName`，`typeName` 可不填 | 否 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
 | | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
@@ -129,7 +129,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 - **项目形式 + 嵌套目录**：> 以可编译项目形式反编译 `bin/Debug/MyApp.dll` 到 `src`，并按命名空间嵌套目录
 - **单个类型**：> 反编译 `bin/Debug/MyApp.dll` 中的 `MyApp.Program` 类型
 - **按名搜索成员**：> 在 `bin/Debug/MyApp.dll` 的 `MyApp.Program` 中搜索名称包含 `Main` 的成员并反编译
-- **按 token 反编译单个成员**：> 在 `bin/Debug/MyApp.dll` 的 `MyApp.Program` 中搜索名称包含 `Parse` 的成员；若匹配超过 20 个仅返回签名清单，则取目标行末尾 token（如 `0x06000010`）用 `token` 参数直接反编译该成员
+- **按 token 反编译单个成员**：> 在 `bin/Debug/MyApp.dll` 的 `MyApp.Program` 中搜索名称包含 `Parse` 的成员；若匹配超过 20 个仅返回 `#MEMBER` 签名清单，则取目标行 JSON 中的 `token` 字段（如 `0x06000010`）用 `token` 参数直接反编译该成员
 - **成员签名（API 地图）**：> 列出 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的全部成员签名
 - **继承关系**：> 查看 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的基类链、接口与继承者
 - **内部引用**：> 查询 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的成员签名引用了哪些内部类型、以及哪些类型引用了它

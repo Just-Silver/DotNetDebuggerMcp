@@ -20,10 +20,10 @@ public static class DecompileMemberCases
         new ToolCallCase("decompile_member", "memberName 多匹配（Big 命中 3 个成员合并输出）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["memberName"] = "Big" },
             ExpectedContains: "3 个匹配", MustNotContain: "at System"),
-        // 多匹配合并输出的各成员体前应有 === 名字 (token) === 分隔行（同参数，经管道缓存命中前序结果）
-        new ToolCallCase("decompile_member", "多匹配分隔头（=== 名字 (token) ===）",
+        // 多匹配合并输出的各成员体前应有 #MEMBER JSON 分隔行（同参数，经管道缓存命中前序结果）
+        new ToolCallCase("decompile_member", "多匹配分隔头（#MEMBER JSON）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.TypeName, ["memberName"] = "Big" },
-            ExpectedContains: "===", MustNotContain: "at System"),
+            ExpectedContains: "#MEMBER", MustNotContain: "at System"),
         // 默认排除属性/事件访问器：Members 的 get_Count 被排除后无名称含 "get" 的成员，返回未找到提示
         new ToolCallCase("decompile_member", "访问器排除（get_Count 不参与匹配）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.MembersTypeName, ["memberName"] = "get" },
