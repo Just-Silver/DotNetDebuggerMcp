@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -66,6 +67,31 @@ public static class CallGraphExtractor
     }
 
     /// <summary>
+    /// 方法级反向调用点：遍历程序集全部非编译器生成类型的方法体，凡调用指令指向指定方法 token 的来源方法，
+    /// 以 <c>类型全名::成员签名</c> 行收集（泛型实例化 MethodSpec 调用解包归约到目标方法；编译器生成类型的方法体不计）。
+    /// 供 call_graph 的 token 参数做类型级反查的细化——直接回答「程序集内哪些方法体调用了这个具体方法」。
+    /// </summary>
+    /// <param name="pe">程序集 PE 读取器。</param>
+    /// <param name="token">目标方法元数据 token（0x 开头的十六进制，如 0x06000005）。</param>
+    /// <returns>调用点行列表（类型全名::成员签名），按全名排序去重；token 非法/非方法定义时为空列表。</returns>
+    public static IReadOnlyList<string> FindMethodCallers(PEReader pe, string token)
+    {
+        if (!token.Trim().StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+            || !int.TryParse(token.Trim().AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var raw))
+            return Array.Empty<string>();
+        var handle = MetadataTokens.EntityHandle(raw);
+        if (handle.Kind != HandleKind.MethodDefinition) return Array.Empty<string>();
+        var scanner = new BodyScanner(pe);
+        foreach (var typeHandle in scanner.Reader.TypeDefinitions)
+        {
+            var type = scanner.Reader.GetTypeDefinition(typeHandle);
+            if (CompilerGeneratedFilter.IsCompilerGenerated(scanner.Reader, type)) continue;
+            scanner.ScanType(type, (MethodDefinitionHandle)handle);
+        }
+        return scanner.RenderCallers();
+    }
+
+    /// <summary>
     /// 单类型方法体扫描器：复用 BodyScanner 以共享一次「全名→TypeDef 句柄」字典构建（反向扫描大量复用）。
     /// </summary>
     private sealed class BodyScanner
@@ -74,6 +100,7 @@ public static class CallGraphExtractor
         private readonly MetadataReader _reader;
         private readonly HashSet<TypeDefinitionHandle> _collected = new();
         private readonly HashSet<string> _external = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _callers = new(StringComparer.Ordinal);
         private readonly Provider _provider;
         private Dictionary<string, TypeDefinitionHandle>? _typeDefsByName;
 
@@ -97,8 +124,9 @@ public static class CallGraphExtractor
 
         /// <summary>
         /// 扫描一个类型定义的全部方法体（含访问器方法体，属性 getter 内的调用同样是该类型的行为调用）。
+        /// callerTarget 非空时启用方法级反向定位：凡方法体调用指令指向该方法的来源方法记入 <see cref="_callers"/>。
         /// </summary>
-        public void ScanType(TypeDefinition type)
+        public void ScanType(TypeDefinition type, MethodDefinitionHandle? callerTarget = null)
         {
             foreach (var methodHandle in type.GetMethods())
             {
@@ -114,7 +142,7 @@ public static class CallGraphExtractor
                     continue; // 单个损坏方法体不影响其余收集
                 }
                 if (body is null) continue;
-                ScanBody(body);
+                ScanBody(body, methodHandle, callerTarget);
             }
         }
 
@@ -131,6 +159,16 @@ public static class CallGraphExtractor
                     result.Add(MetadataNaming.FullName(_reader, _reader.GetTypeDefinition(handle)));
                 }
             }
+            return result;
+        }
+
+        /// <summary>
+        /// 按全名排序输出去重后的调用点集合（格式 类型全名::成员签名）。
+        /// </summary>
+        public List<string> RenderCallers()
+        {
+            var result = _callers.ToList();
+            result.Sort(StringComparer.Ordinal);
             return result;
         }
 
@@ -152,9 +190,9 @@ public static class CallGraphExtractor
 
         /// <summary>
         /// 解码一个方法体的 IL 字节流：按 opcode 操作数表精确读取 token 与跳过定长操作数。
-        /// 遇到非法操作数表（越界/超大 switch）时安全中止，保留已收集部分。
+        /// callerTarget 非空时对方法调用 token 同时做调用点匹配。遇到非法操作数表（越界/超大 switch）时安全中止，保留已收集部分。
         /// </summary>
-        private void ScanBody(MethodBodyBlock body)
+        private void ScanBody(MethodBodyBlock body, MethodDefinitionHandle sourceMethod, MethodDefinitionHandle? callerTarget)
         {
             var il = body.GetILReader();
             try
@@ -177,7 +215,9 @@ public static class CallGraphExtractor
                     switch (kind)
                     {
                         case OperandKind.MethodToken:
-                            CollectMethodToken(il.ReadInt32());
+                            var rawToken = il.ReadInt32();
+                            CollectMethodToken(rawToken);
+                            if (callerTarget is not null && MatchesToken(rawToken, callerTarget.Value)) RecordCaller(sourceMethod);
                             break;
                         case OperandKind.SignatureToken:
                             CollectSignatureToken(il.ReadInt32());
@@ -240,6 +280,32 @@ public static class CallGraphExtractor
                     }
                     break;
             }
+        }
+
+        /// <summary>
+        /// 方法调用 token 是否指向目标方法：MethodDef 直接比较；MethodSpec 解包 spec.Method 再比较（覆盖泛型实例化调用
+        /// 如 GenericHelper.Echo&lt;int&gt; 的 MethodSpec 归约到 GenericHelper.Echo）。
+        /// </summary>
+        private bool MatchesToken(int rawToken, MethodDefinitionHandle target)
+        {
+            var handle = MetadataTokens.EntityHandle(rawToken);
+            return handle.Kind switch
+            {
+                HandleKind.MethodDefinition => (MethodDefinitionHandle)handle == target,
+                HandleKind.MethodSpecification => _reader.GetMethodSpecification((MethodSpecificationHandle)handle).Method == target,
+                _ => false,
+            };
+        }
+
+        /// <summary>
+        /// 记录调用点来源方法：以 类型全名::成员签名 行加入去重集合（签名经 SignatureRenderer 渲染，与 signature 工具口径一致）。
+        /// </summary>
+        private void RecordCaller(MethodDefinitionHandle source)
+        {
+            var method = _reader.GetMethodDefinition(source);
+            var declaringType = _reader.GetTypeDefinition(method.GetDeclaringType());
+            var signature = SignatureRenderer.RenderMemberSignature(_reader, declaringType, method);
+            _callers.Add($"{MetadataNaming.FullName(_reader, declaringType)}::{signature}");
         }
 
         /// <summary>

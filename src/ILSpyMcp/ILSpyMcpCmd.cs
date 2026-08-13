@@ -78,6 +78,12 @@ public class ILSpyMcpCmd
     public bool External { get; }
 
     /// <summary>
+    /// 按方法元数据 token 反向定位程序集内调用该方法的成员（配合 -cg；token 取 -s 行尾或 #MEMBER 的 token）。
+    /// </summary>
+    [Option("-tk|--token <token>", "按方法元数据 token 反向定位程序集内调用该方法的成员（配合 -cg；token 取 -s 行尾或 #MEMBER 的 token）。", CommandOptionType.SingleValue)]
+    public string Token { get; } = null!;
+
+    /// <summary>
     /// 列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 csi。
     /// </summary>
     [Option("-l|--list <entity-types>", "列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum；可组合多个字母，如 csi。", CommandOptionType.SingleValue)]
@@ -133,14 +139,14 @@ public class ILSpyMcpCmd
     /// <summary>
     /// 命令行分发：-c 走环境自检，-ai 走 assembly_info，-p 走 decompile_to_project，-o 走 decompile_to_dir，
     /// -s/-hc/-d/-cg 分别走 signature/hierarchy/dependencies/call_graph（-i 让 hierarchy 含间接后代、
-    /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用），-l 走 list_types（-nc 提供类型名子串过滤），
-    /// -mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用，-tk 配合 -cg 按方法 token 反向定位调用点），-l 走 list_types
+    /// （-nc 提供类型名子串过滤），-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string entityTypes, string nameContains,
         string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies, bool callGraph,
         bool external, bool indirect, bool assemblyInfo,
-        string lines, int timeoutSeconds, bool check,
+        string token, string lines, int timeoutSeconds, bool check,
         CancellationToken cancellationToken = default)
     {
         if (check)
@@ -175,7 +181,7 @@ public class ILSpyMcpCmd
         }
         if (callGraph)
         {
-            return await CallGraphTool.CallGraph(assembly, typeName, includeExternal: external, lines, cancellationToken);
+            return await CallGraphTool.CallGraph(assembly, typeName, token, includeExternal: external, lines, cancellationToken);
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {
@@ -199,7 +205,7 @@ public class ILSpyMcpCmd
                 Assembly, TypeName, MemberName, EntityTypes, NameContains,
                 OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies, CallGraph,
                 External, Indirect, AssemblyInfo,
-                Lines, TimeoutSeconds, Check));
+                Token, Lines, TimeoutSeconds, Check));
             return 0;
         }
 

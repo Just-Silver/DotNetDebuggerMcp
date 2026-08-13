@@ -1,5 +1,6 @@
 using ILSpyMcp.Metadata;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using Xunit;
 
@@ -160,5 +161,42 @@ public class CallGraphExtractorTests
         var type = GetType(scope.Reader, "ILSpyMcp.Samples.GenericHelper");
         var callers = CallGraphExtractor.FindCallers(scope.Pe, type, "ILSpyMcp.Samples.GenericHelper");
         Assert.Contains("ILSpyMcp.Samples.GenericCaller", callers);
+    }
+
+    [Fact]
+    public void FindMethodCallers_反向定位调用该方法的方法体()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        // 取 Callee 首个方法（Help，被 Caller.Run 的 c.Help() 调用）token
+        var callee = GetType(reader, "ILSpyMcp.Samples.Callee");
+        var token = $"0x{MetadataTokens.GetToken(callee.GetMethods().First()):x8}";
+        var callers = CallGraphExtractor.FindMethodCallers(pe, token);
+        Assert.Contains(callers, c => c.StartsWith("ILSpyMcp.Samples.Caller::"));
+    }
+
+    [Fact]
+    public void FindMethodCallers_泛型实例化调用_解包MethodSpec()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        // GenericCaller.Run 调 GenericHelper.Echo(1) 编译为 MethodSpec，应解包归约到 Echo
+        var helper = GetType(reader, "ILSpyMcp.Samples.GenericHelper");
+        var echo = helper.GetMethods().First(h => reader.GetString(reader.GetMethodDefinition(h).Name) == "Echo");
+        var token = $"0x{MetadataTokens.GetToken(echo):x8}";
+        var callers = CallGraphExtractor.FindMethodCallers(pe, token);
+        Assert.Contains(callers, c => c.StartsWith("ILSpyMcp.Samples.GenericCaller::"));
+    }
+
+    [Fact]
+    public void FindMethodCallers_非方法token_返回空()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        // 0x02000000 是 TypeDef 表起始 token，非方法定义 → 返回空
+        var callers = CallGraphExtractor.FindMethodCallers(pe, "0x02000000");
+        Assert.Empty(callers);
     }
 }

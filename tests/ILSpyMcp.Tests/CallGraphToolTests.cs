@@ -1,10 +1,13 @@
 using ILSpyMcp.Tools;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
 using Xunit;
 
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// call_graph 工具层用例：段标题输出 / 无内部调用（无）占位 / 反向段 / 类型不存在 / 参数校验 / lines 分页。
+/// call_graph 工具层用例：段标题输出 / 无内部调用（无）占位 / 反向段 / 类型不存在 / 参数校验 / lines 分页 / token 调用点。
 /// </summary>
 public class CallGraphToolTests
 {
@@ -89,5 +92,70 @@ public class CallGraphToolTests
         var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Caller");
 
         Assert.DoesNotContain("方法体调用的外部类型:", result);
+    }
+
+    [Fact]
+    public async Task CallGraph_token_输出方法体调用点()
+    {
+        var token = FirstCalleeMethodToken();
+        var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, token: token);
+
+        Assert.Contains("方法体调用此方法的成员:", result);
+        Assert.Contains("ILSpyMcp.Samples.Caller::", result);
+        Assert.DoesNotContain("方法体调用的内部类型:", result);
+    }
+
+    [Fact]
+    public async Task CallGraph_token_typeName非空_头部含类型与方法token()
+    {
+        var token = FirstCalleeMethodToken();
+        var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Callee", token);
+
+        Assert.Contains($"类型 ILSpyMcp.Samples.Callee 的方法 {token}（调用点）", result);
+        Assert.Contains("ILSpyMcp.Samples.Caller::", result);
+    }
+
+    [Fact]
+    public async Task CallGraph_token_缺省typeName_头部为方法token()
+    {
+        var token = FirstCalleeMethodToken();
+        var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, token: token);
+
+        Assert.Contains($"方法 {token}（调用点）", result);
+    }
+
+    [Fact]
+    public async Task CallGraph_token非法_返回提示()
+    {
+        var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, token: "0xZZZZ");
+
+        Assert.Contains("不是有效的元数据 token", result);
+    }
+
+    [Fact]
+    public async Task CallGraph_token为字段token_输出无占位()
+    {
+        // 字段 token（0x04 表）非方法定义：FindMethodCallers 返回空，应输出（无）占位而非报错
+        var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, token: "0x04000001");
+
+        Assert.Contains("方法体调用此方法的成员:", result);
+        Assert.Contains("（无）", result);
+    }
+
+    /// <summary>
+    /// 取测试程序集 Callee 首个方法（Help）的元数据 token，供 token 调用点用例。
+    /// </summary>
+    private static string FirstCalleeMethodToken()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        foreach (var typeHandle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(typeHandle);
+            if (reader.GetString(type.Name) != "Callee") continue;
+            return $"0x{MetadataTokens.GetToken(type.GetMethods().First()):x8}";
+        }
+        throw new InvalidOperationException("TestSamples 未找到 Callee 类型");
     }
 }

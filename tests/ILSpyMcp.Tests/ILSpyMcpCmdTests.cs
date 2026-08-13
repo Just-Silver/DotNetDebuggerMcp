@@ -1,10 +1,13 @@
 using ILSpyMcp;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
 using Xunit;
 
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// CLI 入口测试。仅覆盖不触碰 AppServices 单例的纯逻辑（版本号），避免并行测试相互污染；
+/// CLI 入口测试。仅覆盖不触碰 AppServices 单例的纯逻辑（版本号、-cg -tk 分发），避免并行测试相互污染；
 /// 命令行分发复用 DecompileTool/ListTypesTool/DecompileToDirTool（已在工具层测试覆盖），
 /// 端到端 CLI 行为由 dotnet run 手工验证。
 /// </summary>
@@ -16,6 +19,37 @@ public class ILSpyMcpCmdTests
         var cmd = new ILSpyMcpCmd();
         Assert.StartsWith("ilspymcp ", cmd.Version);
         Assert.Matches(@"^ilspymcp \d+\.\d+\.\d+$", cmd.Version);
+    }
+
+    [Fact]
+    public async Task DispatchCliAsync_cg加tk_输出方法级调用点()
+    {
+        // -cg -tk 分发走 call_graph 的 token 分支（纯元数据，不触碰 AppServices），应输出 Caller:: 调用点行
+        var token = FirstCalleeMethodToken();
+        var result = await ILSpyMcpCmd.DispatchCliAsync(
+            assembly: TestDataPaths.TestSamplesDll, typeName: "", memberName: "", entityTypes: "", nameContains: "",
+            outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
+            dependencies: false, callGraph: true, external: false, indirect: false, assemblyInfo: false,
+            token: token, lines: "", timeoutSeconds: 30, check: false);
+
+        Assert.Contains("ILSpyMcp.Samples.Caller::", result);
+    }
+
+    /// <summary>
+    /// 取测试程序集 Callee 首个方法（Help）的元数据 token，供 -cg -tk 分发用例。
+    /// </summary>
+    private static string FirstCalleeMethodToken()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        foreach (var typeHandle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(typeHandle);
+            if (reader.GetString(type.Name) != "Callee") continue;
+            return $"0x{MetadataTokens.GetToken(type.GetMethods().First()):x8}";
+        }
+        throw new InvalidOperationException("TestSamples 未找到 Callee 类型");
     }
 
     [Fact]

@@ -47,6 +47,11 @@ public static class TestDataHelper
     public const string CallerTypeName = "ILSpyMcp.Samples.Caller";
 
     /// <summary>
+    /// 被调用方（call_graph token 方法级调用点验证：Callee 方法被 Caller 调用）。
+    /// </summary>
+    public const string CalleeTypeName = "ILSpyMcp.Samples.Callee";
+
+    /// <summary>
     /// 仓库根目录（含 ILSpyMcp.slnx），随仓库整体移动自动适配。
     /// </summary>
     public static string RepoRoot { get; } = FindRepoRoot();
