@@ -127,12 +127,12 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
-    /// 反编译写入目录：单文件布局，文件名为 {typeName 空 ? Path.GetFileNameWithoutExtension(assembly) : typeName}.decompiled.cs。
+    /// 反编译写入目录：单文件布局，全量时输出 {程序集名}.decompiled.cs，指定类型时每个类型一个 {TypeName}.decompiled.cs 文件。
     /// 写入磁盘不做输出上限截断；返回成功提示（含文件数）或错误提示。
     /// </summary>
     /// <param name="assemblyPath">程序集文件路径（dll/exe）。</param>
     /// <param name="outputDir">输出目录（不存在则创建）。</param>
-    /// <param name="typeName">指定则仅反编译该类型；为空则反编译整个程序集。</param>
+    /// <param name="typeName">指定则仅反编译该类型，支持逗号分隔多个类型批量写盘；为空则反编译整个程序集。</param>
     /// <param name="cancellationToken">取消令牌，透传给反编译引擎实现协作式中断。</param>
     /// <returns>成功提示（含文件数与来源）或错误提示。</returns>
     public static string DecompileToDir(string assemblyPath, string outputDir, string? typeName, CancellationToken cancellationToken = default)
@@ -140,21 +140,37 @@ public sealed class InProcessDecompiler
         return Execute(assemblyPath, cancellationToken, (module, decompiler) =>
         {
             Directory.CreateDirectory(outputDir);
-            var outputName = string.IsNullOrEmpty(typeName) ? Path.GetFileNameWithoutExtension(assemblyPath) : typeName;
-            var outputPath = Path.Combine(outputDir, outputName + ".decompiled.cs");
-
-            string text;
             if (string.IsNullOrEmpty(typeName))
             {
-                text = decompiler.DecompileWholeModuleAsString();
+                // 全量：整个程序集写入单文件 {程序集名}.decompiled.cs
+                var fullPath = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(assemblyPath) + ".decompiled.cs");
+                File.WriteAllText(fullPath, decompiler.DecompileWholeModuleAsString());
+                return BuildWriteSuccess(outputDir, assemblyPath);
             }
-            else
+
+            // 指定类型：typeName 支持逗号分隔多个类型批量写盘，每个类型写入 {TypeName}.decompiled.cs。
+            // 宽松语义——找到的写盘、未找到的累计进提示，部分成功也算成功
+            var names = typeName.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            var missing = new List<string>();
+            foreach (var name in names)
             {
-                var handle = MetadataNaming.FindType(module.Metadata, typeName);
-                if (handle is null) return $"未找到类型 {typeName}";
-                text = decompiler.DecompileAsString(handle.Value);
+                var handle = MetadataNaming.FindType(module.Metadata, name);
+                if (handle is null)
+                {
+                    missing.Add(name);
+                    continue;
+                }
+                var text = decompiler.DecompileAsString(handle.Value);
+                File.WriteAllText(Path.Combine(outputDir, name + ".decompiled.cs"), text);
             }
-            File.WriteAllText(outputPath, text);
+            if (missing.Count > 0)
+            {
+                // 单一类型未找到：保持既有错误提示形态（「未找到类型 」前缀会被 IsErrorResult 判为错误）
+                if (names.Length == 1) return $"未找到类型 {missing[0]}";
+                // 批量未找到：附于成功提示之后（不以「未找到类型 」开头，避免被 IsErrorResult 误判为错误）
+                var hint = BuildWriteSuccess(outputDir, assemblyPath);
+                return hint[..^1] + $"；未找到：{string.Join("、", missing)}）";
+            }
             return BuildWriteSuccess(outputDir, assemblyPath);
         });
     }

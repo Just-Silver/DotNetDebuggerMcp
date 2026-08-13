@@ -63,6 +63,7 @@ ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg -x  # 方法体调用含跨
 ilspymcp -a bin/Debug/MyApp.dll -l csi               # 列出实体类型（等价 ilspy_list_types）
 ilspymcp -a bin/Debug/MyApp.dll -l c -nc Box        # 列出类型且名称含 Box（等价 ilspy_list_types 的 nameContains 参数，忽略大小写）
 ilspymcp -a bin/Debug/MyApp.dll -o src                 # 反编译写盘（等价 ilspy_decompile_to_dir，单文件输出）
+ilspymcp -a bin/Debug/MyApp.dll -o src -t "MyApp.IWorker,MyApp.Worker"   # 写盘指定多个类型（typeName 逗号分隔，每类型一个文件）
 ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories   # 项目形式反编译写盘（等价 ilspy_decompile_to_project）
 ilspymcp -c                                          # 检查 ilspymcp 是否有新版本（CLI 调试用，无需 -a；MCP 会话握手时自动注入报告）
 ```
@@ -75,7 +76,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | ---- | ---- |
 | `ilspy_decompile` | 反编译单个类型的完整源码到标准输出（类型级入口），输出带行号标注，支持按行号范围分页拉取 |
 | `ilspy_decompile_member` | 反编译单个或多个成员的实现体（成员级入口），按成员名子串定位或按 token 定位，输出带行号标注，支持分页拉取 |
-| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或单个类型，单文件输出） |
+| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或指定类型，`typeName` 支持逗号分隔多个类型批量写盘，单文件输出） |
 | `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件，按命名空间嵌套目录） |
 | `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），支持按类型名子串过滤，输出带行号标注 |
 | `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图；每行行尾附成员 token，可直接用于 `ilspy_decompile_member` 的 `token` 参数 |
@@ -101,7 +102,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
-| | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集 | 否 |
+| | `typeName` | 仅反编译指定全限定类型名；支持逗号分隔多个类型批量写盘（每个类型一个 `.decompiled.cs` 文件），如 `A.B.C1,A.B.C2`；未找到的类型在结果中提示，部分成功也算成功；省略则反编译整个程序集 | 否 |
 | | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_to_project` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |

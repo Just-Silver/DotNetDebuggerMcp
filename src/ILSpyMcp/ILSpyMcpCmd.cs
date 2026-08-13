@@ -24,9 +24,9 @@ public class ILSpyMcpCmd
     public string Assembly { get; } = null!;
 
     /// <summary>
-    /// 仅反编译指定全限定类型名，例如 System.String。
+    /// 仅反编译指定全限定类型名，例如 System.String；配合 -o 写盘时支持逗号分隔多个类型。
     /// </summary>
-    [Option("-t|--type <type-name>", "仅反编译指定全限定类型名，例如 System.String。", CommandOptionType.SingleValue)]
+    [Option("-t|--type <type-name>", "仅反编译指定全限定类型名，例如 System.String；配合 -o 写盘时支持逗号分隔多个类型。", CommandOptionType.SingleValue)]
     public string TypeName { get; } = null!;
 
     /// <summary>

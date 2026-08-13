@@ -13,6 +13,7 @@
 - `list_types` 新增 `nameContains` 名称子串过滤参数（忽略大小写，默认空=不过滤），大型程序集按名定位类型；CLI 同步提供 `-nc|--namecontains` 选项（配合 `-l`）
 - `hierarchy` 新增 `includeIndirect` 参数（默认 `false`）：为 true 时一次返回接口/基类的全部间接后代（如接口的所有实现者及其子类、基类的所有子孙），免 agent 递归多次调用
 - `dependencies`/`call_graph` 新增 `includeExternal` 参数（默认 `false`，CLI `-x`）：同时输出跨程序集外部类型引用（格式 `全名 [程序集名]`，如 `System.Console [System.Console]`），真实依赖链可见；CLI `-hc` 同步提供 `-i|--indirect` 选项传入 hierarchy 的 includeIndirect
+- `decompile_to_dir` 的 `typeName` 支持逗号分隔多个类型批量写盘（默认空=全量）：一次调用写入多个指定类型的源码文件（每个类型一个 `{TypeName}.decompiled.cs`），如 `"A.B.C1,A.B.C2"`；找到的类型写盘、未找到的类型在结果中提示（附「未找到：」清单），部分成功也算成功；CLI 写盘（`-o` + `-t`）同步支持
 
 ### Changed
 
