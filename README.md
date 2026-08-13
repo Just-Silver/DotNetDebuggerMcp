@@ -73,7 +73,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_decompile_member` | 反编译单个或多个成员的实现体（成员级入口），按成员名子串定位或按 token 定位，输出带行号标注，支持分页拉取 |
 | `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或单个类型，单文件输出） |
 | `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件，按命名空间嵌套目录） |
-| `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），输出带行号标注 |
+| `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），支持按类型名子串过滤，输出带行号标注 |
 | `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图；每行行尾附成员 token，可直接用于 `ilspy_decompile_member` 的 `token` 参数 |
 | `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型 |
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用 |
@@ -105,6 +105,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_list_types` | `assembly` | 程序集文件路径 | 是 |
 | | `list` | 实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 `csi` | 是 |
+| | `nameContains` | 类型名子串过滤（忽略大小写，默认空=不过滤），如 `Box` 只返回名称含 Box 的类型；大型程序集按名定位类型免分页 | 否 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
 | `ilspy_signature` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Formatting.OutputFormatter` | 是 |

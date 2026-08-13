@@ -66,6 +66,12 @@ public class ILSpyMcpCmd
     public string EntityTypes { get; } = null!;
 
     /// <summary>
+    /// 按类型名子串过滤 list_types 结果（忽略大小写），需配合 -l。
+    /// </summary>
+    [Option("-nc|--namecontains <substring>", "按类型名子串过滤 list_types 结果（忽略大小写），需配合 -l。", CommandOptionType.SingleValue)]
+    public string NameContains { get; } = null!;
+
+    /// <summary>
     /// 反编译写入的目录；指定后结果写入磁盘而非标准输出。
     /// </summary>
     [Option("-o|--outputdir <directory>", "反编译写入的目录；指定后结果写入磁盘而非标准输出。", CommandOptionType.SingleValue)]
@@ -111,7 +117,7 @@ public class ILSpyMcpCmd
     /// dependencies/call_graph，-l 走 list_types，-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
-        string assembly, string typeName, string memberName, string entityTypes,
+        string assembly, string typeName, string memberName, string entityTypes, string nameContains,
         string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies, bool callGraph,
         string lines, int timeoutSeconds, bool check,
         CancellationToken cancellationToken = default)
@@ -148,7 +154,7 @@ public class ILSpyMcpCmd
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {
-            return await ListTypesTool.ListTypes(assembly, entityTypes, lines, cancellationToken);
+            return await ListTypesTool.ListTypes(assembly, entityTypes, nameContains, lines, cancellationToken);
         }
         if (!string.IsNullOrEmpty(memberName))
         {
@@ -165,7 +171,7 @@ public class ILSpyMcpCmd
         if (!string.IsNullOrEmpty(Assembly) || Check)
         {
             Console.WriteLine(await DispatchCliAsync(
-                Assembly, TypeName, MemberName, EntityTypes,
+                Assembly, TypeName, MemberName, EntityTypes, NameContains,
                 OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies, CallGraph,
                 Lines, TimeoutSeconds, Check));
             return 0;

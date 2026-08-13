@@ -95,4 +95,53 @@ public class TypeListerTests
             Assert.Equal('e', entries["ILSpyMcp.Pipeline.DecompileKind"]);
         });
     }
+
+    [Fact]
+    public void 测试程序集_名称子串过滤_忽略大小写命中泛型类型()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            // "genericbox" 小写应忽略大小写命中 ILSpyMcp.Samples.GenericBox`1
+            var names = TypeLister.ListTypes(reader, "c", "genericbox").Select(e => e.FullName).ToList();
+
+            Assert.Contains("ILSpyMcp.Samples.GenericBox`1", names);
+        });
+    }
+
+    [Fact]
+    public void 名称子串过滤_子串命中即可()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            // 子串 "Generic" 应命中多个含该片段的类型（部分匹配即可）
+            var names = TypeLister.ListTypes(reader, "c", "Generic").Select(e => e.FullName).ToList();
+
+            Assert.Contains("ILSpyMcp.Samples.GenericBox`1", names);
+            Assert.Contains("ILSpyMcp.Samples.GenericCaller", names);
+            Assert.Contains("ILSpyMcp.Samples.GenericHelper", names);
+        });
+    }
+
+    [Fact]
+    public void 名称子串过滤_无匹配返回空()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            Assert.Empty(TypeLister.ListTypes(reader, "c", "不存在的类型名XYZ"));
+        });
+    }
+
+    [Fact]
+    public void 空或null名称子串_不过滤()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            var unfiltered = TypeLister.ListTypes(reader, "c");
+            var withEmpty = TypeLister.ListTypes(reader, "c", "");
+            var withNull = TypeLister.ListTypes(reader, "c", null);
+
+            Assert.Equal(unfiltered, withEmpty);
+            Assert.Equal(unfiltered, withNull);
+        });
+    }
 }

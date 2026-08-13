@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `list_types` 新增 `nameContains` 名称子串过滤参数（忽略大小写，默认空=不过滤），大型程序集按名定位类型
+
 ### Changed
 
 - MCP 握手注入 server 当前工作目录：agent 可据此解析 assembly/outputDir 相对路径，消除路径基准盲区
