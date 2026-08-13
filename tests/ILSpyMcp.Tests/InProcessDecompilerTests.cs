@@ -6,7 +6,7 @@ namespace ILSpyMcp.Tests;
 
 /// <summary>
 /// 进程内反编译服务用例：DecompileType 命中/未找到、DecompileMember token 非法/越界、DecompileWholeModule、
-/// DecompileToDir 单文件布局与文件计数、DecompileToProject 写盘、RunWithTimeoutAsync 正常/超时/取消语义。
+/// DecompileToDir 单文件布局、写盘文件名与文件计数、DecompileToProject 写盘、RunWithTimeoutAsync 正常/超时/取消语义。
 /// </summary>
 public class InProcessDecompilerTests
 {
@@ -228,6 +228,19 @@ public class InProcessDecompilerTests
         {
             if (Directory.Exists(dir)) Directory.Delete(dir, true);
         }
+    }
+
+    [Fact]
+    public void DecompileToDir_批量写盘提示列出文件路径()
+    {
+        var outDir = Path.Combine(Path.GetTempPath(), "ilspymcp-tests-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, outDir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Members");
+            Assert.Contains("ILSpyMcp.Samples.BigClass.decompiled.cs", result);
+            Assert.Contains("ILSpyMcp.Samples.Members.decompiled.cs", result);
+        }
+        finally { if (Directory.Exists(outDir)) Directory.Delete(outDir, recursive: true); }
     }
 
     [Fact]
