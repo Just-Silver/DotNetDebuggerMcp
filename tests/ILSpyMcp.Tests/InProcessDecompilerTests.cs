@@ -170,6 +170,67 @@ public class InProcessDecompilerTests
     }
 
     [Fact]
+    public void DecompileToDir_逗号分隔多类型_每类型一个文件()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Circle");
+
+            Assert.Contains("已写入", result);
+            Assert.Contains("2 个文件", result);
+            Assert.Contains("来源", result);
+            Assert.DoesNotContain("未找到", result);
+            Assert.True(File.Exists(Path.Combine(dir, "ILSpyMcp.Samples.BigClass.decompiled.cs")));
+            Assert.True(File.Exists(Path.Combine(dir, "ILSpyMcp.Samples.Circle.decompiled.cs")));
+            Assert.Contains("class BigClass", File.ReadAllText(Path.Combine(dir, "ILSpyMcp.Samples.BigClass.decompiled.cs")));
+            Assert.Contains("class Circle", File.ReadAllText(Path.Combine(dir, "ILSpyMcp.Samples.Circle.decompiled.cs")));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void DecompileToDir_逗号分隔部分未找到_已找到仍写盘并附未找到提示()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass,No.Such.Type");
+
+            Assert.Contains("已写入", result);
+            Assert.Contains("1 个文件", result);
+            Assert.Contains("未找到：No.Such.Type", result);
+            Assert.True(File.Exists(Path.Combine(dir, "ILSpyMcp.Samples.BigClass.decompiled.cs")));
+            Assert.Single(Directory.GetFiles(dir));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void DecompileToDir_逗号分隔全部未找到_附未找到提示且文件数0()
+    {
+        var dir = NewTempDir();
+        try
+        {
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "No.A,No.B");
+
+            Assert.Contains("未找到：No.A、No.B", result);
+            Assert.Contains("0 个文件", result);
+            Assert.Equal(0, Directory.Exists(dir) ? Directory.GetFiles(dir).Length : 0);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
     public void DecompileToProject_写盘生成csproj与源码文件()
     {
         var dir = NewTempDir();

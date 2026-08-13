@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 
 namespace ILSpyMcp.Metadata;
 
@@ -12,11 +13,12 @@ namespace ILSpyMcp.Metadata;
 public static class SignatureRenderer
 {
     /// <summary>
-    /// 渲染指定类型全部成员的一行签名（每成员一行，API 地图）。
+    /// 渲染指定类型全部成员的一行签名（每成员一行，API 地图）。每行行尾附成员元数据 token，
+    /// agent 看中某成员后可直接用于 decompile_member 的 token 参数反编译。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待渲染的类型定义。</param>
-    /// <returns>成员签名行列表，顺序为字段、方法、属性、事件；属性/事件的访问器方法不单独出现。</returns>
+    /// <returns>成员签名行列表，顺序为字段、方法、属性、事件；属性/事件的访问器方法不单独出现，每行行尾附 `  0x...` token。</returns>
     public static IReadOnlyList<string> RenderTypeSignatures(MetadataReader reader, TypeDefinition type)
     {
         var provider = new Provider(reader);
@@ -31,30 +33,38 @@ public static class SignatureRenderer
             var field = reader.GetFieldDefinition(handle);
             // 自动属性/事件的 backing field（名含 '<'，如 <Count>k__BackingField）是编译器生成物，API 地图不展示
             if (reader.GetString(field.Name).Contains('<')) continue;
-            results.Add(RenderField(reader, field, provider, typeParams));
+            results.Add(WithToken(RenderField(reader, field, provider, typeParams), handle));
         }
 
         foreach (var handle in type.GetMethods())
         {
             var method = reader.GetMethodDefinition(handle);
             if (IsAccessorName(reader.GetString(method.Name))) continue;
-            results.Add(RenderMethod(reader, method, provider, typeParams, ctorDisplayName));
+            results.Add(WithToken(RenderMethod(reader, method, provider, typeParams, ctorDisplayName), handle));
         }
 
         foreach (var handle in type.GetProperties())
         {
             var property = reader.GetPropertyDefinition(handle);
-            results.Add(RenderProperty(reader, property, provider, typeParams));
+            results.Add(WithToken(RenderProperty(reader, property, provider, typeParams), handle));
         }
 
         foreach (var handle in type.GetEvents())
         {
             var evt = reader.GetEventDefinition(handle);
-            results.Add(RenderEvent(reader, evt, provider, new GenericContext(typeParams, Array.Empty<string>())));
+            results.Add(WithToken(RenderEvent(reader, evt, provider, new GenericContext(typeParams, Array.Empty<string>())), handle));
         }
 
         return results;
     }
+
+    /// <summary>
+    /// 行尾附成员元数据 token（如 `  0x06000505`，两个空格分隔），供 agent 直接用于 decompile_member 的 token 参数。
+    /// 只在 RenderTypeSignatures 的调用处拼接——RenderMethod 等被 RenderMemberSignature 复用（decompile_member 超限清单
+    /// 场景），在其内部拼 token 会污染 #MEMBER JSON 的 signature 字段。
+    /// </summary>
+    private static string WithToken(string line, EntityHandle handle)
+        => $"{line}  0x{MetadataTokens.GetToken(handle):x8}";
 
     /// <summary>
     /// 渲染单个方法成员的一行签名（供 decompile_member 超限清单等场景）。不做访问器过滤——调用方传的是明确要渲染的成员，

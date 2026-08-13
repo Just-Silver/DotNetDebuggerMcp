@@ -83,6 +83,62 @@ public class SignatureRendererTests
         Assert.Matches(@"^(public|internal|protected|private)", lines[0]);
     }
 
+    [Fact]
+    public void 每行行尾附成员token()
+    {
+        // API 地图每行行尾附 `  0x...` 成员元数据 token，agent 可直接用于 decompile_member 的 token 参数
+        var lines = Render("ILSpyMcp.Formatting.OutputFormatter");
+        Assert.NotEmpty(lines);
+        Assert.All(lines, line => Assert.Matches(@"0x[0-9a-f]{8}$", line));
+    }
+
+    [Fact]
+    public void 方法token以06开头()
+    {
+        // DecompileCache 构造函数（.ctor 渲染为类型名）是方法，MethodDef token 高字节为 0x06
+        var lines = Render("ILSpyMcp.Caching.DecompileCache");
+        var line = Assert.Single(lines, l => l.Contains("DecompileCache("));
+        Assert.Matches(@"0x06[0-9a-f]{6}$", line);
+    }
+
+    [Fact]
+    public void 字段token以04开头()
+    {
+        // _maxBytes 是字段，Field token 高字节为 0x04
+        var lines = Render("ILSpyMcp.Caching.DecompileCache");
+        var line = Assert.Single(lines, l => l.Contains("_maxBytes;"));
+        Assert.Matches(@"0x04[0-9a-f]{6}$", line);
+    }
+
+    [Fact]
+    public void 属性token以17开头()
+    {
+        // Latest 是属性，Property token 高字节为 0x17
+        var lines = Render("ILSpyMcp.UpdateCheck.UpdateChecker+UpdateCheckCache");
+        var line = Assert.Single(lines, l => l.Contains(" Latest { get; set; }"));
+        Assert.Matches(@"0x17[0-9a-f]{6}$", line);
+    }
+
+    [Fact]
+    public void RenderMemberSignature_不含行尾token()
+    {
+        // RenderMemberSignature 供 decompile_member 超限清单复用，token 已在 #MEMBER JSON 中，行内不得再拼
+        using var fs = File.OpenRead(AssemblyPath);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        var typeHandle = MetadataNaming.FindType(reader, "ILSpyMcp.Formatting.OutputFormatter");
+        Assert.True(typeHandle.HasValue, $"测试程序集中未找到类型 ILSpyMcp.Formatting.OutputFormatter");
+        var type = reader.GetTypeDefinition(typeHandle!.Value);
+        var method = type.GetMethods()
+            .Select(reader.GetMethodDefinition)
+            .Single(m => reader.GetString(m.Name) == "FormatHead");
+
+        var line = SignatureRenderer.RenderMemberSignature(reader, type, method);
+
+        Assert.DoesNotMatch(@"0x[0-9a-f]{8}$", line);
+        Assert.Contains("FormatHead(", line);
+    }
+
     // TODO(TestData 扩展后补)：主程序集当前无泛型类型定义/泛型方法，泛型参数渲染（List`1 实例化、
     // GetGenericTypeParameter/GetGenericMethodParameter 取名字、方法名后 <T>）暂无可断言的真实成员；
     // 待 tests/TestData 加入泛型样本类型后再补泛型断言。

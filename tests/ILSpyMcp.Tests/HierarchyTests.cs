@@ -143,4 +143,73 @@ public class HierarchyTests
         var circleFullName = MetadataNaming.FullName(scope.Reader, circle);
         Assert.Contains("ILSpyMcp.Samples.SealedCircle", Hierarchy.GetDescendants(scope.Reader, circle, circleFullName));
     }
+
+    [Fact]
+    public void GetDescendantsIncludingIndirect_Level1_含全部间接后代()
+    {
+        // Level1 → Level2 → Level3 → Level4：间接后代应收集 Level2/Level3/Level4 整条链
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.Level1");
+        var fullName = MetadataNaming.FullName(scope.Reader, type);
+        var descendants = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, type, fullName);
+
+        Assert.Contains("ILSpyMcp.Samples.Level2", descendants);
+        Assert.Contains("ILSpyMcp.Samples.Level3", descendants);
+        Assert.Contains("ILSpyMcp.Samples.Level4", descendants);
+    }
+
+    [Fact]
+    public void GetDescendantsIncludingIndirect_接口_含多层实现者()
+    {
+        // IWorker 被 WorkerBase 直接实现，WorkerDerived : WorkerBase 间接实现；间接实现者应含两者
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.IWorker");
+        var fullName = MetadataNaming.FullName(scope.Reader, type);
+        var descendants = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, type, fullName);
+
+        Assert.Contains("ILSpyMcp.Samples.WorkerBase", descendants);
+        Assert.Contains("ILSpyMcp.Samples.WorkerDerived", descendants);
+
+        // 直接实现者仅 WorkerBase
+        var direct = Hierarchy.GetDescendants(scope.Reader, type, fullName);
+        Assert.Contains("ILSpyMcp.Samples.WorkerBase", direct);
+        Assert.DoesNotContain("ILSpyMcp.Samples.WorkerDerived", direct);
+    }
+
+    [Fact]
+    public void GetDescendantsIncludingIndirect_泛型基类_含间接后代()
+    {
+        // GenericRoot<T> 被 GenericMid : GenericRoot<int> 直接继承，GenericLeaf : GenericMid 间接继承；
+        // 泛型实例化比较走底层定义全名（与 GetDescendants 一致），间接后代应含两者
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.GenericRoot`1");
+        var fullName = MetadataNaming.FullName(scope.Reader, type);
+        var descendants = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, type, fullName);
+
+        Assert.Contains("ILSpyMcp.Samples.GenericMid", descendants);
+        Assert.Contains("ILSpyMcp.Samples.GenericLeaf", descendants);
+
+        // 直接后代仅 GenericMid
+        var direct = Hierarchy.GetDescendants(scope.Reader, type, fullName);
+        Assert.Contains("ILSpyMcp.Samples.GenericMid", direct);
+        Assert.DoesNotContain("ILSpyMcp.Samples.GenericLeaf", direct);
+    }
+
+    [Fact]
+    public void GetDescendantsIncludingIndirect_无间接后代_与直接后代一致()
+    {
+        // AbstractShape → Circle → SealedCircle：AbstractShape 的间接后代含 SealedCircle（间接），
+        // 与 GetDescendants（直接）不一致；而 Circle 无更深的链，间接=直接
+        using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
+        var shape = Resolve(scope.Reader, "ILSpyMcp.Samples.AbstractShape");
+        var shapeFullName = MetadataNaming.FullName(scope.Reader, shape);
+        Assert.Contains("ILSpyMcp.Samples.SealedCircle",
+            Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, shape, shapeFullName));
+
+        var circle = Resolve(scope.Reader, "ILSpyMcp.Samples.Circle");
+        var circleFullName = MetadataNaming.FullName(scope.Reader, circle);
+        var indirectCircle = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, circle, circleFullName);
+        var directCircle = Hierarchy.GetDescendants(scope.Reader, circle, circleFullName);
+        Assert.Equal(directCircle.OrderBy(n => n), indirectCircle.OrderBy(n => n));
+    }
 }

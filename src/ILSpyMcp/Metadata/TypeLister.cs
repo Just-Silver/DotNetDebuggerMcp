@@ -14,8 +14,9 @@ public static class TypeLister
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="categories">实体类别组合（调用方已校验），c/i/s/d/e 可组合：c=class, i=interface, s=struct, d=delegate, e=enum。</param>
+    /// <param name="nameContains">可选类型名子串过滤（忽略大小写）；为空时不过滤。</param>
     /// <returns>(类别字母, 全名) 列表，按元数据枚举序；无匹配时为空列表。</returns>
-    public static IReadOnlyList<(char Category, string FullName)> ListTypes(MetadataReader reader, string categories)
+    public static IReadOnlyList<(char Category, string FullName)> ListTypes(MetadataReader reader, string categories, string? nameContains = null)
     {
         var result = new List<(char Category, string FullName)>();
         foreach (var handle in reader.TypeDefinitions)
@@ -23,7 +24,10 @@ public static class TypeLister
             var type = reader.GetTypeDefinition(handle);
             if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type)) continue;
             var category = Classify(reader, type);
-            if (categories.Contains(category)) result.Add((category, MetadataNaming.FullName(reader, type)));
+            if (!categories.Contains(category)) continue;
+            var fullName = MetadataNaming.FullName(reader, type);
+            if (!string.IsNullOrEmpty(nameContains) && !fullName.Contains(nameContains, StringComparison.OrdinalIgnoreCase)) continue;
+            result.Add((category, fullName));
         }
         return result;
     }

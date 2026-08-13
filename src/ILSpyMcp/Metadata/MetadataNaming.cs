@@ -28,6 +28,65 @@ public static class MetadataNaming
     }
 
     /// <summary>
+    /// 渲染 TypeReference 的全限定名（命名空间.名，嵌套沿 ResolutionScope 递归用 + 连接），与
+    /// <see cref="FullName(MetadataReader, TypeDefinition)"/> 的格式一致（供跨程序集外部类型渲染）。
+    /// 纯元数据读取，不加载外部程序集。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <param name="handle">待渲染的类型引用句柄。</param>
+    /// <returns>如 "System.Console"、"System.Collections.Generic.List`1"；无法解析时返回 null。</returns>
+    public static string? TypeReferenceFullName(MetadataReader reader, TypeReferenceHandle handle)
+    {
+        var tr = reader.GetTypeReference(handle);
+        var name = reader.GetString(tr.Name);
+        if (tr.ResolutionScope.Kind == HandleKind.TypeReference)
+        {
+            var outer = TypeReferenceFullName(reader, (TypeReferenceHandle)tr.ResolutionScope);
+            return outer is null ? null : $"{outer}+{name}";
+        }
+        var ns = reader.GetString(tr.Namespace);
+        return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+    }
+
+    /// <summary>
+    /// 判定 TypeReference 归属：沿 ResolutionScope 上溯到最外层，最外层为 AssemblyReference 时返回该程序集名
+    /// （跨程序集外部类型，纯元数据读取 AssemblyReference.Name，不加载外部程序集）；ModuleDefinition 为本模块
+    /// （程序集内部）；ModuleReference 等其余作用域归属未知（外部，程序集名为 null）。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <param name="handle">待判定的类型引用句柄。</param>
+    /// <returns>IsInternal 表示本程序集类型；否则 AssemblyName 为归属程序集名（未知时为 null）。</returns>
+    public static (bool IsInternal, string? AssemblyName) TypeReferenceScope(MetadataReader reader, TypeReferenceHandle handle)
+    {
+        var scope = reader.GetTypeReference(handle).ResolutionScope;
+        while (true)
+        {
+            switch (scope.Kind)
+            {
+                case HandleKind.ModuleDefinition:
+                    return (true, null);
+                case HandleKind.AssemblyReference:
+                    return (false, reader.GetString(reader.GetAssemblyReference((AssemblyReferenceHandle)scope).Name));
+                case HandleKind.TypeReference: // 嵌套类型：沿外层继续上溯
+                    scope = reader.GetTypeReference((TypeReferenceHandle)scope).ResolutionScope;
+                    continue;
+                default: // ModuleReference 等其余作用域：外部且归属未知
+                    return (false, null);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 渲染跨程序集外部类型的归属条目：<c>全名 [程序集名]</c>（如 <c>System.Console [System.Console]</c>）；
+    /// 归属未知（如 ModuleReference 作用域）时输出 <c>全名 [&lt;外部&gt;]</c>。供 dependencies/call_graph 的外部段使用。
+    /// </summary>
+    /// <param name="fullName">类型全名（建议来自 <see cref="TypeReferenceFullName"/>）。</param>
+    /// <param name="assemblyName">归属程序集名；未知时传 null。</param>
+    /// <returns>如 "System.Console [System.Console]"、"Ns.Type [&lt;外部&gt;]"。</returns>
+    public static string FormatExternal(string fullName, string? assemblyName)
+        => $"{fullName} [{(assemblyName ?? "<外部>")}]";
+
+    /// <summary>
     /// 在程序集内按用户输入定位 TypeDefinition；未找到返回 null。
     /// 输入可含两种嵌套分隔符（Probe.Outer+Inner 或 Probe.Outer.Inner）——匹配前将 + 统一归一化为 . 后比较。
     /// 注意：命名空间与嵌套分隔的歧义（A.B.C 是命名空间 A.B 的类型 C，还是命名空间 A 的类型 B 的嵌套 C）取枚举序首个命中。

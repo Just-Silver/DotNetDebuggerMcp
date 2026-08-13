@@ -27,6 +27,14 @@ public static class ListTypesCases
         new ToolCallCase("list_types", "编译器生成类型全过滤（输出不含 <）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c" },
             ExpectedContains: TestDataHelper.ListedClassName, MustNotContain: "<"),
+        // nameContains 按类型名子串过滤（忽略大小写）："Generic" 应命中 GenericBox`1
+        new ToolCallCase("list_types", "nameContains 按名过滤（命中 GenericBox）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["nameContains"] = "Generic" },
+            ExpectedContains: "ILSpyMcp.Samples.GenericBox`1", MustNotContain: "at System"),
+        // nameContains 无匹配：过滤后应无结果行，但头部信息块仍在（匹配实体: 0 个）
+        new ToolCallCase("list_types", "nameContains 无匹配（返回空列表）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["nameContains"] = "不存在的类型名XYZ" },
+            ExpectedContains: "匹配实体: 0 个", MustNotContain: "at System"),
         // 非法 list 应返回中文校验提示而非异常堆栈
         new ToolCallCase("list_types", "非法 list（应返回校验提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "xyz" },

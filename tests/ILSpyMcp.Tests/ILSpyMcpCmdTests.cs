@@ -17,4 +17,22 @@ public class ILSpyMcpCmdTests
         Assert.StartsWith("ilspymcp ", cmd.Version);
         Assert.Matches(@"^ilspymcp \d+\.\d+\.\d+$", cmd.Version);
     }
+
+    [Fact]
+    public void BuildServerInstructions_含更新报告_首行为CWD行后接报告()
+    {
+        const string report = "ilspymcp 已是最新版本";
+        var text = ILSpyMcpCmd.BuildServerInstructions(report);
+
+        var lines = text.Split([Environment.NewLine], StringSplitOptions.None);
+        Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", lines[0]);
+        Assert.Contains(report, text);
+    }
+
+    [Fact]
+    public void BuildServerInstructions_报告为空_仅CWD行()
+    {
+        Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", ILSpyMcpCmd.BuildServerInstructions(null));
+        Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", ILSpyMcpCmd.BuildServerInstructions(""));
+    }
 }

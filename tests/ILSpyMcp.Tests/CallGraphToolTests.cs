@@ -60,4 +60,23 @@ public class CallGraphToolTests
 
         Assert.Contains("lines 参数格式应为", result);
     }
+
+    [Fact]
+    public async Task CallGraph_includeExternal_输出外部段()
+    {
+        var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Caller", includeExternal: true);
+
+        Assert.Contains("方法体调用的内部类型:", result);
+        Assert.Contains("方法体调用的外部类型:", result);
+        Assert.Contains("System.Console [System.Console]", result);
+        Assert.Contains("ILSpyMcp.Samples.Callee", result);
+    }
+
+    [Fact]
+    public async Task CallGraph_缺省includeExternal_无外部段()
+    {
+        var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Caller");
+
+        Assert.DoesNotContain("方法体调用的外部类型:", result);
+    }
 }
