@@ -131,9 +131,10 @@ public static class DecompileMemberTool
     }
 
     /// <summary>
-    /// 匹配数超限时仅返回成员签名清单：重新打开程序集做纯元数据读取，遍历全部非编译器生成类型，凡 token 属于匹配集合的成员渲染一行
-    /// `#MEMBER {name/token/signature/type}` JSON 行（type 为该成员所属类型全名）。按 token（而非方法名）匹配，避免同名重载成员被名字
-    /// 集合去重而丢失。清单同样受 lines 分页控制（缺省返回前约 8 KB）。
+    /// 匹配数超限时仅返回成员签名清单：重新打开程序集做纯元数据读取，遍历全部非编译器生成类型的全部成员（字段/方法/属性/事件），
+    /// 凡 token 属于匹配集合的成员渲染一行 `#MEMBER {name/token/signature/type}` JSON 行（type 为该成员所属类型全名）。
+    /// 按 token（而非成员名）匹配，避免同名重载成员被名字集合去重而丢失；签名经 <see cref="SignatureRenderer.RenderSingleMember"/> 渲染，
+    /// 支持字段/方法/属性/事件四类成员。清单同样受 lines 分页控制（缺省返回前约 8 KB）。
     /// </summary>
     private static string RenderSignatureList(string assemblyFull, string memberName, IReadOnlyList<MemberMatch> matches, string lines)
     {
@@ -151,13 +152,12 @@ public static class DecompileMemberTool
                 var type = reader.GetTypeDefinition(handle);
                 if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type)) continue;
                 var typeName = MetadataNaming.FullName(reader, type);
-                foreach (var methodHandle in type.GetMethods())
+                foreach (var memberHandle in EnumerateMemberHandles(type))
                 {
-                    var token = $"0x{MetadataTokens.GetToken(methodHandle):x8}";
+                    var token = $"0x{MetadataTokens.GetToken(memberHandle):x8}";
                     if (!tokens.Contains(token)) continue;
-                    var method = reader.GetMethodDefinition(methodHandle);
-                    var name = reader.GetString(method.Name);
-                    var signature = SignatureRenderer.RenderMemberSignature(reader, type, method);
+                    var signature = SignatureRenderer.RenderSingleMember(reader, type, memberHandle);
+                    var name = MemberName(reader, memberHandle);
                     signatureLines.Add($"#MEMBER {OutputFormatter.MemberJson(name, token, signature, typeName)}");
                 }
             }
@@ -169,4 +169,28 @@ public static class DecompileMemberTool
             return $"无法读取程序集元数据：{ex.Message}";
         }
     }
+
+    /// <summary>
+    /// 按字段→方法→属性→事件顺序枚举类型全部成员句柄（与搜索/签名渲染顺序一致，保证清单行序稳定）。
+    /// </summary>
+    private static IEnumerable<EntityHandle> EnumerateMemberHandles(TypeDefinition type)
+    {
+        foreach (var handle in type.GetFields()) yield return handle;
+        foreach (var handle in type.GetMethods()) yield return handle;
+        foreach (var handle in type.GetProperties()) yield return handle;
+        foreach (var handle in type.GetEvents()) yield return handle;
+    }
+
+    /// <summary>
+    /// 取成员元数据原始名（字段/方法取 Name，属性/事件取 Name）；未知句柄类型返回占位符。
+    /// </summary>
+    private static string MemberName(MetadataReader reader, EntityHandle handle)
+        => handle.Kind switch
+        {
+            HandleKind.FieldDefinition => reader.GetString(reader.GetFieldDefinition((FieldDefinitionHandle)handle).Name),
+            HandleKind.MethodDefinition => reader.GetString(reader.GetMethodDefinition((MethodDefinitionHandle)handle).Name),
+            HandleKind.PropertyDefinition => reader.GetString(reader.GetPropertyDefinition((PropertyDefinitionHandle)handle).Name),
+            HandleKind.EventDefinition => reader.GetString(reader.GetEventDefinition((EventDefinitionHandle)handle).Name),
+            _ => "<unknown>",
+        };
 }

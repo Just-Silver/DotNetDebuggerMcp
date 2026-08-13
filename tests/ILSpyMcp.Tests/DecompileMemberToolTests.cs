@@ -74,6 +74,48 @@ public class DecompileMemberToolTests
     }
 
     [Fact]
+    public async Task 字段token_按token反编译字段()
+    {
+        AppServices.ConfigureForTest();
+        try
+        {
+            // Members 类型中按名搜 Name 命中字段（0x04），取其 token 走 token 参数反编译
+            var matches = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Name").Matches;
+            var field = Assert.Single(matches, m => m.Token.StartsWith("0x04"));
+
+            var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "", field.Token);
+
+            Assert.Contains("按 token 反编译", result);
+            Assert.Contains("Name", result);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task 跨程序集搜索超限_签名清单含字段属性事件()
+    {
+        AppServices.ConfigureForTest();
+        try
+        {
+            // "e" 跨程序集匹配约 39 个成员（>20）触发超限签名清单，且覆盖字段/属性/事件：
+            // Members 类型的 Name 字段（0x04000003）、Changed 事件（0x14000001）与 Props 的 PrivateSet 属性（0x17000006）均在清单内
+            var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "e");
+
+            Assert.Contains("超过上限", result);
+            Assert.Contains("0x04000003", result); // 字段 Name
+            Assert.Contains("0x17000006", result); // 属性 PrivateSet
+            Assert.Contains("0x14000001", result); // 事件 Changed
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
     public async Task 缺token且缺memberName_返回校验提示()
     {
         AppServices.ConfigureForTest();

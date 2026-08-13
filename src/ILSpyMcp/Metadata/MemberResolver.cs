@@ -42,13 +42,13 @@ public readonly record struct MemberSearchResult(bool TypeFound, IReadOnlyList<M
 
 /// <summary>
 /// 成员名搜索：纯元数据读取（PEReader + MetadataReader），不加载程序集、不反编译 IL。 经 <see cref="MetadataNaming.FindType"/>
-/// 按输入定位 TypeDefinition（+ 与 . 嵌套分隔均可），枚举其全部方法并按名字子串匹配，返回可直用于进程内成员反编译的 token。
-/// 默认排除属性/事件访问器方法，无匹配时给出相近成员名供调用方拼「未找到」提示。
+/// 按输入定位 TypeDefinition（+ 与 . 嵌套分隔均可），枚举其全部可搜索成员（字段/方法/属性/事件）并按名字子串匹配，
+/// 返回可直用于进程内成员反编译的 token。默认排除属性/事件访问器方法，无匹配时给出相近成员名供调用方拼「未找到」提示。
 /// </summary>
 public static class MemberResolver
 {
     /// <summary>
-    /// 在指定类型的全部方法中按名字子串搜索（忽略大小写）。
+    /// 在指定类型的全部可搜索成员（字段/方法/属性/事件）中按名字子串搜索（忽略大小写）。
     /// </summary>
     /// <param name="assemblyPath">程序集绝对路径。</param>
     /// <param name="typeName">全限定类型名（嵌套类型以 + 或 . 连接，如 Outer+Inner / Outer.Inner）。</param>
@@ -65,25 +65,22 @@ public static class MemberResolver
         if (typeHandle is null) return new MemberSearchResult(false, Array.Empty<MemberMatch>(), Array.Empty<string>());
 
         var type = reader.GetTypeDefinition(typeHandle.Value);
-        var fullTypeName = MetadataNaming.FullName(reader, type);
         var matches = new List<MemberMatch>();
         var names = new List<string>();
-        foreach (var methodHandle in type.GetMethods())
+        foreach (var (name, token, fullTypeName) in EnumerateSearchableMembers(reader, type, includeAccessors))
         {
-            var method = reader.GetMethodDefinition(methodHandle);
-            var name = reader.GetString(method.Name);
-            if (!includeAccessors && IsAccessorName(name)) continue;
             names.Add(name);
             if (!name.Contains(memberName, StringComparison.OrdinalIgnoreCase)) continue;
-            matches.Add(new MemberMatch(name, $"0x{MetadataTokens.GetToken(methodHandle):x8}", fullTypeName));
+            matches.Add(new MemberMatch(name, token, fullTypeName));
         }
         var similar = matches.Count == 0 ? SimilarNameMatcher.FindSimilar(names, memberName) : Array.Empty<string>();
         return new MemberSearchResult(true, matches, similar);
     }
 
     /// <summary>
-    /// 在程序集全部非编译器生成类型的全部方法中按名字子串搜索（忽略大小写），返回匹配成员及其所属类型全名。
-    /// 供 decompile_member 省略 typeName 时的跨程序集搜索；默认排除属性/事件访问器，无匹配时给出相近成员名。
+    /// 在程序集全部非编译器生成类型的全部可搜索成员（字段/方法/属性/事件）中按名字子串搜索（忽略大小写），
+    /// 返回匹配成员及其所属类型全名。供 decompile_member 省略 typeName 时的跨程序集搜索；默认排除属性/事件访问器，
+    /// 无匹配时给出相近成员名。
     /// </summary>
     /// <param name="assemblyPath">程序集绝对路径。</param>
     /// <param name="memberName">成员名子串，忽略大小写。</param>
@@ -99,19 +96,41 @@ public static class MemberResolver
         {
             var type = reader.GetTypeDefinition(handle);
             if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type)) continue;
-            var typeName = MetadataNaming.FullName(reader, type);
-            foreach (var methodHandle in type.GetMethods())
+            foreach (var (name, token, typeName) in EnumerateSearchableMembers(reader, type, includeAccessors: false))
             {
-                var method = reader.GetMethodDefinition(methodHandle);
-                var name = reader.GetString(method.Name);
-                if (IsAccessorName(name)) continue;
                 names.Add(name);
                 if (!name.Contains(memberName, StringComparison.OrdinalIgnoreCase)) continue;
-                matches.Add(new MemberMatch(name, $"0x{MetadataTokens.GetToken(methodHandle):x8}", typeName));
+                matches.Add(new MemberMatch(name, token, typeName));
             }
         }
         var similar = matches.Count == 0 ? SimilarNameMatcher.FindSimilar(names, memberName) : Array.Empty<string>();
         return new MemberSearchResult(true, matches, similar);
+    }
+
+    /// <summary>
+    /// 枚举类型的全部可搜索成员（字段→方法→属性→事件，与 SignatureRenderer 输出顺序一致），每个成员一条
+    /// (名字, token, 类型全名)。字段跳过名含 '&lt;' 的自动属性/事件 backing field（编译器生成物），
+    /// includeAccessors 为 false 时方法跳过属性/事件访问器（get_/set_/add_/remove_ 与显式接口实现含 '.' 的访问器）。
+    /// </summary>
+    private static IEnumerable<(string Name, string Token, string TypeName)> EnumerateSearchableMembers(MetadataReader reader, TypeDefinition type, bool includeAccessors)
+    {
+        var typeName = MetadataNaming.FullName(reader, type);
+        foreach (var handle in type.GetFields())
+        {
+            var name = reader.GetString(reader.GetFieldDefinition(handle).Name);
+            if (name.Contains('<')) continue; // 自动属性 backing field
+            yield return (name, $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
+        }
+        foreach (var handle in type.GetMethods())
+        {
+            var name = reader.GetString(reader.GetMethodDefinition(handle).Name);
+            if (!includeAccessors && IsAccessorName(name)) continue;
+            yield return (name, $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
+        }
+        foreach (var handle in type.GetProperties())
+            yield return (reader.GetString(reader.GetPropertyDefinition(handle).Name), $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
+        foreach (var handle in type.GetEvents())
+            yield return (reader.GetString(reader.GetEventDefinition(handle).Name), $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
     }
 
     /// <summary>

@@ -120,6 +120,28 @@ public class SignatureRendererTests
     }
 
     [Fact]
+    public void RenderSingleMember_字段属性事件按其token渲染()
+    {
+        // Members 类型：string Name（字段）、int Count { get; set; }（属性）、event Changed（事件）；
+        // RenderSingleMember 按句柄 Kind 分发到对应私有渲染器，供 decompile_member 超限签名清单复用
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        var handle = MetadataNaming.FindType(reader, "ILSpyMcp.Samples.Members");
+        Assert.True(handle.HasValue, "测试程序集中未找到类型 ILSpyMcp.Samples.Members");
+        var type = reader.GetTypeDefinition(handle!.Value);
+
+        var fieldHandle = type.GetFields().Single(h => reader.GetString(reader.GetFieldDefinition(h).Name) == "Name");
+        Assert.Equal("public string Name;", SignatureRenderer.RenderSingleMember(reader, type, fieldHandle));
+
+        var propHandle = type.GetProperties().Single(h => reader.GetString(reader.GetPropertyDefinition(h).Name) == "Count");
+        Assert.Equal("public int Count { get; set; }", SignatureRenderer.RenderSingleMember(reader, type, propHandle));
+
+        var eventHandle = type.GetEvents().Single(h => reader.GetString(reader.GetEventDefinition(h).Name) == "Changed");
+        Assert.Equal("public event System.EventHandler Changed;", SignatureRenderer.RenderSingleMember(reader, type, eventHandle));
+    }
+
+    [Fact]
     public void RenderMemberSignature_不含行尾token()
     {
         // RenderMemberSignature 供 decompile_member 超限清单复用，token 已在 #MEMBER JSON 中，行内不得再拼

@@ -83,6 +83,29 @@ public static class SignatureRenderer
     }
 
     /// <summary>
+    /// 渲染单个成员（字段/方法/属性/事件）的一行签名（供 decompile_member 超限清单等场景）。按 handle 的
+    /// Kind 分发到对应私有渲染器；不做访问器/backing field 过滤——调用方传的是明确要渲染的成员（搜索已过滤）。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <param name="type">成员所属的类型定义。</param>
+    /// <param name="handle">成员句柄（FieldDefinition/MethodDefinition/PropertyDefinition/EventDefinition）。</param>
+    /// <returns>该成员的一行签名，如 "public string Name;"、"public int Count { get; set; }"。</returns>
+    public static string RenderSingleMember(MetadataReader reader, TypeDefinition type, EntityHandle handle)
+    {
+        var typeParams = GetGenericParameterNames(reader, type.GetGenericParameters());
+        var provider = new Provider(reader);
+        var ctx = new GenericContext(typeParams, Array.Empty<string>());
+        return handle.Kind switch
+        {
+            HandleKind.FieldDefinition => RenderField(reader, reader.GetFieldDefinition((FieldDefinitionHandle)handle), provider, typeParams),
+            HandleKind.MethodDefinition => RenderMemberSignature(reader, type, reader.GetMethodDefinition((MethodDefinitionHandle)handle)),
+            HandleKind.PropertyDefinition => RenderProperty(reader, reader.GetPropertyDefinition((PropertyDefinitionHandle)handle), provider, typeParams),
+            HandleKind.EventDefinition => RenderEvent(reader, reader.GetEventDefinition((EventDefinitionHandle)handle), provider, ctx),
+            _ => "<unknown>",
+        };
+    }
+
+    /// <summary>
     /// 构造构造函数展示名：类型名（+泛型参数列表），供 .ctor/.cctor 渲染代替元数据名。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>

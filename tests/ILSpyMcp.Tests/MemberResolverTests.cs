@@ -72,6 +72,18 @@ public class MemberResolverTests
     }
 
     [Fact]
+    public void FindMembers_按名匹配字段与属性()
+    {
+        // Members 类型：int Count { get; set; }（属性）、string Name（字段）、event Changed（事件）
+        var fields = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Name");
+        Assert.Contains(fields.Matches, m => m.Token.StartsWith("0x04")); // 字段 Name
+        var props = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Count");
+        Assert.Contains(props.Matches, m => m.Token.StartsWith("0x17")); // 属性 Count
+        var events = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Changed");
+        Assert.Contains(events.Matches, m => m.Token.StartsWith("0x14")); // 事件 Changed
+    }
+
+    [Fact]
     public void FindMembers_默认排除访问器_includeAccessors为true时包含()
     {
         // ToolCommand 含 Assembly/Signature/Executable/Args 等属性，元数据层对应 get_ 访问器方法
