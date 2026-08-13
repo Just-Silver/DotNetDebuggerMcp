@@ -53,6 +53,7 @@ ilspymcp -v                                  # 查看版本号（等价 --versio
 ilspymcp -h                                  # 查看帮助（等价 --help）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program      # 反编译单个类型（带行号，等价 ilspy_decompile）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Main  # 按成员名子串搜成员（等价 ilspy_decompile_member）
+ilspymcp -a bin/Debug/MyApp.dll -mn Main      # 省略 -t 跨程序集按成员名搜成员（等价 ilspy_decompile_member，typeName 缺省）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -s   # 输出成员签名（等价 ilspy_signature）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc  # 继承/接口关系（等价 ilspy_hierarchy）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc -i  # 继承/接口关系含全部间接后代（等价 ilspy_hierarchy includeIndirect=true）
@@ -76,15 +77,15 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 
 | MCP 工具 | 用途 |
 | ---- | ---- |
-| `ilspy_decompile` | 反编译单个类型的完整源码到标准输出（类型级入口），输出带行号标注，支持按行号范围分页拉取 |
-| `ilspy_decompile_member` | 反编译单个或多个成员的实现体（成员级入口），按成员名子串定位或按 token 定位，输出带行号标注，支持分页拉取 |
-| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或指定类型，`typeName` 支持逗号分隔多个类型批量写盘，单文件输出） |
+| `ilspy_decompile` | 反编译单个类型的完整源码到标准输出（类型级入口），输出带行号标注，支持按行号范围分页拉取；未找到类型时附相近类型名 |
+| `ilspy_decompile_member` | 反编译单个或多个成员的实现体（成员级入口），按成员名子串定位（字段/方法/属性/事件均可，`typeName` 省略时跨程序集搜索）或按 token 定位，输出带行号标注，支持分页拉取；未找到类型时附相近类型名 |
+| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或指定类型，`typeName` 支持逗号分隔多个类型批量写盘，单文件输出；未找到的类型在结果中提示） |
 | `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件，按命名空间嵌套目录） |
 | `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），支持按类型名子串过滤，输出带行号标注 |
-| `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图；每行行尾附成员 token，可直接用于 `ilspy_decompile_member` 的 `token` 参数 |
-| `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型；`includeIndirect=true` 时后代段含全部间接后代（接口的所有实现者、基类的所有子孙） |
-| `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用；`includeExternal=true` 时追加输出跨程序集外部类型（带程序集归属，格式 `全名 [程序集名]`） |
-| `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补）；`includeExternal=true` 时追加输出方法体调用的跨程序集外部类型（带程序集归属）；`token` 参数按方法 token 反向定位程序集内调用该具体方法的成员（方法级调用点） |
+| `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图；每行行尾附成员 token，可直接用于 `ilspy_decompile_member` 的 `token` 参数；未找到类型时附相近类型名 |
+| `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型；`includeIndirect=true` 时后代段含全部间接后代（接口的所有实现者、基类的所有子孙）；未找到类型时附相近类型名 |
+| `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用；`includeExternal=true` 时追加输出跨程序集外部类型（带程序集归属，格式 `全名 [程序集名]`）；未找到类型时附相近类型名 |
+| `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补）；`includeExternal=true` 时追加输出方法体调用的跨程序集外部类型（带程序集归属）；`token` 参数按方法 token 反向定位程序集内调用该具体方法的成员（方法级调用点）；未找到类型时附相近类型名 |
 | `ilspy_assembly_info` | 输出程序集概览：程序集名与版本、目标框架、引用的程序集清单（名+版本）、实体类型计数（class/interface/struct/delegate/enum，过滤编译器生成类型）与入口点；元数据读取秒回，适合作为接触陌生程序集的第一站 |
 
 `ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy`、`ilspy_dependencies` 与 `ilspy_call_graph`、`ilspy_assembly_info` 默认仅输出前约 8 KB，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做输出量截断。全部工具均使用内置反编译引擎，开箱即用；其中 `ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies`/`ilspy_call_graph`/`ilspy_assembly_info` 为元数据读取，秒回。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效；反编译结果命中缓存时头部标注「缓存: 命中（重复查询成本低）」，agent 可知重复查询低成本、可放心多问。`list_types` 输出行首类别前缀（如 `class Foo.Bar`）可直接复制作 `typeName` 使用，无需去掉前缀。MCP 会话启动握手时自动检查 ilspymcp 是否有新版本：检测到新版本时注入指令式提示，要求 agent 在会话开始的回复中主动告知用户并提供升级命令；已是最新时仅注入状态行，不打扰用户。无需单独调用检查工具。
@@ -98,14 +99,14 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | | `lines` | 按行号范围读取结果，格式 `start-end`（1-based 含两端，单次最多约 32 KB），如 `200-400`；省略返回前约 8 KB | 否 |
 | | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_member` | `assembly` | 程序集文件路径 | 是 |
-| | `typeName` | 在指定类型内搜索成员，全限定类型名，例如 `System.Text.Json.JsonSerializer`（提供 `token` 时可不填） | 否 |
-| | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；匹配到的成员全部反编译，匹配数超过 20 时仅返回成员签名清单（提供 `token` 时可不填） | 否 |
-| | `token` | 按元数据 token 直接反编译单个成员（如超限签名清单或多成员分隔行 `#MEMBER {"name","token"}` 中的 `0x06000005`）；提供时忽略 `memberName`，`typeName` 可不填 | 否 |
+| | `typeName` | 在指定类型内搜索成员，全限定类型名，例如 `System.Text.Json.JsonSerializer`；省略时跨程序集搜索全部类型的成员（提供 `token` 时可不填） | 否 |
+| | `memberName` | 成员名子串（忽略大小写），例如 `SerializeAsync`；字段/方法/属性/事件均可按名搜索，匹配到的成员全部反编译，匹配数超过 20 时仅返回成员签名清单（提供 `token` 时可不填） | 否 |
+| | `token` | 按元数据 token 直接反编译单个成员（如超限签名清单或多成员分隔行 `#MEMBER` JSON 中的 `0x06000005`）；提供时忽略 `memberName`，`typeName` 可不填 | 否 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
 | | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；超时即放弃本次反编译、结果不入缓存，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
-| | `typeName` | 仅反编译指定全限定类型名；支持逗号分隔多个类型批量写盘（每个类型一个 `.decompiled.cs` 文件），如 `A.B.C1,A.B.C2`；未找到的类型在结果中提示，部分成功也算成功；省略则反编译整个程序集 | 否 |
+| | `typeName` | 仅反编译指定全限定类型名；支持逗号分隔多个类型批量写盘（每个类型一个 `.decompiled.cs` 文件），如 `A.B.C1,A.B.C2`；未找到的类型在结果中提示（单个未找到时附相近类型名），部分成功也算成功；省略则反编译整个程序集 | 否 |
 | | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_to_project` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
@@ -145,6 +146,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 - **项目形式 + 嵌套目录**：> 以可编译项目形式反编译 `bin/Debug/MyApp.dll` 到 `src`，并按命名空间嵌套目录
 - **单个类型**：> 反编译 `bin/Debug/MyApp.dll` 中的 `MyApp.Program` 类型
 - **按名搜索成员**：> 在 `bin/Debug/MyApp.dll` 的 `MyApp.Program` 中搜索名称包含 `Main` 的成员并反编译
+- **跨程序集搜索成员**：> 在 `bin/Debug/MyApp.dll` 的全部类型中搜索名称包含 `Parse` 的成员并反编译（省略 `typeName`；多匹配时 `#MEMBER` JSON 带 `type` 字段标注各成员所属类型）
 - **按 token 反编译单个成员**：> 在 `bin/Debug/MyApp.dll` 的 `MyApp.Program` 中搜索名称包含 `Parse` 的成员；若匹配超过 20 个仅返回 `#MEMBER` 签名清单，则取目标行 JSON 中的 `token` 字段（如 `0x06000010`）用 `token` 参数直接反编译该成员
 - **成员签名（API 地图）**：> 列出 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的全部成员签名（每行行尾为成员 token，如 `  0x06000005`，可直接用作 `token` 参数反编译对应成员）
 - **继承关系**：> 查看 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的基类链、接口与继承者

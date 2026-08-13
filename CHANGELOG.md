@@ -22,8 +22,11 @@
 - MCP 握手注入 server 当前工作目录：agent 可据此解析 assembly/outputDir 相对路径，消除路径基准盲区
 - MCP 握手更新提示改为指令式：检测到 ilspymcp 有新版本时，注入文本明确指示 agent 在会话开始的第一条回复中主动告知用户并提供升级命令（仅新版本时主动转述；已是最新时仍为背景状态行，不打扰用户）。CLI `-c/--check` 输出保持朴素状态行不变
 - 反编译结果命中缓存时，头部信息块在「目标」行后追加「缓存: 命中（重复查询成本低）」行，agent 可感知重复查询低成本、放心多问；未命中或元数据工具不标注
+- 各工具未找到类型时附相近类型名提示（行为变化）：decompile/signature/hierarchy/dependencies/call_graph/decompile_to_dir/decompile_member 在类型未找到时返回「未找到类型 X。相近类型：A、B、C」（相近类型为全名，可直接复制定位），agent 免自行猜测拼写
 - `decompile`/`decompile_member` 描述点明入口粒度：`decompile` 为类型级入口（整类型源码）、`decompile_member` 为成员级入口（单个或多个成员实现体），消除「按成员反编译该用哪个工具」的歧义，无行为变化
-- **`decompile_member` 多成员分隔行与超限签名清单改为 `#MEMBER` JSON 结构化行（破坏性变更）**：分隔行由 `=== 名字 (token) ===` 改为 `#MEMBER {"name":"...","token":"0x..."}`，超限签名清单由每行 `签名  [token]` 改为 `#MEMBER {"name","token","signature"}`——agent 免解析文本分隔线，直接按行首 `#MEMBER ` 识别并解析 JSON 取 token（token 仍可直接用于 `token` 参数反编译）；`token` 单成员反编译输出不变
+- **`decompile_member` 多成员分隔行与超限签名清单改为 `#MEMBER` JSON 结构化行（破坏性变更）**：分隔行由 `=== 名字 (token) ===` 改为 `#MEMBER {"name":"...","token":"0x..."}`（跨程序集搜索时另带 `type` 字段标注成员所属类型），超限签名清单由每行 `签名  [token]` 改为 `#MEMBER {"name","token","signature","type"}`——agent 免解析文本分隔线，直接按行首 `#MEMBER ` 识别并解析 JSON 取 token（token 仍可直接用于 `token` 参数反编译）；`token` 单成员反编译输出不变
+- **`decompile_member` 的 `typeName` 变为可选（行为变化）**：省略 `typeName` 时跨程序集按成员名搜索全部类型的成员（默认仍排除属性/事件访问器），头部目标描述相应改为「成员 Y（跨程序集，N 个匹配）」
+- `decompile_member` 按名搜索范围扩展为字段/方法/属性/事件（行为变化）：此前 `memberName` 只命中方法，现字段、属性、事件同样按名子串匹配（属性/事件访问器仍默认排除）
 - `signature` 工具每行行尾附成员 token（如 `public void Do(int);  0x06000505`，可直接用于 `decompile_member` 的 `token` 参数反编译对应成员），API 地图与成员反编译闭环
 - `decompile_to_dir` 成功提示列出实际写盘的文件名（如 `已写入 2 个文件至 <dir>：A.decompiled.cs、B.decompiled.cs（来源 <assembly>）`），agent 免推导即可直接读取产物；文件名过多时列前 3 个 + 等 N 个
 
