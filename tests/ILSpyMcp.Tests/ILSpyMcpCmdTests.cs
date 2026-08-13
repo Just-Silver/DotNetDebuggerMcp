@@ -1,7 +1,4 @@
 using ILSpyMcp;
-using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
-using System.Reflection.PortableExecutable;
 using Xunit;
 
 namespace ILSpyMcp.Tests;
@@ -25,7 +22,7 @@ public class ILSpyMcpCmdTests
     public async Task DispatchCliAsync_cg加tk_输出方法级调用点()
     {
         // -cg -tk 分发走 call_graph 的 token 分支（纯元数据，不触碰 AppServices），应输出 Caller:: 调用点行
-        var token = FirstCalleeMethodToken();
+        var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var result = await ILSpyMcpCmd.DispatchCliAsync(
             assembly: TestDataPaths.TestSamplesDll, typeName: "", memberName: "", entityTypes: "", nameContains: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
@@ -33,23 +30,6 @@ public class ILSpyMcpCmdTests
             token: token, lines: "", timeoutSeconds: 30, check: false);
 
         Assert.Contains("ILSpyMcp.Samples.Caller::", result);
-    }
-
-    /// <summary>
-    /// 取测试程序集 Callee 首个方法（Help）的元数据 token，供 -cg -tk 分发用例。
-    /// </summary>
-    private static string FirstCalleeMethodToken()
-    {
-        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
-        using var pe = new PEReader(fs);
-        var reader = pe.GetMetadataReader();
-        foreach (var typeHandle in reader.TypeDefinitions)
-        {
-            var type = reader.GetTypeDefinition(typeHandle);
-            if (reader.GetString(type.Name) != "Callee") continue;
-            return $"0x{MetadataTokens.GetToken(type.GetMethods().First()):x8}";
-        }
-        throw new InvalidOperationException("TestSamples 未找到 Callee 类型");
     }
 
     [Fact]

@@ -47,6 +47,8 @@ public static class CallGraphCases
 
     /// <summary>
     /// 取 TestSamples 中 Callee 首个方法（Help）的元数据 token，供 token 方法级调用点用例。
+    /// 与 Tests 项目 <c>TestDataPaths.FirstCalleeMethodToken</c> 逐字符相同，但 Client 是独立项目、无法引用 Tests，
+    /// 故此处保留本地副本（改动时注意与 Tests 侧同步）。
     /// </summary>
     private static string FirstCalleeMethodToken(string dll)
     {

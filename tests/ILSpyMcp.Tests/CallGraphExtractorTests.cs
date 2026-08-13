@@ -168,10 +168,8 @@ public class CallGraphExtractorTests
     {
         using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
         using var pe = new PEReader(fs);
-        var reader = pe.GetMetadataReader();
-        // 取 Callee 首个方法（Help，被 Caller.Run 的 c.Help() 调用）token
-        var callee = GetType(reader, "ILSpyMcp.Samples.Callee");
-        var token = $"0x{MetadataTokens.GetToken(callee.GetMethods().First()):x8}";
+        // 取 Callee 首个方法（Help，被 Caller.Run 的 c.Help() 调用）token（与 CallGraphToolTests/ILSpyMcpCmdTests 共用辅助）
+        var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var callers = CallGraphExtractor.FindMethodCallers(pe, token);
         Assert.Contains(callers, c => c.StartsWith("ILSpyMcp.Samples.Caller::"));
     }

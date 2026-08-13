@@ -25,7 +25,11 @@ public static class SimilarNameMatcher
     /// 类型名匹配时全名与短名（最后一段）分别调用本方法，兼容只输短名的查询。
     /// </summary>
     public static bool IsSimilar(string candidate, string query)
-        => LevenshteinDistance(candidate, query) <= 2 || CommonPrefixLength(candidate, query) >= 4;
+    {
+        // 长度差 >2 时编辑距离必 >2，跳过 Levenshtein 矩阵计算仅查公共前缀（与原判定严格等价）
+        if (Math.Abs(candidate.Length - query.Length) > 2) return CommonPrefixLength(candidate, query) >= 4;
+        return LevenshteinDistance(candidate, query) <= 2 || CommonPrefixLength(candidate, query) >= 4;
+    }
 
     /// <summary>
     /// Levenshtein 编辑距离：插入/删除/替换各计 1，用于相近名判定（≤ 2 视为相近）。

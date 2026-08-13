@@ -65,6 +65,11 @@ public static class MemberResolver
         if (typeHandle is null) return new MemberSearchResult(false, Array.Empty<MemberMatch>(), Array.Empty<string>());
 
         var type = reader.GetTypeDefinition(typeHandle.Value);
+        // 编译器生成类型（<...> 闭包/状态机等）全局过滤：within-type 搜索与跨程序集搜索保持一致，视为未找到类型
+        if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type))
+        {
+            return new MemberSearchResult(false, Array.Empty<MemberMatch>(), Array.Empty<string>());
+        }
         var matches = new List<MemberMatch>();
         var names = new List<string>();
         foreach (var (name, token, fullTypeName) in EnumerateSearchableMembers(reader, type, includeAccessors))
@@ -109,16 +114,23 @@ public static class MemberResolver
 
     /// <summary>
     /// 枚举类型的全部可搜索成员（字段→方法→属性→事件，与 SignatureRenderer 输出顺序一致），每个成员一条
-    /// (名字, token, 类型全名)。字段跳过名含 '&lt;' 的自动属性/事件 backing field（编译器生成物），
+    /// (名字, token, 类型全名)。字段跳过名含 '&lt;' 的自动属性 backing field 与字段式事件的同名字段 backing field
+    /// （C# CS0102 保证源码不可能有同名字段+事件，事件名可安全代表该 backing field），
     /// includeAccessors 为 false 时方法跳过属性/事件访问器（get_/set_/add_/remove_ 与显式接口实现含 '.' 的访问器）。
     /// </summary>
     private static IEnumerable<(string Name, string Token, string TypeName)> EnumerateSearchableMembers(MetadataReader reader, TypeDefinition type, bool includeAccessors)
     {
         var typeName = MetadataNaming.FullName(reader, type);
+        // 事件名集合：字段式事件（public event EventHandler Changed;）的同名私有 backing field 与事件重名，
+        // 字段枚举时以「字段名是否与事件同名」判定并跳过，避免同一事件被计成字段+事件两个匹配
+        var eventNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var eventHandle in type.GetEvents())
+            eventNames.Add(reader.GetString(reader.GetEventDefinition(eventHandle).Name));
         foreach (var handle in type.GetFields())
         {
             var name = reader.GetString(reader.GetFieldDefinition(handle).Name);
             if (name.Contains('<')) continue; // 自动属性 backing field
+            if (eventNames.Contains(name)) continue; // 字段式事件 backing field（与事件同名）
             yield return (name, $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
         }
         foreach (var handle in type.GetMethods())
@@ -132,13 +144,6 @@ public static class MemberResolver
         foreach (var handle in type.GetEvents())
             yield return (reader.GetString(reader.GetEventDefinition(handle).Name), $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
     }
-
-    /// <summary>
-    /// 无匹配时返回相近成员名：编辑距离 ≤ 2 或与查询名共享 ≥ 4 字符公共前缀，按名字序取前 5 个。
-    /// 判定算法统一走 <see cref="SimilarNameMatcher"/>（与类型名相近判定共用，避免两处实现漂移）。
-    /// </summary>
-    private static IReadOnlyList<string> FindSimilarNames(List<string> names, string query)
-        => SimilarNameMatcher.FindSimilar(names, query);
 
     /// <summary>
     /// 判断方法名是否为属性/事件访问器（get_X/set_X/add_/remove_）——与 SignatureRenderer.IsAccessorName 同逻辑。

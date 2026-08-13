@@ -1,7 +1,4 @@
 using ILSpyMcp.Tools;
-using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
-using System.Reflection.PortableExecutable;
 using Xunit;
 
 namespace ILSpyMcp.Tests;
@@ -97,7 +94,7 @@ public class CallGraphToolTests
     [Fact]
     public async Task CallGraph_token_输出方法体调用点()
     {
-        var token = FirstCalleeMethodToken();
+        var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, token: token);
 
         Assert.Contains("方法体调用此方法的成员:", result);
@@ -108,7 +105,7 @@ public class CallGraphToolTests
     [Fact]
     public async Task CallGraph_token_typeName非空_头部含类型与方法token()
     {
-        var token = FirstCalleeMethodToken();
+        var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Callee", token);
 
         Assert.Contains($"类型 ILSpyMcp.Samples.Callee 的方法 {token}（调用点）", result);
@@ -118,7 +115,7 @@ public class CallGraphToolTests
     [Fact]
     public async Task CallGraph_token_缺省typeName_头部为方法token()
     {
-        var token = FirstCalleeMethodToken();
+        var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var result = await CallGraphTool.CallGraph(TestDataPaths.TestSamplesDll, token: token);
 
         Assert.Contains($"方法 {token}（调用点）", result);
@@ -140,22 +137,5 @@ public class CallGraphToolTests
 
         Assert.Contains("方法体调用此方法的成员:", result);
         Assert.Contains("（无）", result);
-    }
-
-    /// <summary>
-    /// 取测试程序集 Callee 首个方法（Help）的元数据 token，供 token 调用点用例。
-    /// </summary>
-    private static string FirstCalleeMethodToken()
-    {
-        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
-        using var pe = new PEReader(fs);
-        var reader = pe.GetMetadataReader();
-        foreach (var typeHandle in reader.TypeDefinitions)
-        {
-            var type = reader.GetTypeDefinition(typeHandle);
-            if (reader.GetString(type.Name) != "Callee") continue;
-            return $"0x{MetadataTokens.GetToken(type.GetMethods().First()):x8}";
-        }
-        throw new InvalidOperationException("TestSamples 未找到 Callee 类型");
     }
 }

@@ -81,6 +81,21 @@ public class MemberResolverTests
         Assert.Contains(props.Matches, m => m.Token.StartsWith("0x17")); // 属性 Count
         var events = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Changed");
         Assert.Contains(events.Matches, m => m.Token.StartsWith("0x14")); // 事件 Changed
+        Assert.DoesNotContain(events.Matches, m => m.Token.StartsWith("0x04")); // 字段式事件同名字段 backing field 不应计入
+        Assert.Single(events.Matches); // 只应返回事件一项（默认排除 add_/remove_ 访问器）
+    }
+
+    [Fact]
+    public void FindMembers_编译器生成类型_视为未找到类型()
+    {
+        // 编译器生成类型（闭包 <>c__DisplayClass0_0）应被全局过滤：within-type 搜索返回 TypeFound=false，
+        // 避免对 <...> 类型按名搜出 >20 匹配时仅返回空签名清单（与跨程序集搜索的过滤不变量一致）
+        var (typeFound, matches, similar) = MemberResolver.FindMembers(
+            TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.WithClosure+<>c__DisplayClass0_0", "");
+
+        Assert.False(typeFound);
+        Assert.Empty(matches);
+        Assert.Empty(similar);
     }
 
     [Fact]

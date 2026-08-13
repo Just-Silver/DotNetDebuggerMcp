@@ -329,8 +329,8 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
-    /// 组装写盘成功提示（to_dir/to_project 共用的按目录统计版本）：输出目录 + 文件数 + 来源程序集；
-    /// 文件枚举失败时退回不含文件数的提示。to_project 保持此形态不变（数量+目录）。
+    /// 组装写盘成功提示（to_project 用的按目录统计版本）：输出目录 + 文件数 + 来源程序集；
+    /// 文件枚举失败时退回不含文件数的提示。
     /// </summary>
     /// <param name="outputDir">输出目录。</param>
     /// <param name="assemblyPath">来源程序集。</param>

@@ -114,12 +114,13 @@ public static class CallGraphExtractor
         public MetadataReader Reader => _reader;
 
         /// <summary>
-        /// 清空已收集集合，供反向扫描在候选类型间复用实例。
+        /// 清空已收集集合与调用点集合，供反向扫描在候选类型间复用实例。
         /// </summary>
         public void Clear()
         {
             _collected.Clear();
             _external.Clear();
+            _callers.Clear();
         }
 
         /// <summary>
