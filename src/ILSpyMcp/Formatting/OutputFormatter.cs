@@ -67,6 +67,54 @@ public static class OutputFormatter
     }
 
     /// <summary>
+    /// 渲染成员 JSON 分隔行内容（不含 #MEMBER 前缀）：{name, token[, signature]}。供 decompile_member 多匹配分隔行与超限
+    /// 签名清单共用，agent 免解析文本分隔线直接取 name/token。用 UnsafeRelaxedJsonEscaping 避免成员名含中文时 \uXXXX 转义
+    /// 导致 token 膨胀。
+    /// </summary>
+    /// <param name="name">成员名。</param>
+    /// <param name="token">成员 token（如 0x060004b2）。</param>
+    /// <param name="signature">成员签名；超限清单提供，普通分隔行为 null。</param>
+    /// <returns>JSON 对象文本，如 {"name":"BigHelper","token":"0x060004b2"}。</returns>
+    public static string MemberJson(string name, string token, string? signature = null)
+    {
+        var sb = new StringBuilder("{\"name\":");
+        AppendJsonString(sb, name);
+        sb.Append(",\"token\":");
+        AppendJsonString(sb, token);
+        if (signature is not null)
+        {
+            sb.Append(",\"signature\":");
+            AppendJsonString(sb, signature);
+        }
+        sb.Append('}');
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 追加 JSON 字符串字面量：转义引号、反斜杠与控制字符；非 ASCII 字符原样保留（避免 \uXXXX 转义膨胀 token）。
+    /// </summary>
+    private static void AppendJsonString(StringBuilder sb, string value)
+    {
+        sb.Append('"');
+        foreach (var c in value)
+        {
+            switch (c)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default:
+                    if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
+                    else sb.Append(c);
+                    break;
+            }
+        }
+        sb.Append('"');
+    }
+
+    /// <summary>
     /// 默认返回按字符预算（DefaultMaxOutputChars UTF-8 字节）与行数软上限（DefaultMaxLines）取前若干行（每行标注行号）；
     /// 结果更大时截断并附操作提示（总行数由头部字段提供，此处不再重复）。
     /// </summary>

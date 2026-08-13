@@ -13,6 +13,7 @@
 - MCP 握手更新提示改为指令式：检测到 ilspymcp 有新版本时，注入文本明确指示 agent 在会话开始的第一条回复中主动告知用户并提供升级命令（仅新版本时主动转述；已是最新时仍为背景状态行，不打扰用户）。CLI `-c/--check` 输出保持朴素状态行不变
 - 反编译结果命中缓存时，头部信息块在「目标」行后追加「缓存: 命中（重复查询成本低）」行，agent 可感知重复查询低成本、放心多问；未命中或元数据工具不标注
 - `decompile`/`decompile_member` 描述点明入口粒度：`decompile` 为类型级入口（整类型源码）、`decompile_member` 为成员级入口（单个或多个成员实现体），消除「按成员反编译该用哪个工具」的歧义，无行为变化
+- **`decompile_member` 多成员分隔行与超限签名清单改为 `#MEMBER` JSON 结构化行（破坏性变更）**：分隔行由 `=== 名字 (token) ===` 改为 `#MEMBER {"name":"...","token":"0x..."}`，超限签名清单由每行 `签名  [token]` 改为 `#MEMBER {"name","token","signature"}`——agent 免解析文本分隔线，直接按行首 `#MEMBER ` 识别并解析 JSON 取 token（token 仍可直接用于 `token` 参数反编译）；`token` 单成员反编译输出不变
 
 ### Removed
 

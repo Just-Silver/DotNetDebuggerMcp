@@ -274,14 +274,18 @@ public class ToolPipelineTests
             var (found, matches, _) = MemberResolver.FindMembers(SamplesDll, TypeBigClass, "BigHelper");
             Assert.True(found);
             var commands = matches
-                .Select(m => new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, m.Token)) { DisplayName = $"{m.Name} ({m.Token})" })
+                .Select(m => new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, m.Token))
+                {
+                    MemberName = m.Name,
+                    MemberToken = m.Token,
+                })
                 .ToArray();
             Assert.NotEmpty(commands);
 
             var result = await AppServices.Pipeline.ExecuteMergedAsync(commands, "");
 
-            Assert.StartsWith("1\t=== BigHelper (", result.Text); // 分隔行计入行号且为首行
-            Assert.Contains("=== BigHelper2 (", result.Text);
+            Assert.StartsWith("1\t#MEMBER {\"name\":\"BigHelper\"", result.Text); // JSON 分隔行计入行号且为首行
+            Assert.Contains("#MEMBER {\"name\":\"BigHelper2\"", result.Text);
             Assert.Contains("BigHelper", result.Text);
         }
         finally

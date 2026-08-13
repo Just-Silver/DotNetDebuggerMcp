@@ -15,8 +15,8 @@ namespace ILSpyMcp.Tools;
 
 /// <summary>
 /// 反编译指定类型内单个或多个成员的实现体（成员级入口，如某个方法体）：按成员名在类型内定位成员并反编译合并输出，
-/// 或按 token 直接反编译单个成员。定位的多个成员全部反编译并合并输出（行号连续），默认返回前约 8 KB、可用 lines 分页；
-/// 定位数量超过上限时仅返回签名清单，不启动反编译。
+/// 或按 token 直接反编译单个成员。定位的多个成员全部反编译并合并输出（行号连续，各成员前有 #MEMBER JSON 结构化分隔行），
+/// 默认返回前约 8 KB、可用 lines 分页；定位数量超过上限时仅返回签名清单，不启动反编译。
 /// </summary>
 [McpServerToolType]
 public static class DecompileMemberTool
@@ -33,7 +33,7 @@ public static class DecompileMemberTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>匹配成员反编译合并结果（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("反编译指定类型内单个或多个成员的实现体到标准输出（成员级入口，如某个方法体；整类型源码请用 decompile 工具）。按 memberName 子串在 typeName 内定位成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。定位到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；超过 20 个时仅返回成员签名清单（每行 签名 [token]）不反编译。提供 token 参数时直接按元数据 token 反编译单个成员（忽略 memberName，typeName 可不填，清单与分隔行中的 token 均可直接用）。结果默认只返回前约 8 KB，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
+    [Description("反编译指定类型内单个或多个成员的实现体到标准输出（成员级入口，如某个方法体；整类型源码请用 decompile 工具）。按 memberName 子串在 typeName 内定位成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。定位到多个成员时全部反编译并合并输出，行号连续，各成员前有 #MEMBER JSON 结构化分隔行（格式 #MEMBER {\"name\":\"...\",\"token\":\"0x...\"}，token 可直接用于后续反编译）；超过 20 个时仅返回成员签名清单（每行 #MEMBER JSON，含 name/token/signature）不反编译。提供 token 参数时直接按元数据 token 反编译单个成员（忽略 memberName，typeName 可不填，清单与分隔行中的 token 均可直接用）。结果默认只返回前约 8 KB，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
     public static async Task<string> DecompileMember(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("在指定类型内搜索成员，全限定类型名，例如 System.Text.Json.JsonSerializer（必填；提供 token 时可不填）")] string typeName = "",
@@ -80,20 +80,25 @@ public static class DecompileMemberTool
 
         // 每个匹配成员一条命令：token 全局唯一，同一成员不同子串查询 token 相同 → 缓存签名相同 → 共享缓存；各命令独立缓存 key
         var commands = matches
-            .Select(m => new ToolCommand(assemblyFull, new DecompileRequest(DecompileKind.Member, m.Token)) { DisplayName = $"{m.Name} ({m.Token})" })
+            .Select(m => new ToolCommand(assemblyFull, new DecompileRequest(DecompileKind.Member, m.Token))
+            {
+                MemberName = m.Name,
+                MemberToken = m.Token,
+            })
             .ToArray();
 
         // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）。不展示参数——对外工具没有 token 概念， 暴露内部 token 或反编译细节会误导
         // agent（agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员 {memberName}（{matches.Count} 个匹配）");
 
-        // 走共享执行管道：各成员缓存/回源后合并（DisplayName 非空时自动插 === 分隔行），统一行号与 lines 分页
+        // 走共享执行管道：各成员缓存/回源后合并（MemberName/MemberToken 非空时自动插 #MEMBER JSON 分隔行），统一行号与 lines 分页
         return await ToolExecutor.RunMergedAsync(commands, lines, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken, context);
     }
 
     /// <summary>
-    /// 匹配数超限时仅返回成员签名清单：重新打开程序集做纯元数据读取，凡 token 属于匹配集合的成员渲染一行签名并附 token。
-    /// 按 token（而非方法名）匹配，避免同名重载成员被名字集合去重而丢失。清单同样受 lines 分页控制（缺省返回前约 8 KB）。
+    /// 匹配数超限时仅返回成员签名清单：重新打开程序集做纯元数据读取，凡 token 属于匹配集合的成员渲染一行
+    /// `#MEMBER {name/token/signature}` JSON 行。按 token（而非方法名）匹配，避免同名重载成员被名字集合去重而丢失。
+    /// 清单同样受 lines 分页控制（缺省返回前约 8 KB）。
     /// </summary>
     private static string RenderSignatureList(string assemblyFull, string typeName, string memberName, IReadOnlyList<MemberMatch> matches, string lines)
     {
@@ -114,8 +119,9 @@ public static class DecompileMemberTool
                 var token = $"0x{MetadataTokens.GetToken(methodHandle):x8}";
                 if (!tokens.Contains(token)) continue;
                 var method = reader.GetMethodDefinition(methodHandle);
+                var name = reader.GetString(method.Name);
                 var signature = SignatureRenderer.RenderMemberSignature(reader, type, method);
-                signatureLines.Add($"{signature}  [{token}]");
+                signatureLines.Add($"#MEMBER {OutputFormatter.MemberJson(name, token, signature)}");
             }
             // 清单可能超过预算，统一走 lines 分页（缺省截断前约 8 KB，超限可用 lines 续读）
             return OutputFormatter.Format(signatureLines, lines, context);

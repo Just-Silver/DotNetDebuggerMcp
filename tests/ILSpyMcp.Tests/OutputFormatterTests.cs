@@ -376,6 +376,33 @@ public class OutputFormatterTests
     }
 
     [Fact]
+    public void MemberJson_含name与token_输出JSON对象()
+    {
+        var json = OutputFormatter.MemberJson("BigHelper", "0x060004b2");
+
+        Assert.Equal("{\"name\":\"BigHelper\",\"token\":\"0x060004b2\"}", json);
+    }
+
+    [Fact]
+    public void MemberJson_含signature_附带signature字段()
+    {
+        var json = OutputFormatter.MemberJson("Do", "0x060004b2", "public void Do();");
+
+        Assert.Equal("{\"name\":\"Do\",\"token\":\"0x060004b2\",\"signature\":\"public void Do();\"}", json);
+    }
+
+    [Fact]
+    public void MemberJson_含中文与引号_JSON可解析且非ASCII不转义()
+    {
+        var json = OutputFormatter.MemberJson("方法\"引\",\"号", "0x060004b2");
+
+        Assert.Contains("方法", json); // 中文不 \uXXXX 转义（避免 token 膨胀）
+        var obj = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
+        Assert.Equal("方法\"引\",\"号", obj.GetProperty("name").GetString());
+        Assert.Equal("0x060004b2", obj.GetProperty("token").GetString());
+    }
+
+    [Fact]
     public void ContainsIlUnresolved_含IL注释_返回true()
     {
         var lines = new List<string> { "public void M()", "    //IL_0001: nop", "}" };

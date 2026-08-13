@@ -36,7 +36,7 @@ public sealed record DecompileRequest(DecompileKind Kind, string Target);
 
 /// <summary>
 /// 一次反编译调用描述：程序集路径 + 反编译请求；缓存签名由 Kind+Target 统一派生（以 \u001F 拼接），
-/// 杜绝调用方手写签名导致缓存 key 错配。DisplayName 仅影响合并展示，不参与缓存签名。
+/// 杜绝调用方手写签名导致缓存 key 错配。DisplayName/MemberName/MemberToken 仅影响合并展示，不参与缓存签名。
 /// </summary>
 public sealed class ToolCommand
 {
@@ -72,6 +72,17 @@ public sealed class ToolCommand
     /// 为空/null 时合并行为不变（不插分隔行）；仅影响合并展示，不参与缓存签名。
     /// </summary>
     public string? DisplayName { get; set; }
+
+    /// <summary>
+    /// 可选成员名：与 <see cref="MemberToken"/> 同时提供时，合并输出前插入 `#MEMBER {"name","token"}` JSON 分隔行
+    /// （agent 免解析分隔线直接取 token）；仅影响合并展示，不参与缓存签名。优先级高于 <see cref="DisplayName"/>。
+    /// </summary>
+    public string? MemberName { get; set; }
+
+    /// <summary>
+    /// 可选成员 token（如 0x060004b2）：与 <see cref="MemberName"/> 同时提供时输出 JSON 分隔行；仅影响合并展示，不参与缓存签名。
+    /// </summary>
+    public string? MemberToken { get; set; }
 
     /// <summary>
     /// 由 Kind+Target 派生缓存签名：类型/成员/整模块前缀 + \u001F + 目标（整模块目标为空，仅前缀）。
@@ -164,7 +175,9 @@ public sealed class ToolPipeline
                 return new ToolPipelineResult($"反编译失败：{ex.Message}");
             }
             allCached &= fromCache;
-            if (!string.IsNullOrEmpty(command.DisplayName)) merged.Add($"=== {command.DisplayName} ===");
+            if (!string.IsNullOrEmpty(command.MemberName) && !string.IsNullOrEmpty(command.MemberToken))
+                merged.Add($"#MEMBER {OutputFormatter.MemberJson(command.MemberName, command.MemberToken)}");
+            else if (!string.IsNullOrEmpty(command.DisplayName)) merged.Add($"=== {command.DisplayName} ===");
             merged.AddRange(source);
         }
         var fmtContext = allCached && context is not null ? context with { IsCached = true } : context;
