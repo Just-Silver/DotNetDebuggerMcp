@@ -212,6 +212,31 @@ public class OutputFormatterTests
     }
 
     [Fact]
+    public void Format_带context且IsCached_头部标注缓存命中()
+    {
+        var lines = Enumerable.Range(1, 3).Select(i => $"line{i}").ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String", IsCached: true);
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.Contains("程序集: D:\\a\\b.dll", result);
+        Assert.Contains("目标:   类型 System.String", result);
+        Assert.Contains("缓存:   命中（重复查询成本低）", result); // 缓存命中标注在头部
+        Assert.DoesNotContain("1\tline1\n\n缓存:", result); // 标注不混入正文
+    }
+
+    [Fact]
+    public void Format_带context且未命中缓存_头部不标注缓存()
+    {
+        var lines = Enumerable.Range(1, 3).Select(i => $"line{i}").ToList();
+        var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.String");
+
+        var result = OutputFormatter.Format(lines, "", ctx);
+
+        Assert.DoesNotContain("缓存:", result);
+    }
+
+    [Fact]
     public void Format_带context且超限_头部标注总量与截断范围_截断提示不含重复行数()
     {
         var lines = Enumerable.Range(1, 250).Select(i => new string('x', 100)).ToList();

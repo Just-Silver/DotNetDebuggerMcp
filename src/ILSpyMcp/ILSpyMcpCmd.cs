@@ -78,9 +78,9 @@ public class ILSpyMcpCmd
     public bool Project { get; }
 
     /// <summary>
-    /// 输出到目录时按命名空间使用嵌套目录。
+    /// 以可编译项目形式反编译时按命名空间使用嵌套目录（仅对 -p 生效）。
     /// </summary>
-    [Option("--nested-directories", "输出到目录时按命名空间使用嵌套目录。", CommandOptionType.NoValue)]
+    [Option("--nested-directories", "以项目形式反编译（-p）时按命名空间使用嵌套目录。", CommandOptionType.NoValue)]
     public bool NestedDirectories { get; }
 
     /// <summary>
@@ -128,7 +128,7 @@ public class ILSpyMcpCmd
         }
         if (!string.IsNullOrEmpty(outputDir))
         {
-            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, typeName, nestedDirectories, timeoutSeconds, cancellationToken);
+            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, typeName, timeoutSeconds, cancellationToken);
         }
         if (signatures)
         {

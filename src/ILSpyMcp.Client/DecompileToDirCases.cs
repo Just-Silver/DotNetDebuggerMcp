@@ -1,7 +1,7 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// decompile_to_dir / decompile_to_project 工具的全部端到端验证场景：全量 / 项目形式 / typeName / nestedDirectories /
+/// decompile_to_dir / decompile_to_project 工具的全部端到端验证场景：全量 / 项目形式 / typeName /
 /// timeoutSeconds / 缺参校验。 每个场景写独立输出子目录，避免互相覆盖；最终由入口统一清理并校验产物。
 /// </summary>
 public static class DecompileToDirCases
@@ -18,9 +18,6 @@ public static class DecompileToDirCases
             ExpectedContains: "已写入", MustNotContain: "at System"),
         new ToolCallCase("decompile_to_dir", "typeName 单类型",
             new Dictionary<string, object?> { ["assembly"] = dll, ["outputDir"] = Path.Combine(outDir, "single"), ["typeName"] = TestDataHelper.TypeName },
-            ExpectedContains: "已写入", MustNotContain: "at System"),
-        new ToolCallCase("decompile_to_dir", "nestedDirectories 嵌套目录",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["outputDir"] = Path.Combine(outDir, "nested"), ["nestedDirectories"] = true },
             ExpectedContains: "已写入", MustNotContain: "at System"),
         new ToolCallCase("decompile_to_dir", "timeoutSeconds（自定义超时）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["outputDir"] = Path.Combine(outDir, "timeout"), ["timeoutSeconds"] = 120 },

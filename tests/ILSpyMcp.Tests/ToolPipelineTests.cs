@@ -46,6 +46,15 @@ public class ToolPipelineTests
         return await AppServices.Pipeline.ExecuteAsync(command, lines, context: context);
     }
 
+    /// <summary>
+    /// 取格式化结果中头部信息块之后的正文字段（按 --- 分隔线切分），供比较不同头部标注（如缓存命中行）时的正文一致性。
+    /// </summary>
+    private static string FirstBody(string text)
+    {
+        var sep = text.IndexOf("\n---\n", StringComparison.Ordinal);
+        return sep < 0 ? text : text[(sep + 5)..];
+    }
+
     [Fact]
     public async Task 首次调用_回源并返回格式化结果()
     {
@@ -77,10 +86,12 @@ public class ToolPipelineTests
             var first = await ExecuteTypeAsync(TypeBigClass);
             Assert.NotNull(AppServices.Cache.Get(key)); // 首调已写缓存
             Assert.True(AppServices.Cache.Get(key)!.Count > 200); // 缓存内是全量行，供后续 lines 切片复用
+            Assert.DoesNotContain("缓存:", first.Text); // 首调回源不标注缓存
 
             var second = await ExecuteTypeAsync(TypeBigClass);
             Assert.StartsWith("程序集: ", second.Text); // 缓存命中同样带头部上下文
-            Assert.Equal(first.Text, second.Text);
+            Assert.Contains("缓存:   命中（重复查询成本低）", second.Text); // 缓存命中标注缓存
+            Assert.Equal(FirstBody(first.Text), FirstBody(second.Text)); // 正文一致（仅头部缓存标注行不同）
         }
         finally
         {
@@ -310,10 +321,13 @@ public class ToolPipelineTests
                 .Select(m => new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, m.Token)))
                 .ToArray();
 
-            var first = await AppServices.Pipeline.ExecuteMergedAsync(commands, "");
-            var second = await AppServices.Pipeline.ExecuteMergedAsync(commands, "");
+            var context = new FormatContext(SamplesDll, "成员");
+            var first = await AppServices.Pipeline.ExecuteMergedAsync(commands, "", context: context);
+            Assert.DoesNotContain("缓存:", first.Text); // 首调各命令均回源，不标注缓存
 
-            Assert.Equal(first.Text, second.Text);
+            var second = await AppServices.Pipeline.ExecuteMergedAsync(commands, "", context: context);
+            Assert.Contains("缓存:   命中（重复查询成本低）", second.Text); // 各命令均命中缓存 → 标注缓存
+            Assert.Equal(FirstBody(first.Text), FirstBody(second.Text)); // 正文一致（仅头部缓存标注行不同）
             foreach (var cmd in commands)
             {
                 Assert.NotNull(AppServices.Cache.Get(AppServices.Cache.BuildKey(SamplesDll, cmd.Signature)));

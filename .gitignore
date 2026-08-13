@@ -5,6 +5,7 @@
 
 # Test data (verification assemblies) and temp output of the e2e client
 tests/.ilspymcp-client-out/
+tests/TestData/*.dll
 
 # User-specific files
 *.rsuser

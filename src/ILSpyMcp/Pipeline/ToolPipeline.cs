@@ -124,15 +124,17 @@ public sealed class ToolPipeline
     public async Task<ToolPipelineResult> ExecuteAsync(ToolCommand command, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
     {
         List<string> source;
+        bool fromCache;
         try
         {
-            source = await GetSourceLinesAsync(command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
+            (source, fromCache) = await GetSourceLinesAsync(command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
         }
         catch (Exception ex)
         {
             return new ToolPipelineResult($"反编译失败：{ex.Message}");
         }
-        return new ToolPipelineResult(OutputFormatter.Format(source, lines, context));
+        var fmtContext = fromCache && context is not null ? context with { IsCached = true } : context;
+        return new ToolPipelineResult(OutputFormatter.Format(source, lines, fmtContext));
     }
 
     /// <summary>
@@ -148,21 +150,25 @@ public sealed class ToolPipeline
     public async Task<ToolPipelineResult> ExecuteMergedAsync(IReadOnlyList<ToolCommand> commands, string lines, TimeSpan? timeout = null, CancellationToken cancellationToken = default, FormatContext? context = null)
     {
         var merged = new List<string>();
+        var allCached = commands.Count > 0;
         foreach (var command in commands)
         {
             List<string> source;
+            bool fromCache;
             try
             {
-                source = await GetSourceLinesAsync(command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
+                (source, fromCache) = await GetSourceLinesAsync(command, timeout ?? AppConfig.DefaultTimeout, cancellationToken);
             }
             catch (Exception ex)
             {
                 return new ToolPipelineResult($"反编译失败：{ex.Message}");
             }
+            allCached &= fromCache;
             if (!string.IsNullOrEmpty(command.DisplayName)) merged.Add($"=== {command.DisplayName} ===");
             merged.AddRange(source);
         }
-        return new ToolPipelineResult(OutputFormatter.Format(merged, lines, context));
+        var fmtContext = allCached && context is not null ? context with { IsCached = true } : context;
+        return new ToolPipelineResult(OutputFormatter.Format(merged, lines, fmtContext));
     }
 
     /// <summary>
@@ -171,8 +177,8 @@ public sealed class ToolPipeline
     /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
     /// <param name="timeout">本次回源超时。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>反编译结果纯净行列表（不含头部与行号，供渲染期统一格式化）。</returns>
-    private async Task<List<string>> GetSourceLinesAsync(ToolCommand command, TimeSpan timeout, CancellationToken cancellationToken)
+    /// <returns>反编译结果纯净行列表（不含头部与行号，供渲染期统一格式化）与是否缓存命中的标志。</returns>
+    private async Task<(List<string> Lines, bool FromCache)> GetSourceLinesAsync(ToolCommand command, TimeSpan timeout, CancellationToken cancellationToken)
     {
         CacheKey key;
         try
@@ -184,7 +190,7 @@ public sealed class ToolPipeline
             throw new InvalidOperationException(ex.Message, ex);
         }
         var cached = _cache.Get(key);
-        if (cached is not null) return cached;
+        if (cached is not null) return (cached, true);
 
         // 并发单飞：同 key 只启动一次进程内反编译，其余等待者复用同一 Lazy 承载的 Task
         var lazy = _inflight.GetOrAdd(key,
@@ -194,7 +200,7 @@ public sealed class ToolPipeline
             cached = await lazy.Value;
             // 能走到这里说明回源未抛异常（超时/取消/错误提示等已在 RunSourceAsync 转为异常），结果必为正常反编译文本，直接写缓存
             _cache.Put(key, cached);
-            return cached;
+            return (cached, false);
         }
         finally
         {

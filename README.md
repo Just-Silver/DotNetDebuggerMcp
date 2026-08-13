@@ -58,28 +58,28 @@ ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc  # 继承/接口关系（�
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -d   # 成员签名内部引用（等价 ilspy_dependencies）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg  # 方法体调用关系（等价 ilspy_call_graph）
 ilspymcp -a bin/Debug/MyApp.dll -l csi               # 列出实体类型（等价 ilspy_list_types）
-ilspymcp -a bin/Debug/MyApp.dll -o src --nested-directories   # 反编译写盘（等价 ilspy_decompile_to_dir）
+ilspymcp -a bin/Debug/MyApp.dll -o src                 # 反编译写盘（等价 ilspy_decompile_to_dir，单文件输出）
 ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories   # 项目形式反编译写盘（等价 ilspy_decompile_to_project）
 ilspymcp -c                                          # 检查 ilspymcp 是否有新版本（CLI 调试用，无需 -a；MCP 会话握手时自动注入报告）
 ```
 
-常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-mn|--membername`（按名搜索成员）、`-s|--signatures`（成员签名，配合 `-t`）、`-hc|--hierarchy`（继承/接口，配合 `-t`）、`-d|--dependencies`（内部引用，配合 `-t`）、`-cg|--callgraph`（方法体调用关系，配合 `-t`）、`-l|--list`（类型类别）、`-o|--outputdir`（输出目录）、`-p|--project`（项目形式，需配合 `-o`）、`--nested-directories`（嵌套目录）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）、`-c|--check`（检查 ilspymcp 是否有新版本）。
+常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-mn|--membername`（按名搜索成员）、`-s|--signatures`（成员签名，配合 `-t`）、`-hc|--hierarchy`（继承/接口，配合 `-t`）、`-d|--dependencies`（内部引用，配合 `-t`）、`-cg|--callgraph`（方法体调用关系，配合 `-t`）、`-l|--list`（类型类别）、`-o|--outputdir`（输出目录，单文件输出）、`-p|--project`（项目形式，需配合 `-o`）、`--nested-directories`（项目形式下按命名空间嵌套目录，仅对 `-p` 生效）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）、`-c|--check`（检查 ilspymcp 是否有新版本）。
 
 ## 工具
 
 | MCP 工具 | 用途 |
 | ---- | ---- |
-| `ilspy_decompile` | 反编译单个类型到标准输出，输出带行号标注，支持按行号范围分页拉取 |
-| `ilspy_decompile_member` | 按成员名子串在指定类型内搜索并反编译匹配的成员，输出带行号标注，支持分页拉取 |
-| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或单个类型） |
-| `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件） |
+| `ilspy_decompile` | 反编译单个类型的完整源码到标准输出（类型级入口），输出带行号标注，支持按行号范围分页拉取 |
+| `ilspy_decompile_member` | 反编译单个或多个成员的实现体（成员级入口），按成员名子串定位或按 token 定位，输出带行号标注，支持分页拉取 |
+| `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或单个类型，单文件输出） |
+| `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件，按命名空间嵌套目录） |
 | `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），输出带行号标注 |
 | `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图 |
 | `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型 |
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用 |
 | `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补） |
 
-`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy`、`ilspy_dependencies` 与 `ilspy_call_graph` 默认仅输出前约 8 KB，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做输出量截断。全部工具均使用内置反编译引擎，开箱即用；其中 `ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies`/`ilspy_call_graph` 为元数据读取，秒回。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效。`list_types` 输出行首类别前缀（如 `class Foo.Bar`）可直接复制作 `typeName` 使用，无需去掉前缀。MCP 会话启动握手时自动检查 ilspymcp 是否有新版本：检测到新版本时注入指令式提示，要求 agent 在会话开始的回复中主动告知用户并提供升级命令；已是最新时仅注入状态行，不打扰用户。无需单独调用检查工具。
+`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy`、`ilspy_dependencies` 与 `ilspy_call_graph` 默认仅输出前约 8 KB，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做输出量截断。全部工具均使用内置反编译引擎，开箱即用；其中 `ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies`/`ilspy_call_graph` 为元数据读取，秒回。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效；反编译结果命中缓存时头部标注「缓存: 命中（重复查询成本低）」，agent 可知重复查询低成本、可放心多问。`list_types` 输出行首类别前缀（如 `class Foo.Bar`）可直接复制作 `typeName` 使用，无需去掉前缀。MCP 会话启动握手时自动检查 ilspymcp 是否有新版本：检测到新版本时注入指令式提示，要求 agent 在会话开始的回复中主动告知用户并提供升级命令；已是最新时仅注入状态行，不打扰用户。无需单独调用检查工具。
 
 ### 工具参数
 
@@ -98,7 +98,6 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_decompile_to_dir` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |
 | | `typeName` | 仅反编译指定全限定类型名；省略则反编译整个程序集 | 否 |
-| | `nestedDirectories` | 指定则按命名空间嵌套目录输出；当前单文件输出模式下该参数不产生效果（默认 true） | 否 |
 | | `timeoutSeconds` | 本次反编译写盘等待超时秒数（默认 30，全量写盘大程序集可调大）；超时即放弃本次写盘，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_decompile_to_project` | `assembly` | 程序集文件路径 | 是 |
 | | `outputDir` | 输出目录；结果写入磁盘而非标准输出 | 是 |

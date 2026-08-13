@@ -3,9 +3,10 @@ using System.Text;
 namespace ILSpyMcp.Formatting;
 
 /// <summary>
-/// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞。
+/// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞，
+/// IsCached 标注本次结果来自缓存命中（供 agent 感知重复查询低成本）。
 /// </summary>
-public sealed record FormatContext(string AssemblyPath, string Target, bool IsListing = false);
+public sealed record FormatContext(string AssemblyPath, string Target, bool IsListing = false, bool IsCached = false);
 
 /// <summary>
 /// 标准输出结果格式化：默认按字符预算（UTF-8 字节）返回前若干行并附行数软上限，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片
@@ -229,6 +230,7 @@ public static class OutputFormatter
         var sb = new StringBuilder();
         sb.Append("程序集: ").Append(ctx.AssemblyPath).Append('\n');
         sb.Append("目标:   ").Append(ctx.Target).Append('\n');
+        if (ctx.IsCached) sb.Append("缓存:   命中（重复查询成本低）\n");
         sb.Append(DescribeStats(ctx, lines.Count)).Append('\n');
         sb.Append(DescribeCurrent(lines, linesParam));
         var remaining = DescribeRemaining(lines, linesParam);

@@ -14,13 +14,15 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 按成员名在指定类型内搜索并反编译匹配的成员：适合只知道方法名、给不出完整文档 ID 的场景。 匹配的多个成员全部反编译并合并输出（行号连续），默认返回前约 8 KB、可用 lines 分页； 匹配数超过上限时仅返回签名清单，不启动反编译。
+/// 反编译指定类型内单个或多个成员的实现体（成员级入口，如某个方法体）：按成员名在类型内定位成员并反编译合并输出，
+/// 或按 token 直接反编译单个成员。定位的多个成员全部反编译并合并输出（行号连续），默认返回前约 8 KB、可用 lines 分页；
+/// 定位数量超过上限时仅返回签名清单，不启动反编译。
 /// </summary>
 [McpServerToolType]
 public static class DecompileMemberTool
 {
     /// <summary>
-    /// 按成员名子串在指定类型内搜索并反编译匹配的成员，经共享管道缓存与 lines 分页。
+    /// 按成员名子串在指定类型内定位并反编译成员（或按 token 直接反编译单个成员），经共享管道缓存与 lines 分页。
     /// </summary>
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">在指定类型内搜索成员，全限定类型名（token 分支下可不填）。</param>
@@ -31,7 +33,7 @@ public static class DecompileMemberTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>匹配成员反编译合并结果（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("按成员名子串在指定类型内搜索并反编译匹配的成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。匹配到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；匹配数超过 20 时仅返回成员签名清单（每行 签名 [token]）不反编译。提供 token 参数时直接按元数据 token 反编译单个成员（忽略 memberName，typeName 可不填，清单与分隔行中的 token 均可直接用）。结果默认只返回前约 8 KB，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
+    [Description("反编译指定类型内单个或多个成员的实现体到标准输出（成员级入口，如某个方法体；整类型源码请用 decompile 工具）。按 memberName 子串在 typeName 内定位成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。定位到多个成员时全部反编译并合并输出，行号连续，各成员前有 === 名字 (token) === 分隔行；超过 20 个时仅返回成员签名清单（每行 签名 [token]）不反编译。提供 token 参数时直接按元数据 token 反编译单个成员（忽略 memberName，typeName 可不填，清单与分隔行中的 token 均可直接用）。结果默认只返回前约 8 KB，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
     public static async Task<string> DecompileMember(
         [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("在指定类型内搜索成员，全限定类型名，例如 System.Text.Json.JsonSerializer（必填；提供 token 时可不填）")] string typeName = "",
