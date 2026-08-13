@@ -74,7 +74,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或单个类型，单文件输出） |
 | `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件，按命名空间嵌套目录） |
 | `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），输出带行号标注 |
-| `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图 |
+| `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图；每行行尾附成员 token，可直接用于 `ilspy_decompile_member` 的 `token` 参数 |
 | `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型 |
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用 |
 | `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补） |
@@ -130,7 +130,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 - **单个类型**：> 反编译 `bin/Debug/MyApp.dll` 中的 `MyApp.Program` 类型
 - **按名搜索成员**：> 在 `bin/Debug/MyApp.dll` 的 `MyApp.Program` 中搜索名称包含 `Main` 的成员并反编译
 - **按 token 反编译单个成员**：> 在 `bin/Debug/MyApp.dll` 的 `MyApp.Program` 中搜索名称包含 `Parse` 的成员；若匹配超过 20 个仅返回 `#MEMBER` 签名清单，则取目标行 JSON 中的 `token` 字段（如 `0x06000010`）用 `token` 参数直接反编译该成员
-- **成员签名（API 地图）**：> 列出 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的全部成员签名
+- **成员签名（API 地图）**：> 列出 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的全部成员签名（每行行尾为成员 token，如 `  0x06000005`，可直接用作 `token` 参数反编译对应成员）
 - **继承关系**：> 查看 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的基类链、接口与继承者
 - **内部引用**：> 查询 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的成员签名引用了哪些内部类型、以及哪些类型引用了它
 - **方法体调用关系**：> 查询 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的方法体调用了哪些内部类型、以及哪些类型的方法体调用了它

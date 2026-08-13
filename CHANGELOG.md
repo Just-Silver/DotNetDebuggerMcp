@@ -15,6 +15,7 @@
 - 反编译结果命中缓存时，头部信息块在「目标」行后追加「缓存: 命中（重复查询成本低）」行，agent 可感知重复查询低成本、放心多问；未命中或元数据工具不标注
 - `decompile`/`decompile_member` 描述点明入口粒度：`decompile` 为类型级入口（整类型源码）、`decompile_member` 为成员级入口（单个或多个成员实现体），消除「按成员反编译该用哪个工具」的歧义，无行为变化
 - **`decompile_member` 多成员分隔行与超限签名清单改为 `#MEMBER` JSON 结构化行（破坏性变更）**：分隔行由 `=== 名字 (token) ===` 改为 `#MEMBER {"name":"...","token":"0x..."}`，超限签名清单由每行 `签名  [token]` 改为 `#MEMBER {"name","token","signature"}`——agent 免解析文本分隔线，直接按行首 `#MEMBER ` 识别并解析 JSON 取 token（token 仍可直接用于 `token` 参数反编译）；`token` 单成员反编译输出不变
+- `signature` 工具每行行尾附成员 token（如 `public void Do(int);  0x06000505`，可直接用于 `decompile_member` 的 `token` 参数反编译对应成员），API 地图与成员反编译闭环
 
 ### Removed
 

@@ -67,6 +67,7 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
 - 总量：反编译为 `总行数: N 行`；列类型同时给出 `匹配实体: N 个` 与 `总行数: N 行`（每行一个实体，行数=实体数）。`当前输出` 含返回量 KB 与截断原因：截断如 `1-78（78 行，7.9 KB，已截断：超过默认预算约 8 KB）`、未截断如 `1-3（3 行，0.0 KB）`；`剩余` 行如 `剩余:     122 行 / 约 12.5 KB，可一次获取：lines="79-200"`、剩余超单次预算时如 `剩余:     922 行 / 约 94.5 KB，超过单次预算（约 32 KB），需分次获取：先用 lines="79-390"`。空结果为 `无`、越界为 `无效（起始行 X 超出总行数 Y）`
 - `decompile_member` 提供 `token` 参数时按 token 直接反编译单个成员，头部目标描述为 `类型 X 的成员 <token>（按 token 反编译）`（typeName 缺省时为 `成员 <token>（按 token 反编译）`）；按名搜索时头部目标描述为 `类型 X 的成员 <memberName>（N 个匹配）`；多成员匹配合并输出（行号连续、总行数基于合并结果，各成员前有 `#MEMBER {"name","token"}` JSON 分隔行、计入行号——agent 可直接解析取 token），匹配数 > `AppConfig.MaxMemberMatches`（20）时头部注明「超过上限，仅列出签名」并只返回 `#MEMBER` 签名清单（每行 `#MEMBER {"name","token","signature"}`）；无匹配返回「类型 X 中未找到名称包含 Y 的成员」、存在相近名时追加「相近成员：A、B、C」；类型不存在返回「未找到类型 X」
 - 纯元数据工具（list_types/signature/hierarchy/dependencies/call_graph）头部同样带信息块（IsListing：`匹配实体: N 个 + 总行数: N 行`，每行一个实体），默认返回前约 8 KB、同样支持 `lines` 分页。反编译输出含 `//IL_` 未解析注释时，头部追加「提示: 输出含 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考」
+- `signature` 每行行尾附成员 token（`  0x06000505`，两空格分隔；方法 `0x06`/字段 `0x04`/属性 `0x17`/事件 `0x14` 高字节区分），agent 看中某成员可直接取行尾 token 用于 `decompile_member` 的 `token` 参数反编译，API 地图与成员反编译闭环
 - `hierarchy` 输出三段（基类链/接口/程序集内继承实现者），`dependencies` 输出两段（引用的内部类型/引用它的类型），`call_graph` 输出两段（方法体调用的内部类型/程序集内方法体调用此类型的类型），空段均输出（无）占位，段标题与实体均作为行标注行号
 - 头部之下按行号标注（`行号\t内容`），切片时行号基于原始位置
 - 默认返回前约 8 KB，`lines="start-end"` 按行号范围分页（单次最多约 32 KB）

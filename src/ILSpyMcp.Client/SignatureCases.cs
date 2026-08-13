@@ -15,6 +15,10 @@ public static class SignatureCases
         new ToolCallCase("signature", "Members 属性访问器合并（{ get; set; } 不出现 get_）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.MembersTypeName },
             ExpectedContains: "{ get; set; }", MustNotContain: "get_"),
+        // Members：每行行尾附成员 token（方法 0x06），agent 可直接用于 decompile_member 的 token 参数
+        new ToolCallCase("signature", "Members 每行行尾附成员 token（0x06 方法）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.MembersTypeName },
+            ExpectedContains: "  0x06", MustNotContain: "at System"),
         // 泛型类型：成员签名带类型级泛型参数（T），含泛型方法 First()
         new ToolCallCase("signature", "GenericBox`1 泛型方法 First()",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.GenericTypeName },

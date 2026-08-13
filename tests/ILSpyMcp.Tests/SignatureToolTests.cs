@@ -34,6 +34,16 @@ public class SignatureToolTests
     }
 
     [Fact]
+    public async Task Signature_Members_每行行尾附方法属性token()
+    {
+        // Members 含方法（Raise/隐式 ctor，token 0x06）、属性（Count，token 0x17），行尾应附 token 供 agent 直接反编译
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members");
+
+        Assert.Contains("  0x06", result);
+        Assert.Contains("  0x17", result);
+    }
+
+    [Fact]
     public async Task Signature_类型不存在_返回未找到提示()
     {
         var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "No.Such.Type");
