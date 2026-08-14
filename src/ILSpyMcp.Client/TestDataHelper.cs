@@ -63,6 +63,11 @@ public static class TestDataHelper
         .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
         .First();
 
+    /// <summary>
+    /// 跨程序集测试程序集（引用 TestSamples.dll 的 Callee），供 call_chain includeExternal 跨程序集展开用例。
+    /// </summary>
+    public static string ExtDll { get; } = Path.Combine(RepoRoot, "tests", "TestData", "ILSpyMcp.TestSamplesExt.dll");
+
     private static string FindRepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

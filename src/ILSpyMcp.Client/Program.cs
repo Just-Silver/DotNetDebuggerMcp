@@ -23,6 +23,7 @@ try
     await runner.RunAsync(InterfaceUsageCases.All(dll));
     await runner.RunAsync(GenericInstantiationCases.All(dll));
     await runner.RunAsync(CallChainCases.All(dll));
+    await runner.RunAsync(CallChainCases.CrossAssembly(TestDataHelper.ExtDll));
     await runner.RunAsync(SearchStringCases.All(dll));
     await runner.RunAsync(FieldAccessCases.All(dll));
     await runner.RunAsync(DecompileToDirCases.All(dll, outDir));

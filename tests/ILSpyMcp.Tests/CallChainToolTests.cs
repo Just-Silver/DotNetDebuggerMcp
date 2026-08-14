@@ -91,6 +91,47 @@ public class CallChainToolTests
     }
 
     [Fact]
+    public async Task CallChain_includeExternal_跨程序集调用展开()
+    {
+        // ExtCaller.Run 调 TestSamples.dll 的 Callee：includeExternal=true 时展开到被调方法体（含 System.Object::.ctor）
+        AppServices.ConfigureForTest();
+        try
+        {
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesExtDll, token: ExtCallerRunToken(), includeExternal: true);
+
+            Assert.Contains("ILSpyMcp.TestSamples::ILSpyMcp.Samples.Callee::.ctor 调用:", result);
+            Assert.Contains("System.Object::.ctor", result);
+            Assert.DoesNotContain("未找到程序集", result);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task CallChain_includeExternal_外部程序集无法解析_标注终止()
+    {
+        // 把 Ext dll 复制到临时目录（同目录无 TestSamples.dll，CWD 也无）：resolver 定位失败 → 行尾标注终止提示
+        AppServices.ConfigureForTest();
+        var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-callchain-ext-test");
+        Directory.CreateDirectory(tempDir);
+        var tempDll = Path.Combine(tempDir, "ILSpyMcp.TestSamplesExt.dll");
+        try
+        {
+            File.Copy(TestDataPaths.TestSamplesExtDll, tempDll, overwrite: true);
+            var result = await CallChainTool.CallChain(tempDll, token: ExtCallerRunToken(), includeExternal: true);
+
+            Assert.Contains("（未找到程序集 ILSpyMcp.TestSamples，视为框架/外部调用未展开）", result);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+            try { Directory.Delete(tempDir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    [Fact]
     public async Task CallChain_多匹配_返回签名清单提示用token()
     {
         // BigClass 中 Big 命中 BigMethod/BigHelper/BigHelper2 3 个 → 返回 #MEMBER 清单而非反编译
@@ -280,5 +321,27 @@ public class CallChainToolTests
             }
         }
         throw new InvalidOperationException("TestSamples 未找到 ChainMid.Mid");
+    }
+
+    /// <summary>
+    /// 取跨程序集测试程序集 ExtCaller.Run 的元数据 token，供跨程序集展开用例。
+    /// </summary>
+    private static string ExtCallerRunToken()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesExtDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        foreach (var typeHandle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(typeHandle);
+            if (reader.GetString(type.Name) != "ExtCaller") continue;
+            foreach (var methodHandle in type.GetMethods())
+            {
+                var method = reader.GetMethodDefinition(methodHandle);
+                if (reader.GetString(method.Name) == "Run")
+                    return $"0x{MetadataTokens.GetToken(methodHandle):x8}";
+            }
+        }
+        throw new InvalidOperationException("TestSamplesExt 未找到 ExtCaller.Run");
     }
 }

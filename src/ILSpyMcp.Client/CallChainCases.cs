@@ -42,6 +42,17 @@ public static class CallChainCases
     };
 
     /// <summary>
+    /// call_chain 跨程序集展开的端到端验证场景：ExtCaller.Run 的跨程序集调用（TestSamples.dll 的 Callee）经
+    /// UniversalAssemblyResolver 定位并展开其方法体子序列。
+    /// </summary>
+    public static IReadOnlyList<ToolCallCase> CrossAssembly(string extDll) => new[]
+    {
+        new ToolCallCase("call_chain", "跨程序集调用展开（ExtCaller → Callee）",
+            new Dictionary<string, object?> { ["assembly"] = extDll, ["typeName"] = "ILSpyMcp.SamplesExt.ExtCaller", ["memberName"] = "Run", ["includeExternal"] = true },
+            ExpectedContains: "ILSpyMcp.TestSamples::ILSpyMcp.Samples.Callee::", MustNotContain: "at System"),
+    };
+
+    /// <summary>
     /// 取 TestSamples 中 ChainTop.Run 的元数据 token，供 token 定位用例。
     /// </summary>
     private static string ChainTopRunToken(string dll)

@@ -35,13 +35,13 @@ public static class CallChainTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>调用序列 + 被调用成员反编译的合并输出（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出指定起始方法的方法级正向调用序列，并对被调用的程序集内部成员反编译组合输出（方法级执行流视图，供追踪单个方法的直接调用链）。按 token（取 signature 行尾或 #MEMBER 分隔行的 token，如 0x06000005）或 typeName+memberName（成员名子串，忽略大小写，匹配多个方法时返回 #MEMBER 签名清单，用其中 token 精确定位起始方法）定位起始方法。扫描其方法体的调用指令（call/callvirt/newobj/jmp/ldftn/ldvirtftn，calli 函数指针跳过），按 IL 序列出 调用序列（每行 序号. 类型::成员()  + 内部成员的 0x06 开头 token）；includeExternal=true 时保留跨程序集外部调用行（格式 全名::成员名 [程序集名]，默认 false 过滤）。对去重后的唯一内部成员（最多 20 个）逐条反编译，各成员体前有 #MEMBER JSON 结构化分隔行（格式 #MEMBER {\"name\":\"...\",\"token\":\"0x...\",\"type\":\"...\"}，token 可直接用于后续反编译）；超过 20 个时仅返回 #MEMBER 签名清单不反编译。结果默认只返回前约 8 KB，可用 lines 参数分页。")]
+    [Description("输出指定起始方法的方法级正向调用序列，并对被调用的程序集内部成员反编译组合输出（方法级执行流视图，供追踪单个方法的直接调用链）。按 token（取 signature 行尾或 #MEMBER 分隔行的 token，如 0x06000005）或 typeName+memberName（成员名子串，忽略大小写，匹配多个方法时返回 #MEMBER 签名清单，用其中 token 精确定位起始方法）定位起始方法。扫描其方法体的调用指令（call/callvirt/newobj/jmp/ldftn/ldvirtftn，calli 函数指针跳过），按 IL 序列出 调用序列（每行 序号. 类型::成员()  + 内部成员的 0x06 开头 token）；includeExternal=true 时保留跨程序集外部调用行（格式 全名::成员名 [程序集名]，默认 false 过滤）并展开可解析的外部调用（同目录/CWD/NuGet 缓存/共享框架/GAC 的磁盘程序集，外部调用行后缩进输出 程序集::类型::成员 调用: + 被调方法体子序列，子序列内跨程序集调用递归展开），解析失败的行尾标注（未找到程序集 X，视为框架/外部调用未展开）。对去重后的唯一内部成员（最多 20 个）逐条反编译，各成员体前有 #MEMBER JSON 结构化分隔行（格式 #MEMBER {\"name\":\"...\",\"token\":\"0x...\",\"type\":\"...\"}，token 可直接用于后续反编译）；超过 20 个时仅返回 #MEMBER 签名清单不反编译。结果默认只返回前约 8 KB，可用 lines 参数分页。")]
     public static async Task<string> CallChain(
         [Description("要分析的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
         [Description("起始方法所属类型全名，格式与 list_types 输出一致（命名空间.类型，嵌套类型用 + 或 . 分隔，泛型类型带 arity 如 GenericBox`1），例如 ILSpyMcp.Samples.ChainTop；提供 token 时可不填")] string typeName = "",
         [Description("起始方法名子串（忽略大小写），例如 Run；匹配多个方法时返回 #MEMBER 签名清单（含 token）供精确定位（提供 token 时可不填）")] string memberName = "",
         [Description("起始方法元数据 token（取 signature 行尾或 #MEMBER 分隔行的 token，如 0x06000005）：按 token 直接定位起始方法，忽略 memberName，typeName 可不填。默认空=不使用")] string token = "",
-        [Description("是否在调用序列中保留跨程序集外部调用行（格式 全名::成员名 [程序集名]，如 System.Console::WriteLine [System.Console]；默认 false 过滤）")] bool includeExternal = false,
+        [Description("是否在调用序列中保留跨程序集外部调用行并展开（格式 全名::成员名 [程序集名]，如 System.Console::WriteLine [System.Console]；true 时经 UniversalAssemblyResolver 展开同目录/CWD/NuGet 可解析的外部调用为被调方法体子序列（外部调用行后缩进输出 程序集::类型::成员 调用: + 子序列），找不到的在行尾标注「未找到程序集 X，视为框架/外部调用未展开」；默认 false 过滤）")] bool includeExternal = false,
         [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
         [Description("本次反编译超时秒数，默认 30；被调用成员较多时可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
@@ -127,8 +127,10 @@ public static class CallChainTool
         }
 
         var overLimit = uniqueInternal.Count > AppConfig.MaxMemberMatches;
-        var context = new FormatContext(assemblyFull, overLimit ? $"{targetDesc}（超过上限，仅列出签名）" : targetDesc, Degraded: scanner.AbortedBodies);
-        var (merged, allCached, error) = await BuildMergedLinesAsync(callSites, uniqueInternal, includeExternal, assemblyFull, timeoutSeconds, cancellationToken);
+        using var expander = includeExternal ? new ExternalCallExpander(assemblyFull) : null;
+        var context = new FormatContext(assemblyFull, overLimit ? $"{targetDesc}（超过上限，仅列出签名）" : targetDesc,
+            Degraded: scanner.AbortedBodies + (expander?.AbortedBodies ?? 0));
+        var (merged, allCached, error) = await BuildMergedLinesAsync(callSites, uniqueInternal, includeExternal, expander, assemblyFull, timeoutSeconds, cancellationToken);
         if (error is not null) return error;
         if (allCached) context = context with { IsCached = true };
         return OutputFormatter.Format(merged!, lines, context);
@@ -142,7 +144,7 @@ public static class CallChainTool
     /// </summary>
     private static async Task<(List<string>? Lines, bool AllCached, string? Error)> BuildMergedLinesAsync(
         IReadOnlyList<CallSite> callSites, IReadOnlyList<CallSite> uniqueInternal, bool includeExternal,
-        string assemblyFull, int timeoutSeconds, CancellationToken cancellationToken)
+        ExternalCallExpander? expander, string assemblyFull, int timeoutSeconds, CancellationToken cancellationToken)
     {
         var merged = new List<string>();
         merged.Add("方法体调用序列:");
@@ -155,7 +157,25 @@ public static class CallChainTool
                 ? $"{callSite.TypeFullName}::{callSite.MemberName} [{ShortAssemblyName(callSite)}]"
                 : $"{callSite.TypeFullName}::{callSite.MemberName}()";
             var tokenPart = callSite.MemberToken is null ? "" : $"  {callSite.MemberToken}";
-            merged.Add($"  {index}. {display}{tokenPart}");
+            var line = $"  {index}. {display}{tokenPart}";
+            if (callSite.IsExternal && expander is not null)
+            {
+                // 跨程序集调用展开：可解析则外部调用行后缩进追加展开行；解析失败在行尾标注终止
+                var expansion = expander.Expand(callSite, s_expandSearchDirs);
+                if (expansion.Count == 0)
+                {
+                    line += $"（未找到程序集 {ShortAssemblyName(callSite)}，视为框架/外部调用未展开）";
+                }
+                merged.Add(line);
+                foreach (var expansionLine in expansion)
+                {
+                    merged.Add("  " + expansionLine);
+                }
+            }
+            else
+            {
+                merged.Add(line);
+            }
         }
         if (index == 0) merged.Add("  （无）");
 
@@ -201,6 +221,11 @@ public static class CallChainTool
         }
         return (merged, allCached, null);
     }
+
+    /// <summary>
+    /// 跨程序集调用展开的追加搜索目录（主 dll 同目录由 resolver 构造自带，CWD 由调用方显式传入）。
+    /// </summary>
+    private static readonly string[] s_expandSearchDirs = { Environment.CurrentDirectory };
 
     /// <summary>
     /// 外部调用的程序集短名（完整名首段）；归属未知时返回 "&lt;外部&gt;"。

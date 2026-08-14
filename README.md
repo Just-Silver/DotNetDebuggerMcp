@@ -68,7 +68,7 @@ ilspymcp -a bin/Debug/MyApp.dll -t MyApp.IWorker -iu -i  # 含全部间接实现
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.GenericBox -gi  # 泛型实例化使用点（等价 ilspy_generic_instantiations，typeName 可带 arity 如 GenericBox`1 也可省略）
 ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc  # 起始方法 Parse 的调用序列 + 被调用成员反编译（等价 ilspy_call_chain）
 ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010  # 按方法 token 直接定位起始方法（等价 ilspy_call_chain token=...，typeName/memberName 可不填）
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc -x  # 调用序列含跨程序集外部调用行（等价 ilspy_call_chain includeExternal=true）
+ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc -x  # 调用序列含跨程序集外部调用行并展开可解析的外部调用（同目录/CWD/NuGet 可解析则展开为被调方法体子序列，找不到标注终止；等价 ilspy_call_chain includeExternal=true）
 ilspymcp -a bin/Debug/MyApp.dll -ai      # 输出程序集概览（等价 ilspy_assembly_info）
 ilspymcp -a bin/Debug/MyApp.dll -l csi               # 列出实体类型（等价 ilspy_list_types）
 ilspymcp -a bin/Debug/MyApp.dll -l c -nc Box        # 列出类型且名称含 Box（等价 ilspy_list_types 的 nameContains 参数，忽略大小写）
@@ -98,7 +98,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型；`includeIndirect=true` 时后代段含全部间接后代（接口的所有实现者、基类的所有子孙）；未找到类型时附相近类型名 |
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用；`includeExternal=true` 时追加输出跨程序集外部类型（带程序集归属，格式 `全名 [程序集名]`）；未找到类型时附相近类型名 |
 | `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补）；`includeExternal=true` 时追加输出方法体调用的跨程序集外部类型（带程序集归属）；`token` 参数按方法 token 反向定位程序集内调用该具体方法的成员（方法级调用点）；未找到类型时附相近类型名 |
-| `ilspy_call_chain` | 输出起始方法的方法级正向调用序列，并对被调用的程序集内部成员反编译组合输出（方法级执行流视图）：按 `token` 或 `typeName`+`memberName`（匹配多个方法时返回 `#MEMBER` 签名清单）定位起始方法，序列行带内部成员 token（可直接用于 `ilspy_decompile_member` 反编译）；`includeExternal=true` 时保留跨程序集外部调用行（格式 `全名::成员名 [程序集名]`）；被调用成员各成员体前有 `#MEMBER` JSON 分隔行 |
+| `ilspy_call_chain` | 输出起始方法的方法级正向调用序列，并对被调用的程序集内部成员反编译组合输出（方法级执行流视图）：按 `token` 或 `typeName`+`memberName`（匹配多个方法时返回 `#MEMBER` 签名清单）定位起始方法，序列行带内部成员 token（可直接用于 `ilspy_decompile_member` 反编译）；`includeExternal=true` 时保留跨程序集外部调用行（格式 `全名::成员名 [程序集名]`）并展开可解析的外部调用（经 UniversalAssemblyResolver 定位主 dll 同目录/CWD/NuGet 缓存/共享框架/GAC 的磁盘程序集，外部调用行后缩进输出 `程序集::类型::成员 调用:` + 被调方法体子序列，子序列内跨程序集调用递归展开），解析失败的框架/外部调用在行尾标注 `（未找到程序集 X，视为框架/外部调用未展开）`；被调用成员各成员体前有 `#MEMBER` JSON 分隔行 |
 | `ilspy_interface_usage` | 输出指定接口的使用情况组合视图：程序集内实现该接口的类型（`includeIndirect=true` 时含全部间接实现者，如接口的子接口、实现者及其子类）、方法体调用接口成员的调用点（`类型全名::成员名 → 接口成员名` 行，反扫全部类型方法体调用指令，覆盖内部接口与跨程序集外部接口、含泛型实例化调用解包）与成员签名引用该接口的类型（签名级引用，与调用点互补）；三段空段输出 `（无）` 占位，未找到类型时附相近类型名 |
 | `ilspy_generic_instantiations` | 输出指定泛型类型在程序集内被具体实例化的使用点两段：成员签名中的泛型实例化（扫描全部类型的字段/方法/属性/事件签名，凡签名用具体类型参数实例化该泛型类型时输出 `类型全名::成员签名 → GenericType<arg, arg>` 行）与方法体调用中的泛型实例化（扫描全部类型方法体调用指令，凡调用该泛型类型的泛型方法输出 `来源类型::来源方法签名 → Echo<int>` 行、经成员引用实例化该泛型类型时输出对应行）；两段空段输出 `（无）` 占位，`typeName` 可带 arity（``GenericBox`1``）也可省略（`GenericBox`，短名亦命中），未找到类型时附相近类型名 |
 | `ilspy_search_string` | 按字符串字面量子串反查成员：扫描全部（或 `typeName` 指定）类型方法体的 `ldstr` 指令，按子串（忽略大小写）匹配业务文案/SQL 片段/配置 Key 等用户字符串，输出每行 `类型全名::成员签名` + 转义后的字符串值 + 成员 token（可直接用于 `ilspy_decompile_member` 的 `token` 参数反编译对应成员）；未找到类型时附相近类型名 |
@@ -156,7 +156,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | | `typeName` | 起始方法所属类型全名，格式与 list_types 输出一致，例如 `ILSpyMcp.Samples.ChainTop`；提供 `token` 时可不填 | 否 |
 | | `memberName` | 起始方法名子串（忽略大小写），如 `Run`；匹配多个方法时返回 `#MEMBER` 签名清单（含 token）供精确定位；提供 `token` 时可不填 | 否 |
 | | `token` | 起始方法元数据 token（取 `signature` 行尾或 `#MEMBER` 分隔行的 token，如 `0x06000005`）：按 token 直接定位起始方法，忽略 `memberName`，`typeName` 可不填；默认空=不使用 | 否 |
-| | `includeExternal` | 是否在调用序列中保留跨程序集外部调用行（格式 `全名::成员名 [程序集名]`，如 `System.Console::WriteLine [System.Console]`）；默认 `false` | 否 |
+| | `includeExternal` | 是否在调用序列中保留跨程序集外部调用行并展开（格式 `全名::成员名 [程序集名]`，如 `System.Console::WriteLine [System.Console]`）；为 `true` 时经 UniversalAssemblyResolver 将可解析的外部调用（主 dll 同目录/CWD/NuGet 缓存/共享框架/GAC）展开为被调方法体子序列（外部调用行后缩进输出，子序列内跨程序集调用递归展开），找不到的外部调用在行尾标注 `（未找到程序集 X，视为框架/外部调用未展开）`；默认 `false` | 否 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
 | | `timeoutSeconds` | 本次反编译等待超时秒数（默认 30）；被调用成员较多时可调大；超时即放弃本次反编译、结果不入缓存，可调大后重试；超时后中断后台反编译，不再继续占用 CPU | 否 |
 | `ilspy_interface_usage` | `assembly` | 程序集文件路径 | 是 |
@@ -199,7 +199,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 - **方法级调用点**：> 查询 `bin/Debug/MyApp.dll` 中哪些方法体调用了 `MyApp.Program` 的 `Parse` 方法（先用 `signature` 取该成员行尾 token 如 `0x06000010`，再以 `token` 参数调用 `ilspy_call_graph`，输出 `类型全名::成员签名` 调用点行）
 - **接口使用情况**：> 查询 `bin/Debug/MyApp.dll` 中 `MyApp.IWorker` 接口的实现者、方法体调用该接口成员的调用点（输出 `类型全名::成员名 → 接口成员名` 行）与成员签名引用它的类型（加 `includeIndirect=true` 一次列出全部间接实现者，如接口的子接口、实现者及其子类）
 - **泛型实例化使用点**：> 查询 `bin/Debug/MyApp.dll` 中 `MyApp.GenericBox` 泛型类型在程序集内被具体实例化的使用点（`typeName` 传 `GenericBox` 短名或 ``GenericBox`1`` 全名均可，输出两段：成员签名中的泛型实例化 `类型全名::成员签名 → GenericBox<int>` 行与方法体调用中的泛型实例化行）
-- **方法调用序列**：> 追踪 `bin/Debug/MyApp.dll` 中 `MyApp.Program.Parse` 方法体的正向调用序列，并反编译被调用的内部成员（`typeName`+`memberName` 定位起始方法；`memberName` 匹配多个方法时返回 `#MEMBER` 签名清单，取目标行 `token` 用 `token` 参数精确定位；`includeExternal=true` 时保留跨程序集外部调用行，如 `System.Console::WriteLine [System.Console]`；序列行带内部成员 token，可直接用于 `ilspy_decompile_member` 反编译）
+- **方法调用序列**：> 追踪 `bin/Debug/MyApp.dll` 中 `MyApp.Program.Parse` 方法体的正向调用序列，并反编译被调用的内部成员（`typeName`+`memberName` 定位起始方法；`memberName` 匹配多个方法时返回 `#MEMBER` 签名清单，取目标行 `token` 用 `token` 参数精确定位；`includeExternal=true` 时保留跨程序集外部调用行，如 `System.Console::WriteLine [System.Console]`，并把同目录/CWD/NuGet 缓存/共享框架可解析的外部调用展开为被调方法体子序列（行尾标注 `（未找到程序集 X，视为框架/外部调用未展开）` 表示该外部调用无法解析、未展开）；序列行带内部成员 token，可直接用于 `ilspy_decompile_member` 反编译）
 - **字符串反查**：> 在 `bin/Debug/MyApp.dll` 中按字符串字面量子串 `配置Key` 反查引用它的成员（忽略大小写，输出 `类型全名::成员签名` + 转义后的字符串值 + 成员 token；可加 `typeName` 限定在指定类型内，命中行 token 可直接用于 `ilspy_decompile_member` 反编译对应成员）
 - **字段读写点**：> 追踪 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 字段 `_count` 的读取/写入/取地址位置（输出三段 `类型全名::成员签名` 来源成员；若字段名匹配多个字段会返回 `#MEMBER` 签名清单，取目标字段的 token 用 `fieldToken` 参数精确定位；也可先用 `signature` 取该字段行尾 token 如 `0x04000010` 直接定位）
 - **按行拉取**：> 反编译 `bin/Debug/MyApp.dll` 中的 `MyApp.Program`，读取第 200-400 行
