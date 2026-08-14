@@ -25,9 +25,9 @@ public class ILSpyMcpCmdTests
         var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var result = await ILSpyMcpCmd.DispatchCliAsync(
             assembly: TestDataPaths.TestSamplesDll, typeName: "", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
-            searchString: "",
+            searchString: "", fieldName: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
-            dependencies: false, callGraph: true, external: false, indirect: false, assemblyInfo: false,
+            dependencies: false, callGraph: true, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
             token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false);
 
         Assert.Contains("ILSpyMcp.Samples.Caller::", result);
