@@ -365,3 +365,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Git worktree scratch directories (isolated feature branches)
+.worktrees/
