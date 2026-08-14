@@ -1,7 +1,6 @@
 using ILSpyMcp.Configuration;
 using ILSpyMcp.Decompiler;
 using ILSpyMcp.Services;
-using ILSpyMcp.Validation;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 
@@ -31,23 +30,8 @@ public static class DecompileToProjectTool
         [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
-        // 参数校验：assembly 必填且文件存在（进程内反编译，无安装前置）
-        if (!ArgumentValidators.ValidateAssembly(assembly, out var assemblyError)) return assemblyError;
-        // 参数校验：outputDir 必填且路径合法
-        if (!ArgumentValidators.ValidateOutputDir(outputDir, out var argError)) return argError;
-        // 参数校验：timeoutSeconds 必须为正整数（不允许永不超时）
-        if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
-
-        var cwd = Environment.CurrentDirectory;
-        if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
-        var outputFull = Path.GetFullPath(outputDir, cwd);
-        var timeoutHint = $"反编译写盘超时（超过 {timeoutSeconds} 秒），已放弃本次写盘；可调大 timeoutSeconds 后重试";
-
-        // 进程内项目模式写盘：{程序集名}.csproj + 每类型一个源码文件；超时/取消返回提示文本，不抛异常
-        return await InProcessDecompiler.RunWithTimeoutAsync(
-            ct => InProcessDecompiler.DecompileToProject(assemblyFull, outputFull, nestedDirectories, ct),
-            TimeSpan.FromSeconds(timeoutSeconds),
-            cancellationToken,
-            timeoutHint);
+        return await ToolExecutor.RunToDisk(assembly, outputDir, timeoutSeconds, cancellationToken,
+            (assemblyFull, outputFull, ct) => InProcessDecompiler.DecompileToProject(
+                assemblyFull, outputFull, nestedDirectories, ct));
     }
 }

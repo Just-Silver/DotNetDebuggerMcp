@@ -1,7 +1,9 @@
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using ILSpyMcp.Decompiler;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Pipeline;
+using ILSpyMcp.Validation;
 
 namespace ILSpyMcp.Services;
 
@@ -28,6 +30,32 @@ internal static class ToolExecutor
             fullPath = "";
             return $"路径非法：{ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// 写盘工具共享执行辅助：统一「参数校验 + 路径解析 + 超时提示 + RunWithTimeoutAsync」样板，供
+    /// decompile_to_dir / decompile_to_project 复用，避免各工具重复手写同一段校验与超时包装并在细节上漂移。
+    /// 依次校验 assembly/outputDir/timeoutSeconds，失败返回对应中文提示；随后解析程序集绝对路径与输出目录
+    /// 绝对路径（相对当前工作目录），转调 <see cref="InProcessDecompiler.RunWithTimeoutAsync"/> 执行 work。
+    /// </summary>
+    /// <param name="assembly">程序集路径（必填，相对或绝对）。</param>
+    /// <param name="outputDir">输出目录（必填，相对或绝对；目录不存在允许，写盘时自动创建）。</param>
+    /// <param name="timeoutSeconds">写盘超时秒数，必须为正整数。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="work">实际写盘委托：入参为解析后的程序集绝对路径、输出目录绝对路径与取消令牌。</param>
+    /// <returns>写盘结果提示或错误提示文本。</returns>
+    public static async Task<string> RunToDisk(string assembly, string outputDir, int timeoutSeconds,
+        CancellationToken cancellationToken, Func<string, string, CancellationToken, string> work)
+    {
+        if (!ArgumentValidators.ValidateAssembly(assembly, out var assemblyError)) return assemblyError;
+        if (!ArgumentValidators.ValidateOutputDir(outputDir, out var argError)) return argError;
+        if (!ArgumentValidators.ValidateTimeoutSeconds(timeoutSeconds, out var timeoutError)) return timeoutError;
+        if (ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return pathError;
+        var outputFull = Path.GetFullPath(outputDir, Environment.CurrentDirectory);
+        var timeoutHint = $"反编译写盘超时（超过 {timeoutSeconds} 秒），已放弃本次写盘；可调大 timeoutSeconds 后重试";
+        return await InProcessDecompiler.RunWithTimeoutAsync(
+            ct => work(assemblyFull, outputFull, ct),
+            TimeSpan.FromSeconds(timeoutSeconds), cancellationToken, timeoutHint);
     }
 
     /// <summary>
