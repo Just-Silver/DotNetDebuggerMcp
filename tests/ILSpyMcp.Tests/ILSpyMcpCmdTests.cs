@@ -27,7 +27,7 @@ public class ILSpyMcpCmdTests
             assembly: TestDataPaths.TestSamplesDll, typeName: "", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: true, external: false, indirect: false, assemblyInfo: false,
-            token: token, lines: "", timeoutSeconds: 30, check: false);
+            token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false);
 
         Assert.Contains("ILSpyMcp.Samples.Caller::", result);
     }

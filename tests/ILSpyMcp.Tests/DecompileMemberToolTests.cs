@@ -2,6 +2,10 @@ using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
 using ILSpyMcp.Tools;
 
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
+
 using Xunit;
 
 namespace ILSpyMcp.Tests;
@@ -45,6 +49,46 @@ public class DecompileMemberToolTests
         try
         {
             var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "", "0xZZZZ");
+
+            Assert.Contains("不是有效的元数据 token", result);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task typeToken_精确定位类型内搜索成员()
+    {
+        AppServices.ConfigureForTest();
+        try
+        {
+            using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+            using var pe = new PEReader(fs);
+            var reader = pe.GetMetadataReader();
+            var handles = MetadataNaming.FindTypes(reader, "ILSpyMcp.Samples.BigClass");
+            var handle = Assert.Single(handles);
+            var typeToken = $"0x{MetadataTokens.GetToken(handle):x8}";
+
+            var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "BigMethod", "", typeToken);
+
+            Assert.Contains("已截断", result);
+            Assert.DoesNotContain("有歧义", result);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task typeToken_非法返回中文提示()
+    {
+        AppServices.ConfigureForTest();
+        try
+        {
+            var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "BigMethod", "", "0xZZZZ");
 
             Assert.Contains("不是有效的元数据 token", result);
         }

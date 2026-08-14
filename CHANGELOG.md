@@ -11,6 +11,7 @@
 ### Added
 
 - `list_types` 新增 `namespaceContains` 命名空间子串过滤参数（忽略大小写，默认空=不过滤），嵌套类型按其最外层声明类型的命名空间归属；可与 `nameContains` 组合使用，按命名空间定位类型免分页扫全量；CLI 同步提供 `-ns|--namespacecontains` 选项（配合 `-l`）
+- `decompile_member` 新增 `typeToken` 参数（CLI `-tt`）：`typeName` 存在歧义（命名空间与嵌套分隔的多种解释均命中同一名字）时返回歧义提示并列出候选类型（附类型定义 token `0x02` 开头），可用 `typeToken` 精确定位类型后再按 `memberName` 搜索成员；提供 `typeToken` 时 `typeName` 可不填
 
 ## [1.2.3] - 2026-08-14
 

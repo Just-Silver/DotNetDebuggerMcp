@@ -1,4 +1,6 @@
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
+using System.Text;
 
 namespace ILSpyMcp.Metadata;
 
@@ -89,20 +91,57 @@ public static class MetadataNaming
     /// <summary>
     /// 在程序集内按用户输入定位 TypeDefinition；未找到返回 null。
     /// 输入可含两种嵌套分隔符（Probe.Outer+Inner 或 Probe.Outer.Inner）——匹配前将 + 统一归一化为 . 后比较。
-    /// 注意：命名空间与嵌套分隔的歧义（A.B.C 是命名空间 A.B 的类型 C，还是命名空间 A 的类型 B 的嵌套 C）取枚举序首个命中。
+    /// 注意：命名空间与嵌套分隔的歧义（A.B.C 是命名空间 A.B 的类型 C，还是命名空间 A 的类型 B 的嵌套 C）时，
+    /// 返回 <see cref="FindTypes"/> 全部候选中的首个（枚举序）。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="input">用户输入的类型全名，如 "Probe.Outer+Inner"，可带 list_types 行首类别前缀（如 "class Probe.Outer"）。</param>
     /// <returns>命中的类型句柄；未找到为 null。</returns>
     public static TypeDefinitionHandle? FindType(MetadataReader reader, string input)
     {
+        var candidates = FindTypes(reader, input);
+        // 注意：default(TypeDefinitionHandle) 转可空后 HasValue 恒为 true，空候选需显式返回 null
+        return candidates.Count > 0 ? candidates[0] : null;
+    }
+
+    /// <summary>
+    /// 在程序集内按用户输入定位全部 TypeDefinition 候选：输入与类型全名均将 + 归一化为 . 后比较，收集全部相等命中。
+    /// 命名空间与嵌套分隔存在歧义（如 A.B.C 既可能是命名空间 A.B 的类型 C，也可能是命名空间 A 的类型 B 的嵌套 C）时
+    /// 返回多个候选，供调用方判定歧义；无歧义时恒为 0 或 1 个。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <param name="input">用户输入的类型全名，如 "Probe.Outer+Inner"，可带 list_types 行首类别前缀（如 "class Probe.Outer"）。</param>
+    /// <returns>全部命中的类型句柄（枚举序），可能为空。</returns>
+    public static IReadOnlyList<TypeDefinitionHandle> FindTypes(MetadataReader reader, string input)
+    {
         var normalized = StripCategoryPrefix(input).Replace('+', '.');
+        var candidates = new List<TypeDefinitionHandle>();
         foreach (var handle in reader.TypeDefinitions)
         {
             var type = reader.GetTypeDefinition(handle);
-            if (FullName(reader, type).Replace('+', '.') == normalized) return handle;
+            if (FullName(reader, type).Replace('+', '.') == normalized) candidates.Add(handle);
         }
-        return null;
+        return candidates;
+    }
+
+    /// <summary>
+    /// 组装「类型名歧义」提示：列出全部候选全名与其类型定义 token（0x02 开头，可直接用于 decompile_member 的 typeToken 参数精确定位），
+    /// 首行说明可用 typeToken 消歧。供工具按 typeName 定位到多个候选时提示 agent。
+    /// </summary>
+    /// <param name="reader">元数据读取器。</param>
+    /// <param name="input">用户输入的类型名（提示文本保留原始输入）。</param>
+    /// <param name="candidates">全部命中候选（枚举序）。</param>
+    /// <returns>歧义提示文本。</returns>
+    public static string BuildAmbiguityMessage(MetadataReader reader, string input, IReadOnlyList<TypeDefinitionHandle> candidates)
+    {
+        var sb = new StringBuilder();
+        sb.Append($"类型 {input} 有歧义，匹配以下类型（可用 typeToken 精确定位）：");
+        foreach (var handle in candidates)
+        {
+            sb.Append('\n').Append("  ").Append(FullName(reader, reader.GetTypeDefinition(handle)))
+              .Append($"（token 0x{MetadataTokens.GetToken(handle):x8}）");
+        }
+        return sb.ToString();
     }
 
     /// <summary>

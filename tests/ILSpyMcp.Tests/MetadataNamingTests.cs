@@ -76,6 +76,22 @@ public class MetadataNamingTests
     }
 
     [Fact]
+    public void FindTypes_返回全部归一化候选()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+
+        // 点号分隔的嵌套类型名归一化后命中 Container+Inner，首个候选与 FindType 一致
+        var candidates = MetadataNaming.FindTypes(reader, "ILSpyMcp.Samples.Container.Inner");
+        var viaFindType = MetadataNaming.FindType(reader, "ILSpyMcp.Samples.Container.Inner");
+
+        Assert.NotEmpty(candidates);
+        Assert.True(viaFindType.HasValue);
+        Assert.Equal(viaFindType!.Value, candidates[0]);
+    }
+
+    [Fact]
     public void BuildNotFoundMessage_未找到时附相近类型名()
     {
         using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);

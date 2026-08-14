@@ -84,6 +84,12 @@ public class ILSpyMcpCmd
     public string Token { get; } = null!;
 
     /// <summary>
+    /// 按类型定义 token 精确定位类型（typeName 歧义消歧），配合 -mn 在类型内搜索成员。
+    /// </summary>
+    [Option("-tt|--typetoken <token>", "按类型定义 token（0x02 开头）精确定位类型（typeName 歧义消歧），配合 -mn 在类型内搜索成员（typeToken 取歧义提示中列出的 token）。", CommandOptionType.SingleValue)]
+    public string TypeToken { get; } = null!;
+
+    /// <summary>
     /// 列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 csi。
     /// </summary>
     [Option("-l|--list <entity-types>", "列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum；可组合多个字母，如 csi。", CommandOptionType.SingleValue)]
@@ -146,13 +152,14 @@ public class ILSpyMcpCmd
     /// 命令行分发：-c 走环境自检，-ai 走 assembly_info，-p 走 decompile_to_project，-o 走 decompile_to_dir，
     /// -s/-hc/-d/-cg 分别走 signature/hierarchy/dependencies/call_graph（-i 让 hierarchy 含间接后代、
     /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用，-tk 配合 -cg 按方法 token 反向定位调用点），-l 走 list_types
-    /// （-nc 提供类型名子串过滤、-ns 提供命名空间子串过滤），-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// （-nc 提供类型名子串过滤、-ns 提供命名空间子串过滤），-mn 走 decompile_member（-tt 按类型 token 精确定位，typeName 歧义消歧），
+    /// 否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string entityTypes, string nameContains, string namespaceContains,
         string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies, bool callGraph,
         bool external, bool indirect, bool assemblyInfo,
-        string token, string lines, int timeoutSeconds, bool check,
+        string token, string typeToken, string lines, int timeoutSeconds, bool check,
         CancellationToken cancellationToken = default)
     {
         if (check)
@@ -195,7 +202,7 @@ public class ILSpyMcpCmd
         }
         if (!string.IsNullOrEmpty(memberName))
         {
-            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, token: "", lines, timeoutSeconds, cancellationToken);
+            return await DecompileMemberTool.DecompileMember(assembly, typeName, memberName, token: "", typeToken, lines, timeoutSeconds, cancellationToken);
         }
         return await DecompileTool.Decompile(assembly, typeName, lines, timeoutSeconds, cancellationToken);
     }
@@ -211,7 +218,7 @@ public class ILSpyMcpCmd
                 Assembly, TypeName, MemberName, EntityTypes, NameContains, NamespaceContains,
                 OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies, CallGraph,
                 External, Indirect, AssemblyInfo,
-                Token, Lines, TimeoutSeconds, Check));
+                Token, TypeToken, Lines, TimeoutSeconds, Check));
             return 0;
         }
 
