@@ -1,6 +1,7 @@
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using Xunit;
 
@@ -114,6 +115,24 @@ public class MetadataNamingTests
         var message = MetadataNaming.BuildNotFoundMessage(reader, "No.Such.Type");
 
         Assert.Equal("未找到类型 No.Such.Type", message);
+    }
+
+    [Fact]
+    public void BuildAmbiguityMessage_头部与候选行格式()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        // 任意两个真实类型 handle 作候选：验证头部说明行与每候选行格式（全名 + 0x02 开头 token，可直接用于 typeToken）
+        var bigClass = MetadataNaming.FindType(reader, "ILSpyMcp.Samples.BigClass")!.Value;
+        var class0001 = MetadataNaming.FindType(reader, "ILSpyMcp.Samples.Class0001")!.Value;
+        var candidates = new[] { bigClass, class0001 };
+
+        var message = MetadataNaming.BuildAmbiguityMessage(reader, "Probe.Ambiguous.Input", candidates);
+
+        Assert.StartsWith("类型 Probe.Ambiguous.Input 有歧义，匹配以下类型（可用 typeToken 精确定位）：", message);
+        Assert.Contains($"  ILSpyMcp.Samples.BigClass（token 0x{MetadataTokens.GetToken(bigClass):x8}）", message);
+        Assert.Contains($"  ILSpyMcp.Samples.Class0001（token 0x{MetadataTokens.GetToken(class0001):x8}）", message);
     }
 
     [Fact]

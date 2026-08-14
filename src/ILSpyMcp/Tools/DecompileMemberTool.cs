@@ -116,8 +116,8 @@ public static class DecompileMemberTool
 
     /// <summary>
     /// 纯元数据读取定位成员：typeToken 非空时按类型定义 token 精确定位（typeName 歧义消歧），typeName 为空走跨程序集搜索，
-    /// 否则在指定类型内搜索；类型未命中/歧义时重新打开程序集做纯元数据读取，返回附相近类型名的未找到提示或歧义提示
-    /// （Error 非空，元数据秒回）；IO 类异常同样以 Error 返回「无法读取程序集元数据」提示。
+    /// 否则先用 FindTypes 判定歧义/未找到（歧义返回歧义提示、未找到返回附相近类型名的未找到提示），唯一候选再在类型内按
+    /// memberName 搜索（Error 非空，元数据秒回）；IO 类异常同样以 Error 返回「无法读取程序集元数据」提示。
     /// EffectiveTypeName 非空表示本次是类型内搜索（供调用方做目标描述与「未找到」消息），typeToken/typeName 定位成功时返回类型全名。
     /// </summary>
     private static (IReadOnlyList<MemberMatch> Matches, IReadOnlyList<string> SimilarNames, string? EffectiveTypeName, string? Error)
@@ -133,28 +133,35 @@ public static class DecompileMemberTool
             var r = MemberResolver.FindMembersAcrossAssembly(assemblyFull, memberName);
             return (r.Matches, r.SimilarNames, null, null);
         }
-        var inType = MemberResolver.FindMembers(assemblyFull, typeName, memberName);
-        if (!inType.TypeFound)
+        // typeName 分支：先用 FindTypes 判定歧义/未找到——不能先经 MemberResolver.FindMembers（其内部用 FindType 取首个
+        // 候选，会吞掉歧义直达首个类型），否则歧义提示永远不可达；唯一候选再用其全名在类型内按 memberName 搜索
+        try
         {
-            // 类型未命中：重新打开程序集做纯元数据读取，先判定 typeName 是否有歧义（多个归一化候选），再附相近类型名（元数据秒回）
-            try
+            using var fs = File.OpenRead(assemblyFull);
+            using var pe = new PEReader(fs);
+            var reader = pe.GetMetadataReader();
+            var candidates = MetadataNaming.FindTypes(reader, typeName);
+            if (candidates.Count > 1)
             {
-                using var fs = File.OpenRead(assemblyFull);
-                using var pe = new PEReader(fs);
-                var reader = pe.GetMetadataReader();
-                var candidates = MetadataNaming.FindTypes(reader, typeName);
-                if (candidates.Count > 1)
-                {
-                    return (Array.Empty<MemberMatch>(), Array.Empty<string>(), null, MetadataNaming.BuildAmbiguityMessage(reader, typeName, candidates));
-                }
+                return (Array.Empty<MemberMatch>(), Array.Empty<string>(), null, MetadataNaming.BuildAmbiguityMessage(reader, typeName, candidates));
+            }
+            if (candidates.Count == 0)
+            {
                 return (Array.Empty<MemberMatch>(), Array.Empty<string>(), null, MetadataNaming.BuildNotFoundMessage(reader, typeName));
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
+            // 唯一候选：用其全名在类型内按 memberName 搜索（编译器生成类型经 FindMembers 过滤为未找到类型）
+            var fullName = MetadataNaming.FullName(reader, reader.GetTypeDefinition(candidates[0]));
+            var inType = MemberResolver.FindMembers(assemblyFull, fullName, memberName);
+            if (!inType.TypeFound)
             {
-                return (Array.Empty<MemberMatch>(), Array.Empty<string>(), null, $"无法读取程序集元数据：{ex.Message}");
+                return (Array.Empty<MemberMatch>(), Array.Empty<string>(), null, MetadataNaming.BuildNotFoundMessage(reader, typeName));
             }
+            return (inType.Matches, inType.SimilarNames, fullName, null);
         }
-        return (inType.Matches, inType.SimilarNames, typeName, null);
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
+        {
+            return (Array.Empty<MemberMatch>(), Array.Empty<string>(), null, $"无法读取程序集元数据：{ex.Message}");
+        }
     }
 
     /// <summary>
