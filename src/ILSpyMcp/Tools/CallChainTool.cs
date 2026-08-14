@@ -126,18 +126,21 @@ public static class CallChainTool
             if (seen.Add(callSite.MemberToken)) uniqueInternal.Add(callSite);
         }
 
-        var context = new FormatContext(assemblyFull, targetDesc, Degraded: scanner.AbortedBodies);
-        var (merged, allCached) = await BuildMergedLinesAsync(callSites, uniqueInternal, includeExternal, assemblyFull, timeoutSeconds, cancellationToken);
+        var overLimit = uniqueInternal.Count > AppConfig.MaxMemberMatches;
+        var context = new FormatContext(assemblyFull, overLimit ? $"{targetDesc}（超过上限，仅列出签名）" : targetDesc, Degraded: scanner.AbortedBodies);
+        var (merged, allCached, error) = await BuildMergedLinesAsync(callSites, uniqueInternal, includeExternal, assemblyFull, timeoutSeconds, cancellationToken);
+        if (error is not null) return error;
         if (allCached) context = context with { IsCached = true };
-        return OutputFormatter.Format(merged, lines, context);
+        return OutputFormatter.Format(merged!, lines, context);
     }
 
     /// <summary>
     /// 组装合并行：`方法体调用序列:` + 序列行 + 空行 + `被调用成员反编译:` + 每唯一内部成员 #MEMBER 分隔行 + 反编译体行。
     /// 匹配数超过上限时仅渲染 #MEMBER 签名清单（含 signature）不反编译；无内部调用时省略反编译段。
-    /// 返回 (合并行列表, 是否全部缓存命中)。
+    /// 任一成员反编译失败/超时返回可重试错误提示（Error 非空、Lines 为 null），不抛异常。
+    /// 返回 (合并行列表, 是否全部缓存命中, 错误提示)。
     /// </summary>
-    private static async Task<(List<string> Lines, bool AllCached)> BuildMergedLinesAsync(
+    private static async Task<(List<string>? Lines, bool AllCached, string? Error)> BuildMergedLinesAsync(
         IReadOnlyList<CallSite> callSites, IReadOnlyList<CallSite> uniqueInternal, bool includeExternal,
         string assemblyFull, int timeoutSeconds, CancellationToken cancellationToken)
     {
@@ -158,7 +161,7 @@ public static class CallChainTool
 
         if (uniqueInternal.Count == 0)
         {
-            return (merged, false);
+            return (merged, false, null);
         }
         merged.Add("");
         merged.Add("被调用成员反编译:");
@@ -169,7 +172,7 @@ public static class CallChainTool
             {
                 merged.Add($"#MEMBER {OutputFormatter.MemberJson(callSite.MemberName, callSite.MemberToken!, callSite.Signature, callSite.TypeFullName)}");
             }
-            return (merged, false);
+            return (merged, false, null);
         }
 
         var allCached = true;
@@ -189,13 +192,14 @@ public static class CallChainTool
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException($"反编译失败：{ex.Message}");
+                // 任一成员反编译失败/超时：返回可重试提示文本而非抛异常（与 ExecuteMergedAsync 语义一致：丢弃已拼部分，不写缓存，同 key 可重试）
+                return (null, false, $"反编译失败：{ex.Message}");
             }
             allCached &= fromCache;
             merged.Add($"#MEMBER {OutputFormatter.MemberJson(callSite.MemberName, callSite.MemberToken!, type: callSite.TypeFullName)}");
             merged.AddRange(body);
         }
-        return (merged, allCached);
+        return (merged, allCached, null);
     }
 
     /// <summary>

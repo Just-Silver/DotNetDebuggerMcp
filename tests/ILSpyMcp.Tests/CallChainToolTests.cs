@@ -1,3 +1,4 @@
+using ILSpyMcp.Pipeline;
 using ILSpyMcp.Services;
 using ILSpyMcp.Tools;
 using System.Reflection.Metadata;
@@ -185,6 +186,55 @@ public class CallChainToolTests
         }
         finally
         {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task CallChain_成员反编译失败_返回提示文本不抛异常()
+    {
+        // 反编译探针抛异常模拟成员反编译失败：工具应返回中文提示文本而非把异常逸出为 Tool Error/崩溃
+        AppServices.ConfigureForTest();
+        AppServices.Pipeline = new ToolPipeline(AppServices.Cache,
+            (_, _) => throw new InvalidOperationException("模拟反编译失败"));
+        try
+        {
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainTopRunToken());
+
+            Assert.Contains("反编译失败", result);
+            Assert.Contains("模拟反编译失败", result);
+            Assert.DoesNotContain("方法体调用序列:", result); // 任一成员失败即整体返回提示，丢弃已拼部分
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task CallChain_成员反编译超时_返回可重试提示()
+    {
+        // 反编译探针经门闩阻塞模拟慢反编译：timeoutSeconds=1 必超时，返回可重试提示文本而非抛异常
+        var gate = new ManualResetEventSlim(initialState: true);
+        var probe = new Func<ToolCommand, CancellationToken, string>((_, _) =>
+        {
+            gate.Wait();
+            return "public class Ok { }";
+        });
+        AppServices.ConfigureForTest();
+        AppServices.Pipeline = new ToolPipeline(AppServices.Cache, probe);
+        gate.Reset(); // 阻塞探针：成员反编译必超时
+        try
+        {
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainTopRunToken(), timeoutSeconds: 1);
+
+            Assert.Contains("反编译超时", result);
+            Assert.Contains("可调大 timeoutSeconds", result);
+            Assert.DoesNotContain("方法体调用序列:", result);
+        }
+        finally
+        {
+            gate.Set(); // 放行后台探针，避免残留阻塞线程
             AppServices.ResetForTest();
         }
     }
