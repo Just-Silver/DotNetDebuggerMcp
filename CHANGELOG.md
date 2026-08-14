@@ -14,6 +14,7 @@
 - `decompile_member` 新增 `typeToken` 参数（CLI `-tt`）：`typeName` 存在歧义（命名空间与嵌套分隔的多种解释均命中同一名字）时返回歧义提示并列出候选类型（附类型定义 token `0x02` 开头），可用 `typeToken` 精确定位类型后再按 `memberName` 搜索成员；提供 `typeToken` 时 `typeName` 可不填
 - 新增 `search_string` 工具（CLI `-ss|--searchstring`）：按字符串字面量子串（忽略大小写）在方法体 `ldstr` 指令中反查成员，输出每行 `类型全名::成员签名` + 转义后的字符串值 + 成员 token（可直接用于 `decompile_member` 的 `token` 参数反编译对应成员）；`typeName` 非空时仅在指定类型内反查，省略时跨程序集全部类型；适用于按业务文案/SQL 片段/配置 Key 反查代码位置，无需反编译全文
 - 新增 `field_access` 工具（CLI `-fa|--fieldaccess` + `-fn|--fieldname`）：追踪指定字段的读取/写入/取地址位置——按 `fieldToken`（`0x04` 开头字段 token，取 `signature` 行尾或 `#MEMBER` 分隔行的 token）或 `typeName`+`fieldName`（忽略大小写，省略 `typeName` 时跨程序集搜索）定位字段后，反向扫描全部类型方法体的字段访问指令（`ldfld`/`ldsfld` 读取、`stfld`/`stsfld` 写入、`ldflda`/`ldsflda` 取地址），输出三段 `类型全名::成员签名` 来源成员（空段 `（无）` 占位）；字段名匹配多个字段时返回 `#MEMBER` 签名清单，用其中 token 作 `fieldToken` 精确定位；适用于追踪字段读写点、判断字段是否仍被使用
+- 新增 `call_chain` 工具（CLI `-cc|--callchain`）：输出起始方法的方法级正向调用序列 + 被调用成员反编译组合视图——按 `token`（`0x06` 开头方法 token）或 `typeName`+`memberName`（忽略大小写，匹配多个方法时返回 `#MEMBER` 签名清单，用其中 token 精确定位）定位起始方法，扫描其方法体调用指令按 IL 序列出调用序列（每行 `序号. 类型::成员()` + 内部成员 token，token 可直接用于 `decompile_member` 反编译）；`includeExternal=true` 时保留跨程序集外部调用行（格式 `全名::成员名 [程序集名]`，默认 `false` 过滤）；对去重后的唯一内部成员（最多 20 个）逐条反编译，各成员体前有 `#MEMBER` JSON 分隔行（含 name/token/type），超过 20 个时仅返回 `#MEMBER` 签名清单；适用于追踪单个方法直接调用了哪些方法及其实现体
 
 ### Changed
 

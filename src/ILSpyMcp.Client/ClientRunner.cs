@@ -45,7 +45,7 @@ public sealed class ClientRunner
         foreach (var tool in tools) Console.WriteLine($"- {tool.Name}");
 
         var names = tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
-        var pass = tools.Count >= 12
+        var pass = tools.Count >= 13
             && names.Contains("decompile")
             && names.Contains("decompile_member")
             && names.Contains("list_types")
@@ -55,12 +55,13 @@ public sealed class ClientRunner
             && names.Contains("hierarchy")
             && names.Contains("dependencies")
             && names.Contains("call_graph")
+            && names.Contains("call_chain")
             && names.Contains("assembly_info")
             && names.Contains("search_string")
             && names.Contains("field_access");
         if (pass)
         {
-            Console.WriteLine("[PASS] 工具数量 >= 12 且含 decompile/decompile_member/list_types/decompile_to_dir/decompile_to_project/signature/hierarchy/dependencies/call_graph/assembly_info/search_string/field_access");
+            Console.WriteLine("[PASS] 工具数量 >= 13 且含 decompile/decompile_member/list_types/decompile_to_dir/decompile_to_project/signature/hierarchy/dependencies/call_graph/call_chain/assembly_info/search_string/field_access");
         }
         else
         {

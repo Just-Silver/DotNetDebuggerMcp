@@ -20,6 +20,7 @@ try
     await runner.RunAsync(HierarchyCases.All(dll));
     await runner.RunAsync(DependenciesCases.All(dll));
     await runner.RunAsync(CallGraphCases.All(dll));
+    await runner.RunAsync(CallChainCases.All(dll));
     await runner.RunAsync(SearchStringCases.All(dll));
     await runner.RunAsync(FieldAccessCases.All(dll));
     await runner.RunAsync(DecompileToDirCases.All(dll, outDir));
