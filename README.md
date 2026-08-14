@@ -87,6 +87,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用；`includeExternal=true` 时追加输出跨程序集外部类型（带程序集归属，格式 `全名 [程序集名]`）；未找到类型时附相近类型名 |
 | `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补）；`includeExternal=true` 时追加输出方法体调用的跨程序集外部类型（带程序集归属）；`token` 参数按方法 token 反向定位程序集内调用该具体方法的成员（方法级调用点）；未找到类型时附相近类型名 |
 | `ilspy_assembly_info` | 输出程序集概览：程序集名与版本、目标框架、引用的程序集清单（名+版本）、实体类型计数（class/interface/struct/delegate/enum，过滤编译器生成类型）与入口点；元数据读取秒回，适合作为接触陌生程序集的第一站 |
+| `ilspy_cache_stats` | 输出进程内共享缓存状态：当前占用/上限（据此判断缓存大小设置是否合适）、条目数、命中率（会话启动以来的累计命中/未命中）与逐条目占用明细（按占用降序，含来源工具、参数与程序集），定位缓存大头；无程序集参数 |
 
 `ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy`、`ilspy_dependencies` 与 `ilspy_call_graph`、`ilspy_assembly_info` 默认仅输出前约 8 KB，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做输出量截断。全部工具均使用内置反编译引擎，开箱即用；其中 `ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies`/`ilspy_call_graph`/`ilspy_assembly_info` 为元数据读取，秒回。除写盘工具外全部工具结果按「程序集 + 参数」缓存在内存（共用同一缓存，程序集更新后自动失效）；命中缓存时头部标注「缓存: 命中（重复查询成本低）」，agent 可知重复查询低成本、可放心多问。`list_types` 输出行首类别前缀（如 `class Foo.Bar`）可直接复制作 `typeName` 使用，无需去掉前缀。MCP 会话启动握手时自动检查 ilspymcp 是否有新版本：检测到新版本时注入指令式提示，要求 agent 在会话开始的回复中主动告知用户并提供升级命令；已是最新时仅注入状态行，不打扰用户。无需单独调用检查工具。
 
@@ -134,6 +135,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
 | `ilspy_assembly_info` | `assembly` | 程序集文件路径 | 是 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
+| `ilspy_cache_stats` | `lines` | 按行号范围读取条目明细，格式 `start-end`；省略返回前约 8 KB | 否 |
 
 ## 使用示例
 
@@ -154,6 +156,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 - **方法体调用关系**：> 查询 `bin/Debug/MyApp.dll` 中 `MyApp.Program` 的方法体调用了哪些内部类型、以及哪些类型的方法体调用了它（加 `includeExternal=true` 同时列出方法体调用的外部类型及所属程序集）
 - **方法级调用点**：> 查询 `bin/Debug/MyApp.dll` 中哪些方法体调用了 `MyApp.Program` 的 `Parse` 方法（先用 `signature` 取该成员行尾 token 如 `0x06000010`，再以 `token` 参数调用 `ilspy_call_graph`，输出 `类型全名::成员签名` 调用点行）
 - **按行拉取**：> 反编译 `bin/Debug/MyApp.dll` 中的 `MyApp.Program`，读取第 200-400 行
+- **缓存状态**：> 查看当前会话的缓存占用与命中率（`cache_stats`），评估缓存大小设置是否合适、定位占用大头
 
 ## License
 

@@ -12,6 +12,27 @@ namespace ILSpyMcp.Caching;
 public readonly record struct CacheKey(string AssemblyPath, string Fingerprint, string Signature);
 
 /// <summary>
+/// 单条缓存条目的状态快照：占用字节数与行数（供 cache_stats 工具展示每条占用，定位缓存大头）。
+/// </summary>
+/// <param name="AssemblyPath">程序集绝对路径。</param>
+/// <param name="Signature">参数签名。</param>
+/// <param name="Bytes">该条目占用字节数。</param>
+/// <param name="LineCount">该条目的行数。</param>
+/// <param name="Hits">该条目被命中的累计次数。</param>
+public sealed record CacheEntryInfo(string AssemblyPath, string Signature, long Bytes, int LineCount, long Hits);
+
+/// <summary>
+/// 缓存整体状态快照：当前占用/上限（供评估缓存大小设置）、条目数、累计命中/未命中（供命中率计算）与逐条目明细。
+/// </summary>
+/// <param name="EntryCount">当前条目数。</param>
+/// <param name="TotalBytes">当前占用总字节数。</param>
+/// <param name="MaxBytes">缓存总字节上限。</param>
+/// <param name="HitCount">累计命中次数。</param>
+/// <param name="MissCount">累计未命中次数。</param>
+/// <param name="Entries">逐条目明细（快照时点）。</param>
+public sealed record CacheStats(int EntryCount, long TotalBytes, long MaxBytes, long HitCount, long MissCount, IReadOnlyList<CacheEntryInfo> Entries);
+
+/// <summary>
 /// 反编译结果内存缓存（线程安全 LRU，总上限可配置，默认 <see cref="AppConfig.MaxCacheBytes"/>）。key = 程序集绝对路径 +
 /// 文件指纹（mtime+size）+ 参数签名， 不同参数组合各自独立缓存；程序集更新后指纹变化，同路径同签名的旧条目自动清理。
 /// </summary>
@@ -22,6 +43,8 @@ public sealed class DecompileCache
     private readonly LinkedList<CacheKey> _lru = new();
     private readonly Lock _lock = new();
     private long _totalBytes;
+    private long _hitCount;
+    private long _missCount;
 
     /// <param name="maxBytes">缓存总字节上限，超出后按 LRU 驱逐；测试可传小值。</param>
     public DecompileCache(long maxBytes = AppConfig.MaxCacheBytes) => _maxBytes = maxBytes;
@@ -41,7 +64,7 @@ public sealed class DecompileCache
     }
 
     /// <summary>
-    /// 读取缓存条目；未命中返回 null，命中即刷新 LRU 访问时间。
+    /// 读取缓存条目；未命中返回 null，命中即刷新 LRU 访问时间。命中/未命中均累计计数（供命中率统计）。
     /// </summary>
     /// <param name="key">缓存键。</param>
     /// <returns>命中的行列表；未命中为 null。</returns>
@@ -49,10 +72,33 @@ public sealed class DecompileCache
     {
         lock (_lock)
         {
-            if (!_map.TryGetValue(key, out var entry)) return null;
+            if (!_map.TryGetValue(key, out var entry))
+            {
+                _missCount++;
+                return null;
+            }
+            _hitCount++;
+            entry.Hits++;
             _lru.Remove(entry.Node!);
             _lru.AddFirst(entry.Node!); // 命中即移到队首，供 LRU 使用
             return entry.Lines;
+        }
+    }
+
+    /// <summary>
+    /// 返回缓存当前状态快照：总占用/上限、条目数、累计命中/未命中与逐条目明细（供 cache_stats 工具评估缓存大小设置）。
+    /// </summary>
+    /// <returns>快照时点的缓存状态。</returns>
+    public CacheStats GetStats()
+    {
+        lock (_lock)
+        {
+            var entries = new List<CacheEntryInfo>(_map.Count);
+            foreach (var (key, entry) in _map)
+            {
+                entries.Add(new CacheEntryInfo(key.AssemblyPath, key.Signature, entry.TotalBytes, entry.Lines.Count, entry.Hits));
+            }
+            return new CacheStats(_map.Count, _totalBytes, _maxBytes, _hitCount, _missCount, entries);
         }
     }
 
@@ -151,6 +197,7 @@ public sealed class DecompileCache
     {
         public List<string> Lines = null!;
         public long TotalBytes;
+        public long Hits;
         public LinkedListNode<CacheKey>? Node;
     }
 }

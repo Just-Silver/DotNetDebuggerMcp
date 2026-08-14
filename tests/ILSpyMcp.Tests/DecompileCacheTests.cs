@@ -121,5 +121,71 @@ public class DecompileCacheTests
         });
     }
 
+    [Fact]
+    public void GetStats_返回条目数总占用与明细()
+    {
+        var cache = new DecompileCache(maxBytes: 1024);
+        var keyA = new CacheKey(@"C:\a.dll", "fp", "sigA");
+        var keyB = new CacheKey(@"C:\b.dll", "fp", "sigB");
+        cache.Put(keyA, Lines("aaaaaaaaaa")); // 10 B
+        cache.Put(keyB, Lines("bbbb"));       // 4 B
+
+        var stats = cache.GetStats();
+
+        Assert.Equal(2, stats.EntryCount);
+        Assert.Equal(16, stats.TotalBytes); // CountBytes = 每行内容长度 + 1：11 + 5
+        Assert.Equal(1024, stats.MaxBytes);
+        Assert.Equal(2, stats.Entries.Count);
+        var a = stats.Entries.Single(e => e.Signature == "sigA");
+        Assert.Equal(@"C:\a.dll", a.AssemblyPath);
+        Assert.Equal(11, a.Bytes);
+        Assert.Equal(1, a.LineCount);
+        Assert.Equal(0, a.Hits);
+    }
+
+    [Fact]
+    public void Get_命中与未命中累计_供命中率计算()
+    {
+        var cache = new DecompileCache();
+        var key = new CacheKey(@"C:\a.dll", "fp", "sig");
+        cache.Put(key, Lines("x"));
+
+        Assert.Null(cache.Get(new CacheKey(@"C:\a.dll", "fp", "other"))); // 未命中
+        cache.Get(key); // 命中
+        cache.Get(key); // 命中
+
+        var stats = cache.GetStats();
+        Assert.Equal(2, stats.HitCount);
+        Assert.Equal(1, stats.MissCount);
+    }
+
+    [Fact]
+    public void Get_命中_条目Hits递增()
+    {
+        var cache = new DecompileCache();
+        var key = new CacheKey(@"C:\a.dll", "fp", "sig");
+        cache.Put(key, Lines("x"));
+        cache.Get(key);
+        cache.Get(key);
+
+        var entry = cache.GetStats().Entries.Single();
+        Assert.Equal(2, entry.Hits);
+    }
+
+    [Fact]
+    public void 驱逐后_GetStats反映当前条目与占用()
+    {
+        var cache = new DecompileCache(maxBytes: 8); // 两条 5B 合计超限，驱逐最久未访问的一条
+        var keyA = new CacheKey(@"C:\a.dll", "fp", "sigA");
+        var keyB = new CacheKey(@"C:\a.dll", "fp", "sigB");
+        cache.Put(keyA, Lines("aaaaa"));
+        cache.Put(keyB, Lines("bbbbb"));
+
+        var stats = cache.GetStats();
+
+        Assert.Equal(1, stats.EntryCount); // 超限驱逐后仅剩一条
+        Assert.Equal(6, stats.TotalBytes); // "bbbbb" → 5 + 1
+    }
+
     private static List<string> Lines(params string[] lines) => lines.ToList();
 }
