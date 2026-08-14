@@ -1,3 +1,5 @@
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Pipeline;
 
@@ -81,4 +83,24 @@ internal static class ToolExecutor
         AppServices.Cache.Put(key, result);
         return OutputFormatter.Format(result, lines, context);
     }
+
+    /// <summary>
+    /// 元数据工具经共享缓存且自开 PE 的执行辅助：在 <see cref="RunMetadata"/> 之上打开程序集文件与
+    /// <see cref="PEReader"/>，produce 直接拿 <see cref="MetadataReader"/> 读元数据，缓存与异常处理复用上层。
+    /// </summary>
+    /// <param name="assemblyFull">程序集绝对路径。</param>
+    /// <param name="signature">缓存签名（工具前缀 + 参数，经 \u001F 拼接，与反编译签名互不冲突）。</param>
+    /// <param name="lines">lines 参数原文；空字符串时按默认预算返回。</param>
+    /// <param name="context">头部信息块上下文。</param>
+    /// <param name="produce">生成纯行列表的委托，入参为已打开的 <see cref="PEReader"/> 与其 <see cref="MetadataReader"/>；错误/未找到以 <see cref="InvalidOperationException"/> 抛提示文本。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>格式化后的元数据结果或错误提示文本。</returns>
+    public static string RunMetadataPe(string assemblyFull, string signature, string lines, FormatContext context,
+        Func<PEReader, MetadataReader, List<string>> produce, CancellationToken cancellationToken)
+        => RunMetadata(assemblyFull, signature, lines, context, _ =>
+        {
+            using var fs = File.OpenRead(assemblyFull);
+            using var pe = new PEReader(fs);
+            return produce(pe, pe.GetMetadataReader());
+        }, cancellationToken);
 }

@@ -251,6 +251,28 @@ public class MetadataCacheTests
     }
 
     [Fact]
+    public void RunMetadataPe_首次回源二次命中_且produce只执行一次()
+    {
+        Init();
+        try
+        {
+            var calls = 0;
+            string Call() => ToolExecutor.RunMetadataPe(SamplesDll, "pe-sig", "",
+                new FormatContext(SamplesDll, "测试", IsListing: true), (_, reader) =>
+                {
+                    calls++;
+                    return new List<string> { reader.GetAssemblyDefinition() is var a ? reader.GetString(a.Name) : "" };
+                }, default);
+            var first = Call();
+            var second = Call();
+            Assert.Equal(1, calls);
+            Assert.DoesNotContain("缓存:   命中", first);
+            Assert.Contains("缓存:   命中", second);
+        }
+        finally { AppServices.ResetForTest(); }
+    }
+
+    [Fact]
     public async Task Signature_未找到类型_重复查询不入缓存()
     {
         Init();
