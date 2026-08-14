@@ -16,9 +16,9 @@ public class SectionBuilderTests
         SectionBuilder.Append(t, "标题:", new List<string>());
         Assert.Equal(new[] { "标题:", "（无）" }, t);
     }
-    [Fact] public void 空段_omitWhenEmpty_只输出标题() {
+    [Fact] public void 空段_omitWhenEmpty_整段省略() {
         var t = new List<string>();
         SectionBuilder.Append(t, "标题:", new List<string>(), omitWhenEmpty: true);
-        Assert.Equal(new[] { "标题:" }, t);
+        Assert.Empty(t);
     }
 }

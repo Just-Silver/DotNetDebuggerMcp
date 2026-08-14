@@ -1,5 +1,6 @@
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
+using ILSpyMcp.Tools;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using Xunit;
@@ -193,6 +194,18 @@ public class HierarchyTests
         var direct = Hierarchy.GetDescendants(scope.Reader, type, fullName);
         Assert.Contains("ILSpyMcp.Samples.GenericMid", direct);
         Assert.DoesNotContain("ILSpyMcp.Samples.GenericLeaf", direct);
+    }
+
+    [Fact]
+    public async Task Hierarchy_Empty_无接口无后代_空段整段省略()
+    {
+        // Empty 为 public class Empty { }（仅默认构造）：无接口实现、无程序集内后代/继承者，但基类链非空（[自身, System.Object]）。
+        // 防回归：hierarchy 空段应整段省略，不得输出裸标题行「接口:」或「程序集内继承/实现此类型的类型:」。
+        var result = await HierarchyTool.Hierarchy(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Empty");
+
+        Assert.Contains("基类链:", result);
+        Assert.DoesNotContain("接口:", result);
+        Assert.DoesNotContain("程序集内继承/实现此类型的类型:", result);
     }
 
     [Fact]
