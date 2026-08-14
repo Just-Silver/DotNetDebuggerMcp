@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -53,7 +54,7 @@ public static class HierarchyTool
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的继承/接口关系", IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型/无信息以异常抛提示、不入缓存
-        var signature = $"hierarchy\u001F{typeName}\u001F{includeIndirect}";
+        var signature = $"{CacheSignatures.Hierarchy}{CacheSignatures.Separator}{typeName}{CacheSignatures.Separator}{includeIndirect}";
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
             var handle = MetadataNaming.FindType(reader, typeName);

@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -63,7 +64,7 @@ public static class CallGraphTool
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的方法体调用关系", IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
-        var signature = $"call-graph\u001F{typeName}\u001F{includeExternal}";
+        var signature = $"{CacheSignatures.CallGraph}{CacheSignatures.Separator}{typeName}{CacheSignatures.Separator}{includeExternal}";
         var aborted = 0;
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
@@ -99,7 +100,7 @@ public static class CallGraphTool
         var tokenContext = new FormatContext(tokenAssemblyFull, targetDesc, IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
-        var tokenSignature = $"call-graph-token\u001F{token}";
+        var tokenSignature = $"{CacheSignatures.CallGraphToken}{CacheSignatures.Separator}{token}";
         return Task.FromResult(ToolExecutor.RunMetadataPe(tokenAssemblyFull, tokenSignature, lines, tokenContext, (pe, _) =>
         {
             var callers = CallGraphExtractor.FindMethodCallers(pe, token);

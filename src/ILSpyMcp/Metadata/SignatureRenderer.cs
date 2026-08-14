@@ -64,7 +64,7 @@ public static class SignatureRenderer
     /// 场景），在其内部拼 token 会污染 #MEMBER JSON 的 signature 字段。
     /// </summary>
     private static string WithToken(string line, EntityHandle handle)
-        => $"{line}  0x{MetadataTokens.GetToken(handle):x8}";
+        => $"{line}  {MetadataNaming.FormatToken(MetadataTokens.GetToken(handle))}";
 
     /// <summary>
     /// 渲染单个方法成员的一行签名（供 decompile_member 超限清单等场景）。不做访问器过滤——调用方传的是明确要渲染的成员，

@@ -113,7 +113,7 @@ public sealed class StringLiteralScanner
 
         var declaringType = _reader.GetTypeDefinition(method.GetDeclaringType());
         var signature = SignatureRenderer.RenderMemberSignature(_reader, declaringType, method);
-        var memberToken = $"0x{MetadataTokens.GetToken(methodHandle):x8}";
+        var memberToken = MetadataNaming.FormatToken(MetadataTokens.GetToken(methodHandle));
         foreach (var value in matches)
         {
             results.Add(new StringHit(fullName, signature, memberToken, value));

@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -50,7 +51,7 @@ public static class InterfaceUsageTool
         var context = new FormatContext(assemblyFull, $"接口 {typeName} 的实现者与调用点", IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
-        var signature = $"interface-usage\u001F{typeName}\u001F{includeIndirect}";
+        var signature = $"{CacheSignatures.InterfaceUsage}{CacheSignatures.Separator}{typeName}{CacheSignatures.Separator}{includeIndirect}";
         InterfaceUsageScanner? scanner = null;
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {

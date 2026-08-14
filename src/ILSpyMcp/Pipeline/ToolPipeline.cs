@@ -99,12 +99,12 @@ public sealed class ToolCommand
     {
         var prefix = request.Kind switch
         {
-            DecompileKind.Type => "type",
-            DecompileKind.Member => "member",
-            DecompileKind.WholeModule => "whole-module",
+            DecompileKind.Type => CacheSignatures.Type,
+            DecompileKind.Member => CacheSignatures.Member,
+            DecompileKind.WholeModule => CacheSignatures.WholeModule,
             _ => throw new ArgumentOutOfRangeException(nameof(request), $"未知反编译请求类型 {request.Kind}"),
         };
-        return string.IsNullOrEmpty(request.Target) ? prefix : $"{prefix}\u001F{request.Target}";
+        return string.IsNullOrEmpty(request.Target) ? prefix : $"{prefix}{CacheSignatures.Separator}{request.Target}";
     }
 }
 
@@ -148,7 +148,7 @@ public sealed class ToolPipeline
         }
         catch (Exception ex)
         {
-            return new ToolPipelineResult($"反编译失败：{ex.Message}");
+            return new ToolPipelineResult($"{AppText.DecompileFailurePrefix}{ex.Message}");
         }
         var fmtContext = fromCache && context is not null ? context with { IsCached = true } : context;
         return new ToolPipelineResult(OutputFormatter.Format(source, lines, fmtContext));
@@ -178,11 +178,11 @@ public sealed class ToolPipeline
             }
             catch (Exception ex)
             {
-                return new ToolPipelineResult($"反编译失败：{ex.Message}");
+                return new ToolPipelineResult($"{AppText.DecompileFailurePrefix}{ex.Message}");
             }
             allCached &= fromCache;
             if (!string.IsNullOrEmpty(command.MemberName) && !string.IsNullOrEmpty(command.MemberToken))
-                merged.Add($"#MEMBER {OutputFormatter.MemberJson(command.MemberName, command.MemberToken, type: command.MemberType)}");
+                merged.Add(OutputFormatter.MemberLine(command.MemberName, command.MemberToken, type: command.MemberType));
             else if (!string.IsNullOrEmpty(command.DisplayName)) merged.Add($"=== {command.DisplayName} ===");
             merged.AddRange(source);
         }

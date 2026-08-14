@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -86,7 +87,7 @@ public static class FieldAccessTool
                 }
                 var field = reader.GetFieldDefinition(handle.Value);
                 var declaringType = reader.GetTypeDefinition(field.GetDeclaringType());
-                var token = $"0x{MetadataTokens.GetToken(handle.Value):x8}";
+                var token = MetadataNaming.FormatToken(MetadataTokens.GetToken(handle.Value));
                 return (new List<MemberMatch> { new(reader.GetString(field.Name), token, MetadataNaming.FullName(reader, declaringType)) }, true, null);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
@@ -172,7 +173,7 @@ public static class FieldAccessTool
     private static string RenderFieldList(string assemblyFull, IReadOnlyList<MemberMatch> matches, string typeName, string fieldName, string lines)
     {
         var context = new FormatContext(assemblyFull, $"字段 {fieldName}（{matches.Count} 个匹配，请用 fieldToken 精确定位）", IsListing: true);
-        return ToolExecutor.RunMetadataPe(assemblyFull, $"field-access-list\u001F{typeName}\u001F{fieldName}", lines, context, (pe, reader) =>
+        return ToolExecutor.RunMetadataPe(assemblyFull, $"{CacheSignatures.FieldAccessList}{CacheSignatures.Separator}{typeName}{CacheSignatures.Separator}{fieldName}", lines, context, (pe, reader) =>
         {
             var tokens = matches.Select(m => m.Token).ToHashSet(StringComparer.Ordinal);
             var signatureLines = new List<string>();
@@ -183,11 +184,11 @@ public static class FieldAccessTool
                 var renderedTypeName = MetadataNaming.FullName(reader, type);
                 foreach (var fieldHandle in type.GetFields())
                 {
-                    var token = $"0x{MetadataTokens.GetToken(fieldHandle):x8}";
+                    var token = MetadataNaming.FormatToken(MetadataTokens.GetToken(fieldHandle));
                     if (!tokens.Contains(token)) continue;
                     var signature = SignatureRenderer.RenderSingleMember(reader, type, fieldHandle);
                     var name = reader.GetString(reader.GetFieldDefinition(fieldHandle).Name);
-                    signatureLines.Add($"#MEMBER {OutputFormatter.MemberJson(name, token, signature, renderedTypeName)}");
+                    signatureLines.Add(OutputFormatter.MemberLine(name, token, signature, renderedTypeName));
                 }
             }
             return signatureLines;
@@ -208,7 +209,7 @@ public static class FieldAccessTool
         var context = new FormatContext(assemblyFull, targetDesc, IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到字段/类型以异常抛提示、不入缓存
-        var signature = $"field-access\u001F{match.Token}\u001F{typeName}\u001F{fieldName}";
+        var signature = $"{CacheSignatures.FieldAccess}{CacheSignatures.Separator}{match.Token}{CacheSignatures.Separator}{typeName}{CacheSignatures.Separator}{fieldName}";
         FieldAccessScanner? scanner = null;
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {

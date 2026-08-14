@@ -131,18 +131,18 @@ public static class MemberResolver
             var name = reader.GetString(reader.GetFieldDefinition(handle).Name);
             if (name.Contains('<')) continue; // 自动属性 backing field
             if (eventNames.Contains(name)) continue; // 字段式事件 backing field（与事件同名）
-            yield return (name, $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
+            yield return (name, MetadataNaming.FormatToken(MetadataTokens.GetToken(handle)), typeName);
         }
         foreach (var handle in type.GetMethods())
         {
             var name = reader.GetString(reader.GetMethodDefinition(handle).Name);
             if (!includeAccessors && IsAccessorName(name)) continue;
-            yield return (name, $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
+            yield return (name, MetadataNaming.FormatToken(MetadataTokens.GetToken(handle)), typeName);
         }
         foreach (var handle in type.GetProperties())
-            yield return (reader.GetString(reader.GetPropertyDefinition(handle).Name), $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
+            yield return (reader.GetString(reader.GetPropertyDefinition(handle).Name), MetadataNaming.FormatToken(MetadataTokens.GetToken(handle)), typeName);
         foreach (var handle in type.GetEvents())
-            yield return (reader.GetString(reader.GetEventDefinition(handle).Name), $"0x{MetadataTokens.GetToken(handle):x8}", typeName);
+            yield return (reader.GetString(reader.GetEventDefinition(handle).Name), MetadataNaming.FormatToken(MetadataTokens.GetToken(handle)), typeName);
     }
 
     /// <summary>

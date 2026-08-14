@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Services;
 using ModelContextProtocol.Server;
@@ -20,17 +21,22 @@ public static class CacheStatsTool
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> ToolNames = new Dictionary<string, string>
     {
-        ["type"] = "decompile",
-        ["member"] = "decompile_member",
-        ["whole-module"] = "decompile（整模块）",
-        ["list-types"] = "list_types",
-        ["signature"] = "signature",
-        ["hierarchy"] = "hierarchy",
-        ["dependencies"] = "dependencies",
-        ["call-graph"] = "call_graph",
-        ["call-graph-token"] = "call_graph(token)",
-        ["assembly-info"] = "assembly_info",
-        ["member-signatures"] = "decompile_member（超限清单）",
+        [CacheSignatures.Type] = "decompile",
+        [CacheSignatures.Member] = "decompile_member",
+        [CacheSignatures.WholeModule] = "decompile（整模块）",
+        [CacheSignatures.ListTypes] = "list_types",
+        [CacheSignatures.Signature] = "signature",
+        [CacheSignatures.Hierarchy] = "hierarchy",
+        [CacheSignatures.Dependencies] = "dependencies",
+        [CacheSignatures.CallGraph] = "call_graph",
+        [CacheSignatures.CallGraphToken] = "call_graph(token)",
+        [CacheSignatures.AssemblyInfo] = "assembly_info",
+        [CacheSignatures.MemberSignatures] = "decompile_member（超限清单）",
+        [CacheSignatures.FieldAccess] = "field_access",
+        [CacheSignatures.FieldAccessList] = "field_access（多匹配清单）",
+        [CacheSignatures.SearchString] = "search_string",
+        [CacheSignatures.InterfaceUsage] = "interface_usage",
+        [CacheSignatures.GenericInstantiations] = "generic_instantiations",
     };
 
     /// <summary>
@@ -58,7 +64,7 @@ public static class CacheStatsTool
 
         if (stats.Entries.Count == 0)
         {
-            return Task.FromResult(sb.Append("\n条目明细: （无）").ToString());
+            return Task.FromResult(sb.Append("\n条目明细: ").Append(SectionBuilder.EmptyPlaceholder).ToString());
         }
 
         // 条目明细：按占用降序，标注来源工具、参数签名与程序集文件名，经 OutputFormatter 加行号并支持 lines 分页
@@ -86,10 +92,10 @@ public static class CacheStatsTool
     /// </summary>
     private static string DescribeSignature(string signature)
     {
-        var sep = signature.IndexOf('\u001F');
+        var sep = signature.IndexOf(CacheSignatures.SeparatorChar);
         if (sep < 0) return ToolNames.TryGetValue(signature, out var name) ? name : signature;
         var prefix = signature[..sep];
-        var rest = signature[(sep + 1)..].Replace("\u001F", " | ");
+        var rest = signature[(sep + 1)..].Replace(CacheSignatures.Separator, " | ");
         var tool = ToolNames.TryGetValue(prefix, out var toolName) ? toolName : prefix;
         return string.IsNullOrEmpty(rest) ? tool : $"{tool}: {rest}";
     }

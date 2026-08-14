@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -51,7 +52,7 @@ public static class SearchStringTool
         var context = new FormatContext(assemblyFull, target, IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；typeName 歧义/未找到以异常抛提示、不入缓存
-        var signature = $"search-string\u001F{search}\u001F{typeName}";
+        var signature = $"{CacheSignatures.SearchString}{CacheSignatures.Separator}{search}{CacheSignatures.Separator}{typeName}";
         var aborted = 0;
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {

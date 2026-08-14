@@ -120,7 +120,7 @@ public sealed class CallChainScanner
             TypeFullName: MetadataNaming.FullName(_reader, declaringType),
             MemberName: _reader.GetString(method.Name),
             Signature: SignatureRenderer.RenderMemberSignature(_reader, declaringType, method),
-            MemberToken: $"0x{MetadataTokens.GetToken(handle):x8}",
+            MemberToken: MetadataNaming.FormatToken(MetadataTokens.GetToken(handle)),
             AssemblyFullName: null,
             ParamCount: -1));
     }
@@ -188,7 +188,7 @@ public sealed class CallChainScanner
             TypeFullName: MetadataNaming.FullName(_reader, type),
             MemberName: name,
             Signature: SignatureRenderer.RenderMemberSignature(_reader, type, _reader.GetMethodDefinition(methodDef.Value)),
-            MemberToken: $"0x{MetadataTokens.GetToken(methodDef.Value):x8}",
+            MemberToken: MetadataNaming.FormatToken(MetadataTokens.GetToken(methodDef.Value)),
             AssemblyFullName: null,
             ParamCount: -1));
     }

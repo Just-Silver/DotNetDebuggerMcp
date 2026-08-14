@@ -30,6 +30,14 @@ public static class MetadataNaming
     }
 
     /// <summary>
+    /// 把元数据 token 值渲染为标准 0x 十六进制文本（8 位，如 0x06000005）。全仓成员 token 统一经此格式化，
+    /// 避免各扫描器/渲染器重复拼写 "0x{:x8}" 造成格式漂移。
+    /// </summary>
+    /// <param name="token">元数据 token 值（如 <see cref="MetadataTokens.GetToken(EntityHandle)"/> 的整数形式）。</param>
+    /// <returns>如 "0x06000005"。</returns>
+    public static string FormatToken(int token) => $"0x{token:x8}";
+
+    /// <summary>
     /// 渲染 TypeReference 的全限定名（命名空间.名，嵌套沿 ResolutionScope 递归用 + 连接），与
     /// <see cref="FullName(MetadataReader, TypeDefinition)"/> 的格式一致（供跨程序集外部类型渲染）。
     /// 纯元数据读取，不加载外部程序集。
@@ -141,7 +149,7 @@ public static class MetadataNaming
         foreach (var handle in candidates)
         {
             sb.Append('\n').Append("  ").Append(FullName(reader, reader.GetTypeDefinition(handle)))
-              .Append($"（token 0x{MetadataTokens.GetToken(handle):x8}）");
+              .Append($"（token {FormatToken(MetadataTokens.GetToken(handle))}）");
         }
         return sb.ToString();
     }

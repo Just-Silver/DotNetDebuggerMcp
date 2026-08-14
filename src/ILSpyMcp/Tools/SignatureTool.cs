@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -45,7 +46,7 @@ public static class SignatureTool
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员签名", IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型/空签名以异常抛提示、不入缓存
-        var signature = $"signature\u001F{typeName}";
+        var signature = $"{CacheSignatures.Signature}{CacheSignatures.Separator}{typeName}";
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
             var typeHandle = MetadataNaming.FindType(reader, typeName);

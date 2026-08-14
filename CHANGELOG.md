@@ -28,6 +28,7 @@
 - **类型名歧义提示按工具给出解法（行为变化）**：`typeName` 存在歧义时，`decompile_member` 提示用 `typeToken` 精确定位、`field_access` 提示用 `fieldToken` 精确定位；`search_string`/`interface_usage`/`generic_instantiations` 无 token 参数，提示改为「该类型名在归一化后存在同名类型，请换用不含歧义的完整类型名」
 - `call_chain` 跨程序集调用展开增加深度与节点上限（默认 5 层 / 200 节点）：超限的外部调用子树不再展开（按未展开处理），防 BCL 密集方法体在 `includeExternal=true` 时展开数百节点拖慢查询
 - `generic_instantiations` 修复类型参数过滤漏洞：泛型方法内以类型参数调用（如 `Echo<T>`）不再产出虚假 `Echo<T0>` 命中；嵌套部分具体化实参（如 `GenericBox<SomeGeneric<T>>`）不再被误判为具体化实例化
+- `cache_stats` 修复新工具来源名显示：缓存条目来源工具名映射此前缺 `search_string`/`field_access`/`call_chain`/`interface_usage`/`generic_instantiations` 五个新工具前缀，明细中会显示原始签名前缀而非工具名；现已补录（映射与各工具签名生成同源引用 `CacheSignatures` 常量，后续改前缀不再失同步）
 
 ## [1.2.3] - 2026-08-14
 

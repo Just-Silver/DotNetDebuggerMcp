@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -64,7 +65,7 @@ public static class ListTypesTool
         var context = new FormatContext(assemblyFull, target, IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
-        var signature = $"list-types\u001F{list}\u001F{nameContains}\u001F{namespaceContains}";
+        var signature = $"{CacheSignatures.ListTypes}{CacheSignatures.Separator}{list}{CacheSignatures.Separator}{nameContains}{CacheSignatures.Separator}{namespaceContains}";
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
             var typeList = TypeLister.ListTypes(reader, list,

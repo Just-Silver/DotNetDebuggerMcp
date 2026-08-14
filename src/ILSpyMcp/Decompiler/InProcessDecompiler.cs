@@ -56,7 +56,7 @@ public sealed class InProcessDecompiler
         catch (Exception ex)
         {
             // work 本身抛出的异常不向上传播，兜底返回中文提示（后台任务异常不可被外部观察，此处就地降级）
-            return $"反编译失败：{ex.Message}";
+            return $"{AppText.DecompileFailurePrefix}{ex.Message}";
         }
     }
 
@@ -218,19 +218,19 @@ public sealed class InProcessDecompiler
         }
         catch (IOException ex)
         {
-            return $"反编译失败：IO 错误（{ex.Message}）";
+            return $"{AppText.DecompileFailurePrefix}IO 错误（{ex.Message}）";
         }
         catch (UnauthorizedAccessException ex)
         {
-            return $"反编译失败：无访问权限（{ex.Message}）";
+            return $"{AppText.DecompileFailurePrefix}无访问权限（{ex.Message}）";
         }
         catch (BadImageFormatException ex)
         {
-            return $"反编译失败：程序集格式无效（{ex.Message}）";
+            return $"{AppText.DecompileFailurePrefix}程序集格式无效（{ex.Message}）";
         }
         catch (Exception ex)
         {
-            return $"反编译失败：{ex.Message}";
+            return $"{AppText.DecompileFailurePrefix}{ex.Message}";
         }
     }
 
@@ -282,19 +282,19 @@ public sealed class InProcessDecompiler
         }
         catch (IOException ex)
         {
-            return $"反编译失败：IO 错误（{ex.Message}）";
+            return $"{AppText.DecompileFailurePrefix}IO 错误（{ex.Message}）";
         }
         catch (UnauthorizedAccessException ex)
         {
-            return $"反编译失败：无访问权限（{ex.Message}）";
+            return $"{AppText.DecompileFailurePrefix}无访问权限（{ex.Message}）";
         }
         catch (BadImageFormatException ex)
         {
-            return $"反编译失败：程序集格式无效（{ex.Message}）";
+            return $"{AppText.DecompileFailurePrefix}程序集格式无效（{ex.Message}）";
         }
         catch (Exception ex)
         {
-            return $"反编译失败：{ex.Message}";
+            return $"{AppText.DecompileFailurePrefix}{ex.Message}";
         }
     }
 
@@ -310,7 +310,7 @@ public sealed class InProcessDecompiler
         // 全部错误提示前缀：Execute/RunWithTimeoutAsync 的「反编译失败：」兜底、未找到类型、输出超限、
         // 「元数据 token …未引用…」越界、「反编译已取消」（引擎检查点中断）、以及以引号开头的非法 token 提示
         // （正常反编译文本不可能以这些开头）
-        return text.StartsWith("反编译失败：", StringComparison.Ordinal)
+        return AppText.StartsWithDecompileFailure(text)
             || text.StartsWith("反编译已取消", StringComparison.Ordinal)
             || text.StartsWith("未找到类型 ", StringComparison.Ordinal)
             || text.StartsWith("反编译输出超过上限", StringComparison.Ordinal)

@@ -128,7 +128,7 @@ public static class CallChainTool
 
         var overLimit = uniqueInternal.Count > AppConfig.MaxMemberMatches;
         using var expander = includeExternal ? new ExternalCallExpander(assemblyFull) : null;
-        var context = new FormatContext(assemblyFull, overLimit ? $"{targetDesc}（超过上限，仅列出签名）" : targetDesc);
+        var context = new FormatContext(assemblyFull, overLimit ? $"{targetDesc}（{AppText.OverLimitOnlySignatures}）" : targetDesc);
         var (merged, allCached, error) = await BuildMergedLinesAsync(callSites, uniqueInternal, includeExternal, expander, assemblyFull, timeoutSeconds, cancellationToken);
         if (error is not null) return error;
         // 降级计数须在展开完成后合并：expander.AbortedBodies 仅在其内部 Expand 执行后累计，展开前读取恒为 0
@@ -167,7 +167,7 @@ public static class CallChainTool
                 var expansion = expander.Expand(callSite, Array.Empty<string>());
                 if (expansion.Count == 0)
                 {
-                    line += $"（未找到程序集 {ShortAssemblyName(callSite)}，视为框架/外部调用未展开）";
+                    line += $"（{string.Format(AppText.UnresolvedAssemblyAnnotation, ShortAssemblyName(callSite))}）";
                 }
                 merged.Add(line);
                 foreach (var expansionLine in expansion)
@@ -180,7 +180,7 @@ public static class CallChainTool
                 merged.Add(line);
             }
         }
-        if (index == 0) merged.Add("  （无）");
+        if (index == 0) merged.Add("  " + SectionBuilder.EmptyPlaceholder);
 
         if (uniqueInternal.Count == 0)
         {
@@ -193,7 +193,7 @@ public static class CallChainTool
             // 超过上限：仅返回 #MEMBER 签名清单（signature 来自扫描期渲染），不启动反编译
             foreach (var callSite in uniqueInternal)
             {
-                merged.Add($"#MEMBER {OutputFormatter.MemberJson(callSite.MemberName, callSite.MemberToken!, callSite.Signature, callSite.TypeFullName)}");
+                merged.Add(OutputFormatter.MemberLine(callSite.MemberName, callSite.MemberToken!, callSite.Signature, callSite.TypeFullName));
             }
             return (merged, false, null);
         }
@@ -217,10 +217,10 @@ public static class CallChainTool
             {
                 // 任一成员反编译失败/超时：返回可重试提示文本而非抛异常（与 ExecuteMergedAsync 语义一致：丢弃已拼部分，不写缓存，同 key 可重试）。
                 // 底层 GetSourceLinesAsync 抛出的异常 Message 已带「反编译失败：」前缀（InProcessDecompiler 兜底），不再重复包装
-                return (null, false, ex.Message.StartsWith("反编译失败", StringComparison.Ordinal) ? ex.Message : $"反编译失败：{ex.Message}");
+                return (null, false, ex.Message.StartsWith(AppText.DecompileFailurePrefix, StringComparison.Ordinal) ? ex.Message : $"{AppText.DecompileFailurePrefix}{ex.Message}");
             }
             allCached &= fromCache;
-            merged.Add($"#MEMBER {OutputFormatter.MemberJson(callSite.MemberName, callSite.MemberToken!, type: callSite.TypeFullName)}");
+            merged.Add(OutputFormatter.MemberLine(callSite.MemberName, callSite.MemberToken!, type: callSite.TypeFullName));
             merged.AddRange(body);
         }
         return (merged, allCached, null);
@@ -250,7 +250,7 @@ public static class CallChainTool
             var signature = typeHandle is not null
                 ? SignatureRenderer.RenderSingleMember(reader, reader.GetTypeDefinition(typeHandle.Value), handle)
                 : "";
-            lines.Add($"#MEMBER {OutputFormatter.MemberJson(match.Name, match.Token, signature, match.TypeName)}");
+            lines.Add(OutputFormatter.MemberLine(match.Name, match.Token, signature, match.TypeName));
         }
         return lines;
     }

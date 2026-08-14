@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -42,7 +43,7 @@ public static class AssemblyInfoTool
         var context = new FormatContext(assemblyFull, "程序集信息");
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
-        const string signature = "assembly-info";
+        const string signature = CacheSignatures.AssemblyInfo;
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
             var asm = reader.GetAssemblyDefinition();

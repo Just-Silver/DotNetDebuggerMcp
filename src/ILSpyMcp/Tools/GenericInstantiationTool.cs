@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -46,7 +47,7 @@ public static class GenericInstantiationTool
         var context = new FormatContext(assemblyFull, $"泛型类型 {typeName} 的实例化使用点", IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
-        var signature = $"generic-instantiations\u001F{typeName}";
+        var signature = $"{CacheSignatures.GenericInstantiations}{CacheSignatures.Separator}{typeName}";
         GenericInstantiationScanner? scanner = null;
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, _) =>
         {

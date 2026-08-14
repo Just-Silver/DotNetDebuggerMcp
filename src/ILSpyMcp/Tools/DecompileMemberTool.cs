@@ -218,7 +218,7 @@ public static class DecompileMemberTool
     private static string RenderSignatureList(string assemblyFull, string typeName, string memberName, IReadOnlyList<MemberMatch> matches, string lines)
     {
         var context = new FormatContext(assemblyFull, $"成员 {memberName}（{matches.Count} 个匹配，超过上限 {AppConfig.MaxMemberMatches}，仅列出签名）");
-        return ToolExecutor.RunMetadataPe(assemblyFull, $"member-signatures\u001F{typeName}\u001F{memberName}", lines, context, (pe, reader) =>
+        return ToolExecutor.RunMetadataPe(assemblyFull, $"{CacheSignatures.MemberSignatures}{CacheSignatures.Separator}{typeName}{CacheSignatures.Separator}{memberName}", lines, context, (pe, reader) =>
         {
             var tokens = matches.Select(m => m.Token).ToHashSet();
             var signatureLines = new List<string>();
@@ -229,11 +229,11 @@ public static class DecompileMemberTool
                 var renderedTypeName = MetadataNaming.FullName(reader, type);
                 foreach (var memberHandle in EnumerateMemberHandles(type))
                 {
-                    var token = $"0x{MetadataTokens.GetToken(memberHandle):x8}";
+                    var token = MetadataNaming.FormatToken(MetadataTokens.GetToken(memberHandle));
                     if (!tokens.Contains(token)) continue;
                     var signature = SignatureRenderer.RenderSingleMember(reader, type, memberHandle);
                     var name = MemberName(reader, memberHandle);
-                    signatureLines.Add($"#MEMBER {OutputFormatter.MemberJson(name, token, signature, renderedTypeName)}");
+                    signatureLines.Add(OutputFormatter.MemberLine(name, token, signature, renderedTypeName));
                 }
             }
             // 清单可能超过预算，统一走 lines 分页（缺省截断前约 8 KB，超限可用 lines 续读）

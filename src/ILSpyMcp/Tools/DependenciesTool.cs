@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Metadata;
 using ILSpyMcp.Services;
@@ -49,7 +50,7 @@ public static class DependenciesTool
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员签名内部引用", IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
-        var signature = $"dependencies\u001F{typeName}\u001F{includeExternal}";
+        var signature = $"{CacheSignatures.Dependencies}{CacheSignatures.Separator}{typeName}{CacheSignatures.Separator}{includeExternal}";
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
             var handle = MetadataNaming.FindType(reader, typeName);
