@@ -7,6 +7,7 @@ using Xunit;
 
 namespace ILSpyMcp.Tests;
 
+[Collection("AppServices")]
 public class HierarchyTests
 {
     // 主项目程序集（作为测试依赖复制到 bin），含 class/struct/enum 等；纯元数据读取
