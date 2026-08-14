@@ -417,15 +417,31 @@ public class OutputFormatterTests
     }
 
     [Fact]
-    public void Format_含IL未解析注释_头部分隔线前追加提示()
+    public void Format_含IL未解析注释_头部提示带计数()
     {
         var lines = new List<string> { "public void M()", "    //IL_0001: call [dynamic]" };
         var ctx = new FormatContext(@"D:\a\b.dll", "类型 System.X");
 
         var result = OutputFormatter.Format(lines, "", ctx);
 
-        Assert.Contains("提示: 输出含 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考", result);
-        Assert.Contains("提示: 输出含 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考\n---", result); // 提示在分隔线之前
+        Assert.Contains("提示: 输出含 1 处 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考", result);
+        Assert.Contains("提示: 输出含 1 处 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考\n---", result); // 提示在分隔线之前
+    }
+
+    [Fact]
+    public void IL未解析注释计数()
+    {
+        var result = OutputFormatter.Format(new List<string> { "//IL_001: // ...", "//IL_002: ...", "ok" }, "", new FormatContext("a", "t"));
+
+        Assert.Contains("输出含 2 处 //IL_ 未解析注释", result);
+    }
+
+    [Fact]
+    public void 降级标注头部()
+    {
+        var result = OutputFormatter.Format(new List<string> { "x" }, "", new FormatContext("a", "t", Degraded: 3));
+
+        Assert.Contains("本结果含 3 处降级解析", result);
     }
 
     [Fact]

@@ -4,9 +4,9 @@ namespace ILSpyMcp.Formatting;
 
 /// <summary>
 /// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞，
-/// IsCached 标注本次结果来自缓存命中（供 agent 感知重复查询低成本）。
+/// IsCached 标注本次结果来自缓存命中（供 agent 感知重复查询低成本），Degraded 标注本次结果降级解析的方法体计数（仅新鲜扫描显示）。
 /// </summary>
-public sealed record FormatContext(string AssemblyPath, string Target, bool IsListing = false, bool IsCached = false);
+public sealed record FormatContext(string AssemblyPath, string Target, bool IsListing = false, bool IsCached = false, int Degraded = 0);
 
 /// <summary>
 /// 标准输出结果格式化：默认按字符预算（UTF-8 字节）返回前若干行并附行数软上限，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片
@@ -183,12 +183,20 @@ public static class OutputFormatter
     }
 
     /// <summary>
+    /// 统计反编译文本中未解析的 //IL_ 注释行数（动态类型/异常路径等无法可靠反编译的片段），供头部信息块提示仅结构参考。
+    /// </summary>
+    /// <param name="lines">纯净行列表（未加行号前）。</param>
+    /// <returns>含子串 "//IL_" 的纯净行数。</returns>
+    public static int CountIlUnresolvedLines(List<string> lines)
+        => lines.Count(l => l.Contains("//IL_", StringComparison.Ordinal));
+
+    /// <summary>
     /// 检测反编译文本是否含未解析的 //IL_ 注释（动态类型/异常路径等无法可靠反编译的片段），供头部信息块提示仅结构参考。
     /// </summary>
     /// <param name="lines">纯净行列表（未加行号前）。</param>
     /// <returns>任一纯净行包含子串 "//IL_" 即返回 true。</returns>
     public static bool ContainsIlUnresolved(List<string> lines)
-        => lines.Any(l => l.Contains("//IL_", StringComparison.Ordinal));
+        => CountIlUnresolvedLines(lines) > 0;
 
     /// <summary>
     /// 计算结果总字符数（每行长度 + 换行符），供 DecompileCache 统计缓存占用（与渲染口径无关，仅粗估体积）。
@@ -276,7 +284,8 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 生成头部信息块：程序集 / 目标 两行 + 总量与当前输出/剩余字段行 + 分隔线；输出含 //IL_ 未解析注释时在分隔线前附提示行。
+    /// 生成头部信息块：程序集 / 目标 两行 + 总量与当前输出/剩余字段行 + 分隔线；输出含 //IL_ 未解析注释时在分隔线前附计数提示行，
+    /// 结果经元数据降级解析（ctx.Degraded > 0）时附降级解析计数提示行。
     /// 总量：反编译为「总行数」，列类型同时给出「匹配实体」与「总行数」（每行一个实体，行数=实体数）；当前输出与剩余统一按「行」定位。 头部为纯文本、不带行号前缀，避免与源码行号混淆。
     /// </summary>
     private static string BuildHeader(FormatContext ctx, List<string> lines, string linesParam)
@@ -289,7 +298,9 @@ public static class OutputFormatter
         sb.Append(DescribeCurrent(lines, linesParam));
         var remaining = DescribeRemaining(lines, linesParam);
         if (remaining is not null) sb.Append('\n').Append(remaining);
-        if (ContainsIlUnresolved(lines)) sb.Append('\n').Append("提示: 输出含 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考");
+        var ilUnresolved = CountIlUnresolvedLines(lines);
+        if (ilUnresolved > 0) sb.Append('\n').Append($"提示: 输出含 {ilUnresolved} 处 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考");
+        if (ctx.Degraded > 0) sb.Append('\n').Append($"提示: 本结果含 {ctx.Degraded} 处降级解析（部分方法体 IL 未完全解码，仅供结构参考）");
         sb.Append("\n---");
         return sb.ToString();
     }

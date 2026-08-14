@@ -16,6 +16,7 @@ public class CallGraphToolTests
         Assert.Contains("方法体调用的内部类型:", result);
         Assert.Contains("程序集内方法体调用此类型的类型:", result);
         Assert.Contains("ILSpyMcp.Samples.Callee", result);
+        Assert.DoesNotContain("降级解析", result); // 正常类型方法体 IL 完整解码，头部不含降级行
     }
 
     [Fact]

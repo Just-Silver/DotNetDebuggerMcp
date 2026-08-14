@@ -64,6 +64,7 @@ public static class CallGraphTool
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
         var signature = $"call-graph\u001F{typeName}\u001F{includeExternal}";
+        var aborted = 0;
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
             var handle = MetadataNaming.FindType(reader, typeName);
@@ -71,9 +72,9 @@ public static class CallGraphTool
             var type = reader.GetTypeDefinition(handle.Value);
 
             var fullName = MetadataNaming.FullName(reader, type);
-            var (calls, external) = includeExternal
-                ? CallGraphExtractor.ExtractMethodBodyCallTypesWithExternal(pe, type)
-                : (CallGraphExtractor.ExtractMethodBodyCallTypes(pe, type), Array.Empty<string>());
+            var (calls, external, abortedCount) = CallGraphExtractor.ExtractMethodBodyCallTypesDetailed(pe, type);
+            aborted = abortedCount;
+            if (!includeExternal) external = Array.Empty<string>();
             var callers = CallGraphExtractor.FindCallers(pe, type, fullName);
 
             // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；空段输出（无）占位
@@ -82,7 +83,7 @@ public static class CallGraphTool
             if (includeExternal) SectionBuilder.Append(outputLines, "方法体调用的外部类型:", external);
             SectionBuilder.Append(outputLines, "程序集内方法体调用此类型的类型:", callers);
             return outputLines;
-        }, cancellationToken));
+        }, cancellationToken, degradedProvider: () => aborted));
     }
 
     /// <summary>

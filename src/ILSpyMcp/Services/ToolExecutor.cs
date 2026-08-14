@@ -82,9 +82,11 @@ internal static class ToolExecutor
     /// <param name="context">头部信息块上下文。</param>
     /// <param name="produce">生成纯行列表的委托；错误/未找到以 <see cref="InvalidOperationException"/> 抛提示文本。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="degradedProvider">降级解析计数委托：新鲜扫描（缓存未命中）成功后在结果入缓存前调用，取本次扫描降级解析的方法体计数
+    /// （>0 时经 context.Degraded 注入头部提示）；缓存命中分支不调用，仅新鲜扫描显示。</param>
     /// <returns>格式化后的元数据结果或错误提示文本。</returns>
     public static string RunMetadata(string assemblyFull, string signature, string lines, FormatContext context,
-        Func<CancellationToken, List<string>> produce, CancellationToken cancellationToken)
+        Func<CancellationToken, List<string>> produce, CancellationToken cancellationToken, Func<int>? degradedProvider = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var key = AppServices.Cache.BuildKey(assemblyFull, signature);
@@ -109,6 +111,11 @@ internal static class ToolExecutor
             return $"无法读取程序集元数据：{ex.Message}";
         }
         AppServices.Cache.Put(key, result);
+        if (degradedProvider is not null)
+        {
+            var degraded = degradedProvider();
+            if (degraded > 0) context = context with { Degraded = degraded };
+        }
         return OutputFormatter.Format(result, lines, context);
     }
 
@@ -122,13 +129,14 @@ internal static class ToolExecutor
     /// <param name="context">头部信息块上下文。</param>
     /// <param name="produce">生成纯行列表的委托，入参为已打开的 <see cref="PEReader"/> 与其 <see cref="MetadataReader"/>；错误/未找到以 <see cref="InvalidOperationException"/> 抛提示文本。</param>
     /// <param name="cancellationToken">取消令牌。</param>
+    /// <param name="degradedProvider">降级解析计数委托，原样透传给 <see cref="RunMetadata"/>（缓存命中分支不调用，仅新鲜扫描显示）。</param>
     /// <returns>格式化后的元数据结果或错误提示文本。</returns>
     public static string RunMetadataPe(string assemblyFull, string signature, string lines, FormatContext context,
-        Func<PEReader, MetadataReader, List<string>> produce, CancellationToken cancellationToken)
+        Func<PEReader, MetadataReader, List<string>> produce, CancellationToken cancellationToken, Func<int>? degradedProvider = null)
         => RunMetadata(assemblyFull, signature, lines, context, _ =>
         {
             using var fs = File.OpenRead(assemblyFull);
             using var pe = new PEReader(fs);
             return produce(pe, pe.GetMetadataReader());
-        }, cancellationToken);
+        }, cancellationToken, degradedProvider);
 }
