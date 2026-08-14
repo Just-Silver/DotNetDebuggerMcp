@@ -30,6 +30,7 @@ public static class CacheStatsTool
         ["call-graph"] = "call_graph",
         ["call-graph-token"] = "call_graph(token)",
         ["assembly-info"] = "assembly_info",
+        ["member-signatures"] = "decompile_member（超限清单）",
     };
 
     /// <summary>

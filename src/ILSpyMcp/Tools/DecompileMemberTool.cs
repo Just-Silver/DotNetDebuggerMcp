@@ -54,13 +54,7 @@ public static class DecompileMemberTool
         // token 分支：非空时按元数据 token 直接反编译单个成员（token 全局唯一，无需 typeName 定位；头部保留 typeName 仅作目标描述）
         if (!string.IsNullOrWhiteSpace(token))
         {
-            if (!ArgumentValidators.ValidateToken(token, out var tokenError)) return tokenError;
-            var tokenContext = new FormatContext(assemblyFull, string.IsNullOrWhiteSpace(typeName)
-                ? $"成员 {token}（按 token 反编译）"
-                : $"类型 {typeName} 的成员 {token}（按 token 反编译）");
-            return await ToolExecutor.RunPipelineAsync(
-                new ToolCommand(assemblyFull, new DecompileRequest(DecompileKind.Member, token)),
-                lines, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken, tokenContext);
+            return await RunByTokenAsync(assemblyFull, typeName, token, lines, timeoutSeconds, cancellationToken);
         }
 
         // 参数校验：memberName 必填（typeName 允许为空，省略时跨程序集按成员名搜索）
@@ -68,36 +62,10 @@ public static class DecompileMemberTool
 
         // 纯元数据读取定位成员：typeName 为空走跨程序集搜索，否则在指定类型内搜索；未命中类型/无匹配成员时直接返回提示，
         // 无匹配且存在相近名时附相近成员名
-        var crossAssembly = string.IsNullOrWhiteSpace(typeName);
-        IReadOnlyList<MemberMatch> matches;
-        IReadOnlyList<string> similarNames;
-        if (crossAssembly)
-        {
-            var result = MemberResolver.FindMembersAcrossAssembly(assemblyFull, memberName);
-            matches = result.Matches;
-            similarNames = result.SimilarNames;
-        }
-        else
-        {
-            var result = MemberResolver.FindMembers(assemblyFull, typeName, memberName);
-            if (!result.TypeFound)
-            {
-                // 类型未命中：重新打开程序集做纯元数据读取，附相近类型名（元数据秒回）
-                try
-                {
-                    using var fs = File.OpenRead(assemblyFull);
-                    using var pe = new PEReader(fs);
-                    return MetadataNaming.BuildNotFoundMessage(pe.GetMetadataReader(), typeName);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-                {
-                    return $"无法读取程序集元数据：{ex.Message}";
-                }
-            }
-            matches = result.Matches;
-            similarNames = result.SimilarNames;
-        }
+        var (matches, similarNames, locateError) = LocateMembers(assemblyFull, typeName, memberName);
+        if (locateError is not null) return locateError;
 
+        var crossAssembly = string.IsNullOrWhiteSpace(typeName);
         if (matches.Count == 0)
         {
             var message = crossAssembly
@@ -108,7 +76,7 @@ public static class DecompileMemberTool
         }
 
         // 匹配数超过上限：不反编译，仅返回成员签名清单（元数据秒回），避免为海量匹配逐一启动反编译
-        if (matches.Count > AppConfig.MaxMemberMatches) return RenderSignatureList(assemblyFull, memberName, matches, lines);
+        if (matches.Count > AppConfig.MaxMemberMatches) return RenderSignatureList(assemblyFull, typeName, memberName, matches, lines);
 
         // 每个匹配成员一条命令：token 全局唯一，同一成员不同子串查询 token 相同 → 缓存签名相同 → 共享缓存；各命令独立缓存 key
         var commands = matches
@@ -131,43 +99,79 @@ public static class DecompileMemberTool
     }
 
     /// <summary>
-    /// 匹配数超限时仅返回成员签名清单：重新打开程序集做纯元数据读取，遍历全部非编译器生成类型的全部成员（字段/方法/属性/事件），
-    /// 凡 token 属于匹配集合的成员渲染一行 `#MEMBER {name/token/signature/type}` JSON 行（type 为该成员所属类型全名）。
+    /// token 分支：非空时按元数据 token 直接反编译单个成员（token 全局唯一，无需 typeName 定位；头部保留 typeName 仅作目标描述）。
+    /// </summary>
+    private static async Task<string> RunByTokenAsync(string assemblyFull, string typeName, string token, string lines, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        if (!ArgumentValidators.ValidateToken(token, out var tokenError)) return tokenError;
+        var tokenContext = new FormatContext(assemblyFull, string.IsNullOrWhiteSpace(typeName)
+            ? $"成员 {token}（按 token 反编译）"
+            : $"类型 {typeName} 的成员 {token}（按 token 反编译）");
+        return await ToolExecutor.RunPipelineAsync(
+            new ToolCommand(assemblyFull, new DecompileRequest(DecompileKind.Member, token)),
+            lines, TimeSpan.FromSeconds(timeoutSeconds), cancellationToken, tokenContext);
+    }
+
+    /// <summary>
+    /// 纯元数据读取定位成员：typeName 为空走跨程序集搜索，否则在指定类型内搜索；类型未命中时重新打开程序集做纯元数据读取，
+    /// 返回附相近类型名的未找到提示（Error 非空，元数据秒回）；IO 类异常同样以 Error 返回「无法读取程序集元数据」提示。
+    /// </summary>
+    private static (IReadOnlyList<MemberMatch> Matches, IReadOnlyList<string> SimilarNames, string? Error)
+        LocateMembers(string assemblyFull, string typeName, string memberName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            var r = MemberResolver.FindMembersAcrossAssembly(assemblyFull, memberName);
+            return (r.Matches, r.SimilarNames, null);
+        }
+        var inType = MemberResolver.FindMembers(assemblyFull, typeName, memberName);
+        if (!inType.TypeFound)
+        {
+            // 类型未命中：重新打开程序集做纯元数据读取，附相近类型名（元数据秒回）
+            try
+            {
+                using var fs = File.OpenRead(assemblyFull);
+                using var pe = new PEReader(fs);
+                return (Array.Empty<MemberMatch>(), Array.Empty<string>(), MetadataNaming.BuildNotFoundMessage(pe.GetMetadataReader(), typeName));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
+            {
+                return (Array.Empty<MemberMatch>(), Array.Empty<string>(), $"无法读取程序集元数据：{ex.Message}");
+            }
+        }
+        return (inType.Matches, inType.SimilarNames, null);
+    }
+
+    /// <summary>
+    /// 匹配数超限时仅返回成员签名清单：元数据读取经共享缓存（重复查询直接命中），遍历全部非编译器生成类型的全部成员
+    /// （字段/方法/属性/事件），凡 token 属于匹配集合的成员渲染一行 `#MEMBER {name/token/signature/type}` JSON 行（type 为该成员所属类型全名）。
     /// 按 token（而非成员名）匹配，避免同名重载成员被名字集合去重而丢失；签名经 <see cref="SignatureRenderer.RenderSingleMember"/> 渲染，
     /// 支持字段/方法/属性/事件四类成员。清单同样受 lines 分页控制（缺省返回前约 8 KB）。
     /// </summary>
-    private static string RenderSignatureList(string assemblyFull, string memberName, IReadOnlyList<MemberMatch> matches, string lines)
+    private static string RenderSignatureList(string assemblyFull, string typeName, string memberName, IReadOnlyList<MemberMatch> matches, string lines)
     {
         var context = new FormatContext(assemblyFull, $"成员 {memberName}（{matches.Count} 个匹配，超过上限 {AppConfig.MaxMemberMatches}，仅列出签名）");
-        try
+        return ToolExecutor.RunMetadataPe(assemblyFull, $"member-signatures\u001F{typeName}\u001F{memberName}", lines, context, (pe, reader) =>
         {
-            using var fs = File.OpenRead(assemblyFull);
-            using var pe = new PEReader(fs);
-            var reader = pe.GetMetadataReader();
-
             var tokens = matches.Select(m => m.Token).ToHashSet();
             var signatureLines = new List<string>();
             foreach (var handle in reader.TypeDefinitions)
             {
                 var type = reader.GetTypeDefinition(handle);
                 if (CompilerGeneratedFilter.IsCompilerGenerated(reader, type)) continue;
-                var typeName = MetadataNaming.FullName(reader, type);
+                var renderedTypeName = MetadataNaming.FullName(reader, type);
                 foreach (var memberHandle in EnumerateMemberHandles(type))
                 {
                     var token = $"0x{MetadataTokens.GetToken(memberHandle):x8}";
                     if (!tokens.Contains(token)) continue;
                     var signature = SignatureRenderer.RenderSingleMember(reader, type, memberHandle);
                     var name = MemberName(reader, memberHandle);
-                    signatureLines.Add($"#MEMBER {OutputFormatter.MemberJson(name, token, signature, typeName)}");
+                    signatureLines.Add($"#MEMBER {OutputFormatter.MemberJson(name, token, signature, renderedTypeName)}");
                 }
             }
             // 清单可能超过预算，统一走 lines 分页（缺省截断前约 8 KB，超限可用 lines 续读）
-            return OutputFormatter.Format(signatureLines, lines, context);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-        {
-            return $"无法读取程序集元数据：{ex.Message}";
-        }
+            return signatureLines;
+        }, default);
     }
 
     /// <summary>
