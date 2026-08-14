@@ -31,6 +31,7 @@ public class ILSpyMcpCmdTests
             searchString: "", fieldName: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: true, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
+            interfaceUsage: false,
             token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false);
 
         Assert.Contains("ILSpyMcp.Samples.Caller::", result);
@@ -46,10 +47,28 @@ public class ILSpyMcpCmdTests
             searchString: "", fieldName: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: false, callChain: true, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
+            interfaceUsage: false,
             token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false);
 
         Assert.Contains("方法体调用序列:", result);
         Assert.Contains("ChainMid::", result);
+    }
+
+    [Fact]
+    public async Task DispatchCliAsync_iu_输出接口实现者与调用点()
+    {
+        // -iu 分发走 interface_usage（纯元数据，经共享缓存），IAnimal 应含实现者 Dog 与调用点 AnimalCaller::Run → Speak
+        var result = await ILSpyMcpCmd.DispatchCliAsync(
+            assembly: TestDataPaths.TestSamplesDll, typeName: "ILSpyMcp.Samples.IAnimal", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
+            searchString: "", fieldName: "",
+            outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
+            dependencies: false, callGraph: false, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
+            interfaceUsage: true,
+            token: "", typeToken: "", lines: "", timeoutSeconds: 30, check: false);
+
+        Assert.Contains("实现该接口的类型:", result);
+        Assert.Contains("ILSpyMcp.Samples.Dog", result);
+        Assert.Contains("ILSpyMcp.Samples.AnimalCaller::Run → Speak", result);
     }
 
     [Fact]

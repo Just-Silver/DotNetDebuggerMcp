@@ -54,9 +54,9 @@ public class ILSpyMcpCmd
     public bool AssemblyInfo { get; }
 
     /// <summary>
-    /// hierarchy 包含全部间接后代（接口的所有实现者、基类的所有子孙），需配合 -hc。
+    /// hierarchy 包含全部间接后代（接口的所有实现者、基类的所有子孙）、interface_usage 包含全部间接实现者，需配合 -hc/-iu。
     /// </summary>
-    [Option("-i|--indirect", "hierarchy 包含全部间接后代（接口的所有实现者、基类的所有子孙），配合 -hc。", CommandOptionType.NoValue)]
+    [Option("-i|--indirect", "hierarchy 包含全部间接后代、interface_usage 包含全部间接实现者（接口的子接口、实现者及其子类），配合 -hc/-iu。", CommandOptionType.NoValue)]
     public bool Indirect { get; }
 
     /// <summary>
@@ -70,6 +70,12 @@ public class ILSpyMcpCmd
     /// </summary>
     [Option("-cg|--callgraph", "输出指定类型方法体调用关系（配合 -t）。", CommandOptionType.NoValue)]
     public bool CallGraph { get; }
+
+    /// <summary>
+    /// 输出指定接口的实现者与调用点组合视图，需配合 -t。
+    /// </summary>
+    [Option("-iu|--interfaceusage", "输出指定接口的实现者与调用点组合视图（配合 -t）。", CommandOptionType.NoValue)]
+    public bool InterfaceUsage { get; }
 
     /// <summary>
     /// 输出起始方法的方法级正向调用序列 + 被调用成员反编译，配合 -t/-mn 或 -tk。
@@ -174,7 +180,8 @@ public class ILSpyMcpCmd
 
     /// <summary>
     /// 命令行分发：-c 走环境自检，-ai 走 assembly_info，-p 走 decompile_to_project，-o 走 decompile_to_dir，
-    /// -s/-hc/-d/-cg/-cc 分别走 signature/hierarchy/dependencies/call_graph/call_chain（-i 让 hierarchy 含间接后代、
+    /// -s/-hc/-d/-cg/-iu/-cc 分别走 signature/hierarchy/dependencies/call_graph/interface_usage/call_chain
+    /// （-i 让 hierarchy 含间接后代、interface_usage 含全部间接实现者，
     /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用、-cc 让 call_chain 保留外部调用行，
     /// -tk 配合 -cg 按方法 token 反向定位调用点、配合 -cc 直接定位起始方法），-l 走 list_types
     /// （-nc 提供类型名子串过滤、-ns 提供命名空间子串过滤），-ss 走 search_string（-t 限定类型），-fa 走 field_access
@@ -185,7 +192,7 @@ public class ILSpyMcpCmd
         string assembly, string typeName, string memberName, string entityTypes, string nameContains, string namespaceContains,
         string searchString, string fieldName,
         string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies, bool callGraph,
-        bool callChain, bool fieldAccess, bool external, bool indirect, bool assemblyInfo,
+        bool callChain, bool fieldAccess, bool external, bool indirect, bool assemblyInfo, bool interfaceUsage,
         string token, string typeToken, string lines, int timeoutSeconds, bool check,
         CancellationToken cancellationToken = default)
     {
@@ -214,6 +221,10 @@ public class ILSpyMcpCmd
         if (hierarchy)
         {
             return await HierarchyTool.Hierarchy(assembly, typeName, includeIndirect: indirect, lines, cancellationToken);
+        }
+        if (interfaceUsage)
+        {
+            return await InterfaceUsageTool.InterfaceUsage(assembly, typeName, includeIndirect: indirect, lines, cancellationToken);
         }
         if (dependencies)
         {
@@ -257,7 +268,7 @@ public class ILSpyMcpCmd
                 Assembly, TypeName, MemberName, EntityTypes, NameContains, NamespaceContains,
                 SearchString, FieldName,
                 OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies, CallGraph,
-                CallChain, FieldAccess, External, Indirect, AssemblyInfo,
+                CallChain, FieldAccess, External, Indirect, AssemblyInfo, InterfaceUsage,
                 Token, TypeToken, Lines, TimeoutSeconds, Check));
             return 0;
         }
