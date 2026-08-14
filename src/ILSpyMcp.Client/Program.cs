@@ -21,6 +21,7 @@ try
     await runner.RunAsync(DependenciesCases.All(dll));
     await runner.RunAsync(CallGraphCases.All(dll));
     await runner.RunAsync(InterfaceUsageCases.All(dll));
+    await runner.RunAsync(GenericInstantiationCases.All(dll));
     await runner.RunAsync(CallChainCases.All(dll));
     await runner.RunAsync(SearchStringCases.All(dll));
     await runner.RunAsync(FieldAccessCases.All(dll));

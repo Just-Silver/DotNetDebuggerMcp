@@ -78,6 +78,12 @@ public class ILSpyMcpCmd
     public bool InterfaceUsage { get; }
 
     /// <summary>
+    /// 输出指定泛型类型被具体实例化的使用点，需配合 -t。
+    /// </summary>
+    [Option("-gi|--genericinstantiations", "输出指定泛型类型被具体实例化的使用点（配合 -t）。", CommandOptionType.NoValue)]
+    public bool GenericInstantiations { get; }
+
+    /// <summary>
     /// 输出起始方法的方法级正向调用序列 + 被调用成员反编译，配合 -t/-mn 或 -tk。
     /// </summary>
     [Option("-cc|--callchain", "输出起始方法的方法级正向调用序列 + 被调用成员反编译（配合 -t -mn 或 -tk）。", CommandOptionType.NoValue)]
@@ -180,7 +186,7 @@ public class ILSpyMcpCmd
 
     /// <summary>
     /// 命令行分发：-c 走环境自检，-ai 走 assembly_info，-p 走 decompile_to_project，-o 走 decompile_to_dir，
-    /// -s/-hc/-d/-cg/-iu/-cc 分别走 signature/hierarchy/dependencies/call_graph/interface_usage/call_chain
+    /// -s/-hc/-d/-cg/-iu/-gi/-cc 分别走 signature/hierarchy/dependencies/call_graph/interface_usage/generic_instantiations/call_chain
     /// （-i 让 hierarchy 含间接后代、interface_usage 含全部间接实现者，
     /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用、-cc 让 call_chain 保留外部调用行，
     /// -tk 配合 -cg 按方法 token 反向定位调用点、配合 -cc 直接定位起始方法），-l 走 list_types
@@ -192,7 +198,7 @@ public class ILSpyMcpCmd
         string assembly, string typeName, string memberName, string entityTypes, string nameContains, string namespaceContains,
         string searchString, string fieldName,
         string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies, bool callGraph,
-        bool callChain, bool fieldAccess, bool external, bool indirect, bool assemblyInfo, bool interfaceUsage,
+        bool callChain, bool fieldAccess, bool external, bool indirect, bool assemblyInfo, bool interfaceUsage, bool genericInstantiations,
         string token, string typeToken, string lines, int timeoutSeconds, bool check,
         CancellationToken cancellationToken = default)
     {
@@ -225,6 +231,10 @@ public class ILSpyMcpCmd
         if (interfaceUsage)
         {
             return await InterfaceUsageTool.InterfaceUsage(assembly, typeName, includeIndirect: indirect, lines, cancellationToken);
+        }
+        if (genericInstantiations)
+        {
+            return await GenericInstantiationTool.GenericInstantiations(assembly, typeName, lines, cancellationToken);
         }
         if (dependencies)
         {
@@ -268,7 +278,7 @@ public class ILSpyMcpCmd
                 Assembly, TypeName, MemberName, EntityTypes, NameContains, NamespaceContains,
                 SearchString, FieldName,
                 OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies, CallGraph,
-                CallChain, FieldAccess, External, Indirect, AssemblyInfo, InterfaceUsage,
+                CallChain, FieldAccess, External, Indirect, AssemblyInfo, InterfaceUsage, GenericInstantiations,
                 Token, TypeToken, Lines, TimeoutSeconds, Check));
             return 0;
         }

@@ -31,7 +31,7 @@ public class ILSpyMcpCmdTests
             searchString: "", fieldName: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: true, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
-            interfaceUsage: false,
+            interfaceUsage: false, genericInstantiations: false,
             token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false);
 
         Assert.Contains("ILSpyMcp.Samples.Caller::", result);
@@ -47,7 +47,7 @@ public class ILSpyMcpCmdTests
             searchString: "", fieldName: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: false, callChain: true, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
-            interfaceUsage: false,
+            interfaceUsage: false, genericInstantiations: false,
             token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false);
 
         Assert.Contains("方法体调用序列:", result);
@@ -63,12 +63,29 @@ public class ILSpyMcpCmdTests
             searchString: "", fieldName: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: false, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
-            interfaceUsage: true,
+            interfaceUsage: true, genericInstantiations: false,
             token: "", typeToken: "", lines: "", timeoutSeconds: 30, check: false);
 
         Assert.Contains("实现该接口的类型:", result);
         Assert.Contains("ILSpyMcp.Samples.Dog", result);
         Assert.Contains("ILSpyMcp.Samples.AnimalCaller::Run → Speak", result);
+    }
+
+    [Fact]
+    public async Task DispatchCliAsync_gi_输出泛型实例化两段()
+    {
+        // -gi 分发走 generic_instantiations（纯元数据，经共享缓存），GenericBox 应含成员签名段与 GenericUser 命中
+        var result = await ILSpyMcpCmd.DispatchCliAsync(
+            assembly: TestDataPaths.TestSamplesDll, typeName: "ILSpyMcp.Samples.GenericBox", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
+            searchString: "", fieldName: "",
+            outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
+            dependencies: false, callGraph: false, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
+            interfaceUsage: false, genericInstantiations: true,
+            token: "", typeToken: "", lines: "", timeoutSeconds: 30, check: false);
+
+        Assert.Contains("成员签名中的泛型实例化:", result);
+        Assert.Contains("ILSpyMcp.Samples.GenericUser::", result);
+        Assert.Contains("GenericBox<int>", result);
     }
 
     [Fact]
