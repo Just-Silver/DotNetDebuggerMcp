@@ -31,6 +31,7 @@
 - `decompile_member` 按名搜索范围扩展为字段/方法/属性/事件（行为变化）：此前 `memberName` 只命中方法，现字段、属性、事件同样按名子串匹配（属性/事件访问器仍默认排除）
 - `signature` 工具每行行尾附成员 token（如 `public void Do(int);  0x06000505`，可直接用于 `decompile_member` 的 `token` 参数反编译对应成员），API 地图与成员反编译闭环
 - `decompile_to_dir` 成功提示列出实际写盘的文件名（如 `已写入 2 个文件至 <dir>：A.decompiled.cs、B.decompiled.cs（来源 <assembly>）`），agent 免推导即可直接读取产物；文件名过多时列前 3 个 + 等 N 个
+- 内部重构：统一工具执行样板（RunMetadataPe/RunToDisk/SectionBuilder）并拆分 decompile_member 与 call_graph 方法，无用户可见变化
 
 ### Removed
 
