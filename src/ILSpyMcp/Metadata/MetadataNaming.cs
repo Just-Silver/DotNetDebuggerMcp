@@ -126,16 +126,18 @@ public static class MetadataNaming
 
     /// <summary>
     /// 组装「类型名歧义」提示：列出全部候选全名与其类型定义 token（0x02 开头，可直接用于 decompile_member 的 typeToken 参数精确定位），
-    /// 首行说明可用 typeToken 消歧。供工具按 typeName 定位到多个候选时提示 agent。
+    /// 首行按调用方传入的解法说明当前工具如何消歧（有 token 参数的写 token 用法，无 token 参数的写名称归一化固有的换名解法）。
+    /// 供工具按 typeName 定位到多个候选时提示 agent。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="input">用户输入的类型名（提示文本保留原始输入）。</param>
     /// <param name="candidates">全部命中候选（枚举序）。</param>
+    /// <param name="remedyHint">当前工具的消歧解法说明（如 "可用 typeToken 精确定位"）。</param>
     /// <returns>歧义提示文本。</returns>
-    public static string BuildAmbiguityMessage(MetadataReader reader, string input, IReadOnlyList<TypeDefinitionHandle> candidates)
+    public static string BuildAmbiguityMessage(MetadataReader reader, string input, IReadOnlyList<TypeDefinitionHandle> candidates, string remedyHint)
     {
         var sb = new StringBuilder();
-        sb.Append($"类型 {input} 有歧义，匹配以下类型（可用 typeToken 精确定位）：");
+        sb.Append($"类型 {input} 有歧义，匹配以下类型（{remedyHint}）：");
         foreach (var handle in candidates)
         {
             sb.Append('\n').Append("  ").Append(FullName(reader, reader.GetTypeDefinition(handle)))

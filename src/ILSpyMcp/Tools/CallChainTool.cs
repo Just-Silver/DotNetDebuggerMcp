@@ -162,8 +162,9 @@ public static class CallChainTool
             var line = $"  {index}. {display}{tokenPart}";
             if (callSite.IsExternal && expander is not null)
             {
-                // 跨程序集调用展开：可解析则外部调用行后缩进追加展开行；解析失败在行尾标注终止
-                var expansion = expander.Expand(callSite, s_expandSearchDirs);
+                // 跨程序集调用展开：可解析则外部调用行后缩进追加展开行；解析失败在行尾标注终止。
+                // 搜索目录为空数组：主 dll 同目录由 resolver 构造自带、CWD 由 expander 恒加，无需重复传
+                var expansion = expander.Expand(callSite, Array.Empty<string>());
                 if (expansion.Count == 0)
                 {
                     line += $"（未找到程序集 {ShortAssemblyName(callSite)}，视为框架/外部调用未展开）";
@@ -214,8 +215,9 @@ public static class CallChainTool
             }
             catch (Exception ex)
             {
-                // 任一成员反编译失败/超时：返回可重试提示文本而非抛异常（与 ExecuteMergedAsync 语义一致：丢弃已拼部分，不写缓存，同 key 可重试）
-                return (null, false, $"反编译失败：{ex.Message}");
+                // 任一成员反编译失败/超时：返回可重试提示文本而非抛异常（与 ExecuteMergedAsync 语义一致：丢弃已拼部分，不写缓存，同 key 可重试）。
+                // 底层 GetSourceLinesAsync 抛出的异常 Message 已带「反编译失败：」前缀（InProcessDecompiler 兜底），不再重复包装
+                return (null, false, ex.Message.StartsWith("反编译失败", StringComparison.Ordinal) ? ex.Message : $"反编译失败：{ex.Message}");
             }
             allCached &= fromCache;
             merged.Add($"#MEMBER {OutputFormatter.MemberJson(callSite.MemberName, callSite.MemberToken!, type: callSite.TypeFullName)}");
@@ -223,11 +225,6 @@ public static class CallChainTool
         }
         return (merged, allCached, null);
     }
-
-    /// <summary>
-    /// 跨程序集调用展开的追加搜索目录（主 dll 同目录由 resolver 构造自带，CWD 由调用方显式传入）。
-    /// </summary>
-    private static readonly string[] s_expandSearchDirs = { Environment.CurrentDirectory };
 
     /// <summary>
     /// 外部调用的程序集短名（完整名首段）；归属未知时返回 "&lt;外部&gt;"。

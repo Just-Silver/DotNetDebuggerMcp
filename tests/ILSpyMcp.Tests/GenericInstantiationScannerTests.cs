@@ -88,6 +88,32 @@ public class GenericInstantiationScannerTests
     }
 
     [Fact]
+    public void 泛型方法内以类型参数调用Echo_不产出虚假Echo_T0()
+    {
+        // GenericSelfEcho.Run<T> 内调 GenericHelper.Echo(value)（value: T，泛型实参为方法类型参数）：预修复时
+        // CaptureMethodInstantiation 无条件加 Echo<T0>（空上下文解码类型参数为 T0）产出虚假具体化命中；
+        // 修复后按「任一实参含类型参数」门控，方法级捕获跳过
+        using var scope = new MetadataScope();
+
+        var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericHelper");
+
+        Assert.DoesNotContain(result.CallHits, l => l.Contains("GenericSelfEcho::"));
+        Assert.DoesNotContain(result.CallHits, l => l.Contains("Echo<T0>"));
+    }
+
+    [Fact]
+    public void 嵌套部分具体化实参_GenericBox_SomeGeneric_T_不记为具体()
+    {
+        // NestedGenericUser<T> 的字段/参数类型为 GenericBox<SomeGeneric<T>>（嵌套实例化，内层 SomeGeneric<T> 含类型参数）：
+        // 预修复时内层实例化的 last-element 标志重置使外层 GenericBox 被误判为具体化命中；修复后按任一实参跟踪不再捕获
+        using var scope = new MetadataScope();
+
+        var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericBox");
+
+        Assert.DoesNotContain(result.SignatureHits, l => l.Contains("NestedGenericUser::"));
+    }
+
+    [Fact]
     public void 正常方法体_Aborted计数为零()
     {
         using var scope = new MetadataScope();

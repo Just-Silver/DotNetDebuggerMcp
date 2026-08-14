@@ -1,4 +1,5 @@
 using ICSharpCode.Decompiler.Metadata;
+using ILSpyMcp.Configuration;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -19,6 +20,7 @@ public sealed class ExternalCallExpander : IDisposable
     private readonly PEReader _mainPe;
     private readonly MetadataReader _mainReader;
     private int _abortedBodies;
+    private int _nodesThisExpand;
 
     /// <summary>
     /// 以主 dll 绝对路径构造展开器（内部自开 PEReader：resolver 需 mainAssemblyFileName 文件路径，PEReader 拿不到文件名；
@@ -42,14 +44,17 @@ public sealed class ExternalCallExpander : IDisposable
     /// 展开单个外部调用点：经 UniversalAssemblyResolver 定位归属程序集（主 dll 同目录由 resolver 构造自带，
     /// searchDirs 逐目录追加，另恒含 CWD），按类型全名 + 成员名 + 参数个数定位方法并扫描其方法体序列，
     /// 返回展开行（首行 <c>  {程序集}::{类型}::{成员} 调用:</c> + 子序列行）。
-    /// 子序列内的跨程序集调用递归展开；解析失败/找不到/已访问（防环）返回空列表。
+    /// 子序列内的跨程序集调用递归展开，深度超过 <see cref="AppConfig.ExternalExpandMaxDepth"/> 或已展开节点数超过
+    /// <see cref="AppConfig.ExternalExpandMaxNodes"/> 时子树不再展开（返回空，调用方标注终止）；
+    /// 解析失败/找不到/已访问（防环）同样返回空列表。
     /// </summary>
     /// <param name="external">外部调用点（AssemblyFullName 为归属程序集完整名，TypeFullName/MemberName/ParamCount 用于定位）。</param>
     /// <param name="searchDirs">追加搜索目录（主 dll 同目录与 CWD 恒在，此处传其余目录）。</param>
-    /// <returns>展开行列表（随深度缩进）；解析失败/找不到/已访问为空。</returns>
+    /// <returns>展开行列表（随深度缩进）；解析失败/找不到/已访问/超限为空。</returns>
     public IReadOnlyList<string> Expand(CallSite external, IReadOnlyList<string> searchDirs)
     {
         var visited = new HashSet<(string Path, int Token)>();
+        _nodesThisExpand = 0;
         try
         {
             return ExpandCore(external, CreateResolver(searchDirs), visited, depth: 0);
@@ -64,6 +69,8 @@ public sealed class ExternalCallExpander : IDisposable
     private IReadOnlyList<string> ExpandCore(CallSite external, UniversalAssemblyResolver resolver,
         HashSet<(string Path, int Token)> visited, int depth)
     {
+        if (depth >= AppConfig.ExternalExpandMaxDepth) return Array.Empty<string>(); // 深度超限：子树不再展开
+        if (_nodesThisExpand >= AppConfig.ExternalExpandMaxNodes) return Array.Empty<string>(); // 节点预算耗尽
         if (string.IsNullOrEmpty(external.AssemblyFullName)) return Array.Empty<string>();
         try
         {
@@ -78,6 +85,7 @@ public sealed class ExternalCallExpander : IDisposable
             var methodDef = FindMethod(reader, typeDef.Value, external.MemberName, external.ParamCount);
             if (methodDef is null) return Array.Empty<string>();
             if (!visited.Add((Path.GetFullPath(path), MetadataTokens.GetToken(methodDef.Value)))) return Array.Empty<string>(); // 防环
+            _nodesThisExpand++;
 
             var scanner = new CallChainScanner(pe);
             var subSites = scanner.ScanMethod(methodDef.Value);

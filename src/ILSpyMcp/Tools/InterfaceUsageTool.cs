@@ -55,7 +55,7 @@ public static class InterfaceUsageTool
         return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
             var candidates = MetadataNaming.FindTypes(reader, typeName);
-            if (candidates.Count > 1) throw new InvalidOperationException(MetadataNaming.BuildAmbiguityMessage(reader, typeName, candidates));
+            if (candidates.Count > 1) throw new InvalidOperationException(MetadataNaming.BuildAmbiguityMessage(reader, typeName, candidates, "该类型名在归一化后存在同名类型，请换用不含歧义的完整类型名"));
             if (candidates.Count == 0) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var type = reader.GetTypeDefinition(candidates[0]);
 

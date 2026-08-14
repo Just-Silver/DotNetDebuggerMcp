@@ -125,7 +125,7 @@ public static class FieldAccessTool
             var candidates = MetadataNaming.FindTypes(reader, typeName);
             if (candidates.Count > 1)
             {
-                return (new List<MemberMatch>(), false, MetadataNaming.BuildAmbiguityMessage(reader, typeName, candidates));
+                return (new List<MemberMatch>(), false, MetadataNaming.BuildAmbiguityMessage(reader, typeName, candidates, "可用 fieldToken 精确定位"));
             }
             if (candidates.Count == 0)
             {

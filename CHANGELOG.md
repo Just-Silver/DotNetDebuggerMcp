@@ -23,6 +23,12 @@
 - **输出可靠性标注（行为变化）**：反编译输出含 `//IL_` 未解析注释时，头部提示由定性描述改为计数（「提示: 输出含 N 处 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考」）；`call_graph` 方法体 IL 解码降级（部分方法体因 IL 损坏中止解码）时头部追加「提示: 本结果含 N 处降级解析（部分方法体 IL 未完全解码，仅供结构参考）」（仅新鲜扫描显示，命中缓存不标注），agent 可感知结果的解码完整性
 - **`call_chain` 跨程序集调用链展开（行为变化）**：`includeExternal=true` 时，跨程序集外部调用行保留并展开——可解析的外部调用（主 dll 同目录/CWD/NuGet 缓存/共享框架/GAC，经 UniversalAssemblyResolver 定位磁盘程序集）在外部调用行后缩进输出 `程序集::类型::成员 调用:` + 被调方法体子序列（子序列内跨程序集调用递归展开、防环），解析失败的框架/外部调用在行尾标注 `（未找到程序集 X，视为框架/外部调用未展开）`；纯元数据读取，不加载外部程序集
 
+### Fixed
+
+- **类型名歧义提示按工具给出解法（行为变化）**：`typeName` 存在歧义时，`decompile_member` 提示用 `typeToken` 精确定位、`field_access` 提示用 `fieldToken` 精确定位；`search_string`/`interface_usage`/`generic_instantiations` 无 token 参数，提示改为「该类型名在归一化后存在同名类型，请换用不含歧义的完整类型名」
+- `call_chain` 跨程序集调用展开增加深度与节点上限（默认 5 层 / 200 节点）：超限的外部调用子树不再展开（按未展开处理），防 BCL 密集方法体在 `includeExternal=true` 时展开数百节点拖慢查询
+- `generic_instantiations` 修复类型参数过滤漏洞：泛型方法内以类型参数调用（如 `Echo<T>`）不再产出虚假 `Echo<T0>` 命中；嵌套部分具体化实参（如 `GenericBox<SomeGeneric<T>>`）不再被误判为具体化实例化
+
 ## [1.2.3] - 2026-08-14
 
 ### Added

@@ -1,3 +1,4 @@
+using ILSpyMcp.Configuration;
 using ILSpyMcp.Metadata;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -122,5 +123,44 @@ public class ExternalCallExpanderTests
         {
             try { Directory.Delete(tempDir, recursive: true); } catch (IOException) { }
         }
+    }
+
+    [Fact]
+    public void 深度超限_最深层不再展开()
+    {
+        // 自引用深链 DeepChain.dll（M0→M1→...→M6）：预修复无深度限制时 7 层全部展开（含 ::M6 调用: 头行）；
+        // 修复后深度达到 ExternalExpandMaxDepth 的子树不再展开，最深层 M6 的头行不再出现。
+        var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-expander-depth-test");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var mainPath = TestAssemblyWriter.WriteDeepChain(tempDir);
+            var callSite = new CallSite(
+                IsExternal: true,
+                TypeFullName: "ILSpyMcp.Deep.Chain",
+                MemberName: "M0",
+                Signature: "",
+                MemberToken: null,
+                AssemblyFullName: "DeepChain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                ParamCount: 0);
+
+            using var expander = new ExternalCallExpander(mainPath);
+            var expanded = expander.Expand(callSite, Array.Empty<string>());
+
+            Assert.Contains(expanded, l => l.Contains("::M0 调用:"));
+            Assert.DoesNotContain(expanded, l => l.Contains("::M6 调用:"));
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    [Fact]
+    public void 深度与节点上限常量_为合理正数()
+    {
+        // 深度/节点上限须为正整数且可正常生效（防误写 0/负数导致全部外部展开被截断）
+        Assert.InRange(AppConfig.ExternalExpandMaxDepth, 1, 64);
+        Assert.InRange(AppConfig.ExternalExpandMaxNodes, 1, 100_000);
     }
 }

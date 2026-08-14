@@ -2,6 +2,10 @@
 
 基于 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy) 的进程内反编译 MCP 服务器：通过 stdio 暴露九个 MCP 工具，方法体反编译与写盘经内置 ICSharpCode.Decompiler（NuGet 包随包分发，无需外部安装反编译工具）在进程内完成，结构类查询（列类型/签名/层级/引用）走 PEReader 元数据层，stdout 输出带行号。
 
+## Agent 优先设计
+
+MCP 工具是 agent 的 API：参数、默认值、输出格式、提示文案等一切接口细节都面向 MCP 调用方（agent）设计——让 agent 能低成本、无歧义地理解、决策与解析，而非迁就人类阅读习惯。新增或修改工具时逐项自检：agent 看到这个参数/这段输出，能否不靠猜就决定下一步？
+
 ## 关键约束
 
 - **所有 MCP 工具参数必须带默认值（如 `string assembly = ""`，不声明为可空）**。SDK 依据参数是否有默认值判断必填：无默认值的参数缺参时会在绑定阶段直接抛异常，返回 Tool Error（`The arguments dictionary is missing a value for the required parameter ...`），agent 拿不到错误原因。带默认值后缺参进入方法体，由校验返回中文提示。校验集中在共享 `ArgumentValidators` 静态类（`ValidateAssembly`/`ValidateRequired`/`ValidateMemberNameSearch`/`ValidateList`/`ValidateOutputDir`/`ValidateTimeoutSeconds`），方法返回 `bool` + `out string? error`，失败时返回中文提示文本。
@@ -56,6 +60,13 @@ dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # �
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -t <TypeName> -cg -x  # 方法体调用含跨程序集外部类型（元数据秒回）
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -l c               # 列 class（c/i/s/d/e 可组合，过滤编译器生成类型）
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -l c -nc Box       # 列 class 且名称含 Box 的类型（忽略大小写，配合 -l）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -l c -ns ILSpyMcp.Samples  # 列 class 且命名空间含 ILSpyMcp.Samples（忽略大小写，配合 -l）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -ss <子串>         # 按字符串字面量子串反查成员（可选 -t 限定类型，元数据秒回）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -fa -t <TypeName> -fn <字段名>  # 追踪字段读写点（可选 -tk 按字段 token，元数据秒回）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -iu -t <InterfaceName>  # 接口实现者与调用点（-i 含全部间接实现者，元数据秒回）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -gi -t <GenericTypeName>  # 泛型实例化使用点（元数据秒回）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -cc -t <TypeName> -mn <方法名>  # 起始方法调用序列 + 被调成员反编译（-tk 按方法 token 定位；-x 展开跨程序集外部调用）
+  ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -t <TypeName> -mn <成员名> -tt <typeToken>  # typeName 有歧义时按类型 token（0x02）精确定位类型后搜成员
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -a <dll> -o <dir>           # 全量写盘；-p 组合为项目形式（to_project）
   ./src/ILSpyMcp/bin/Debug/net10.0/ILSpyMcp.exe -c                         # 检查 ilspymcp 是否有新版本（无需 -a）
   ```

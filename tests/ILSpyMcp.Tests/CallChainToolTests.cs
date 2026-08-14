@@ -270,6 +270,7 @@ public class CallChainToolTests
 
             Assert.Contains("反编译失败", result);
             Assert.Contains("模拟反编译失败", result);
+            Assert.DoesNotContain("反编译失败：反编译失败", result); // 底层已带「反编译失败：」前缀，不得重复包装
             Assert.DoesNotContain("方法体调用序列:", result); // 任一成员失败即整体返回提示，丢弃已拼部分
         }
         finally

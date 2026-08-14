@@ -143,7 +143,7 @@ public static class DecompileMemberTool
             var candidates = MetadataNaming.FindTypes(reader, typeName);
             if (candidates.Count > 1)
             {
-                return (Array.Empty<MemberMatch>(), Array.Empty<string>(), null, MetadataNaming.BuildAmbiguityMessage(reader, typeName, candidates));
+                return (Array.Empty<MemberMatch>(), Array.Empty<string>(), null, MetadataNaming.BuildAmbiguityMessage(reader, typeName, candidates, "可用 typeToken 精确定位"));
             }
             if (candidates.Count == 0)
             {

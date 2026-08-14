@@ -29,6 +29,17 @@ internal static class AppConfig
     public const int MaxMemberMatches = 20;
 
     /// <summary>
+    /// call_chain 跨程序集调用展开的最大递归深度：超过该深度的外部调用不再展开（子树按未展开处理）。
+    /// </summary>
+    public const int ExternalExpandMaxDepth = 5;
+
+    /// <summary>
+    /// call_chain 单次跨程序集调用展开最多展开的外部节点数：超过该节点数的后续外部调用不再展开，
+    /// 防 BCL 密集方法体在 includeExternal=true 时展开出数百节点拖慢查询。
+    /// </summary>
+    public const int ExternalExpandMaxNodes = 200;
+
+    /// <summary>
     /// 本工具发布的 NuGet 包 id，环境自检（CLI -c/握手注入）用它查询是否有新版本。
     /// </summary>
     public const string NuGetPackageId = "ilspymcp";

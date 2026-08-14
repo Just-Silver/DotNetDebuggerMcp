@@ -75,7 +75,7 @@ public sealed class GenericInstantiationScanner
     private TypeDefinitionHandle ResolveTarget(string input)
     {
         var exact = MetadataNaming.FindTypes(_reader, input);
-        if (exact.Count > 1) throw new InvalidOperationException(MetadataNaming.BuildAmbiguityMessage(_reader, input, exact));
+        if (exact.Count > 1) throw new InvalidOperationException(MetadataNaming.BuildAmbiguityMessage(_reader, input, exact, "该类型名在归一化后存在同名类型，请换用不含歧义的完整类型名"));
         if (exact.Count == 1) return exact[0];
 
         var fallback = new List<TypeDefinitionHandle>();
@@ -90,7 +90,7 @@ public sealed class GenericInstantiationScanner
                 fallback.Add(handle);
             }
         }
-        if (fallback.Count > 1) throw new InvalidOperationException(MetadataNaming.BuildAmbiguityMessage(_reader, input, fallback));
+        if (fallback.Count > 1) throw new InvalidOperationException(MetadataNaming.BuildAmbiguityMessage(_reader, input, fallback, "该类型名在归一化后存在同名类型，请换用不含歧义的完整类型名"));
         if (fallback.Count == 0) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(_reader, input));
         return fallback[0];
     }
@@ -272,13 +272,15 @@ public sealed class GenericInstantiationScanner
 
     /// <summary>
     /// 解码 MethodSpec 泛型实参并记录方法级实例化行（如 Echo&lt;int&gt;）。实参本身为目标的实例化（如 Echo&lt;GenericBox&lt;string&gt;&gt;）
-    /// 已由 spec.DecodeSignature 经 Provider 捕获到 _capture。
+    /// 已由 spec.DecodeSignature 经 Provider 捕获到 _capture。任一实参含类型参数（泛型方法/类型内以类型参数调用 Echo&lt;T&gt;）
+    /// 不是具体化实例化，跳过方法级捕获（实参内的类型级实例化仍保留）。
     /// </summary>
     private void CaptureMethodInstantiation(string methodName, MethodSpecification spec)
     {
         try
         {
             var args = spec.DecodeSignature(_provider, s_emptyContext);
+            if (args.Any(a => a.Contains(RenderingProvider.TypeParamMarker))) return;
             _capture.Add($"{methodName}<{string.Join(", ", args)}>");
         }
         catch (BadImageFormatException)
@@ -387,16 +389,20 @@ public sealed class GenericInstantiationScanner
     private static readonly GenericContext s_emptyContext = new(Array.Empty<string>(), Array.Empty<string>());
 
     /// <summary>
-    /// 签名解码器：既渲染签名的类型编码（C# 关键字/全名/泛型实例化/数组/指针等），又在泛型类型等于目标时捕获实例化
-    /// 到当前集合（成员签名遍历与方法体扫描共用，每次解码前清空）。捕获判定用带 arity 的泛型类型全名与 targetName 直比，
-    /// 渲染则去掉 arity（GenericBox`1&lt;int&gt; → GenericBox&lt;int&gt;）。
+    /// 签名解码器：既渲染签名的类型编码（C# 关键字/全名/泛型实例化/数组/指针等），又在泛型类型等于目标且实参为具体类型
+    /// （不含类型参数）时捕获实例化到当前集合（成员签名遍历与方法体扫描共用，每次解码前清空）。捕获判定用带 arity 的
+    /// 泛型类型全名与 targetName 直比 + 任一实参含类型参数标记即不算具体化，渲染则去掉 arity（GenericBox`1&lt;int&gt; → GenericBox&lt;int&gt;）。
     /// </summary>
     private sealed class RenderingProvider : ISignatureTypeProvider<string, GenericContext>
     {
         private readonly MetadataReader _reader;
         private string _targetName = "";
         private HashSet<string>? _sink;
-        private bool _hasTypeParamArg;
+
+        // 类型参数在渲染串内的标记（PUA 区字符，不可能出现在合法类型名/元数据名中）：泛型实例化捕获按「任一实参的
+        // 渲染串含类型参数标记」判定是否具体化，标记随组合类型（数组/指针/byref/嵌套实例化）向上传播，避免依赖
+        // last-element 标志在嵌套部分具体化（GenericBox<SomeGeneric<T>>）与泛型方法内以类型参数调用（Echo<T>）时误判
+        internal const char TypeParamMarker = '\uE000';
 
         public RenderingProvider(MetadataReader reader) => _reader = reader;
 
@@ -407,7 +413,6 @@ public sealed class GenericInstantiationScanner
         {
             _targetName = MetadataNaming.FullName(_reader, _reader.GetTypeDefinition(target));
             _sink = sink;
-            _hasTypeParamArg = false;
         }
 
         public string GetPrimitiveType(PrimitiveTypeCode typeCode)
@@ -435,16 +440,10 @@ public sealed class GenericInstantiationScanner
             };
 
         public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
-        {
-            _hasTypeParamArg = false; // 新类型元素开始：清除先前泛型参数标记，保证实例化捕获只反映本次实参
-            return MetadataNaming.FullName(reader, reader.GetTypeDefinition(handle));
-        }
+            => MetadataNaming.FullName(reader, reader.GetTypeDefinition(handle));
 
         public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
-        {
-            _hasTypeParamArg = false;
-            return MetadataNaming.TypeReferenceFullName(reader, handle) ?? "<unresolved>";
-        }
+            => MetadataNaming.TypeReferenceFullName(reader, handle) ?? "<unresolved>";
 
         public string GetTypeFromSpecification(MetadataReader reader, GenericContext genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
             => reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);
@@ -452,22 +451,23 @@ public sealed class GenericInstantiationScanner
         public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments)
         {
             var rendered = $"{StripArity(genericType)}<{string.Join(", ", typeArguments)}>";
-            // 泛型实参含类型参数（如 GenericBox<T> 自引用、GenericBox<T0>）时不是具体化实例化，不捕获
-            if (genericType == _targetName && _sink is not null && !_hasTypeParamArg) _sink.Add(rendered);
-            _hasTypeParamArg = false;
+            // 泛型实参含类型参数（如 GenericBox<T> 自引用、GenericBox<T0>、嵌套部分具体化 GenericBox<SomeGeneric<T>>）时
+            // 不是具体化实例化，不捕获；判定按「任一实参渲染串含类型参数标记」，嵌套实参的标记已随组合向上传播
+            if (genericType == _targetName && _sink is not null && !typeArguments.Any(a => a.Contains(TypeParamMarker)))
+                _sink.Add(rendered);
             return rendered;
         }
 
         public string GetGenericTypeParameter(GenericContext genericContext, int index)
         {
-            _hasTypeParamArg = true;
-            return index >= 0 && index < genericContext.TypeParameters.Length ? genericContext.TypeParameters[index] : $"T{index}";
+            var name = index >= 0 && index < genericContext.TypeParameters.Length ? genericContext.TypeParameters[index] : $"T{index}";
+            return TypeParamMarker + name;
         }
 
         public string GetGenericMethodParameter(GenericContext genericContext, int index)
         {
-            _hasTypeParamArg = true;
-            return index >= 0 && index < genericContext.MethodParameters.Length ? genericContext.MethodParameters[index] : $"T{index}";
+            var name = index >= 0 && index < genericContext.MethodParameters.Length ? genericContext.MethodParameters[index] : $"T{index}";
+            return TypeParamMarker + name;
         }
 
         public string GetArrayType(string elementType, ArrayShape shape)
