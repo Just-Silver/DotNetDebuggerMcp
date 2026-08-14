@@ -152,7 +152,8 @@ public sealed class FieldAccessScanner
 
     /// <summary>
     /// 判定 MemberRef 的 parent 是否解析为目标字段的声明类型：TypeDef 直比；TypeRef 经归属判定为内部且全名一致；
-    /// TypeSpecification 解码收集底层类型定义句柄比对（覆盖泛型实例化字段如 GenericBox&lt;int&gt;.Data）。
+    /// TypeSpecification 解码仅取签名最外层元素类型（即字段声明类型，泛型实参不参与）比对（覆盖泛型实例化字段如
+    /// GenericBox&lt;int&gt;.Data——实参类型只是实例化参数，不得被当作声明类型误归因）。
     /// </summary>
     private bool MemberRefParentIsTargetType(EntityHandle parent, TypeDefinitionHandle targetDeclaringType, string targetDeclaringTypeName)
     {
@@ -167,16 +168,16 @@ public sealed class FieldAccessScanner
                 var fullName = MetadataNaming.TypeReferenceFullName(_reader, trHandle);
                 return fullName == targetDeclaringTypeName;
             case HandleKind.TypeSpecification:
-                var collected = new HashSet<TypeDefinitionHandle>();
                 try
                 {
-                    _reader.GetTypeSpecification((TypeSpecificationHandle)parent).DecodeSignature(new TypeDefCollector(_reader, collected), null);
+                    var collector = new TypeDefCollector(_reader);
+                    _reader.GetTypeSpecification((TypeSpecificationHandle)parent).DecodeSignature(collector, null);
+                    return collector.RootTypeDef is { } root && root == targetDeclaringType;
                 }
                 catch (BadImageFormatException)
                 {
                     return false; // 忽略损坏的类型规范签名
                 }
-                return collected.Contains(targetDeclaringType);
             default:
                 return false;
             // 其余 parent 作用域（如方法定义等非法字段父）非字段引用
@@ -184,29 +185,46 @@ public sealed class FieldAccessScanner
     }
 
     /// <summary>
-    /// 签名解码器：仅为收集 TypeSpecification 解码过程中出现的内部 TypeDefinition 句柄（覆盖泛型实例化字段的底层声明类型）。
+    /// 签名解码器：仅捕获 TypeSpecification 签名最外层元素类型（字段声明类型）的内部 TypeDefinition 句柄——
+    /// 解码顺序保证根元素先于泛型实参产出，故仅收集第一个产出的元素（含根为 TypeRef/基元等外部元素时置位屏蔽后续实参），
+    /// 避免泛型实例化的实参类型被误判为字段声明类型。
     /// 返回布尔只作占位，不参与任何判定。
     /// </summary>
     private sealed class TypeDefCollector : ISignatureTypeProvider<bool, object?>
     {
         private readonly MetadataReader _reader;
-        private readonly HashSet<TypeDefinitionHandle> _collected;
+        private TypeDefinitionHandle _rootTypeDef;
+        private bool _rootCollected;
 
-        public TypeDefCollector(MetadataReader reader, HashSet<TypeDefinitionHandle> collected)
+        public TypeDefCollector(MetadataReader reader)
         {
             _reader = reader;
-            _collected = collected;
         }
 
-        public bool GetPrimitiveType(PrimitiveTypeCode typeCode) => false;
+        /// <summary>
+        /// 签名最外层元素类型：仅当根元素本身是内部 TypeDefinition 时返回其句柄，否则为 null。
+        /// </summary>
+        public TypeDefinitionHandle? RootTypeDef => _rootCollected ? _rootTypeDef : null;
+
+        public bool GetPrimitiveType(PrimitiveTypeCode typeCode)
+        {
+            _rootCollected = true;
+            return false;
+        }
 
         public bool GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
         {
-            _collected.Add(handle);
+            if (_rootCollected) return true;
+            _rootCollected = true;
+            _rootTypeDef = handle;
             return true;
         }
 
-        public bool GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) => false;
+        public bool GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
+        {
+            _rootCollected = true; // 根为外部类型引用：非内部字段声明，置位阻止其后的泛型实参被收集
+            return false;
+        }
 
         public bool GetTypeFromSpecification(MetadataReader reader, object? genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
             => reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);

@@ -79,4 +79,29 @@ public class FieldAccessScannerTests
         Assert.Contains(result.Reads, r => r.Contains("public int Read("));
         Assert.Contains(result.Writes, w => w.Contains("public void Write("));
     }
+
+    [Fact]
+    public void FieldHolder_Data_泛型实例化同名字段访问不误归因()
+    {
+        using var scope = new MetadataScope();
+        var target = FieldHandle(scope.Reader, "ILSpyMcp.Samples.FieldHolder", "Data");
+
+        var result = new FieldAccessScanner(scope.Pe).Scan(target);
+
+        // GenericFieldUser.TouchBox 访问的是 GenericFieldBox<FieldHolder>.Data（MemberRef parent 为
+        // TypeSpec GenericFieldBox<FieldHolder>），FieldHolder 只是泛型实参，不得归因到 FieldHolder.Data
+        Assert.DoesNotContain(result.Reads, r => r.Contains("TouchBox"));
+    }
+
+    [Fact]
+    public void GenericFieldBox_Data_泛型实例化字段访问归因到容器自身字段()
+    {
+        using var scope = new MetadataScope();
+        var target = FieldHandle(scope.Reader, "ILSpyMcp.Samples.GenericFieldBox`1", "Data");
+
+        var result = new FieldAccessScanner(scope.Pe).Scan(target);
+
+        // GenericFieldUser.TouchBox 的 GenericFieldBox<FieldHolder>.Data 访问应归因到 GenericFieldBox.Data
+        Assert.Contains(result.Reads, r => r.Contains("TouchBox"));
+    }
 }
