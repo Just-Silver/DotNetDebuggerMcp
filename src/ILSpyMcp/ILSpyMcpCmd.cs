@@ -108,6 +108,12 @@ public class ILSpyMcpCmd
     public string NamespaceContains { get; } = null!;
 
     /// <summary>
+    /// 按字符串字面量子串反查方法体中的成员（忽略大小写），需配合 -a；提供 -t 时限定在指定类型内。
+    /// </summary>
+    [Option("-ss|--searchstring <substring>", "按字符串字面量子串反查成员（忽略大小写，配合 -a；可选 -t 限定类型）。", CommandOptionType.SingleValue)]
+    public string SearchString { get; } = null!;
+
+    /// <summary>
     /// 反编译写入的目录；指定后结果写入磁盘而非标准输出。
     /// </summary>
     [Option("-o|--outputdir <directory>", "反编译写入的目录；指定后结果写入磁盘而非标准输出。", CommandOptionType.SingleValue)]
@@ -152,11 +158,12 @@ public class ILSpyMcpCmd
     /// 命令行分发：-c 走环境自检，-ai 走 assembly_info，-p 走 decompile_to_project，-o 走 decompile_to_dir，
     /// -s/-hc/-d/-cg 分别走 signature/hierarchy/dependencies/call_graph（-i 让 hierarchy 含间接后代、
     /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用，-tk 配合 -cg 按方法 token 反向定位调用点），-l 走 list_types
-    /// （-nc 提供类型名子串过滤、-ns 提供命名空间子串过滤），-mn 走 decompile_member（-tt 按类型 token 精确定位，typeName 歧义消歧），
-    /// 否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// （-nc 提供类型名子串过滤、-ns 提供命名空间子串过滤），-ss 走 search_string（-t 限定类型），-mn 走 decompile_member
+    /// （-tt 按类型 token 精确定位，typeName 歧义消歧），否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string entityTypes, string nameContains, string namespaceContains,
+        string searchString,
         string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies, bool callGraph,
         bool external, bool indirect, bool assemblyInfo,
         string token, string typeToken, string lines, int timeoutSeconds, bool check,
@@ -196,6 +203,10 @@ public class ILSpyMcpCmd
         {
             return await CallGraphTool.CallGraph(assembly, typeName, token, includeExternal: external, lines, cancellationToken);
         }
+        if (!string.IsNullOrEmpty(searchString))
+        {
+            return await SearchStringTool.SearchString(assembly, searchString, typeName, lines, cancellationToken);
+        }
         if (!string.IsNullOrEmpty(entityTypes))
         {
             return await ListTypesTool.ListTypes(assembly, entityTypes, nameContains, namespaceContains, lines, cancellationToken);
@@ -216,6 +227,7 @@ public class ILSpyMcpCmd
         {
             Console.WriteLine(await DispatchCliAsync(
                 Assembly, TypeName, MemberName, EntityTypes, NameContains, NamespaceContains,
+                SearchString,
                 OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies, CallGraph,
                 External, Indirect, AssemblyInfo,
                 Token, TypeToken, Lines, TimeoutSeconds, Check));
