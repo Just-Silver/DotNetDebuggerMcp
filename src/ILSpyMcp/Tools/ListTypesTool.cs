@@ -62,11 +62,8 @@ public static class ListTypesTool
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
         var signature = $"list-types\u001F{list}\u001F{nameContains}";
-        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
+        return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
-            using var fs = File.OpenRead(assemblyFull);
-            using var pe = new PEReader(fs);
-            var reader = pe.GetMetadataReader();
             var typeList = TypeLister.ListTypes(reader, list, string.IsNullOrEmpty(nameContains) ? null : nameContains);
             var lineList = new List<string>(typeList.Count);
             foreach (var (category, fullName) in typeList)

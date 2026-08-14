@@ -46,11 +46,8 @@ public static class SignatureTool
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型/空签名以异常抛提示、不入缓存
         var signature = $"signature\u001F{typeName}";
-        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
+        return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
-            using var fs = File.OpenRead(assemblyFull);
-            using var pe = new PEReader(fs);
-            var reader = pe.GetMetadataReader();
             var typeHandle = MetadataNaming.FindType(reader, typeName);
             if (typeHandle is null) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var signatureLines = SignatureRenderer.RenderTypeSignatures(reader, reader.GetTypeDefinition(typeHandle.Value));

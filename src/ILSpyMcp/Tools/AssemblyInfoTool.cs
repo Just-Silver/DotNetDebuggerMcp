@@ -43,11 +43,8 @@ public static class AssemblyInfoTool
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
         const string signature = "assembly-info";
-        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
+        return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
-            using var fs = File.OpenRead(assemblyFull);
-            using var pe = new PEReader(fs);
-            var reader = pe.GetMetadataReader();
             var asm = reader.GetAssemblyDefinition();
             var (byCategory, gen, total) = TypeLister.CountCategories(reader);
             var output = new List<string>

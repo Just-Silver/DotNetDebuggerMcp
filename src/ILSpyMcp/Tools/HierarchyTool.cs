@@ -54,11 +54,8 @@ public static class HierarchyTool
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型/无信息以异常抛提示、不入缓存
         var signature = $"hierarchy\u001F{typeName}\u001F{includeIndirect}";
-        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
+        return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
-            using var fs = File.OpenRead(assemblyFull);
-            using var pe = new PEReader(fs);
-            var reader = pe.GetMetadataReader();
             var handle = MetadataNaming.FindType(reader, typeName);
             if (handle is null) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var type = reader.GetTypeDefinition(handle.Value);
@@ -76,21 +73,9 @@ public static class HierarchyTool
 
             // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；各段为空时省略对应段落
             var outputLines = new List<string>();
-            if (baseChain.Count > 0)
-            {
-                outputLines.Add("基类链:");
-                outputLines.AddRange(baseChain);
-            }
-            if (interfaces.Count > 0)
-            {
-                outputLines.Add("接口:");
-                outputLines.AddRange(interfaces);
-            }
-            if (descendants.Count > 0)
-            {
-                outputLines.Add("程序集内继承/实现此类型的类型:");
-                outputLines.AddRange(descendants);
-            }
+            SectionBuilder.Append(outputLines, "基类链:", baseChain, omitWhenEmpty: true);
+            SectionBuilder.Append(outputLines, "接口:", interfaces, omitWhenEmpty: true);
+            SectionBuilder.Append(outputLines, "程序集内继承/实现此类型的类型:", descendants, omitWhenEmpty: true);
             return outputLines;
         }, cancellationToken));
     }

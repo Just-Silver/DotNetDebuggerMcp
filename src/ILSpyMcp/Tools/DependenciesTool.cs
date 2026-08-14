@@ -50,11 +50,8 @@ public static class DependenciesTool
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
         var signature = $"dependencies\u001F{typeName}\u001F{includeExternal}";
-        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
+        return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
-            using var fs = File.OpenRead(assemblyFull);
-            using var pe = new PEReader(fs);
-            var reader = pe.GetMetadataReader();
             var handle = MetadataNaming.FindType(reader, typeName);
             if (handle is null) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var type = reader.GetTypeDefinition(handle.Value);
@@ -67,18 +64,9 @@ public static class DependenciesTool
 
             // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；空段输出（无）占位
             var outputLines = new List<string>();
-            outputLines.Add("成员签名引用的内部类型:");
-            if (references.Count == 0) outputLines.Add("（无）");
-            else outputLines.AddRange(references);
-            if (includeExternal)
-            {
-                outputLines.Add("成员签名引用的外部类型:");
-                if (external.Count == 0) outputLines.Add("（无）");
-                else outputLines.AddRange(external);
-            }
-            outputLines.Add("程序集内引用此类型的类型:");
-            if (referrers.Count == 0) outputLines.Add("（无）");
-            else outputLines.AddRange(referrers);
+            SectionBuilder.Append(outputLines, "成员签名引用的内部类型:", references);
+            if (includeExternal) SectionBuilder.Append(outputLines, "成员签名引用的外部类型:", external);
+            SectionBuilder.Append(outputLines, "程序集内引用此类型的类型:", referrers);
             return outputLines;
         }, cancellationToken));
     }
