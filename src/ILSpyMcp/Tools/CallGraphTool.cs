@@ -5,8 +5,6 @@ using ILSpyMcp.Validation;
 using ModelContextProtocol.Server;
 
 using System.ComponentModel;
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
 
 namespace ILSpyMcp.Tools;
 
@@ -45,30 +43,18 @@ public static class CallGraphTool
         if (!string.IsNullOrEmpty(token))
         {
             if (!ArgumentValidators.ValidateToken(token, out var tokenError)) return Task.FromResult(tokenError);
-
-            // 解析程序集绝对路径
-            if (ToolExecutor.ResolveAssembly(assembly, out var tokenAssemblyFull) is { } tokenPathError) return Task.FromResult(tokenPathError);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var targetDesc = string.IsNullOrEmpty(typeName) ? $"方法 {token}（调用点）" : $"类型 {typeName} 的方法 {token}（调用点）";
-            var tokenContext = new FormatContext(tokenAssemblyFull, targetDesc, IsListing: true);
-
-            // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
-            var tokenSignature = $"call-graph-token\u001F{token}";
-            return Task.FromResult(ToolExecutor.RunMetadata(tokenAssemblyFull, tokenSignature, lines, tokenContext, _ =>
-            {
-                using var fs = File.OpenRead(tokenAssemblyFull);
-                using var pe = new PEReader(fs);
-                var callers = CallGraphExtractor.FindMethodCallers(pe, token);
-                var outputLines = new List<string> { "方法体调用此方法的成员:" };
-                if (callers.Count == 0) outputLines.Add("（无）");
-                else outputLines.AddRange(callers);
-                return outputLines;
-            }, cancellationToken));
+            return RunTokenCallGraph(assembly, typeName, token, lines, cancellationToken);
         }
         // 参数校验：typeName 必填
         if (!ArgumentValidators.ValidateRequired(typeName, "请指定 typeName 参数（类型全名，格式与 list_types 输出一致）。", out var typeError)) return Task.FromResult(typeError);
+        return RunTypeCallGraph(assembly, typeName, includeExternal, lines, cancellationToken);
+    }
 
+    /// <summary>
+    /// 类型级反查：扫描指定类型方法体调用关系（内部类型 + 可选外部类型 + 反向调用者），经共享缓存秒回。
+    /// </summary>
+    private static Task<string> RunTypeCallGraph(string assembly, string typeName, bool includeExternal, string lines, CancellationToken cancellationToken)
+    {
         // 解析程序集绝对路径
         if (ToolExecutor.ResolveAssembly(assembly, out var assemblyFull) is { } pathError) return Task.FromResult(pathError);
         cancellationToken.ThrowIfCancellationRequested();
@@ -78,11 +64,8 @@ public static class CallGraphTool
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
         var signature = $"call-graph\u001F{typeName}\u001F{includeExternal}";
-        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
+        return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
         {
-            using var fs = File.OpenRead(assemblyFull);
-            using var pe = new PEReader(fs);
-            var reader = pe.GetMetadataReader();
             var handle = MetadataNaming.FindType(reader, typeName);
             if (handle is null) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var type = reader.GetTypeDefinition(handle.Value);
@@ -95,18 +78,32 @@ public static class CallGraphTool
 
             // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；空段输出（无）占位
             var outputLines = new List<string>();
-            outputLines.Add("方法体调用的内部类型:");
-            if (calls.Count == 0) outputLines.Add("（无）");
-            else outputLines.AddRange(calls);
-            if (includeExternal)
-            {
-                outputLines.Add("方法体调用的外部类型:");
-                if (external.Count == 0) outputLines.Add("（无）");
-                else outputLines.AddRange(external);
-            }
-            outputLines.Add("程序集内方法体调用此类型的类型:");
-            if (callers.Count == 0) outputLines.Add("（无）");
-            else outputLines.AddRange(callers);
+            SectionBuilder.Append(outputLines, "方法体调用的内部类型:", calls);
+            if (includeExternal) SectionBuilder.Append(outputLines, "方法体调用的外部类型:", external);
+            SectionBuilder.Append(outputLines, "程序集内方法体调用此类型的类型:", callers);
+            return outputLines;
+        }, cancellationToken));
+    }
+
+    /// <summary>
+    /// 方法级细化：按 token 反向定位程序集内调用该方法的成员（调用点），经共享缓存秒回。
+    /// </summary>
+    private static Task<string> RunTokenCallGraph(string assembly, string typeName, string token, string lines, CancellationToken cancellationToken)
+    {
+        // 解析程序集绝对路径
+        if (ToolExecutor.ResolveAssembly(assembly, out var tokenAssemblyFull) is { } tokenPathError) return Task.FromResult(tokenPathError);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var targetDesc = string.IsNullOrEmpty(typeName) ? $"方法 {token}（调用点）" : $"类型 {typeName} 的方法 {token}（调用点）";
+        var tokenContext = new FormatContext(tokenAssemblyFull, targetDesc, IsListing: true);
+
+        // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
+        var tokenSignature = $"call-graph-token\u001F{token}";
+        return Task.FromResult(ToolExecutor.RunMetadataPe(tokenAssemblyFull, tokenSignature, lines, tokenContext, (pe, _) =>
+        {
+            var callers = CallGraphExtractor.FindMethodCallers(pe, token);
+            var outputLines = new List<string>();
+            SectionBuilder.Append(outputLines, "方法体调用此方法的成员:", callers);
             return outputLines;
         }, cancellationToken));
     }
