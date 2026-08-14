@@ -197,4 +197,13 @@ public class CallGraphExtractorTests
         var callers = CallGraphExtractor.FindMethodCallers(pe, "0x02000000");
         Assert.Empty(callers);
     }
+
+    [Fact]
+    public void 正常方法体_Aborted计数为零()
+    {
+        // 正常方法体解码不应触发降级计数
+        using var scope = new MetadataScope();
+        var detailed = CallGraphExtractor.ExtractMethodBodyCallTypesDetailed(scope.Pe, GetType(scope.Reader, "ILSpyMcp.Samples.Caller"));
+        Assert.Equal(0, detailed.Aborted);
+    }
 }

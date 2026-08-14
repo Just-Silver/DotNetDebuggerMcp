@@ -10,7 +10,8 @@ namespace ILSpyMcp.Metadata;
 /// 纯元数据「方法体调用图」：扫描类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli），
 /// 提取程序集内部被调用的类型（编译器生成类型不计）与跨程序集外部类型（WithExternal 路径，带程序集归属），供 call_graph
 /// 工具使用。与 ReferenceExtractor 的签名级引用互补：本类基于方法体执行流而非成员签名。
-/// IL 解码采用 ECMA-335 操作数表：只精确读取 metadata token 操作数，其余指令按表跳过；
+/// IL 解码经共享 IlScanHelper（基于 ICSharpCode.Decompiler.Disassembler.ILParser 权威跳表）：只提取调用边 token，
+/// 解码异常安全中止并累计降级计数；
 /// 同程序集成员调用编译器通常发 MethodDef/FieldDef 直接 token，MemberRef 兜底沿 ResolutionScope 回溯判定内部/外部。
 /// </summary>
 public static class CallGraphExtractor
@@ -22,7 +23,7 @@ public static class CallGraphExtractor
     /// <param name="type">待扫描的类型定义。</param>
     /// <returns>内部类型全名列表；无内部调用时为空列表。</returns>
     public static IReadOnlyList<string> ExtractMethodBodyCallTypes(PEReader pe, TypeDefinition type)
-        => ExtractMethodBodyCallTypesWithExternal(pe, type).Internal;
+        => ExtractMethodBodyCallTypesDetailed(pe, type).Internal;
 
     /// <summary>
     /// 提取指定类型全部方法体调用的程序集内部与跨程序集外部类型。内部集合语义与
@@ -37,9 +38,23 @@ public static class CallGraphExtractor
     public static (IReadOnlyList<string> Internal, IReadOnlyList<string> External) ExtractMethodBodyCallTypesWithExternal(
         PEReader pe, TypeDefinition type)
     {
+        var (internalSet, external, _) = ExtractMethodBodyCallTypesDetailed(pe, type);
+        return (internalSet, external);
+    }
+
+    /// <summary>
+    /// 提取指定类型全部方法体调用的内部/外部类型集合，并返回解码降级计数（AbortedBodies：因 IL 损坏而中止解码的方法体数）。
+    /// 内部/外部集合语义与 <see cref="ExtractMethodBodyCallTypesWithExternal"/> 完全一致，供调用方感知解码完整性。
+    /// </summary>
+    /// <param name="pe">程序集 PE 读取器（方法体位于 PE 数据段，需经 PEReader 读取）。</param>
+    /// <param name="type">待扫描的类型定义。</param>
+    /// <returns>内部与外部类型集合及中止解码的方法体计数。</returns>
+    public static (IReadOnlyList<string> Internal, IReadOnlyList<string> External, int Aborted) ExtractMethodBodyCallTypesDetailed(
+        PEReader pe, TypeDefinition type)
+    {
         var scanner = new BodyScanner(pe);
         scanner.ScanType(type);
-        return (scanner.Render(), scanner.RenderExternal());
+        return (scanner.Render(), scanner.RenderExternal(), scanner.AbortedBodies);
     }
 
     /// <summary>
@@ -104,6 +119,11 @@ public static class CallGraphExtractor
         private readonly Provider _provider;
         private Dictionary<string, TypeDefinitionHandle>? _typeDefsByName;
 
+        /// <summary>
+        /// 解码中止计数：方法体 IL 解码遇损坏（IlScanHelper 解码异常）时累加，供调用方感知解码完整性。
+        /// </summary>
+        public int AbortedBodies { get; private set; }
+
         public BodyScanner(PEReader pe)
         {
             _pe = pe;
@@ -114,13 +134,14 @@ public static class CallGraphExtractor
         public MetadataReader Reader => _reader;
 
         /// <summary>
-        /// 清空已收集集合与调用点集合，供反向扫描在候选类型间复用实例。
+        /// 清空已收集集合、调用点集合与降级计数，供反向扫描在候选类型间复用实例。
         /// </summary>
         public void Clear()
         {
             _collected.Clear();
             _external.Clear();
             _callers.Clear();
+            AbortedBodies = 0;
         }
 
         /// <summary>
@@ -190,68 +211,26 @@ public static class CallGraphExtractor
             => TryGetTypeDef(fullName, out var handle) && _collected.Contains(handle);
 
         /// <summary>
-        /// 解码一个方法体的 IL 字节流：按 opcode 操作数表精确读取 token 与跳过定长操作数。
-        /// callerTarget 非空时对方法调用 token 同时做调用点匹配。遇到非法操作数表（越界/超大 switch）时安全中止，保留已收集部分。
+        /// 解码一个方法体的 IL 字节流（经 IlScanHelper 回调驱动）：方法调用 token 收集调用边，callerTarget 非空时同时做
+        /// 调用点匹配；解码异常时中止并累计 AbortedBodies，保留已收集部分。
         /// </summary>
         private void ScanBody(MethodBodyBlock body, MethodDefinitionHandle sourceMethod, MethodDefinitionHandle? callerTarget)
         {
             var il = body.GetILReader();
-            try
+            IlScanHelper.DecodeMethodBody(il, instr =>
             {
-                while (il.RemainingBytes > 0)
+                switch (instr.Opcode)
                 {
-                    var opcode = il.ReadByte();
-                    int kind;
-                    if (opcode == 0xFE) // 双字节前缀
-                    {
-                        if (il.RemainingBytes == 0) return;
-                        var op2 = il.ReadByte();
-                        kind = op2 < TwoByteOperands.Length ? TwoByteOperands[op2] : OperandKind.None;
-                    }
-                    else
-                    {
-                        kind = OneByteOperands[opcode];
-                    }
-
-                    switch (kind)
-                    {
-                        case OperandKind.MethodToken:
-                            var rawToken = il.ReadInt32();
-                            CollectMethodToken(rawToken);
-                            if (callerTarget is not null && MatchesToken(rawToken, callerTarget.Value)) RecordCaller(sourceMethod);
-                            break;
-                        case OperandKind.SignatureToken:
-                            CollectSignatureToken(il.ReadInt32());
-                            break;
-                        case OperandKind.Token:
-                            il.ReadInt32(); // 字段/类型/字符串/token 引用：非方法调用边，跳过
-                            break;
-                        case OperandKind.Byte:
-                            il.ReadByte();
-                            break;
-                        case OperandKind.TwoBytes:
-                            il.ReadUInt16();
-                            break;
-                        case OperandKind.FourBytes:
-                            il.ReadInt32();
-                            break;
-                        case OperandKind.EightBytes:
-                            il.ReadInt64();
-                            break;
-                        case OperandKind.Switch:
-                            var count = il.ReadInt32();
-                            if (count < 0 || count > il.RemainingBytes / 4) return; // 非法跳转表，中止本方法体
-                            for (var i = 0; i < count; i++) il.ReadInt32();
-                            break;
-                        default:
-                            break; // 无操作数或保留 opcode
-                    }
+                    case ILOpCode.Call or ILOpCode.Callvirt or ILOpCode.Newobj or ILOpCode.Jmp
+                         or ILOpCode.Ldftn or ILOpCode.Ldvirtftn:
+                        CollectMethodToken(instr.RawToken);
+                        if (callerTarget is not null && MatchesToken(instr.RawToken, callerTarget.Value)) RecordCaller(sourceMethod);
+                        break;
+                    case ILOpCode.Calli:
+                        CollectSignatureToken(instr.RawToken);
+                        break;
                 }
-            }
-            catch (BadImageFormatException)
-            {
-                // 操作数表与 IL 不匹配或 IL 损坏：中止本方法体，保留已收集部分
-            }
+            }, () => AbortedBodies++);
         }
 
         /// <summary>
@@ -404,91 +383,6 @@ public static class CallGraphExtractor
             }
             return map;
         }
-    }
-
-    /// <summary>
-    /// 操作数种类：决定扫描时如何读取/跳过操作数；MethodToken/SignatureToken 是需要提取的调用边。
-    /// 用常量类而非 enum：项目内嵌 private enum 会被 TypeLister 归类为实体枚举类型（System.Enum 基类），
-    /// 破坏「主程序集无 enum」的既有测试事实。
-    /// </summary>
-    private static class OperandKind
-    {
-        public const int None = 0;
-        public const int Byte = 1;
-        public const int TwoBytes = 2;
-        public const int FourBytes = 3;
-        public const int EightBytes = 4;
-        public const int Token = 5;
-        public const int MethodToken = 6;
-        public const int SignatureToken = 7;
-        public const int Switch = 8;
-    }
-
-    /// <summary>
-    /// 单字节 opcode 操作数表（0x00-0xFF），数据对照 ECMA-335 III.C.4。
-    /// </summary>
-    private static readonly int[] OneByteOperands = BuildOneByteOperands();
-
-    private static int[] BuildOneByteOperands()
-    {
-        var t = new int[256];
-        for (var i = 0x0E; i <= 0x13; i++) t[i] = OperandKind.Byte;       // ldarg.s..stloc.s
-        t[0x1F] = OperandKind.Byte;                                       // ldc.i4.s
-        t[0x20] = OperandKind.FourBytes;                                  // ldc.i4
-        t[0x21] = OperandKind.EightBytes;                                 // ldc.i8
-        t[0x22] = OperandKind.FourBytes;                                  // ldc.r4
-        t[0x23] = OperandKind.EightBytes;                                 // ldc.r8
-        t[0x27] = OperandKind.MethodToken;                                // jmp
-        t[0x28] = OperandKind.MethodToken;                                // call
-        t[0x29] = OperandKind.SignatureToken;                             // calli
-        for (var i = 0x2B; i <= 0x37; i++) t[i] = OperandKind.Byte;       // br.s..blt.un.s
-        for (var i = 0x38; i <= 0x44; i++) t[i] = OperandKind.FourBytes;  // br..blt.un
-        t[0x45] = OperandKind.Switch;                                     // switch
-        t[0x6F] = OperandKind.MethodToken;                                // callvirt
-        t[0x70] = OperandKind.Token;                                      // cpobj
-        t[0x71] = OperandKind.Token;                                      // ldobj
-        t[0x72] = OperandKind.Token;                                      // ldstr
-        t[0x73] = OperandKind.MethodToken;                                // newobj
-        t[0x74] = OperandKind.Token;                                      // castclass
-        t[0x75] = OperandKind.Token;                                      // isinst
-        t[0x79] = OperandKind.Token;                                      // unbox
-        for (var i = 0x7B; i <= 0x81; i++) t[i] = OperandKind.Token;      // ldfld..stobj
-        t[0x8C] = OperandKind.Token;                                      // box
-        t[0x8D] = OperandKind.Token;                                      // newarr
-        t[0x8F] = OperandKind.Token;                                      // ldelema
-        t[0xA3] = OperandKind.Token;                                      // ldelem.any
-        t[0xA4] = OperandKind.Token;                                      // stelem.any
-        t[0xA5] = OperandKind.Token;                                      // unbox.any
-        t[0xC2] = OperandKind.Token;                                      // refanyval
-        t[0xC6] = OperandKind.Token;                                      // mkrefany
-        t[0xD0] = OperandKind.Token;                                      // ldtoken
-        t[0xDD] = OperandKind.FourBytes;                                  // leave
-        t[0xDE] = OperandKind.Byte;                                       // leave.s
-        return t;
-    }
-
-    /// <summary>
-    /// 双字节前缀 0xFE 操作数表（0xFE00-0xFE1E），数据对照 ECMA-335 III.C.4。
-    /// </summary>
-    private static readonly int[] TwoByteOperands = BuildTwoByteOperands();
-
-    private static int[] BuildTwoByteOperands()
-    {
-        var t = new int[0x1F];
-        t[0x06] = OperandKind.MethodToken; // ldftn
-        t[0x07] = OperandKind.MethodToken; // ldvirtftn
-        t[0x09] = OperandKind.TwoBytes;    // ldarg
-        t[0x0A] = OperandKind.TwoBytes;    // ldarga
-        t[0x0B] = OperandKind.TwoBytes;    // starg
-        t[0x0C] = OperandKind.TwoBytes;    // ldloc
-        t[0x0D] = OperandKind.TwoBytes;    // ldloca
-        t[0x0E] = OperandKind.TwoBytes;    // stloc
-        t[0x12] = OperandKind.Byte;        // unaligned.
-        t[0x15] = OperandKind.Token;       // initobj
-        t[0x16] = OperandKind.Token;       // constrained.
-        t[0x19] = OperandKind.Byte;        // no.
-        t[0x1C] = OperandKind.Token;       // sizeof
-        return t;
     }
 
     private static readonly GenericContext EmptyContext = new(Array.Empty<string>(), Array.Empty<string>());
