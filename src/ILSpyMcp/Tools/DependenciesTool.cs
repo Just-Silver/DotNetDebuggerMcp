@@ -18,7 +18,7 @@ public static class DependenciesTool
 {
     /// <summary>
     /// 输出指定类型成员签名（方法参数/返回、字段、属性、事件类型）引用的程序集内部类型，以及程序集内引用它的类型：
-    /// 元数据读取（PEReader），秒回。includeExternal 为 true 时追加输出跨程序集外部类型引用（带程序集归属）。
+    /// 元数据读取（PEReader），经共享缓存秒回。includeExternal 为 true 时追加输出跨程序集外部类型引用（带程序集归属）。
     /// 正向与反向都只覆盖成员签名引用，不含继承关系（由 hierarchy 工具覆盖）。
     /// </summary>
     /// <param name="assembly">要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
@@ -48,14 +48,15 @@ public static class DependenciesTool
         // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员签名内部引用", IsListing: true);
 
-        // 纯元数据读取并格式化（无缓存，秒回）
-        try
+        // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
+        var signature = $"dependencies\u001F{typeName}\u001F{includeExternal}";
+        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
         {
             using var fs = File.OpenRead(assemblyFull);
             using var pe = new PEReader(fs);
             var reader = pe.GetMetadataReader();
             var handle = MetadataNaming.FindType(reader, typeName);
-            if (handle is null) return Task.FromResult(MetadataNaming.BuildNotFoundMessage(reader, typeName));
+            if (handle is null) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var type = reader.GetTypeDefinition(handle.Value);
 
             var fullName = MetadataNaming.FullName(reader, type);
@@ -78,12 +79,8 @@ public static class DependenciesTool
             outputLines.Add("程序集内引用此类型的类型:");
             if (referrers.Count == 0) outputLines.Add("（无）");
             else outputLines.AddRange(referrers);
-            return Task.FromResult(OutputFormatter.Format(outputLines, lines, context));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-        {
-            return Task.FromResult($"无法读取程序集元数据：{ex.Message}");
-        }
+            return outputLines;
+        }, cancellationToken));
     }
 
     /// <summary>

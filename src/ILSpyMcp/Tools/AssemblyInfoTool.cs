@@ -17,7 +17,7 @@ namespace ILSpyMcp.Tools;
 public static class AssemblyInfoTool
 {
     /// <summary>
-    /// 输出程序集概览：元数据读取（PEReader），秒回，无需缓存与超时。作为 agent 接触陌生程序集的第一站，
+    /// 输出程序集概览：元数据读取（PEReader），经共享缓存秒回。作为 agent 接触陌生程序集的第一站，
     /// 先概览（名称/版本/目标框架/引用/类型构成/入口点）再决定深入哪个类型。
     /// </summary>
     /// <param name="assembly">要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
@@ -41,8 +41,9 @@ public static class AssemblyInfoTool
         // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, "程序集信息");
 
-        // 纯元数据读取并格式化（无缓存，秒回）
-        try
+        // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
+        const string signature = "assembly-info";
+        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
         {
             using var fs = File.OpenRead(assemblyFull);
             using var pe = new PEReader(fs);
@@ -60,11 +61,7 @@ public static class AssemblyInfoTool
             };
             foreach (var (name, version) in AssemblyInfoReader.GetReferences(reader)) output.Add($"  {name} {version}");
             output.Add($"入口点: {AssemblyInfoReader.GetEntryPoint(pe, reader) ?? "<无或无法解析>"}");
-            return Task.FromResult(OutputFormatter.Format(output, lines, context));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-        {
-            return Task.FromResult($"无法读取程序集元数据：{ex.Message}");
-        }
+            return output;
+        }, cancellationToken));
     }
 }

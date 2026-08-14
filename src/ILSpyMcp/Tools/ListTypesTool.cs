@@ -29,7 +29,7 @@ public static class ListTypesTool
     };
 
     /// <summary>
-    /// 列出指定类别的实体类型：元数据读取（PEReader），默认过滤编译器生成类型，无需缓存与超时。
+    /// 列出指定类别的实体类型：元数据读取（PEReader），默认过滤编译器生成类型，经共享缓存秒回。
     /// </summary>
     /// <param name="assembly">要列类型的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="list">实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 "csi"（必填）。</param>
@@ -60,8 +60,9 @@ public static class ListTypesTool
         if (!string.IsNullOrEmpty(nameContains)) target += $"，名称含 {nameContains}";
         var context = new FormatContext(assemblyFull, target, IsListing: true);
 
-        // 纯元数据读取并格式化（无缓存，秒回）
-        try
+        // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
+        var signature = $"list-types\u001F{list}\u001F{nameContains}";
+        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
         {
             using var fs = File.OpenRead(assemblyFull);
             using var pe = new PEReader(fs);
@@ -72,12 +73,8 @@ public static class ListTypesTool
             {
                 lineList.Add($"{CategoryNames[category]} {fullName}");
             }
-            return Task.FromResult(OutputFormatter.Format(lineList, lines, context));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-        {
-            return Task.FromResult($"无法读取程序集元数据：{ex.Message}");
-        }
+            return lineList;
+        }, cancellationToken));
     }
 
     /// <summary>

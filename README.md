@@ -88,7 +88,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_call_graph` | 输出指定类型方法体调用的程序集内部类型及反向调用者（执行流级，与签名级引用互补）；`includeExternal=true` 时追加输出方法体调用的跨程序集外部类型（带程序集归属）；`token` 参数按方法 token 反向定位程序集内调用该具体方法的成员（方法级调用点）；未找到类型时附相近类型名 |
 | `ilspy_assembly_info` | 输出程序集概览：程序集名与版本、目标框架、引用的程序集清单（名+版本）、实体类型计数（class/interface/struct/delegate/enum，过滤编译器生成类型）与入口点；元数据读取秒回，适合作为接触陌生程序集的第一站 |
 
-`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy`、`ilspy_dependencies` 与 `ilspy_call_graph`、`ilspy_assembly_info` 默认仅输出前约 8 KB，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做输出量截断。全部工具均使用内置反编译引擎，开箱即用；其中 `ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies`/`ilspy_call_graph`/`ilspy_assembly_info` 为元数据读取，秒回。结果按「程序集 + 参数」缓存在内存，程序集更新后自动失效；反编译结果命中缓存时头部标注「缓存: 命中（重复查询成本低）」，agent 可知重复查询低成本、可放心多问。`list_types` 输出行首类别前缀（如 `class Foo.Bar`）可直接复制作 `typeName` 使用，无需去掉前缀。MCP 会话启动握手时自动检查 ilspymcp 是否有新版本：检测到新版本时注入指令式提示，要求 agent 在会话开始的回复中主动告知用户并提供升级命令；已是最新时仅注入状态行，不打扰用户。无需单独调用检查工具。
+`ilspy_decompile`、`ilspy_decompile_member`、`ilspy_list_types`、`ilspy_signature`、`ilspy_hierarchy`、`ilspy_dependencies` 与 `ilspy_call_graph`、`ilspy_assembly_info` 默认仅输出前约 8 KB，均可用 `lines` 参数按行号分页拉取；`ilspy_decompile_to_dir`/`ilspy_decompile_to_project` 结果写盘、不做输出量截断。全部工具均使用内置反编译引擎，开箱即用；其中 `ilspy_list_types`/`ilspy_signature`/`ilspy_hierarchy`/`ilspy_dependencies`/`ilspy_call_graph`/`ilspy_assembly_info` 为元数据读取，秒回。除写盘工具外全部工具结果按「程序集 + 参数」缓存在内存（共用同一缓存，程序集更新后自动失效）；命中缓存时头部标注「缓存: 命中（重复查询成本低）」，agent 可知重复查询低成本、可放心多问。`list_types` 输出行首类别前缀（如 `class Foo.Bar`）可直接复制作 `typeName` 使用，无需去掉前缀。MCP 会话启动握手时自动检查 ilspymcp 是否有新版本：检测到新版本时注入指令式提示，要求 agent 在会话开始的回复中主动告知用户并提供升级命令；已是最新时仅注入状态行，不打扰用户。无需单独调用检查工具。
 
 ### 工具参数
 

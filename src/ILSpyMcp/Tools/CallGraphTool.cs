@@ -18,7 +18,7 @@ public static class CallGraphTool
 {
     /// <summary>
     /// 输出指定类型全部方法体 IL 调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli）引用的程序集内部类型，
-    /// 以及程序集内方法体调用了它的类型：元数据读取（PEReader），秒回。
+    /// 以及程序集内方法体调用了它的类型：元数据读取（PEReader），经共享缓存秒回。
     /// includeExternal 为 true 时追加输出方法体调用的跨程序集外部类型（带程序集归属）。
     /// 与 dependencies 的成员签名引用互补：本工具基于方法体执行流（行为级），签名级引用另见 dependencies。
     /// </summary>
@@ -52,7 +52,10 @@ public static class CallGraphTool
 
             var targetDesc = string.IsNullOrEmpty(typeName) ? $"方法 {token}（调用点）" : $"类型 {typeName} 的方法 {token}（调用点）";
             var tokenContext = new FormatContext(tokenAssemblyFull, targetDesc, IsListing: true);
-            try
+
+            // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
+            var tokenSignature = $"call-graph-token\u001F{token}";
+            return Task.FromResult(ToolExecutor.RunMetadata(tokenAssemblyFull, tokenSignature, lines, tokenContext, _ =>
             {
                 using var fs = File.OpenRead(tokenAssemblyFull);
                 using var pe = new PEReader(fs);
@@ -60,12 +63,8 @@ public static class CallGraphTool
                 var outputLines = new List<string> { "方法体调用此方法的成员:" };
                 if (callers.Count == 0) outputLines.Add("（无）");
                 else outputLines.AddRange(callers);
-                return Task.FromResult(OutputFormatter.Format(outputLines, lines, tokenContext));
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-            {
-                return Task.FromResult($"无法读取程序集元数据：{ex.Message}");
-            }
+                return outputLines;
+            }, cancellationToken));
         }
         // 参数校验：typeName 必填
         if (!ArgumentValidators.ValidateRequired(typeName, "请指定 typeName 参数（类型全名，格式与 list_types 输出一致）。", out var typeError)) return Task.FromResult(typeError);
@@ -77,14 +76,15 @@ public static class CallGraphTool
         // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的方法体调用关系", IsListing: true);
 
-        // 纯元数据读取并格式化（无缓存，秒回）
-        try
+        // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型以异常抛提示、不入缓存
+        var signature = $"call-graph\u001F{typeName}\u001F{includeExternal}";
+        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
         {
             using var fs = File.OpenRead(assemblyFull);
             using var pe = new PEReader(fs);
             var reader = pe.GetMetadataReader();
             var handle = MetadataNaming.FindType(reader, typeName);
-            if (handle is null) return Task.FromResult(MetadataNaming.BuildNotFoundMessage(reader, typeName));
+            if (handle is null) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var type = reader.GetTypeDefinition(handle.Value);
 
             var fullName = MetadataNaming.FullName(reader, type);
@@ -107,11 +107,7 @@ public static class CallGraphTool
             outputLines.Add("程序集内方法体调用此类型的类型:");
             if (callers.Count == 0) outputLines.Add("（无）");
             else outputLines.AddRange(callers);
-            return Task.FromResult(OutputFormatter.Format(outputLines, lines, context));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-        {
-            return Task.FromResult($"无法读取程序集元数据：{ex.Message}");
-        }
+            return outputLines;
+        }, cancellationToken));
     }
 }

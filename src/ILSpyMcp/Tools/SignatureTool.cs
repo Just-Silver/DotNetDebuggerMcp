@@ -17,7 +17,7 @@ namespace ILSpyMcp.Tools;
 public static class SignatureTool
 {
     /// <summary>
-    /// 输出指定类型全部成员的一行签名（API 地图）：元数据读取（PEReader），秒回，无需缓存与超时。
+    /// 输出指定类型全部成员的一行签名（API 地图）：元数据读取（PEReader），经共享缓存秒回。
     /// </summary>
     /// <param name="assembly">要读取成员签名的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">目标类型的全限定名（必填），格式与 list_types 输出一致。</param>
@@ -44,21 +44,18 @@ public static class SignatureTool
         // 头部信息块：程序集绝对路径 + 目标类型描述（参数不展示——agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的成员签名", IsListing: true);
 
-        // 纯元数据读取并格式化（无缓存，秒回）
-        try
+        // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型/空签名以异常抛提示、不入缓存
+        var signature = $"signature\u001F{typeName}";
+        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
         {
             using var fs = File.OpenRead(assemblyFull);
             using var pe = new PEReader(fs);
             var reader = pe.GetMetadataReader();
             var typeHandle = MetadataNaming.FindType(reader, typeName);
-            if (typeHandle is null) return Task.FromResult(MetadataNaming.BuildNotFoundMessage(reader, typeName));
+            if (typeHandle is null) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var signatureLines = SignatureRenderer.RenderTypeSignatures(reader, reader.GetTypeDefinition(typeHandle.Value));
-            if (signatureLines.Count == 0) return Task.FromResult($"类型 {typeName} 无成员签名");
-            return Task.FromResult(OutputFormatter.Format(signatureLines.ToList(), lines, context));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-        {
-            return Task.FromResult($"无法读取程序集元数据：{ex.Message}");
-        }
+            if (signatureLines.Count == 0) throw new InvalidOperationException($"类型 {typeName} 无成员签名");
+            return signatureLines.ToList();
+        }, cancellationToken));
     }
 }

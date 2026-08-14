@@ -39,4 +39,46 @@ internal static class ToolExecutor
     /// </summary>
     public static async Task<string> RunMergedAsync(IReadOnlyList<ToolCommand> commands, string lines, TimeSpan timeout, CancellationToken cancellationToken, FormatContext context)
         => (await AppServices.Pipeline.ExecuteMergedAsync(commands, lines, timeout, cancellationToken, context)).Text;
+
+    /// <summary>
+    /// 元数据工具经共享缓存的执行辅助：与反编译工具共用同一个全局缓存（<see cref="AppServices.Cache"/>）。
+    /// 缓存命中直接格式化返回（头部标注「缓存: 命中」）；未命中则调用 produce 生成纯行列表后写缓存。
+    /// produce 抛 <see cref="InvalidOperationException"/>（未找到类型/空结果提示）或 IO 类异常时返回提示文本、不入缓存
+    /// （与反编译路径「错误提示不入缓存」同规则，同 key 可重试）。元数据秒回，不做并发单飞。
+    /// </summary>
+    /// <param name="assemblyFull">程序集绝对路径。</param>
+    /// <param name="signature">缓存签名（工具前缀 + 参数，经 \u001F 拼接，与反编译签名互不冲突）。</param>
+    /// <param name="lines">lines 参数原文；空字符串时按默认预算返回。</param>
+    /// <param name="context">头部信息块上下文。</param>
+    /// <param name="produce">生成纯行列表的委托；错误/未找到以 <see cref="InvalidOperationException"/> 抛提示文本。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>格式化后的元数据结果或错误提示文本。</returns>
+    public static string RunMetadata(string assemblyFull, string signature, string lines, FormatContext context,
+        Func<CancellationToken, List<string>> produce, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var key = AppServices.Cache.BuildKey(assemblyFull, signature);
+        var cached = AppServices.Cache.Get(key);
+        if (cached is not null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return OutputFormatter.Format(cached, lines, context with { IsCached = true });
+        }
+
+        List<string> result;
+        try
+        {
+            result = produce(cancellationToken);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return ex.Message;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
+        {
+            return $"无法读取程序集元数据：{ex.Message}";
+        }
+        AppServices.Cache.Put(key, result);
+        return OutputFormatter.Format(result, lines, context);
+    }
 }

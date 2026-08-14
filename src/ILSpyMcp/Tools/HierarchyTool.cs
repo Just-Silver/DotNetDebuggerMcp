@@ -20,7 +20,8 @@ namespace ILSpyMcp.Tools;
 public static class HierarchyTool
 {
     /// <summary>
-    /// 输出指定类型的基类链、实现的接口与程序集内继承/实现它的类型（includeIndirect 时含全部间接后代）：元数据读取（PEReader），秒回。
+    /// 输出指定类型的基类链、实现的接口与程序集内继承/实现它的类型（includeIndirect 时含全部间接后代）：元数据读取（PEReader），
+    /// 经共享缓存秒回。
     /// 基类链从目标类型上溯到 System.Object，接口列表为 InterfaceImplementations 表，后代为程序集内直接基类/直接接口等于目标类型的类型
     /// （跳过编译器生成类型）；includeIndirect 为 true 时沿继承/实现链继续下钻收集所有后代。
     /// </summary>
@@ -51,14 +52,15 @@ public static class HierarchyTool
         // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数）
         var context = new FormatContext(assemblyFull, $"类型 {typeName} 的继承/接口关系", IsListing: true);
 
-        // 纯元数据读取并格式化（无缓存，秒回）
-        try
+        // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；未找到类型/无信息以异常抛提示、不入缓存
+        var signature = $"hierarchy\u001F{typeName}\u001F{includeIndirect}";
+        return Task.FromResult(ToolExecutor.RunMetadata(assemblyFull, signature, lines, context, _ =>
         {
             using var fs = File.OpenRead(assemblyFull);
             using var pe = new PEReader(fs);
             var reader = pe.GetMetadataReader();
             var handle = MetadataNaming.FindType(reader, typeName);
-            if (handle is null) return Task.FromResult(MetadataNaming.BuildNotFoundMessage(reader, typeName));
+            if (handle is null) throw new InvalidOperationException(MetadataNaming.BuildNotFoundMessage(reader, typeName));
             var type = reader.GetTypeDefinition(handle.Value);
 
             var fullName = MetadataNaming.FullName(reader, type);
@@ -69,7 +71,7 @@ public static class HierarchyTool
                 : MetadataHierarchy.GetDescendants(reader, type, fullName);
             if (baseChain.Count == 0 && interfaces.Count == 0 && descendants.Count == 0)
             {
-                return Task.FromResult($"类型 {typeName} 无继承与接口信息");
+                throw new InvalidOperationException($"类型 {typeName} 无继承与接口信息");
             }
 
             // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；各段为空时省略对应段落
@@ -89,11 +91,7 @@ public static class HierarchyTool
                 outputLines.Add("程序集内继承/实现此类型的类型:");
                 outputLines.AddRange(descendants);
             }
-            return Task.FromResult(OutputFormatter.Format(outputLines, lines, context));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
-        {
-            return Task.FromResult($"无法读取程序集元数据：{ex.Message}");
-        }
+            return outputLines;
+        }, cancellationToken));
     }
 }
