@@ -89,4 +89,38 @@ public class ExternalCallExpanderTests
 
         Assert.NotNull(expanded);
     }
+
+    [Fact]
+    public void 展开方法体解码中止_累计降级计数()
+    {
+        // 把 TestSamplesExt 复制到临时目录并放置合成同名 TestSamples.dll（Callee 方法体 IL 截断 → 解码中止）：
+        // resolver 经主 dll 同目录定位到合成程序集，展开中止的方法体须累计进 AbortedBodies（供 call_chain 降级提示并入）。
+        var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-expander-abort-test");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            TestAssemblyWriter.WriteCorruptTestSamples(tempDir);
+            var tempMain = Path.Combine(tempDir, "ILSpyMcp.TestSamplesExt.dll");
+            File.Copy(TestDataPaths.TestSamplesExtDll, tempMain, overwrite: true);
+
+            var callSite = new CallSite(
+                IsExternal: true,
+                TypeFullName: "ILSpyMcp.Samples.Callee",
+                MemberName: ".ctor",
+                Signature: "",
+                MemberToken: null,
+                AssemblyFullName: "ILSpyMcp.TestSamples, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                ParamCount: 0);
+
+            using var expander = new ExternalCallExpander(tempMain);
+            var expanded = expander.Expand(callSite, new[] { tempDir });
+
+            Assert.NotEmpty(expanded);
+            Assert.Equal(1, expander.AbortedBodies);
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch (IOException) { }
+        }
+    }
 }

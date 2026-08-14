@@ -128,10 +128,12 @@ public static class CallChainTool
 
         var overLimit = uniqueInternal.Count > AppConfig.MaxMemberMatches;
         using var expander = includeExternal ? new ExternalCallExpander(assemblyFull) : null;
-        var context = new FormatContext(assemblyFull, overLimit ? $"{targetDesc}（超过上限，仅列出签名）" : targetDesc,
-            Degraded: scanner.AbortedBodies + (expander?.AbortedBodies ?? 0));
+        var context = new FormatContext(assemblyFull, overLimit ? $"{targetDesc}（超过上限，仅列出签名）" : targetDesc);
         var (merged, allCached, error) = await BuildMergedLinesAsync(callSites, uniqueInternal, includeExternal, expander, assemblyFull, timeoutSeconds, cancellationToken);
         if (error is not null) return error;
+        // 降级计数须在展开完成后合并：expander.AbortedBodies 仅在其内部 Expand 执行后累计，展开前读取恒为 0
+        var degraded = scanner.AbortedBodies + (expander?.AbortedBodies ?? 0);
+        if (degraded > 0) context = context with { Degraded = degraded };
         if (allCached) context = context with { IsCached = true };
         return OutputFormatter.Format(merged!, lines, context);
     }

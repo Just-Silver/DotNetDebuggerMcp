@@ -50,8 +50,15 @@ public sealed class ExternalCallExpander : IDisposable
     public IReadOnlyList<string> Expand(CallSite external, IReadOnlyList<string> searchDirs)
     {
         var visited = new HashSet<(string Path, int Token)>();
-        var resolver = CreateResolver(searchDirs);
-        return ExpandCore(external, resolver, visited, depth: 0);
+        try
+        {
+            return ExpandCore(external, CreateResolver(searchDirs), visited, depth: 0);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException
+             or ArgumentException or FormatException or OverflowException)
+        {
+            return Array.Empty<string>(); // resolver 构造/框架探测异常按未展开处理，不抛异常
+        }
     }
 
     private IReadOnlyList<string> ExpandCore(CallSite external, UniversalAssemblyResolver resolver,

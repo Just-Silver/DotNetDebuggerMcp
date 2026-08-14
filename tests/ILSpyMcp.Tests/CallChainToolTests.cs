@@ -132,6 +132,32 @@ public class CallChainToolTests
     }
 
     [Fact]
+    public async Task CallChain_includeExternal_展开方法体解码中止_降级计数并入()
+    {
+        // 合成同名 ILSpyMcp.TestSamples.dll（Callee 方法体 IL 截断 → 解码中止）置于主 dll 同目录：ExtCaller.Run 对
+        // Callee..ctor 与 Callee.Help 的跨程序集调用均展开中止（2 处）——头部降级提示须并入 expander 计数，
+        // 证明展开完成后再合并 FormatContext.Degraded（展开前读取恒为 0）。
+        AppServices.ConfigureForTest();
+        var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-callchain-abort-test");
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            TestAssemblyWriter.WriteCorruptTestSamples(tempDir);
+            var tempMain = Path.Combine(tempDir, "ILSpyMcp.TestSamplesExt.dll");
+            File.Copy(TestDataPaths.TestSamplesExtDll, tempMain, overwrite: true);
+            var result = await CallChainTool.CallChain(tempMain, token: ExtCallerRunToken(), includeExternal: true);
+
+            Assert.Contains("ILSpyMcp.TestSamples::ILSpyMcp.Samples.Callee::.ctor 调用:", result);
+            Assert.Contains("本结果含 2 处降级解析", result);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+            try { Directory.Delete(tempDir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    [Fact]
     public async Task CallChain_多匹配_返回签名清单提示用token()
     {
         // BigClass 中 Big 命中 BigMethod/BigHelper/BigHelper2 3 个 → 返回 #MEMBER 清单而非反编译
