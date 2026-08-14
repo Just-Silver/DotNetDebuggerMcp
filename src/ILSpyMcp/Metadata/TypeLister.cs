@@ -15,8 +15,9 @@ public static class TypeLister
     /// <param name="reader">元数据读取器。</param>
     /// <param name="categories">实体类别组合（调用方已校验），c/i/s/d/e 可组合：c=class, i=interface, s=struct, d=delegate, e=enum。</param>
     /// <param name="nameContains">可选类型名子串过滤（忽略大小写）；为空时不过滤。</param>
+    /// <param name="namespaceContains">可选命名空间子串过滤（忽略大小写）；为空时不过滤。嵌套类型取最外层声明类型的命名空间。</param>
     /// <returns>(类别字母, 全名) 列表，按元数据枚举序；无匹配时为空列表。</returns>
-    public static IReadOnlyList<(char Category, string FullName)> ListTypes(MetadataReader reader, string categories, string? nameContains = null)
+    public static IReadOnlyList<(char Category, string FullName)> ListTypes(MetadataReader reader, string categories, string? nameContains = null, string? namespaceContains = null)
     {
         var result = new List<(char Category, string FullName)>();
         foreach (var handle in reader.TypeDefinitions)
@@ -27,9 +28,24 @@ public static class TypeLister
             if (!categories.Contains(category)) continue;
             var fullName = MetadataNaming.FullName(reader, type);
             if (!string.IsNullOrEmpty(nameContains) && !fullName.Contains(nameContains, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.IsNullOrEmpty(namespaceContains) && !GetEffectiveNamespace(reader, type).Contains(namespaceContains, StringComparison.OrdinalIgnoreCase)) continue;
             result.Add((category, fullName));
         }
         return result;
+    }
+
+    /// <summary>
+    /// 取类型所属的有效命名空间：嵌套类型沿 <see cref="TypeDefinition.GetDeclaringType"/> 上溯到最外层声明类型，
+    /// 取该类型的 Namespace（嵌套类型自身的 Namespace 为空字符串）；非嵌套类型直接取自身 Namespace。
+    /// </summary>
+    private static string GetEffectiveNamespace(MetadataReader reader, TypeDefinition type)
+    {
+        var current = type;
+        while (!current.GetDeclaringType().IsNil)
+        {
+            current = reader.GetTypeDefinition(current.GetDeclaringType());
+        }
+        return reader.GetString(current.Namespace);
     }
 
     /// <summary>

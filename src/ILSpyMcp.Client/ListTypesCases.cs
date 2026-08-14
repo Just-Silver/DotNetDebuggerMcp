@@ -1,7 +1,7 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// list_types 工具的全部端到端验证场景：list 单值/组合 / lines / 编译器生成类型过滤 / 非法值 / 缺参校验。
+/// list_types 工具的全部端到端验证场景：list 单值/组合 / lines / 编译器生成类型过滤 / nameContains / namespaceContains / 非法值 / 缺参校验。
 /// </summary>
 public static class ListTypesCases
 {
@@ -34,6 +34,14 @@ public static class ListTypesCases
         // nameContains 无匹配：过滤后应无结果行，但头部信息块仍在（匹配实体: 0 个）
         new ToolCallCase("list_types", "nameContains 无匹配（返回空列表）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["nameContains"] = "不存在的类型名XYZ" },
+            ExpectedContains: "匹配实体: 0 个", MustNotContain: "at System"),
+        // namespaceContains 按命名空间子串过滤（忽略大小写）：应命中测试程序集的 ILSpyMcp.Samples 命名空间
+        new ToolCallCase("list_types", "namespaceContains 按命名空间过滤（命中 ILSpyMcp.Samples）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["namespaceContains"] = "ILSpyMcp.Samples" },
+            ExpectedContains: "ILSpyMcp.Samples.Class0001", MustNotContain: "at System"),
+        // namespaceContains 无匹配：过滤后应无结果行，但头部信息块仍在（匹配实体: 0 个）
+        new ToolCallCase("list_types", "namespaceContains 无匹配（返回空列表）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["namespaceContains"] = "不存在.Ns" },
             ExpectedContains: "匹配实体: 0 个", MustNotContain: "at System"),
         // 非法 list 应返回中文校验提示而非异常堆栈
         new ToolCallCase("list_types", "非法 list（应返回校验提示）",

@@ -65,13 +65,14 @@ ilspymcp -a bin/Debug/MyApp.dll -cg -tk 0x06000005  # 按方法 token 反向定�
 ilspymcp -a bin/Debug/MyApp.dll -ai      # 输出程序集概览（等价 ilspy_assembly_info）
 ilspymcp -a bin/Debug/MyApp.dll -l csi               # 列出实体类型（等价 ilspy_list_types）
 ilspymcp -a bin/Debug/MyApp.dll -l c -nc Box        # 列出类型且名称含 Box（等价 ilspy_list_types 的 nameContains 参数，忽略大小写）
+ilspymcp -a bin/Debug/MyApp.dll -l c -ns ILSpyMcp   # 列出类型且命名空间含 ILSpyMcp（等价 ilspy_list_types 的 namespaceContains 参数，忽略大小写）
 ilspymcp -a bin/Debug/MyApp.dll -o src                 # 反编译写盘（等价 ilspy_decompile_to_dir，单文件输出）
 ilspymcp -a bin/Debug/MyApp.dll -o src -t "MyApp.IWorker,MyApp.Worker"   # 写盘指定多个类型（typeName 逗号分隔，每类型一个文件）
 ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories   # 项目形式反编译写盘（等价 ilspy_decompile_to_project）
 ilspymcp -c                                          # 检查 ilspymcp 是否有新版本（CLI 调试用，无需 -a；MCP 会话握手时自动注入报告）
 ```
 
-常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-mn|--membername`（按名搜索成员）、`-s|--signatures`（成员签名，配合 `-t`）、`-hc|--hierarchy`（继承/接口，配合 `-t`）、`-ai|--assembly-info`（程序集概览，配合 `-a`）、`-i|--indirect`（hierarchy 含全部间接后代，配合 `-hc`）、`-d|--dependencies`（内部引用，配合 `-t`）、`-cg|--callgraph`（方法体调用关系，配合 `-t`）、`-tk|--token`（方法 token，配合 `-cg` 反向定位调用它的成员）、`-x|--external`（同时输出跨程序集外部类型引用，配合 `-d`/`-cg`）、`-l|--list`（类型类别）、`-nc|--namecontains`（类型名子串过滤，配合 `-l`）、`-o|--outputdir`（输出目录，单文件输出）、`-p|--project`（项目形式，需配合 `-o`）、`--nested-directories`（项目形式下按命名空间嵌套目录，仅对 `-p` 生效）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）、`-c|--check`（检查 ilspymcp 是否有新版本）。
+常用参数：`-a|--assembly`（程序集）、`-t|--type`（类型）、`-mn|--membername`（按名搜索成员）、`-s|--signatures`（成员签名，配合 `-t`）、`-hc|--hierarchy`（继承/接口，配合 `-t`）、`-ai|--assembly-info`（程序集概览，配合 `-a`）、`-i|--indirect`（hierarchy 含全部间接后代，配合 `-hc`）、`-d|--dependencies`（内部引用，配合 `-t`）、`-cg|--callgraph`（方法体调用关系，配合 `-t`）、`-tk|--token`（方法 token，配合 `-cg` 反向定位调用它的成员）、`-x|--external`（同时输出跨程序集外部类型引用，配合 `-d`/`-cg`）、`-l|--list`（类型类别）、`-nc|--namecontains`（类型名子串过滤，配合 `-l`）、`-ns|--namespacecontains`（命名空间子串过滤，配合 `-l`）、`-o|--outputdir`（输出目录，单文件输出）、`-p|--project`（项目形式，需配合 `-o`）、`--nested-directories`（项目形式下按命名空间嵌套目录，仅对 `-p` 生效）、`-ln|--lines`（行号分页）、`--timeout`（超时秒数）、`-c|--check`（检查 ilspymcp 是否有新版本）。
 
 ## 工具
 
@@ -81,7 +82,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_decompile_member` | 反编译单个或多个成员的实现体（成员级入口），按成员名子串定位（字段/方法/属性/事件均可，`typeName` 省略时跨程序集搜索）或按 token 定位，输出带行号标注，支持分页拉取；未找到类型时附相近类型名 |
 | `ilspy_decompile_to_dir` | 将程序集反编译写入指定目录（全量或指定类型，`typeName` 支持逗号分隔多个类型批量写盘，单文件输出；未找到的类型在结果中提示） |
 | `ilspy_decompile_to_project` | 以可编译项目形式将整个程序集反编译写入指定目录（每个类型一个源码文件，按命名空间嵌套目录） |
-| `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），支持按类型名子串过滤，输出带行号标注 |
+| `ilspy_list_types` | 列出程序集中的实体类型（class/interface/struct/delegate/enum，可组合指定），支持按类型名/命名空间子串过滤（嵌套类型按最外层声明类型命名空间归属），输出带行号标注 |
 | `ilspy_signature` | 输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图；每行行尾附成员 token，可直接用于 `ilspy_decompile_member` 的 `token` 参数；未找到类型时附相近类型名 |
 | `ilspy_hierarchy` | 输出指定类型的基类链（上溯到 System.Object）、实现的接口与程序集内继承/实现它的类型；`includeIndirect=true` 时后代段含全部间接后代（接口的所有实现者、基类的所有子孙）；未找到类型时附相近类型名 |
 | `ilspy_dependencies` | 输出指定类型成员签名引用的程序集内部类型及反向引用；`includeExternal=true` 时追加输出跨程序集外部类型（带程序集归属，格式 `全名 [程序集名]`）；未找到类型时附相近类型名 |
@@ -116,6 +117,7 @@ ilspymcp -c                                          # 检查 ilspymcp 是否有
 | `ilspy_list_types` | `assembly` | 程序集文件路径 | 是 |
 | | `list` | 实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 `csi` | 是 |
 | | `nameContains` | 类型名子串过滤（忽略大小写，默认空=不过滤），如 `Box` 只返回名称含 Box 的类型；大型程序集按名定位类型免分页 | 否 |
+| | `namespaceContains` | 命名空间子串过滤（忽略大小写，默认空=不过滤），如 `ILSpyMcp` 只返回命名空间含 ILSpyMcp 的类型；嵌套类型按最外层声明类型命名空间归属；可与 `nameContains` 组合使用 | 否 |
 | | `lines` | 按行号范围读取结果，格式 `start-end`；省略返回前约 8 KB | 否 |
 | `ilspy_signature` | `assembly` | 程序集文件路径 | 是 |
 | | `typeName` | 目标类型的全限定名，格式与 list_types 输出一致，例如 `ILSpyMcp.Formatting.OutputFormatter` | 是 |

@@ -24,7 +24,7 @@ public class ILSpyMcpCmdTests
         // -cg -tk 分发走 call_graph 的 token 分支（纯元数据，不触碰 AppServices），应输出 Caller:: 调用点行
         var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var result = await ILSpyMcpCmd.DispatchCliAsync(
-            assembly: TestDataPaths.TestSamplesDll, typeName: "", memberName: "", entityTypes: "", nameContains: "",
+            assembly: TestDataPaths.TestSamplesDll, typeName: "", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: true, external: false, indirect: false, assemblyInfo: false,
             token: token, lines: "", timeoutSeconds: 30, check: false);

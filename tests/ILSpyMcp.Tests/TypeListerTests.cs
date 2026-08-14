@@ -146,6 +146,50 @@ public class TypeListerTests
     }
 
     [Fact]
+    public void 命名空间过滤_命中程序集命名空间()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            // "ILSpyMcp.Samples" 命名空间下应包含 BigClass 等样本类型
+            var names = TypeLister.ListTypes(reader, "c", namespaceContains: "ILSpyMcp.Samples").Select(e => e.FullName).ToList();
+
+            Assert.Contains("ILSpyMcp.Samples.BigClass", names);
+        });
+    }
+
+    [Fact]
+    public void 命名空间过滤_嵌套类型不按全名匹配()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            // 嵌套类型 Namespace 为空，取最外层声明类型命名空间（ILSpyMcp.Samples）；"Container" 是类型名而非命名空间，不应命中
+            var names = TypeLister.ListTypes(reader, "c", namespaceContains: "Container").Select(e => e.FullName).ToList();
+
+            Assert.DoesNotContain("ILSpyMcp.Samples.Container+Inner", names);
+        });
+    }
+
+    [Fact]
+    public void 命名空间过滤_无匹配为空()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            Assert.Empty(TypeLister.ListTypes(reader, "c", namespaceContains: "不存在.Ns"));
+        });
+    }
+
+    [Fact]
+    public void 命名空间过滤_忽略大小写()
+    {
+        WithReader(TestSamplesPath, reader =>
+        {
+            var names = TypeLister.ListTypes(reader, "c", namespaceContains: "ilspymcp.samples").Select(e => e.FullName).ToList();
+
+            Assert.Contains("ILSpyMcp.Samples.BigClass", names);
+        });
+    }
+
+    [Fact]
     public void CountCategories_返回5类别计数_ByCategory总和等于实体数且Total为两者之和()
     {
         WithReader(TestSamplesPath, reader =>

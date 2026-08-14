@@ -96,6 +96,12 @@ public class ILSpyMcpCmd
     public string NameContains { get; } = null!;
 
     /// <summary>
+    /// 按命名空间子串过滤 list_types 结果（忽略大小写，嵌套类型按最外层声明类型命名空间归属），需配合 -l。
+    /// </summary>
+    [Option("-ns|--namespacecontains <substring>", "按命名空间子串过滤 list_types 结果（忽略大小写，嵌套类型按最外层声明类型命名空间归属），需配合 -l。", CommandOptionType.SingleValue)]
+    public string NamespaceContains { get; } = null!;
+
+    /// <summary>
     /// 反编译写入的目录；指定后结果写入磁盘而非标准输出。
     /// </summary>
     [Option("-o|--outputdir <directory>", "反编译写入的目录；指定后结果写入磁盘而非标准输出。", CommandOptionType.SingleValue)]
@@ -140,10 +146,10 @@ public class ILSpyMcpCmd
     /// 命令行分发：-c 走环境自检，-ai 走 assembly_info，-p 走 decompile_to_project，-o 走 decompile_to_dir，
     /// -s/-hc/-d/-cg 分别走 signature/hierarchy/dependencies/call_graph（-i 让 hierarchy 含间接后代、
     /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用，-tk 配合 -cg 按方法 token 反向定位调用点），-l 走 list_types
-    /// （-nc 提供类型名子串过滤），-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// （-nc 提供类型名子串过滤、-ns 提供命名空间子串过滤），-mn 走 decompile_member，否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
-        string assembly, string typeName, string memberName, string entityTypes, string nameContains,
+        string assembly, string typeName, string memberName, string entityTypes, string nameContains, string namespaceContains,
         string outputDir, bool project, bool nestedDirectories, bool signatures, bool hierarchy, bool dependencies, bool callGraph,
         bool external, bool indirect, bool assemblyInfo,
         string token, string lines, int timeoutSeconds, bool check,
@@ -185,7 +191,7 @@ public class ILSpyMcpCmd
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {
-            return await ListTypesTool.ListTypes(assembly, entityTypes, nameContains, lines, cancellationToken);
+            return await ListTypesTool.ListTypes(assembly, entityTypes, nameContains, namespaceContains, lines, cancellationToken);
         }
         if (!string.IsNullOrEmpty(memberName))
         {
@@ -202,7 +208,7 @@ public class ILSpyMcpCmd
         if (!string.IsNullOrEmpty(Assembly) || Check)
         {
             Console.WriteLine(await DispatchCliAsync(
-                Assembly, TypeName, MemberName, EntityTypes, NameContains,
+                Assembly, TypeName, MemberName, EntityTypes, NameContains, NamespaceContains,
                 OutputDir, Project, NestedDirectories, Signatures, Hierarchy, Dependencies, CallGraph,
                 External, Indirect, AssemblyInfo,
                 Token, Lines, TimeoutSeconds, Check));
