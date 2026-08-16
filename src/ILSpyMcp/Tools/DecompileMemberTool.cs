@@ -36,15 +36,15 @@ public static class DecompileMemberTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>匹配成员反编译合并结果（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("反编译指定类型内单个或多个成员的实现体到标准输出（成员级入口，如某个方法体；整类型源码请用 decompile 工具）。按 memberName 子串搜索成员（忽略大小写，适合只知道方法名、不知道完整文档 ID 的场景；默认排除属性/事件访问器）。提供 typeName 时在指定类型内定位；省略 typeName 时跨程序集搜索全部类型（#MEMBER 分隔行带 type 字段标注成员所属类型，供分辨同名成员归属）。typeName 存在歧义（命名空间与嵌套分隔的多种解释均命中）时返回歧义提示并列出候选类型（带 typeToken），可用 typeToken 参数精确定位后再搜索成员。定位到多个成员时全部反编译并合并输出，行号连续，各成员前有 #MEMBER JSON 结构化分隔行（格式 #MEMBER {\"name\":\"...\",\"token\":\"0x...\",\"type\":\"...\"}，token 可直接用于后续反编译）；超过 20 个时仅返回成员签名清单（每行 #MEMBER JSON，含 name/token/signature/type）不反编译。提供 token 参数时直接按元数据 token 反编译单个成员（忽略 memberName，typeName 可不填，清单与分隔行中的 token 均可直接用）；提供 typeToken 参数时按类型定义 token（0x02 开头）精确定位类型（typeName 歧义消歧，typeName 可不填）。结果默认只返回前约 8 KB，可用 lines 参数分页（超限签名清单同样支持）；无匹配时返回相近成员名提示。")]
+    [Description("反编译指定类型内一个或多个成员的实现体（方法级；整类型源码用 decompile）。按 memberName 子串定位（忽略大小写，默认排除属性/事件访问器）：提供 typeName 时仅在该类型内搜索、省略则跨程序集搜索全部类型。多个匹配全部反编译合并输出，各成员前有 #MEMBER JSON 分隔行（含 name/token/type，token 可直接用于本工具）；匹配超过 20 个时仅返回签名清单。提供 token 按元数据 token 直接反编译单个成员（typeName 可不填）；提供 typeToken（0x02 开头）在 typeName 有歧义时精确定位类型后再搜索。无匹配时提示未找到；存在相近成员名时附相近列表。" + ToolParameterText.FooterPagination)]
     public static async Task<string> DecompileMember(
-        [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("在指定类型内搜索成员，全限定类型名，例如 System.Text.Json.JsonSerializer（可选；省略时跨程序集搜索，提供 token 时可不填）")] string typeName = "",
-        [Description("成员名子串（忽略大小写），例如 SerializeAsync；匹配到的成员会全部反编译（必填；提供 token 时可不填）")] string memberName = "",
-        [Description("指定则直接按元数据 token 反编译该成员（非必填，如清单中的 0x06000005）；提供时忽略 memberName，typeName 可不填")] string token = "",
-        [Description("指定则按类型定义 token（0x02 开头，如歧义提示中列出的 token）精确定位类型再搜索成员（非必填；typeName 存在歧义时用于消歧，提供时 typeName 可不填）")] string typeToken = "",
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
-        [Description("本次反编译超时秒数，默认 30；大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
+        [Description(ToolParameterText.AssemblyParam)] string assembly = "",
+        [Description("在指定类型内搜索成员，类型全名（格式与 list_types 输出一致）；省略则跨程序集搜索全部类型（提供 token 时可不填）")] string typeName = "",
+        [Description("成员名子串（忽略大小写），匹配到的成员全部反编译（必填；提供 token 时可不填）")] string memberName = "",
+        [Description("按元数据 token 直接反编译单个成员（取 signature 行尾或 #MEMBER 分隔行的 token，如 0x06000005）；提供时忽略 memberName，typeName 可不填")] string token = "",
+        [Description("按类型定义 token（0x02 开头）精确定位类型后再搜索成员；提供时按 typeToken 定位（忽略 typeName），typeName 存在歧义时可用于消歧")] string typeToken = "",
+        [Description(ToolParameterText.LinesParam)] string lines = "",
+        [Description(ToolParameterText.TimeoutParam)] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（进程内反编译，无安装前置）

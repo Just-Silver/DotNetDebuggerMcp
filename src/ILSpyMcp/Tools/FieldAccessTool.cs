@@ -33,13 +33,13 @@ public static class FieldAccessTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的字段读取/写入/取地址三段或错误提示文本。</returns>
     [McpServerTool]
-    [Description("追踪 .NET 程序集（dll/exe）中指定字段的读取/写入/取地址位置：反向扫描全部类型方法体的字段访问指令（ldfld/ldsfld 读取、stfld/stsfld 写入、ldflda/ldsflda 取地址），输出三段 类型全名::成员签名 来源成员（空段输出（无）占位）。字段定位方式：提供 fieldToken（字段元数据 token，0x04 开头，取 signature 行尾或 #MEMBER 分隔行的 token，如 0x04000005）直接定位；否则按 fieldName 子串搜索（忽略大小写），提供 typeName 时仅在指定类型内搜索，省略时跨程序集搜索全部类型。字段名匹配多个字段时返回 #MEMBER 签名清单（含 name/token/type），取目标字段的 token 再用 fieldToken 参数精确定位。typeName 为类型全名，格式与 list_types 输出一致。适用于追踪字段的读写点、判断字段是否仍被使用。结果默认只返回前约 8 KB，可用 lines 参数按行号范围拉取后续。")]
+    [Description("追踪指定字段在程序集内的读取/写入/取地址位置：反向扫描全部类型的方法体，输出读取/写入/取地址三段来源成员（类型全名::成员签名，空段输出（无））。按 fieldToken（0x04 开头）或 typeName+fieldName（忽略大小写，typeName 省略时跨程序集搜索）定位字段；字段名匹配多个时返回 #MEMBER 签名清单，用其中 token 作 fieldToken 精确定位。适用于判断字段是否仍被使用。" + ToolParameterText.FooterPagination)]
     public static Task<string> FieldAccess(
-        [Description("要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("字段所属类型全名，格式与 list_types 输出一致（命名空间.类型，嵌套类型用 + 或 . 分隔，泛型类型带 arity），例如 ILSpyMcp.Samples.FieldHolder；省略时跨程序集按 fieldName 搜索全部类型（提供 fieldToken 时可不填）")] string typeName = "",
-        [Description("字段名子串（忽略大小写），例如 Data；匹配多个字段时返回 #MEMBER 签名清单，用其中 token 作 fieldToken 精确定位（必填；提供 fieldToken 时可不填）")] string fieldName = "",
-        [Description("字段元数据 token（0x04 开头，取 signature 行尾或 #MEMBER 分隔行的 token，如 0x04000005）：提供时按 token 直接定位字段，忽略 fieldName，typeName 可不填；默认空=按 fieldName 搜索")] string fieldToken = "",
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
+        [Description(ToolParameterText.AssemblyParam)] string assembly = "",
+        [Description("字段所属类型全名（格式与 list_types 输出一致）；省略则跨程序集按 fieldName 搜索全部类型（提供 fieldToken 时可不填）")] string typeName = "",
+        [Description("字段名子串（忽略大小写，必填；提供 fieldToken 时可不填）；匹配多个字段时返回 #MEMBER 签名清单，用其中 token 作 fieldToken 精确定位")] string fieldName = "",
+        [Description("字段元数据 token（0x04 开头，如 0x04000005）：提供时按 token 直接定位字段，忽略 fieldName。默认空=按 fieldName 搜索")] string fieldToken = "",
+        [Description(ToolParameterText.LinesParam)] string lines = "",
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（本工具纯元数据读取）

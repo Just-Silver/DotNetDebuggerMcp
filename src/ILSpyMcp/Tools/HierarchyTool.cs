@@ -33,12 +33,12 @@ public static class HierarchyTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的继承/接口关系或错误提示文本。</returns>
     [McpServerTool]
-    [Description("查询 .NET 程序集（dll/exe）中指定类型的继承/接口关系：输出基类链（上溯到 System.Object）、类型实现的接口、以及程序集内直接继承它或实现其接口的类型；includeIndirect 为 true 时该段扩展为全部间接后代（如接口的所有实现者及其子类、基类的所有子孙），一次调用即可拿全、免递归多次调用（默认 false）。typeName 为类型全名，格式与 list_types 输出一致，可直接复制使用。结果默认只返回前约 8 KB，可用 lines 参数按行号范围拉取后续。")]
+    [Description("输出指定类型的继承/接口关系：基类链（上溯 System.Object）、实现的接口、程序集内直接继承/实现它的类型。includeIndirect=true 时继承段含全部间接后代（接口的所有实现者及其子类、基类的所有子孙），一次拿全。接口的完整使用情况（实现者+调用点+签名引用）请用 interface_usage。未找到类型时返回相近类型名提示。" + ToolParameterText.FooterPagination)]
     public static Task<string> Hierarchy(
-        [Description("要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("类型全名（必填），格式与 list_types 输出一致（命名空间.类型，嵌套类型用 + 或 . 分隔，泛型类型带 arity 如 GenericBox`1），例如 ILSpyMcp.Formatting.OutputFormatter")] string typeName = "",
-        [Description("是否包含间接后代（如接口的所有实现者、基类的所有子孙，默认 false）")] bool includeIndirect = false,
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
+        [Description(ToolParameterText.AssemblyParam)] string assembly = "",
+        [Description("类型全名（必填），格式与 list_types 输出一致")] string typeName = "",
+        [Description(ToolParameterText.IncludeIndirectParam)] bool includeIndirect = false,
+        [Description(ToolParameterText.LinesParam)] string lines = "",
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（本工具纯元数据读取）
@@ -72,11 +72,12 @@ public static class HierarchyTool
                 throw new InvalidOperationException($"类型 {typeName} 无继承与接口信息");
             }
 
-            // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；各段为空时省略对应段落
+            // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；空段输出（无）占位（与 dependencies/call_graph 等
+            // 同族工具占位惯例一致，避免 agent 把「整段省略」误判为输出不完整）
             var outputLines = new List<string>();
-            SectionBuilder.Append(outputLines, "基类链:", baseChain, omitWhenEmpty: true);
-            SectionBuilder.Append(outputLines, "接口:", interfaces, omitWhenEmpty: true);
-            SectionBuilder.Append(outputLines, "程序集内继承/实现此类型的类型:", descendants, omitWhenEmpty: true);
+            SectionBuilder.Append(outputLines, "基类链:", baseChain);
+            SectionBuilder.Append(outputLines, "接口:", interfaces);
+            SectionBuilder.Append(outputLines, "程序集内继承/实现此类型的类型:", descendants);
             return outputLines;
         }, cancellationToken));
     }

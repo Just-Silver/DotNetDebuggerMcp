@@ -198,15 +198,17 @@ public class HierarchyTests
     }
 
     [Fact]
-    public async Task Hierarchy_Empty_无接口无后代_空段整段省略()
+    public async Task Hierarchy_Empty_无接口无后代_空段输出无占位()
     {
         // Empty 为 public class Empty { }（仅默认构造）：无接口实现、无程序集内后代/继承者，但基类链非空（[自身, System.Object]）。
-        // 防回归：hierarchy 空段应整段省略，不得输出裸标题行「接口:」或「程序集内继承/实现此类型的类型:」。
+        // 防回归：hierarchy 空段应与同族工具（dependencies/call_graph/interface_usage）一致输出「（无）」占位，
+        // 不得整段省略——否则 agent 无法区分「确实没有」与「输出不完整」。
         var result = await HierarchyTool.Hierarchy(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Empty");
 
         Assert.Contains("基类链:", result);
-        Assert.DoesNotContain("接口:", result);
-        Assert.DoesNotContain("程序集内继承/实现此类型的类型:", result);
+        Assert.Contains("接口:", result);
+        Assert.Contains("程序集内继承/实现此类型的类型:", result);
+        Assert.Contains("（无）", result);
     }
 
     [Fact]

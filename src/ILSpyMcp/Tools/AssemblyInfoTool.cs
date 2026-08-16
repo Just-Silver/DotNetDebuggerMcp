@@ -26,10 +26,10 @@ public static class AssemblyInfoTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的程序集概览或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出 .NET 程序集（dll/exe）的概览信息：程序集名与版本、目标框架、引用的程序集清单（名+版本）、实体类型计数（class/interface/struct/delegate/enum，过滤编译器生成类型）与入口点。纯元数据读取秒回，适合作为接触陌生程序集的第一站；输出每行带行号标注，默认返回前约 8 KB，可用 lines 参数按行号范围拉取后续。")]
+    [Description("输出程序集概览：程序集名与版本、目标框架、引用的程序集清单（名+版本）、实体类型计数（过滤编译器生成类型）与入口点。元数据读取秒回，适合作为接触陌生程序集的第一站。" + ToolParameterText.FooterPagination)]
     public static Task<string> AssemblyInfo(
-        [Description("要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
+        [Description(ToolParameterText.AssemblyParam)] string assembly = "",
+        [Description(ToolParameterText.LinesParam)] string lines = "",
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（本工具纯元数据读取）

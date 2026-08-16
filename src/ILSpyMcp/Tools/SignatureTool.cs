@@ -26,11 +26,11 @@ public static class SignatureTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的成员签名列表或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作为 API 地图：字段含访问级别与 static/readonly/const，属性合并 get/set 访问器、事件以 event 形式，泛型类型与方法均带泛型参数。typeName 为类型全名，格式与 list_types 输出一致（可直接复制）。结果默认只返回前约 8 KB，可用 lines 参数按行号范围拉取后续。每行行尾为成员元数据 token（如 0x06000005），可直接用于 decompile_member 的 token 参数反编译该成员。")]
+    [Description("输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图。每行行尾附成员 token（如 0x06000005），可直接用于 decompile_member 的 token 参数反编译该成员。未找到类型时返回相近类型名提示。" + ToolParameterText.FooterPagination)]
     public static Task<string> Signature(
-        [Description("要读取成员签名的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("目标类型的全限定名（必填），格式与 list_types 输出一致，例如 ILSpyMcp.Formatting.OutputFormatter")] string typeName = "",
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
+        [Description(ToolParameterText.AssemblyParam)] string assembly = "",
+        [Description("目标类型全名（必填），格式与 list_types 输出一致")] string typeName = "",
+        [Description(ToolParameterText.LinesParam)] string lines = "",
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（本工具纯元数据读取）

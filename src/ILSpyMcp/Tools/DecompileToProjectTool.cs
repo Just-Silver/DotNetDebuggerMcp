@@ -22,12 +22,12 @@ public static class DecompileToProjectTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>写入结果提示或错误提示文本。</returns>
     [McpServerTool]
-    [Description("以可编译项目形式反编译整个程序集到指定目录（每个类型一个源码文件）。结果写入磁盘而非标准输出，不做输出量截断；写盘完成后可直接读取输出目录下的源码文件。nestedDirectories 默认 true（按命名空间嵌套目录）；timeoutSeconds 默认 30。")]
+    [Description("以可编译项目形式反编译整个程序集到指定目录（含项目文件，每个类型一个源码文件，结果写盘不受截断）。nestedDirectories 默认 true（按命名空间嵌套目录输出）。只取个别类型的源码文件请用 decompile_to_dir 的 typeName 参数。")]
     public static async Task<string> DecompileToProject(
-        [Description("要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("输出目录；反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
-        [Description("输出到目录时按命名空间使用嵌套目录（默认 true）")] bool nestedDirectories = true,
-        [Description("本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大")] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
+        [Description(ToolParameterText.AssemblyParam)] string assembly = "",
+        [Description("输出目录，反编译结果写入该目录而非标准输出（必填）")] string outputDir = "",
+        [Description("是否按命名空间嵌套目录输出（默认 true）")] bool nestedDirectories = true,
+        [Description(ToolParameterText.DiskTimeoutParam)] int timeoutSeconds = AppConfig.DefaultTimeoutSeconds,
         CancellationToken cancellationToken = default)
     {
         return await ToolExecutor.RunToDisk(assembly, outputDir, timeoutSeconds, cancellationToken,

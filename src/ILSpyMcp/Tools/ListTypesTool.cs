@@ -40,13 +40,13 @@ public static class ListTypesTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的类型列表或错误提示文本。</returns>
     [McpServerTool]
-    [Description("列出 .NET 程序集（dll/exe）中指定类别的实体类型，默认过滤编译器生成类型（async 状态机、显示类等）。支持 nameContains 按类型名子串过滤、namespaceContains 按命名空间子串过滤（均忽略大小写，嵌套类型按最外层声明类型的命名空间归属），大型程序集按名/命名空间定位类型免分页扫全量。输出每行带行号标注，可直接引用具体行。结果默认只返回前约 8 KB，可用 lines 参数按行号范围拉取后续。")]
+    [Description("列出程序集中指定类别的实体类型，默认过滤编译器生成类型（async 状态机、闭包/显示类等）。支持 nameContains 按类型名子串过滤、namespaceContains 按命名空间子串过滤（均忽略大小写）。输出行首类别前缀（如 class Foo.Bar）可直接复制作 typeName 使用。" + ToolParameterText.FooterPagination)]
     public static Task<string> ListTypes(
-        [Description("要列类型的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("列出程序集中的实体类型：c=class, i=interface, s=struct, d=delegate, e=enum；可组合多个字母同时列出，例如 \"csi\"（必填）")] string list = "",
-        [Description("类型名子串过滤，忽略大小写（默认空=不过滤），例如 \"Box\" 只返回名称含 Box 的类型")] string nameContains = "",
-        [Description("命名空间子串过滤，忽略大小写（默认空=不过滤），嵌套类型按其最外层声明类型的命名空间归属；例如 \"ILSpyMcp\" 只返回命名空间含 ILSpyMcp 的类型")] string namespaceContains = "",
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
+        [Description(ToolParameterText.AssemblyParam)] string assembly = "",
+        [Description("实体类型类别：c=class, i=interface, s=struct, d=delegate, e=enum；可组合多个字母，如 csi（必填）")] string list = "",
+        [Description("类型名子串过滤，忽略大小写（默认空=不过滤）")] string nameContains = "",
+        [Description("命名空间子串过滤，忽略大小写（默认空=不过滤），嵌套类型按最外层声明类型归属")] string namespaceContains = "",
+        [Description(ToolParameterText.LinesParam)] string lines = "",
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（本工具纯元数据读取）

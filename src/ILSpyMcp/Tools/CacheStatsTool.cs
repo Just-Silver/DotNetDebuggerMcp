@@ -46,9 +46,9 @@ public static class CacheStatsTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>缓存状态文本。</returns>
     [McpServerTool]
-    [Description("查看进程内共享缓存的占用状态：当前占用与上限（据此判断缓存大小设置是否合适）、缓存条目数、命中率（会话启动以来的累计命中/未命中），以及每条缓存条目的占用大小（按占用降序，含来源工具、参数签名与程序集），定位缓存大头。无程序集参数，直接调用即可。结果默认只返回前约 8 KB，可用 lines 参数按行号范围拉取条目明细。")]
+    [Description("查看进程内共享缓存状态：当前占用与上限（判断缓存大小设置是否合适）、条目数、命中率（会话累计）、每条目占用大小（按占用降序，含来源工具、参数与程序集）。无程序集参数，直接调用。结果默认只返回前约 8 KB，可用 lines 拉取条目明细。")]
     public static Task<string> CacheStats(
-        [Description("按行号范围读取条目明细，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
+        [Description(ToolParameterText.LinesParam)] string lines = "",
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();

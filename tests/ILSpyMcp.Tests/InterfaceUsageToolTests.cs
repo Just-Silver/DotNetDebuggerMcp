@@ -52,6 +52,16 @@ public class InterfaceUsageToolTests
     }
 
     [Fact]
+    public async Task InterfaceUsage_传class_返回非接口提示()
+    {
+        // Dog 为 class（实现 IAnimal）：interface_usage 仅适用于接口，非接口应返回中文提示而非输出貌似有效的三段伪结果
+        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Dog");
+
+        Assert.Contains("不是接口类型", result);
+        Assert.DoesNotContain("实现该接口的类型:", result);
+    }
+
+    [Fact]
     public async Task InterfaceUsage_缺typeName_返回必填提示()
     {
         var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "");

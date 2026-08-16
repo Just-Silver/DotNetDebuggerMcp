@@ -29,12 +29,12 @@ public static class DependenciesTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的内部类型引用关系或错误提示文本。</returns>
     [McpServerTool]
-    [Description("查询 .NET 程序集（dll/exe）中指定类型的成员签名内部引用：输出其成员签名（方法参数/返回、字段、属性、事件类型）引用的程序集内部类型（跨程序集类型不计），以及程序集内哪些类型的成员签名引用了它（反向扫描全部类型）。includeExternal 为 true 时追加第三段输出成员签名引用的跨程序集外部类型（如 BCL/NuGet，带程序集归属，格式 全名 [程序集名]，默认 false）。不含继承/接口关系——这类关系请用 hierarchy 工具。typeName 为类型全名，格式与 list_types 输出一致，可直接复制使用。结果可能为空（某段无引用时输出（无）占位）；大型程序集反向扫描可能较慢。结果默认只返回前约 8 KB，可用 lines 参数按行号范围拉取后续。")]
+    [Description("输出指定类型成员签名（方法参数/返回、字段、属性、事件类型）引用的程序集内部类型，以及程序集内哪些类型签名引用了它（反向扫描）。includeExternal=true 时追加输出跨程序集外部类型（格式 全名 [程序集名]）。不含继承关系（用 hierarchy）。未找到类型时返回相近类型名提示。" + ToolParameterText.FooterPagination)]
     public static Task<string> Dependencies(
-        [Description("要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）")] string assembly = "",
-        [Description("类型全名（必填），格式与 list_types 输出一致（命名空间.类型，嵌套类型用 + 或 . 分隔，泛型类型带 arity 如 GenericBox`1），例如 ILSpyMcp.Caching.DecompileCache")] string typeName = "",
-        [Description("是否同时输出跨程序集外部类型引用（如 BCL/NuGet，带程序集归属，格式 全名 [程序集名]，默认 false）")] bool includeExternal = false,
-        [Description("按行号范围读取结果，格式 \"start-end\"（1-based 含两端，单次最多约 32 KB），例如 \"200-400\"；缺省返回前约 8 KB")] string lines = "",
+        [Description(ToolParameterText.AssemblyParam)] string assembly = "",
+        [Description("类型全名（必填），格式与 list_types 输出一致")] string typeName = "",
+        [Description(ToolParameterText.IncludeExternalParam)] bool includeExternal = false,
+        [Description(ToolParameterText.LinesParam)] string lines = "",
         CancellationToken cancellationToken = default)
     {
         // 参数校验：assembly 必填且文件存在（本工具纯元数据读取）

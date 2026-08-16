@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`hierarchy` 空段占位（行为变化）**：基类链/接口/继承实现者三段中空段由「整段省略」改为输出 `（无）` 占位，与 `dependencies`/`call_graph`/`interface_usage` 等同族工具一致——此前 agent 无法区分「确实没有」与「输出不完整」，且容易按同族工具占位惯例类比推断而误判
+- **`interface_usage` 非接口校验（行为变化）**：`typeName` 定位到非接口类型时返回中文提示（「X 不是接口类型，interface_usage 仅适用于接口；查类的继承/后代请用 hierarchy」），不再对普通类输出貌似有效的三段伪结果，避免 agent 误以为该类型是接口
+- **工具描述修正（行为无变化）**：`decompile_member` 无匹配提示改为「未找到；存在相近成员名时附相近列表」（此前措辞暗示总有相近名）；`call_chain` 区分两处 `#MEMBER` 清单触发条件——起始方法名多匹配返回清单是「定位步骤（不反编译）」，被调内部成员超过 20 个才仅返回其签名清单；`decompile_member` 的 `typeToken` 说明优先级（提供时按 typeToken 定位、忽略 typeName）；`decompile_to_dir` 注明文件名规则（`{TypeName}.decompiled.cs`，嵌套类型保留 `+` 分隔）；`list_types` 措辞「显示类」改为「闭包/显示类」
+
+## [1.3.0] - 2026-08-17
+
 ### Added
 
 - `list_types` 新增 `namespaceContains` 命名空间子串过滤参数（忽略大小写，默认空=不过滤），嵌套类型按其最外层声明类型的命名空间归属；可与 `nameContains` 组合使用，按命名空间定位类型免分页扫全量；CLI 同步提供 `-ns|--namespacecontains` 选项（配合 `-l`）
@@ -22,6 +30,7 @@
 
 - **输出可靠性标注（行为变化）**：反编译输出含 `//IL_` 未解析注释时，头部提示由定性描述改为计数（「提示: 输出含 N 处 //IL_ 未解析注释（动态类型/异常路径），仅供结构参考」）；`call_graph` 方法体 IL 解码降级（部分方法体因 IL 损坏中止解码）时头部追加「提示: 本结果含 N 处降级解析（部分方法体 IL 未完全解码，仅供结构参考）」（仅新鲜扫描显示，命中缓存不标注），agent 可感知结果的解码完整性
 - **`call_chain` 跨程序集调用链展开（行为变化）**：`includeExternal=true` 时，跨程序集外部调用行保留并展开——可解析的外部调用（主 dll 同目录/CWD/NuGet 缓存/共享框架/GAC，经 UniversalAssemblyResolver 定位磁盘程序集）在外部调用行后缩进输出 `程序集::类型::成员 调用:` + 被调方法体子序列（子序列内跨程序集调用递归展开、防环），解析失败的框架/外部调用在行尾标注 `（未找到程序集 X，视为框架/外部调用未展开）`；纯元数据读取，不加载外部程序集
+- **全部工具描述精简（行为无变化）**：MCP 工具与参数的 `[Description]` 全面压缩并删除实现细节（IL 指令名、UniversalAssemblyResolver/MethodDef/MemberRef 等内部机制、`#MEMBER` 精确 JSON 格式），统一为「做什么 → 定位参数与默认 → 输出要点」三段式；重复的参数描述（`assembly`/`lines`/`timeoutSeconds`/`includeExternal`/`includeIndirect` 及分页页脚）抽为共享模板常量（`Configuration/ToolParameterText.cs`）一处维护；README 工具表与参数表同步重写
 
 ### Fixed
 
