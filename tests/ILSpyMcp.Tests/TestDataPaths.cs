@@ -20,9 +20,8 @@ internal static class TestDataPaths
     public static readonly string TestSamplesExtDll = Locate("tests", "TestData", "ILSpyMcp.TestSamplesExt.dll");
 
     /// <summary>
-    /// 取指定程序集中 Callee 类型首个方法（Help，被 Caller.Run 的 c.Help() 调用）的元数据 token，
-    /// 供 call_graph 的 token 方法级调用点用例。CallGraphToolTests / ILSpyMcpCmdTests / CallGraphExtractorTests 共用，
-    /// 避免三处各存一份逐字符相同的辅助。
+    /// 取指定程序集中 Callee 类型首个方法（Help，被 Caller.Run 的 c.Help() 调用）的元数据 token， 供 call_graph 的 token
+    /// 方法级调用点用例。CallGraphToolTests / ILSpyMcpCmdTests / CallGraphExtractorTests 共用， 避免三处各存一份逐字符相同的辅助。
     /// </summary>
     /// <param name="dll">程序集路径（通常传 <see cref="TestSamplesDll"/>）。</param>
     /// <returns>形如 0x06000005 的元数据 token。</returns>

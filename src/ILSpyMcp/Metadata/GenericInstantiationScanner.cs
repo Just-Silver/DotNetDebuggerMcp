@@ -14,15 +14,15 @@ namespace ILSpyMcp.Metadata;
 public readonly record struct GenericInstantiationResult(IReadOnlyList<string> SignatureHits, IReadOnlyList<string> CallHits);
 
 /// <summary>
-/// 纯元数据「泛型实例化使用点」：反扫程序集全部非编译器生成类型，收集指定泛型类型被以具体类型参数实例化的位置，
-/// 供 generic_instantiations 工具使用。两遍扫描：成员签名遍历（字段/方法/属性/事件签名经
-/// <see cref="ISignatureTypeProvider{TType,TGenericContext}"/> 解码，凡 GENERICINST 的泛型类型等于目标时记录命中）与
-/// 方法体 MethodSpec 调用点（扫描方法体 IL 调用指令，MethodSpec 操作数解码泛型实参，泛型方法的声明类型为目标时记录
-/// 方法级实例化，成员引用 parent 为目标的 TypeSpec 实例化时经签名解码记录类型级实例化）。
-/// 方法体读取经 PEReader.GetMethodBody，IL 解码经共享 IlScanHelper；解码异常安全中止并累计降级计数。
+/// 纯元数据「泛型实例化使用点」：反扫程序集全部非编译器生成类型，收集指定泛型类型被以具体类型参数实例化的位置， 供 generic_instantiations
+/// 工具使用。两遍扫描：成员签名遍历（字段/方法/属性/事件签名经 <see cref="ISignatureTypeProvider{TType,TGenericContext}"/> 解码，凡
+/// GENERICINST 的泛型类型等于目标时记录命中）与 方法体 MethodSpec 调用点（扫描方法体 IL 调用指令，MethodSpec
+/// 操作数解码泛型实参，泛型方法的声明类型为目标时记录 方法级实例化，成员引用 parent 为目标的 TypeSpec 实例化时经签名解码记录类型级实例化）。 方法体读取经
+/// PEReader.GetMethodBody，IL 解码经共享 IlScanHelper；解码异常安全中止并累计降级计数。
 /// </summary>
 public sealed class GenericInstantiationScanner
 {
+    private static readonly GenericContext s_emptyContext = new(Array.Empty<string>(), Array.Empty<string>());
     private readonly PEReader _pe;
     private readonly MetadataReader _reader;
     private readonly RenderingProvider _provider;
@@ -45,8 +45,8 @@ public sealed class GenericInstantiationScanner
     public int AbortedBodies => _abortedBodies;
 
     /// <summary>
-    /// 查找指定泛型类型在程序集内的实例化使用点。目标定位：<see cref="MetadataNaming.FindTypes"/> 精确匹配优先，
-    /// 兜底枚举全部类型按全名/短名（含去 arity 的短名）匹配；多个候选抛歧义异常、无候选抛未找到异常（文本中文）。
+    /// 查找指定泛型类型在程序集内的实例化使用点。目标定位： <see cref="MetadataNaming.FindTypes"/> 精确匹配优先， 兜底枚举全部类型按全名/短名（含去
+    /// arity 的短名）匹配；多个候选抛歧义异常、无候选抛未找到异常（文本中文）。
     /// </summary>
     /// <param name="genericTypeName">用户输入的泛型类型名，可带 arity（GenericBox`1）或省略 arity（GenericBox，短名亦可）。</param>
     /// <returns>两段实例化使用点行列表；程序集内无使用时为空列表。</returns>
@@ -69,8 +69,35 @@ public sealed class GenericInstantiationScanner
     }
 
     /// <summary>
-    /// 目标类型定位：精确匹配（FindTypes，含 +/· 分隔与类别前缀兼容）→ 兜底按全名/去 arity 短名子串匹配；
-    /// 多候选抛歧义提示、无候选抛未找到提示。
+    /// 读取泛型参数句柄集合中每个参数的元数据名（如 T），供签名解码按索引取名字。
+    /// </summary>
+    private static string[] GetGenericParameterNames(MetadataReader reader, GenericParameterHandleCollection handles)
+    {
+        var names = new string[handles.Count];
+        for (var i = 0; i < handles.Count; i++)
+            names[i] = reader.GetString(reader.GetGenericParameter(handles[i]).Name);
+        return names;
+    }
+
+    /// <summary>
+    /// 去掉类型全名中的泛型 arity 后缀（GenericBox`1 → GenericBox，嵌套 Outer`1+Inner`1 → Outer+Inner）， 供目标定位的短名匹配与实例化渲染。
+    /// </summary>
+    private static string StripArity(string fullName)
+    {
+        var sb = new StringBuilder(fullName.Length);
+        for (var i = 0; i < fullName.Length; i++)
+        {
+            if (fullName[i] == '`')
+            {
+                while (i + 1 < fullName.Length && char.IsAsciiDigit(fullName[i + 1])) i++;
+            }
+            else sb.Append(fullName[i]);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 目标类型定位：精确匹配（FindTypes，含 +/· 分隔与类别前缀兼容）→ 兜底按全名/去 arity 短名子串匹配； 多候选抛歧义提示、无候选抛未找到提示。
     /// </summary>
     private TypeDefinitionHandle ResolveTarget(string input)
     {
@@ -140,9 +167,11 @@ public sealed class GenericInstantiationScanner
                     case HandleKind.TypeDefinition:
                         _provider.GetTypeFromDefinition(_reader, (TypeDefinitionHandle)evt.Type, 0);
                         break;
+
                     case HandleKind.TypeReference:
                         _provider.GetTypeFromReference(_reader, (TypeReferenceHandle)evt.Type, 0);
                         break;
+
                     case HandleKind.TypeSpecification:
                         _reader.GetTypeSpecification((TypeSpecificationHandle)evt.Type).DecodeSignature(_provider, memberCtx);
                         break;
@@ -220,9 +249,8 @@ public sealed class GenericInstantiationScanner
     }
 
     /// <summary>
-    /// 调用 token 解析：MethodDef 声明类型为非实例化 TypeDef、非泛型方法调用不触发实例化，跳过；MemberRef 走 parent 解析
-    /// （TypeSpec 父类型解码触发类型级实例化捕获）；MethodSpec 解码泛型实参（方法级与实参内类型级实例化）；
-    /// calli 的函数指针签名解码实参/返回类型中的实例化。
+    /// 调用 token 解析：MethodDef 声明类型为非实例化 TypeDef、非泛型方法调用不触发实例化，跳过；MemberRef 走 parent 解析 （TypeSpec
+    /// 父类型解码触发类型级实例化捕获）；MethodSpec 解码泛型实参（方法级与实参内类型级实例化）； calli 的函数指针签名解码实参/返回类型中的实例化。
     /// </summary>
     private void ResolveCall(int rawToken, string targetName, string targetBase)
     {
@@ -232,9 +260,11 @@ public sealed class GenericInstantiationScanner
             case HandleKind.MemberReference:
                 ResolveMemberParent(_reader.GetMemberReference((MemberReferenceHandle)handle).Parent);
                 break;
+
             case HandleKind.MethodSpecification:
                 ResolveMethodSpec(_reader.GetMethodSpecification((MethodSpecificationHandle)handle), targetName, targetBase);
                 break;
+
             case HandleKind.StandaloneSignature:
                 ResolveSignatureToken((StandaloneSignatureHandle)handle);
                 break;
@@ -242,9 +272,8 @@ public sealed class GenericInstantiationScanner
     }
 
     /// <summary>
-    /// 解析 MethodSpec：泛型方法实参解码（spec.DecodeSignature 触发实参内类型级实例化捕获，返回实参列表供方法级拼接）；
-    /// spec.Method 为 MethodDef 且声明类型为目标 → 记录 方法名&lt;实参&gt;；为 MemberRef 且 parent 为目标的 TypeSpec 实例化 →
-    /// 同样记录方法级实例化（跨程序集/经基类接口调用场景）。
+    /// 解析 MethodSpec：泛型方法实参解码（spec.DecodeSignature 触发实参内类型级实例化捕获，返回实参列表供方法级拼接）； spec.Method 为
+    /// MethodDef 且声明类型为目标 → 记录 方法名&lt;实参&gt;；为 MemberRef 且 parent 为目标的 TypeSpec 实例化 → 同样记录方法级实例化（跨程序集/经基类接口调用场景）。
     /// </summary>
     private void ResolveMethodSpec(MethodSpecification spec, string targetName, string targetBase)
     {
@@ -257,6 +286,7 @@ public sealed class GenericInstantiationScanner
                     CaptureMethodInstantiation(_reader.GetString(methodDef.Name), spec);
                 }
                 break;
+
             case HandleKind.MemberReference:
                 var memberRef = _reader.GetMemberReference((MemberReferenceHandle)spec.Method);
                 ResolveMemberParent(memberRef.Parent);
@@ -271,9 +301,9 @@ public sealed class GenericInstantiationScanner
     }
 
     /// <summary>
-    /// 解码 MethodSpec 泛型实参并记录方法级实例化行（如 Echo&lt;int&gt;）。实参本身为目标的实例化（如 Echo&lt;GenericBox&lt;string&gt;&gt;）
-    /// 已由 spec.DecodeSignature 经 Provider 捕获到 _capture。任一实参含类型参数（泛型方法/类型内以类型参数调用 Echo&lt;T&gt;）
-    /// 不是具体化实例化，跳过方法级捕获（实参内的类型级实例化仍保留）。
+    /// 解码 MethodSpec 泛型实参并记录方法级实例化行（如 Echo&lt;int&gt;）。实参本身为目标的实例化（如
+    /// Echo&lt;GenericBox&lt;string&gt;&gt;） 已由 spec.DecodeSignature 经 Provider 捕获到
+    /// _capture。任一实参含类型参数（泛型方法/类型内以类型参数调用 Echo&lt;T&gt;） 不是具体化实例化，跳过方法级捕获（实参内的类型级实例化仍保留）。
     /// </summary>
     private void CaptureMethodInstantiation(string methodName, MethodSpecification spec)
     {
@@ -339,8 +369,7 @@ public sealed class GenericInstantiationScanner
     }
 
     /// <summary>
-    /// 成员/方法扫描有捕获命中时，渲染成员签名（SignatureRenderer 口径，与 signature 工具一致）后组装使用点行
-    /// 类型全名::成员签名 → 实例化。
+    /// 成员/方法扫描有捕获命中时，渲染成员签名（SignatureRenderer 口径，与 signature 工具一致）后组装使用点行 类型全名::成员签名 → 实例化。
     /// </summary>
     private void EmitHits(HashSet<string> hits, string typeFullName, TypeDefinition type, EntityHandle memberHandle, HashSet<string> capture)
     {
@@ -353,56 +382,24 @@ public sealed class GenericInstantiationScanner
     }
 
     /// <summary>
-    /// 读取泛型参数句柄集合中每个参数的元数据名（如 T），供签名解码按索引取名字。
-    /// </summary>
-    private static string[] GetGenericParameterNames(MetadataReader reader, GenericParameterHandleCollection handles)
-    {
-        var names = new string[handles.Count];
-        for (var i = 0; i < handles.Count; i++)
-            names[i] = reader.GetString(reader.GetGenericParameter(handles[i]).Name);
-        return names;
-    }
-
-    /// <summary>
-    /// 去掉类型全名中的泛型 arity 后缀（GenericBox`1 → GenericBox，嵌套 Outer`1+Inner`1 → Outer+Inner），
-    /// 供目标定位的短名匹配与实例化渲染。
-    /// </summary>
-    private static string StripArity(string fullName)
-    {
-        var sb = new StringBuilder(fullName.Length);
-        for (var i = 0; i < fullName.Length; i++)
-        {
-            if (fullName[i] == '`')
-            {
-                while (i + 1 < fullName.Length && char.IsAsciiDigit(fullName[i + 1])) i++;
-            }
-            else sb.Append(fullName[i]);
-        }
-        return sb.ToString();
-    }
-
-    /// <summary>
     /// 泛型参数上下文：类型级与方法级泛型参数名数组，签名解码时按索引取名字（与 SignatureRenderer 一致）。
     /// </summary>
     private readonly record struct GenericContext(string[] TypeParameters, string[] MethodParameters);
 
-    private static readonly GenericContext s_emptyContext = new(Array.Empty<string>(), Array.Empty<string>());
-
     /// <summary>
     /// 签名解码器：既渲染签名的类型编码（C# 关键字/全名/泛型实例化/数组/指针等），又在泛型类型等于目标且实参为具体类型
-    /// （不含类型参数）时捕获实例化到当前集合（成员签名遍历与方法体扫描共用，每次解码前清空）。捕获判定用带 arity 的
-    /// 泛型类型全名与 targetName 直比 + 任一实参含类型参数标记即不算具体化，渲染则去掉 arity（GenericBox`1&lt;int&gt; → GenericBox&lt;int&gt;）。
+    /// （不含类型参数）时捕获实例化到当前集合（成员签名遍历与方法体扫描共用，每次解码前清空）。捕获判定用带 arity 的 泛型类型全名与 targetName 直比 +
+    /// 任一实参含类型参数标记即不算具体化，渲染则去掉 arity（GenericBox`1&lt;int&gt; → GenericBox&lt;int&gt;）。
     /// </summary>
     private sealed class RenderingProvider : ISignatureTypeProvider<string, GenericContext>
     {
+        // 类型参数在渲染串内的标记（PUA 区字符，不可能出现在合法类型名/元数据名中）：泛型实例化捕获按「任一实参的
+        // 渲染串含类型参数标记」判定是否具体化，标记随组合类型（数组/指针/byref/嵌套实例化）向上传播，避免依赖 last-element 标志在嵌套部分具体化（GenericBox<SomeGeneric<T>>）与泛型方法内以类型参数调用（Echo<T>）时误判
+        internal const char TypeParamMarker = '\uE000';
+
         private readonly MetadataReader _reader;
         private string _targetName = "";
         private HashSet<string>? _sink;
-
-        // 类型参数在渲染串内的标记（PUA 区字符，不可能出现在合法类型名/元数据名中）：泛型实例化捕获按「任一实参的
-        // 渲染串含类型参数标记」判定是否具体化，标记随组合类型（数组/指针/byref/嵌套实例化）向上传播，避免依赖
-        // last-element 标志在嵌套部分具体化（GenericBox<SomeGeneric<T>>）与泛型方法内以类型参数调用（Echo<T>）时误判
-        internal const char TypeParamMarker = '\uE000';
 
         public RenderingProvider(MetadataReader reader) => _reader = reader;
 
@@ -451,8 +448,7 @@ public sealed class GenericInstantiationScanner
         public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments)
         {
             var rendered = $"{StripArity(genericType)}<{string.Join(", ", typeArguments)}>";
-            // 泛型实参含类型参数（如 GenericBox<T> 自引用、GenericBox<T0>、嵌套部分具体化 GenericBox<SomeGeneric<T>>）时
-            // 不是具体化实例化，不捕获；判定按「任一实参渲染串含类型参数标记」，嵌套实参的标记已随组合向上传播
+            // 泛型实参含类型参数（如 GenericBox<T> 自引用、GenericBox<T0>、嵌套部分具体化 GenericBox<SomeGeneric<T>>）时 不是具体化实例化，不捕获；判定按「任一实参渲染串含类型参数标记」，嵌套实参的标记已随组合向上传播
             if (genericType == _targetName && _sink is not null && !typeArguments.Any(a => a.Contains(TypeParamMarker)))
                 _sink.Add(rendered);
             return rendered;

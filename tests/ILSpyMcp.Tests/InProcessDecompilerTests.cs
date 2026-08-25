@@ -5,16 +5,11 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// 进程内反编译服务用例：DecompileType 命中/未找到、DecompileMember token 非法/越界、DecompileWholeModule、
-/// DecompileToDir 单文件布局、写盘文件名与文件计数、DecompileToProject 写盘、RunWithTimeoutAsync 正常/超时/取消语义。
+/// 进程内反编译服务用例：DecompileType 命中/未找到、DecompileMember token 非法/越界、DecompileWholeModule、 DecompileToDir
+/// 单文件布局、写盘文件名与文件计数、DecompileToProject 写盘、RunWithTimeoutAsync 正常/超时/取消语义。
 /// </summary>
 public class InProcessDecompilerTests
 {
-    private static string NewTempDir()
-    {
-        return Path.Combine(Path.GetTempPath(), "ilspymcp-inproc-" + Guid.NewGuid().ToString("N"));
-    }
-
     [Fact]
     public void DecompileType_命中BigClass_包含类声明与方法()
     {
@@ -332,9 +327,8 @@ public class InProcessDecompilerTests
     [Fact]
     public async Task RunWithTimeoutAsync_取消令牌传入work_work收到取消信号返回取消结果()
     {
-        // 验证令牌接线而非空跑：work 在收到取消信号前阻塞在 WaitOne，取消后置位 workSawSignal 并返回取消结果。
-        // 若令牌未真正传入 work（接线为空跑/误传 None），WaitOne 只能靠 30 秒兜底超时才返回，
-        // workSawSignal 在 5 秒等待窗口内不可能置位，断言失败；反之则证明 work 确实收到了取消信号。
+        // 验证令牌接线而非空跑：work 在收到取消信号前阻塞在 WaitOne，取消后置位 workSawSignal 并返回取消结果。 若令牌未真正传入 work（接线为空跑/误传
+        // None），WaitOne 只能靠 30 秒兜底超时才返回， workSawSignal 在 5 秒等待窗口内不可能置位，断言失败；反之则证明 work 确实收到了取消信号。
         using var cts = new CancellationTokenSource();
         var workSawSignal = new ManualResetEventSlim();
         var task = InProcessDecompiler.RunWithTimeoutAsync(
@@ -357,9 +351,9 @@ public class InProcessDecompilerTests
     }
 
     /// <summary>
-    /// IsErrorResult 必须识别全部错误提示形态（超限/未找到/非法 token/越界 token/反编译失败兜底），且不误判正常反编译文本。
-    /// 超限分支受 <see cref="ILSpyMcp.Configuration.AppConfig.MaxOutputBytes"/>（64MB 字符）限制难以在管道层直接触发，此处以真实超限提示文本
-    /// 覆盖 IsErrorResult 对超限形态的判定（管道层仅依赖本判定做「错误不入缓存」决策）。
+    /// IsErrorResult 必须识别全部错误提示形态（超限/未找到/非法 token/越界 token/反编译失败兜底），且不误判正常反编译文本。 超限分支受 <see
+    /// cref="ILSpyMcp.Configuration.AppConfig.MaxOutputBytes"/>（64MB 字符）限制难以在管道层直接触发，此处以真实超限提示文本 覆盖
+    /// IsErrorResult 对超限形态的判定（管道层仅依赖本判定做「错误不入缓存」决策）。
     /// </summary>
     [Theory]
     [InlineData("反编译输出超过上限，建议改用 decompile_to_dir", true)]
@@ -378,6 +372,11 @@ public class InProcessDecompilerTests
     public void IsErrorResult_识别全部错误提示形态_不误判反编译结果(string text, bool isError)
     {
         Assert.Equal(isError, InProcessDecompiler.IsErrorResult(text));
+    }
+
+    private static string NewTempDir()
+    {
+        return Path.Combine(Path.GetTempPath(), "ilspymcp-inproc-" + Guid.NewGuid().ToString("N"));
     }
 
     /// <summary>

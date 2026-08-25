@@ -12,8 +12,8 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// decompile_member 工具 token 参数路径：按元数据 token 直接反编译单个成员，以及非法 token 的中文提示。
-/// 串行化使用 AppServices 静态状态（与 CheckToolTests/ToolPipelineTests 同一集合）。
+/// decompile_member 工具 token 参数路径：按元数据 token 直接反编译单个成员，以及非法 token 的中文提示。 串行化使用 AppServices 静态状态（与
+/// CheckToolTests/ToolPipelineTests 同一集合）。
 /// </summary>
 [Collection("AppServices")]
 public class DecompileMemberToolTests
@@ -160,8 +160,7 @@ public class DecompileMemberToolTests
             var dll = WriteAmbiguousAssembly(dir);
             try
             {
-                // 顶层 Holder.Item（归一化同名对中的第二个候选）的 token 作 typeToken → 在该类型内搜索成员；
-                // 断言消歧后定位到该类型（未找到提示用解析出的类型全名），且不再有歧义提示
+                // 顶层 Holder.Item（归一化同名对中的第二个候选）的 token 作 typeToken → 在该类型内搜索成员； 断言消歧后定位到该类型（未找到提示用解析出的类型全名），且不再有歧义提示
                 var typeToken = $"0x{TopItemToken(dll):x8}";
 
                 var result = await DecompileMemberTool.DecompileMember(dll, "", "NoSuch", "", typeToken);
@@ -178,59 +177,6 @@ public class DecompileMemberToolTests
         {
             AppServices.ResetForTest();
         }
-    }
-
-    /// <summary>
-    /// 用 MetadataBuilder 构造一个含归一化同名类型对的最小程序集：命名空间 Probe.Ambiguity 的 Holder（嵌套 Item，
-    /// 全名 Probe.Ambiguity.Holder+Item）与命名空间 Probe.Ambiguity.Holder 的顶层 Item（全名 Probe.Ambiguity.Holder.Item），
-    /// 两者 + 归一化为 . 后均为 Probe.Ambiguity.Holder.Item，构成真实歧义输入（C# 源码无法表达该碰撞）。
-    /// </summary>
-    private static string WriteAmbiguousAssembly(string dir)
-    {
-        var mb = new MetadataBuilder();
-        mb.AddAssembly(mb.GetOrAddString("Probe.Ambiguous"), new Version(1, 0, 0, 0), default, default, (AssemblyFlags)0, AssemblyHashAlgorithm.Sha1);
-        mb.AddModule(0, mb.GetOrAddString("Probe.Ambiguous.dll"), mb.GetOrAddGuid(Guid.NewGuid()), default, default);
-        var asmRef = mb.AddAssemblyReference(mb.GetOrAddString("System.Runtime"), new Version(10, 0, 0, 0), default, default, (AssemblyFlags)0, default);
-        var objRef = mb.AddTypeReference(asmRef, default, mb.GetOrAddString("Object"));
-
-        var holder = mb.AddTypeDefinition(TypeAttributes.Public | TypeAttributes.Class,
-            mb.GetOrAddString("Probe.Ambiguity"), mb.GetOrAddString("Holder"), objRef,
-            MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
-        var nestedItem = mb.AddTypeDefinition(TypeAttributes.NestedPublic | TypeAttributes.Class,
-            default, mb.GetOrAddString("Item"), objRef,
-            MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
-        mb.AddNestedType(nestedItem, holder);
-        var topItem = mb.AddTypeDefinition(TypeAttributes.Public | TypeAttributes.Class,
-            mb.GetOrAddString("Probe.Ambiguity.Holder"), mb.GetOrAddString("Item"), objRef,
-            MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
-
-        var root = new MetadataRootBuilder(mb);
-        var peBuilder = new ManagedPEBuilder(PEHeaderBuilder.CreateLibraryHeader(), root, new BlobBuilder());
-        var blob = new BlobBuilder();
-        peBuilder.Serialize(blob);
-        var path = Path.Combine(dir, "Probe.Ambiguous.dll");
-        using (var fs = File.Create(path))
-        {
-            blob.WriteContentTo(fs);
-        }
-        return path;
-    }
-
-    /// <summary>
-    /// 取构造程序集中顶层 Item（归一化同名对第二个候选）的类型定义 token。
-    /// </summary>
-    private static int TopItemToken(string dll)
-    {
-        using var fs = File.OpenRead(dll);
-        using var pe = new PEReader(fs);
-        var reader = pe.GetMetadataReader();
-        foreach (var handle in reader.TypeDefinitions)
-        {
-            var type = reader.GetTypeDefinition(handle);
-            if (reader.GetString(type.Name) != "Item") continue;
-            if (!type.IsNested) return MetadataTokens.GetToken(handle);
-        }
-        throw new InvalidOperationException("未找到顶层 Item 类型");
     }
 
     [Fact]
@@ -279,8 +225,8 @@ public class DecompileMemberToolTests
         AppServices.ConfigureForTest();
         try
         {
-            // "e" 跨程序集匹配约 39 个成员（>20）触发超限签名清单，且覆盖字段/属性/事件：
-            // Members 类型的 Name 字段（0x04000003）、Changed 事件（0x14000001）与 Props 的 PrivateSet 属性（0x17000006）均在清单内
+            // "e" 跨程序集匹配约 39 个成员（>20）触发超限签名清单，且覆盖字段/属性/事件： Members 类型的 Name 字段（0x04000003）、Changed
+            // 事件（0x14000001）与 Props 的 PrivateSet 属性（0x17000006）均在清单内
             var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "e");
 
             Assert.Contains("超过上限", result);
@@ -308,5 +254,58 @@ public class DecompileMemberToolTests
         {
             AppServices.ResetForTest();
         }
+    }
+
+    /// <summary>
+    /// 用 MetadataBuilder 构造一个含归一化同名类型对的最小程序集：命名空间 Probe.Ambiguity 的 Holder（嵌套 Item， 全名
+    /// Probe.Ambiguity.Holder+Item）与命名空间 Probe.Ambiguity.Holder 的顶层 Item（全名
+    /// Probe.Ambiguity.Holder.Item）， 两者 + 归一化为 . 后均为 Probe.Ambiguity.Holder.Item，构成真实歧义输入（C# 源码无法表达该碰撞）。
+    /// </summary>
+    private static string WriteAmbiguousAssembly(string dir)
+    {
+        var mb = new MetadataBuilder();
+        mb.AddAssembly(mb.GetOrAddString("Probe.Ambiguous"), new Version(1, 0, 0, 0), default, default, (AssemblyFlags)0, AssemblyHashAlgorithm.Sha1);
+        mb.AddModule(0, mb.GetOrAddString("Probe.Ambiguous.dll"), mb.GetOrAddGuid(Guid.NewGuid()), default, default);
+        var asmRef = mb.AddAssemblyReference(mb.GetOrAddString("System.Runtime"), new Version(10, 0, 0, 0), default, default, (AssemblyFlags)0, default);
+        var objRef = mb.AddTypeReference(asmRef, default, mb.GetOrAddString("Object"));
+
+        var holder = mb.AddTypeDefinition(TypeAttributes.Public | TypeAttributes.Class,
+            mb.GetOrAddString("Probe.Ambiguity"), mb.GetOrAddString("Holder"), objRef,
+            MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
+        var nestedItem = mb.AddTypeDefinition(TypeAttributes.NestedPublic | TypeAttributes.Class,
+            default, mb.GetOrAddString("Item"), objRef,
+            MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
+        mb.AddNestedType(nestedItem, holder);
+        var topItem = mb.AddTypeDefinition(TypeAttributes.Public | TypeAttributes.Class,
+            mb.GetOrAddString("Probe.Ambiguity.Holder"), mb.GetOrAddString("Item"), objRef,
+            MetadataTokens.FieldDefinitionHandle(1), MetadataTokens.MethodDefinitionHandle(1));
+
+        var root = new MetadataRootBuilder(mb);
+        var peBuilder = new ManagedPEBuilder(PEHeaderBuilder.CreateLibraryHeader(), root, new BlobBuilder());
+        var blob = new BlobBuilder();
+        peBuilder.Serialize(blob);
+        var path = Path.Combine(dir, "Probe.Ambiguous.dll");
+        using (var fs = File.Create(path))
+        {
+            blob.WriteContentTo(fs);
+        }
+        return path;
+    }
+
+    /// <summary>
+    /// 取构造程序集中顶层 Item（归一化同名对第二个候选）的类型定义 token。
+    /// </summary>
+    private static int TopItemToken(string dll)
+    {
+        using var fs = File.OpenRead(dll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(handle);
+            if (reader.GetString(type.Name) != "Item") continue;
+            if (!type.IsNested) return MetadataTokens.GetToken(handle);
+        }
+        throw new InvalidOperationException("未找到顶层 Item 类型");
     }
 }

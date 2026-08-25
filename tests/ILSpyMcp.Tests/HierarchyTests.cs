@@ -13,37 +13,6 @@ public class HierarchyTests
     // 主项目程序集（作为测试依赖复制到 bin），含 class/struct/enum 等；纯元数据读取
     private static readonly string AssemblyPath = typeof(OutputFormatter).Assembly.Location;
 
-    /// <summary>
-    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
-    /// </summary>
-    private sealed class MetadataScope : IDisposable
-    {
-        private readonly FileStream _fs;
-        private readonly PEReader _pe;
-
-        public MetadataScope(string path)
-        {
-            _fs = File.OpenRead(path);
-            _pe = new PEReader(_fs);
-            Reader = _pe.GetMetadataReader();
-        }
-
-        public MetadataReader Reader { get; }
-
-        public void Dispose()
-        {
-            _pe.Dispose();
-            _fs.Dispose();
-        }
-    }
-
-    private static TypeDefinition Resolve(MetadataReader reader, string typeFullName)
-    {
-        var handle = MetadataNaming.FindType(reader, typeFullName);
-        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
-        return reader.GetTypeDefinition(handle!.Value);
-    }
-
     [Fact]
     public void GetInterfaces_Dog_含IAnimal()
     {
@@ -201,8 +170,8 @@ public class HierarchyTests
     public async Task Hierarchy_Empty_无接口无后代_空段输出无占位()
     {
         // Empty 为 public class Empty { }（仅默认构造）：无接口实现、无程序集内后代/继承者，但基类链非空（[自身, System.Object]）。
-        // 防回归：hierarchy 空段应与同族工具（dependencies/call_graph/interface_usage）一致输出「（无）」占位，
-        // 不得整段省略——否则 agent 无法区分「确实没有」与「输出不完整」。
+        // 防回归：hierarchy 空段应与同族工具（dependencies/call_graph/interface_usage）一致输出「（无）」占位， 不得整段省略——否则
+        // agent 无法区分「确实没有」与「输出不完整」。
         var result = await HierarchyTool.Hierarchy(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Empty");
 
         Assert.Contains("基类链:", result);
@@ -214,8 +183,8 @@ public class HierarchyTests
     [Fact]
     public void GetDescendantsIncludingIndirect_无间接后代_与直接后代一致()
     {
-        // AbstractShape → Circle → SealedCircle：AbstractShape 的间接后代含 SealedCircle（间接），
-        // 与 GetDescendants（直接）不一致；而 Circle 无更深的链，间接=直接
+        // AbstractShape → Circle → SealedCircle：AbstractShape 的间接后代含 SealedCircle（间接）， 与
+        // GetDescendants（直接）不一致；而 Circle 无更深的链，间接=直接
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
         var shape = Resolve(scope.Reader, "ILSpyMcp.Samples.AbstractShape");
         var shapeFullName = MetadataNaming.FullName(scope.Reader, shape);
@@ -227,5 +196,36 @@ public class HierarchyTests
         var indirectCircle = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, circle, circleFullName);
         var directCircle = Hierarchy.GetDescendants(scope.Reader, circle, circleFullName);
         Assert.Equal(directCircle.OrderBy(n => n), indirectCircle.OrderBy(n => n));
+    }
+
+    private static TypeDefinition Resolve(MetadataReader reader, string typeFullName)
+    {
+        var handle = MetadataNaming.FindType(reader, typeFullName);
+        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
+        return reader.GetTypeDefinition(handle!.Value);
+    }
+
+    /// <summary>
+    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
+    /// </summary>
+    private sealed class MetadataScope : IDisposable
+    {
+        private readonly FileStream _fs;
+        private readonly PEReader _pe;
+
+        public MetadataScope(string path)
+        {
+            _fs = File.OpenRead(path);
+            _pe = new PEReader(_fs);
+            Reader = _pe.GetMetadataReader();
+        }
+
+        public MetadataReader Reader { get; }
+
+        public void Dispose()
+        {
+            _pe.Dispose();
+            _fs.Dispose();
+        }
     }
 }

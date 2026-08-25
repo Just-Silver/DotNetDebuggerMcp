@@ -17,9 +17,6 @@ public class ToolExecutorTests : IDisposable
         File.Delete(_xDll);
     }
 
-    private static async Task<string> Probe(string assembly, string outputDir, int timeout, Func<string, string, CancellationToken, string> work)
-        => await ToolExecutor.RunToDisk(assembly, outputDir, timeout, default, work);
-
     [Fact]
     public async Task 非法assembly_返回提示且不调用work()
     {
@@ -54,4 +51,7 @@ public class ToolExecutorTests : IDisposable
         Assert.StartsWith("done:", r);
         Assert.Contains($"done:{Path.GetFullPath("x.dll")}:{Path.GetFullPath("out")}", r);
     }
+
+    private static async Task<string> Probe(string assembly, string outputDir, int timeout, Func<string, string, CancellationToken, string> work)
+                        => await ToolExecutor.RunToDisk(assembly, outputDir, timeout, default, work);
 }

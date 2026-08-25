@@ -1,9 +1,10 @@
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
 using ILSpyMcp.Decompiler;
 using ILSpyMcp.Formatting;
 using ILSpyMcp.Pipeline;
 using ILSpyMcp.Validation;
+
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 
 namespace ILSpyMcp.Services;
 
@@ -33,10 +34,10 @@ internal static class ToolExecutor
     }
 
     /// <summary>
-    /// 写盘工具共享执行辅助：统一「参数校验 + 路径解析 + 超时提示 + RunWithTimeoutAsync」样板，供
-    /// decompile_to_dir / decompile_to_project 复用，避免各工具重复手写同一段校验与超时包装并在细节上漂移。
-    /// 依次校验 assembly/outputDir/timeoutSeconds，失败返回对应中文提示；随后解析程序集绝对路径与输出目录
-    /// 绝对路径（相对当前工作目录），转调 <see cref="InProcessDecompiler.RunWithTimeoutAsync"/> 执行 work。
+    /// 写盘工具共享执行辅助：统一「参数校验 + 路径解析 + 超时提示 + RunWithTimeoutAsync」样板，供 decompile_to_dir /
+    /// decompile_to_project 复用，避免各工具重复手写同一段校验与超时包装并在细节上漂移。 依次校验
+    /// assembly/outputDir/timeoutSeconds，失败返回对应中文提示；随后解析程序集绝对路径与输出目录 绝对路径（相对当前工作目录），转调 <see
+    /// cref="InProcessDecompiler.RunWithTimeoutAsync"/> 执行 work。
     /// </summary>
     /// <param name="assembly">程序集路径（必填，相对或绝对）。</param>
     /// <param name="outputDir">输出目录（必填，相对或绝对；目录不存在允许，写盘时自动创建）。</param>
@@ -71,10 +72,10 @@ internal static class ToolExecutor
         => (await AppServices.Pipeline.ExecuteMergedAsync(commands, lines, timeout, cancellationToken, context)).Text;
 
     /// <summary>
-    /// 元数据工具经共享缓存的执行辅助：与反编译工具共用同一个全局缓存（<see cref="AppServices.Cache"/>）。
-    /// 缓存命中直接格式化返回（头部标注「缓存: 命中」）；未命中则调用 produce 生成纯行列表后写缓存。
-    /// produce 抛 <see cref="InvalidOperationException"/>（未找到类型/空结果提示）或 IO 类异常时返回提示文本、不入缓存
-    /// （与反编译路径「错误提示不入缓存」同规则，同 key 可重试）。元数据秒回，不做并发单飞。
+    /// 元数据工具经共享缓存的执行辅助：与反编译工具共用同一个全局缓存（ <see cref="AppServices.Cache"/>）。 缓存命中直接格式化返回（头部标注「缓存:
+    /// 命中」）；未命中则调用 produce 生成纯行列表后写缓存。 produce 抛 <see
+    /// cref="InvalidOperationException"/>（未找到类型/空结果提示）或 IO 类异常时返回提示文本、不入缓存 （与反编译路径「错误提示不入缓存」同规则，同
+    /// key 可重试）。元数据秒回，不做并发单飞。
     /// </summary>
     /// <param name="assemblyFull">程序集绝对路径。</param>
     /// <param name="signature">缓存签名（工具前缀 + 参数，经 \u001F 拼接，与反编译签名互不冲突）。</param>
@@ -82,8 +83,9 @@ internal static class ToolExecutor
     /// <param name="context">头部信息块上下文。</param>
     /// <param name="produce">生成纯行列表的委托；错误/未找到以 <see cref="InvalidOperationException"/> 抛提示文本。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <param name="degradedProvider">降级解析计数委托：新鲜扫描（缓存未命中）成功后在结果入缓存前调用，取本次扫描降级解析的方法体计数
-    /// （>0 时经 context.Degraded 注入头部提示）；缓存命中分支不调用，仅新鲜扫描显示。</param>
+    /// <param name="degradedProvider">
+    /// 降级解析计数委托：新鲜扫描（缓存未命中）成功后在结果入缓存前调用，取本次扫描降级解析的方法体计数 （&gt;0 时经 context.Degraded 注入头部提示）；缓存命中分支不调用，仅新鲜扫描显示。
+    /// </param>
     /// <returns>格式化后的元数据结果或错误提示文本。</returns>
     public static string RunMetadata(string assemblyFull, string signature, string lines, FormatContext context,
         Func<CancellationToken, List<string>> produce, CancellationToken cancellationToken, Func<int>? degradedProvider = null)
@@ -120,14 +122,17 @@ internal static class ToolExecutor
     }
 
     /// <summary>
-    /// 元数据工具经共享缓存且自开 PE 的执行辅助：在 <see cref="RunMetadata"/> 之上打开程序集文件与
-    /// <see cref="PEReader"/>，produce 直接拿 <see cref="MetadataReader"/> 读元数据，缓存与异常处理复用上层。
+    /// 元数据工具经共享缓存且自开 PE 的执行辅助：在 <see cref="RunMetadata"/> 之上打开程序集文件与 <see cref="PEReader"/>，produce
+    /// 直接拿 <see cref="MetadataReader"/> 读元数据，缓存与异常处理复用上层。
     /// </summary>
     /// <param name="assemblyFull">程序集绝对路径。</param>
     /// <param name="signature">缓存签名（工具前缀 + 参数，经 \u001F 拼接，与反编译签名互不冲突）。</param>
     /// <param name="lines">lines 参数原文；空字符串时按默认预算返回。</param>
     /// <param name="context">头部信息块上下文。</param>
-    /// <param name="produce">生成纯行列表的委托，入参为已打开的 <see cref="PEReader"/> 与其 <see cref="MetadataReader"/>；错误/未找到以 <see cref="InvalidOperationException"/> 抛提示文本。</param>
+    /// <param name="produce">
+    /// 生成纯行列表的委托，入参为已打开的 <see cref="PEReader"/> 与其 <see cref="MetadataReader"/>；错误/未找到以 <see
+    /// cref="InvalidOperationException"/> 抛提示文本。
+    /// </param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <param name="degradedProvider">降级解析计数委托，原样透传给 <see cref="RunMetadata"/>（缓存命中分支不调用，仅新鲜扫描显示）。</param>
     /// <returns>格式化后的元数据结果或错误提示文本。</returns>

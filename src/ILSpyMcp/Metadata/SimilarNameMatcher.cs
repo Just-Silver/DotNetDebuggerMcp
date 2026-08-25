@@ -1,8 +1,7 @@
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 相近名匹配：编辑距离 ≤ 2 或与查询名共享 ≥ 4 字符公共前缀视为相近，供「未找到类型/未找到成员」时给 agent 相近名提示。
-/// 算法集中于此，MemberResolver（成员名）与 MetadataNaming（类型名）共用同一套判定，避免两处实现漂移。
+/// 相近名匹配：编辑距离 ≤ 2 或与查询名共享 ≥ 4 字符公共前缀视为相近，供「未找到类型/未找到成员」时给 agent 相近名提示。 算法集中于此，MemberResolver（成员名）与 MetadataNaming（类型名）共用同一套判定，避免两处实现漂移。
 /// </summary>
 public static class SimilarNameMatcher
 {
@@ -21,8 +20,7 @@ public static class SimilarNameMatcher
             .ToList();
 
     /// <summary>
-    /// 判定单个候选名是否与查询名相近：编辑距离 ≤ 2 或共享公共前缀 ≥ 4 字符。
-    /// 类型名匹配时全名与短名（最后一段）分别调用本方法，兼容只输短名的查询。
+    /// 判定单个候选名是否与查询名相近：编辑距离 ≤ 2 或共享公共前缀 ≥ 4 字符。 类型名匹配时全名与短名（最后一段）分别调用本方法，兼容只输短名的查询。
     /// </summary>
     public static bool IsSimilar(string candidate, string query)
     {

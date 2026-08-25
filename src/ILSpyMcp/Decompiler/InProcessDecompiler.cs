@@ -5,24 +5,21 @@ using ICSharpCode.Decompiler.Metadata;
 using ILSpyMcp.Configuration;
 using ILSpyMcp.Metadata;
 using System.Globalization;
-using System.Linq;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 
 namespace ILSpyMcp.Decompiler;
 
 /// <summary>
-/// 进程内反编译服务：以 ICSharpCode.Decompiler 库在进程内完成反编译。
-/// 每次调用独立构建 PEFile + UniversalAssemblyResolver + DecompilerSettings + CSharpDecompiler，用完即释放；
-/// 全部入口 try/catch 兜底返回中文提示，不抛异常（纯元数据定位用 ILSpyMcp.Metadata.MetadataNaming）。
+/// 进程内反编译服务：以 ICSharpCode.Decompiler 库在进程内完成反编译。 每次调用独立构建 PEFile + UniversalAssemblyResolver +
+/// DecompilerSettings + CSharpDecompiler，用完即释放； 全部入口 try/catch 兜底返回中文提示，不抛异常（纯元数据定位用 ILSpyMcp.Metadata.MetadataNaming）。
 /// </summary>
 public sealed class InProcessDecompiler
 {
     /// <summary>
-    /// 超时包装：同步 work 放入 Task.Run 在后台执行，并把取消令牌注入 work（由反编译引擎在协作式检查点自行中断）。
-    /// timeout 内未完成（或取消触发）时立即返回 timeoutHint（不阻塞等待后台任务中断完成）；引擎收到令牌后会在
-    /// 下一个检查点抛 OperationCanceledException 自行停止，后台不再跑完占 CPU。注意 Task.Delay(timeout, cancellationToken)
-    /// 在取消触发时会以取消状态完成，统一视为超时处理。
+    /// 超时包装：同步 work 放入 Task.Run 在后台执行，并把取消令牌注入 work（由反编译引擎在协作式检查点自行中断）。 timeout 内未完成（或取消触发）时立即返回
+    /// timeoutHint（不阻塞等待后台任务中断完成）；引擎收到令牌后会在 下一个检查点抛 OperationCanceledException 自行停止，后台不再跑完占 CPU。注意
+    /// Task.Delay(timeout, cancellationToken) 在取消触发时会以取消状态完成，统一视为超时处理。
     /// </summary>
     /// <param name="work">要执行的同步反编译工作，接收取消令牌并返回文本；令牌传递给反编译引擎实现协作式中断。</param>
     /// <param name="timeout">最长等待时间；超时即返回 timeoutHint。</param>
@@ -36,8 +33,8 @@ public sealed class InProcessDecompiler
         var task = Task.Run(() => work(cts.Token));
         try
         {
-            // 超时由 cts.CancelAfter 触发、取消由外部令牌经链接触发：令牌注入 work 后引擎在检查点抛 OCE 自行中断（不再跑完占 CPU）。
-            // 取消时 Task.Delay 以取消状态完成（Task.WhenAny 不抛异常），返回的 completed 不是 work 任务即视为超时/取消
+            // 超时由 cts.CancelAfter 触发、取消由外部令牌经链接触发：令牌注入 work 后引擎在检查点抛 OCE 自行中断（不再跑完占 CPU）。 取消时
+            // Task.Delay 以取消状态完成（Task.WhenAny 不抛异常），返回的 completed 不是 work 任务即视为超时/取消
             var delay = Task.Delay(timeout, cancellationToken);
             var completed = await Task.WhenAny(task, delay);
             if (ReferenceEquals(completed, task))
@@ -128,8 +125,7 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
-    /// 反编译写入目录：单文件布局，全量时输出 {程序集名}.decompiled.cs，指定类型时每个类型一个 {TypeName}.decompiled.cs 文件。
-    /// 写入磁盘不做输出上限截断；返回成功提示（含文件数、写盘文件名与来源）或错误提示。
+    /// 反编译写入目录：单文件布局，全量时输出 {程序集名}.decompiled.cs，指定类型时每个类型一个 {TypeName}.decompiled.cs 文件。 写入磁盘不做输出上限截断；返回成功提示（含文件数、写盘文件名与来源）或错误提示。
     /// </summary>
     /// <param name="assemblyPath">程序集文件路径（dll/exe）。</param>
     /// <param name="outputDir">输出目录（不存在则创建）。</param>
@@ -149,8 +145,7 @@ public sealed class InProcessDecompiler
                 return BuildWriteSuccess(outputDir, assemblyPath, new[] { fileName });
             }
 
-            // 指定类型：typeName 支持逗号分隔多个类型批量写盘，每个类型写入 {TypeName}.decompiled.cs。
-            // 宽松语义——找到的写盘、未找到的累计进提示，部分成功也算成功
+            // 指定类型：typeName 支持逗号分隔多个类型批量写盘，每个类型写入 {TypeName}.decompiled.cs。 宽松语义——找到的写盘、未找到的累计进提示，部分成功也算成功
             var names = typeName.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
             var missing = new List<string>();
             var writtenFiles = new List<string>();
@@ -179,8 +174,7 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
-    /// 项目模式写盘：{程序集名}.csproj + 每个类型一个源码文件，nestedDirectories 控制是否按命名空间嵌套目录。
-    /// 写入磁盘不做输出上限截断；返回成功提示（含文件数）或错误提示。
+    /// 项目模式写盘：{程序集名}.csproj + 每个类型一个源码文件，nestedDirectories 控制是否按命名空间嵌套目录。 写入磁盘不做输出上限截断；返回成功提示（含文件数）或错误提示。
     /// </summary>
     /// <param name="assemblyPath">程序集文件路径（dll/exe）。</param>
     /// <param name="outputDir">输出目录（不存在则创建）。</param>
@@ -235,8 +229,26 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
-    /// 安全打开程序集：自建 FileStream 传给 PEFile（成功接管所有权由 using 释放）。
-    /// 直接 new PEFile(path) 在解析失败（如非程序集文件）抛异常时 FileStream 句柄会泄漏到 GC，这里显式兜底释放。
+    /// 判定文本是否为 InProcessDecompiler 生成的错误提示（而非反编译结果）。 供执行管道在写缓存前排除错误提示——错误提示不入缓存， 同 key
+    /// 后续调用可重试。覆盖全部错误提示形态：反编译异常兜底、未找到类型、输出超限、非法/越界 token、反编译已取消。 超时提示（timeoutHint） 由调用方另行判定（本方法不命中该类文本），无需重复处理。新增错误提示时必须同步扩展本判定，否则会被管道误当正常结果写入缓存。
+    /// </summary>
+    /// <param name="text">反编译入口返回的文本。</param>
+    /// <returns>是错误提示返回 true；反编译结果返回 false。</returns>
+    internal static bool IsErrorResult(string text)
+    {
+        // 全部错误提示前缀：Execute/RunWithTimeoutAsync 的「反编译失败：」兜底、未找到类型、输出超限、 「元数据 token
+        // …未引用…」越界、「反编译已取消」（引擎检查点中断）、以及以引号开头的非法 token 提示 （正常反编译文本不可能以这些开头）
+        return AppText.StartsWithDecompileFailure(text)
+            || text.StartsWith("反编译已取消", StringComparison.Ordinal)
+            || text.StartsWith("未找到类型 ", StringComparison.Ordinal)
+            || text.StartsWith("反编译输出超过上限", StringComparison.Ordinal)
+            || text.StartsWith("元数据 token ", StringComparison.Ordinal)
+            || text.StartsWith("\"", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 安全打开程序集：自建 FileStream 传给 PEFile（成功接管所有权由 using 释放）。 直接 new PEFile(path) 在解析失败（如非程序集文件）抛异常时
+    /// FileStream 句柄会泄漏到 GC，这里显式兜底释放。
     /// </summary>
     /// <param name="assemblyPath">程序集文件路径。</param>
     /// <returns>构造成功的 PEFile（调用方负责 using 释放）。</returns>
@@ -299,26 +311,6 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
-    /// 判定文本是否为 InProcessDecompiler 生成的错误提示（而非反编译结果）。 供执行管道在写缓存前排除错误提示——错误提示不入缓存，
-    /// 同 key 后续调用可重试。覆盖全部错误提示形态：反编译异常兜底、未找到类型、输出超限、非法/越界 token、反编译已取消。 超时提示（timeoutHint）
-    /// 由调用方另行判定（本方法不命中该类文本），无需重复处理。新增错误提示时必须同步扩展本判定，否则会被管道误当正常结果写入缓存。
-    /// </summary>
-    /// <param name="text">反编译入口返回的文本。</param>
-    /// <returns>是错误提示返回 true；反编译结果返回 false。</returns>
-    internal static bool IsErrorResult(string text)
-    {
-        // 全部错误提示前缀：Execute/RunWithTimeoutAsync 的「反编译失败：」兜底、未找到类型、输出超限、
-        // 「元数据 token …未引用…」越界、「反编译已取消」（引擎检查点中断）、以及以引号开头的非法 token 提示
-        // （正常反编译文本不可能以这些开头）
-        return AppText.StartsWithDecompileFailure(text)
-            || text.StartsWith("反编译已取消", StringComparison.Ordinal)
-            || text.StartsWith("未找到类型 ", StringComparison.Ordinal)
-            || text.StartsWith("反编译输出超过上限", StringComparison.Ordinal)
-            || text.StartsWith("元数据 token ", StringComparison.Ordinal)
-            || text.StartsWith("\"", StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// 文本输出超 <see cref="AppConfig.MaxOutputBytes"/> 字符数时返回改用写盘提示，否则原样返回。
     /// </summary>
     /// <param name="text">反编译生成的文本。</param>
@@ -329,8 +321,7 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
-    /// 组装写盘成功提示（to_project 用的按目录统计版本）：输出目录 + 文件数 + 来源程序集；
-    /// 文件枚举失败时退回不含文件数的提示。
+    /// 组装写盘成功提示（to_project 用的按目录统计版本）：输出目录 + 文件数 + 来源程序集； 文件枚举失败时退回不含文件数的提示。
     /// </summary>
     /// <param name="outputDir">输出目录。</param>
     /// <param name="assemblyPath">来源程序集。</param>
@@ -349,8 +340,7 @@ public sealed class InProcessDecompiler
     }
 
     /// <summary>
-    /// 组装写盘成功提示（to_dir 列出写盘文件版）：输出目录 + 文件数 + 写盘文件名 + 来源程序集。
-    /// N≤3 列全名，更多时列前 3 个 + 等 M 个；N=0（全部未找到）不列文件。
+    /// 组装写盘成功提示（to_dir 列出写盘文件版）：输出目录 + 文件数 + 写盘文件名 + 来源程序集。 N≤3 列全名，更多时列前 3 个 + 等 M 个；N=0（全部未找到）不列文件。
     /// </summary>
     /// <param name="outputDir">输出目录。</param>
     /// <param name="assemblyPath">来源程序集。</param>

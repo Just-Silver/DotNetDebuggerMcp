@@ -6,38 +6,12 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// GenericInstantiationScanner 泛型实例化使用点扫描用例。
-/// 素材：生成测试程序集（tests/TestData）中的 GenericBox`1（泛型类型，GenericUser 用 int/string 两个具体参数实例化）、
-/// GenericHelper（泛型方法 Echo&lt;T&gt;，GenericCaller.Run 以 int 调用）。
+/// GenericInstantiationScanner 泛型实例化使用点扫描用例。 素材：生成测试程序集（tests/TestData）中的
+/// GenericBox`1（泛型类型，GenericUser 用 int/string 两个具体参数实例化）、 GenericHelper（泛型方法
+/// Echo&lt;T&gt;，GenericCaller.Run 以 int 调用）。
 /// </summary>
 public class GenericInstantiationScannerTests
 {
-    /// <summary>
-    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
-    /// </summary>
-    private sealed class MetadataScope : IDisposable
-    {
-        private readonly FileStream _fs;
-        private readonly PEReader _pe;
-
-        public MetadataScope()
-        {
-            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
-            _pe = new PEReader(_fs);
-            Reader = _pe.GetMetadataReader();
-        }
-
-        public PEReader Pe => _pe;
-
-        public MetadataReader Reader { get; }
-
-        public void Dispose()
-        {
-            _pe.Dispose();
-            _fs.Dispose();
-        }
-    }
-
     [Fact]
     public void GenericBox_成员签名命中_含GenericUser与int及string实例化()
     {
@@ -75,8 +49,8 @@ public class GenericInstantiationScannerTests
     [Fact]
     public void GenericBox_自引用实例化_不捕获()
     {
-        // GenericBox 自身成员（First/Add）方法体经 get_Items 访问器引用 GenericBox`1<!0>（自身类型参数），
-        // 以及 Items 属性 List<T> 等含类型参数的实例化均非「具体化」实例化，不应出现在命中行
+        // GenericBox 自身成员（First/Add）方法体经 get_Items 访问器引用 GenericBox`1<!0>（自身类型参数）， 以及 Items 属性
+        // List<T> 等含类型参数的实例化均非「具体化」实例化，不应出现在命中行
         using var scope = new MetadataScope();
 
         var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericBox`1");
@@ -91,8 +65,7 @@ public class GenericInstantiationScannerTests
     public void 泛型方法内以类型参数调用Echo_不产出虚假Echo_T0()
     {
         // GenericSelfEcho.Run<T> 内调 GenericHelper.Echo(value)（value: T，泛型实参为方法类型参数）：预修复时
-        // CaptureMethodInstantiation 无条件加 Echo<T0>（空上下文解码类型参数为 T0）产出虚假具体化命中；
-        // 修复后按「任一实参含类型参数」门控，方法级捕获跳过
+        // CaptureMethodInstantiation 无条件加 Echo<T0>（空上下文解码类型参数为 T0）产出虚假具体化命中； 修复后按「任一实参含类型参数」门控，方法级捕获跳过
         using var scope = new MetadataScope();
 
         var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericHelper");
@@ -122,5 +95,31 @@ public class GenericInstantiationScannerTests
         scanner.Find("ILSpyMcp.Samples.GenericBox");
 
         Assert.Equal(0, scanner.AbortedBodies);
+    }
+
+    /// <summary>
+    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
+    /// </summary>
+    private sealed class MetadataScope : IDisposable
+    {
+        private readonly FileStream _fs;
+        private readonly PEReader _pe;
+
+        public MetadataScope()
+        {
+            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+            _pe = new PEReader(_fs);
+            Reader = _pe.GetMetadataReader();
+        }
+
+        public PEReader Pe => _pe;
+
+        public MetadataReader Reader { get; }
+
+        public void Dispose()
+        {
+            _pe.Dispose();
+            _fs.Dispose();
+        }
     }
 }

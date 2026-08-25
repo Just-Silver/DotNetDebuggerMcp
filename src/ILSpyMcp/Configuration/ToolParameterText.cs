@@ -2,9 +2,8 @@ namespace ILSpyMcp.Configuration;
 
 /// <summary>
 /// MCP 工具参数级 Description 模板常量：16 个工具多处重复的参数描述文本（assembly/lines/timeoutSeconds/
-/// includeExternal/includeIndirect 及工具级页脚句）集中在此，改文案只需改一处。Description 属性参数要求
-/// 编译期常量，故均为 const；工具经 [Description(ToolParameterText.Xxx)] 引用（工具级描述可经常量拼接，
-/// const+const 仍为编译期常量）。
+/// includeExternal/includeIndirect 及工具级页脚句）集中在此，改文案只需改一处。Description 属性参数要求 编译期常量，故均为 const；工具经
+/// [Description(ToolParameterText.Xxx)] 引用（工具级描述可经常量拼接， const+const 仍为编译期常量）。
 /// </summary>
 internal static class ToolParameterText
 {

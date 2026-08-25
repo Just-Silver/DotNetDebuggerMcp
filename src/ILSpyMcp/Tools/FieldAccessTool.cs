@@ -14,21 +14,21 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 追踪指定字段在程序集内的读取/写入/取地址位置（字段级反查）：按 fieldToken 或 typeName+fieldName 定位字段后，
-/// 反向扫描全部类型方法体的字段访问指令，输出读取/写入/取地址三段来源成员（类型全名::成员签名）。
+/// 追踪指定字段在程序集内的读取/写入/取地址位置（字段级反查）：按 fieldToken 或 typeName+fieldName 定位字段后， 反向扫描全部类型方法体的字段访问指令，输出读取/写入/取地址三段来源成员（类型全名::成员签名）。
 /// </summary>
 [McpServerToolType]
 public static class FieldAccessTool
 {
     /// <summary>
-    /// 追踪指定字段的读取/写入/取地址位置：fieldToken 非空时按字段元数据 token 直接定位；
-    /// 否则按 fieldName 子串搜索（typeName 非空在类型内、空则跨程序集），匹配多个字段时返回 #MEMBER 签名清单提示用 fieldToken。
-    /// 定位成功后反向扫描全部非编译器生成类型方法体的字段访问指令，输出三段；经共享缓存秒回。
+    /// 追踪指定字段的读取/写入/取地址位置：fieldToken 非空时按字段元数据 token 直接定位； 否则按 fieldName 子串搜索（typeName
+    /// 非空在类型内、空则跨程序集），匹配多个字段时返回 #MEMBER 签名清单提示用 fieldToken。 定位成功后反向扫描全部非编译器生成类型方法体的字段访问指令，输出三段；经共享缓存秒回。
     /// </summary>
     /// <param name="assembly">要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">字段所属类型全名，格式与 list_types 输出一致；省略时跨程序集按 fieldName 搜索（fieldToken 分支下可不填）。</param>
     /// <param name="fieldName">字段名子串，忽略大小写；匹配多个字段时返回 #MEMBER 签名清单提示用 fieldToken（fieldToken 分支下可不填）。</param>
-    /// <param name="fieldToken">字段元数据 token（0x04 开头，取 signature 行尾或 #MEMBER 分隔行的 token）；非空时按 token 直接定位字段，忽略 fieldName。</param>
+    /// <param name="fieldToken">
+    /// 字段元数据 token（0x04 开头，取 signature 行尾或 #MEMBER 分隔行的 token）；非空时按 token 直接定位字段，忽略 fieldName。
+    /// </param>
     /// <param name="lines">按行号范围读取结果，格式 "start-end"；缺省返回前约 8 KB。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的字段读取/写入/取地址三段或错误提示文本。</returns>
@@ -61,8 +61,7 @@ public static class FieldAccessTool
 
     /// <summary>
     /// 定位字段定义：fieldToken 非空走 token 分支（校验格式 + Kind == FieldDefinition + row 在 FieldDefinitions 范围内），
-    /// 否则按 fieldName 子串搜索（typeName 非空在类型内、空跨程序集），过滤字段（0x04）token。
-    /// 未找到类型/歧义/无匹配字段时返回中文提示文本。
+    /// 否则按 fieldName 子串搜索（typeName 非空在类型内、空跨程序集），过滤字段（0x04）token。 未找到类型/歧义/无匹配字段时返回中文提示文本。
     /// </summary>
     private static (List<MemberMatch> Matches, bool ByToken, string? Error) LocateField(
         string assemblyFull, string typeName, string fieldName, string fieldToken)
@@ -116,8 +115,7 @@ public static class FieldAccessTool
             return (fields, false, null);
         }
 
-        // 类型内搜索：先用 FindTypes 判定歧义/未找到（不能先经 FindMembers——其内部取首个候选会吞掉歧义），
-        // 唯一候选再用其全名在类型内按 fieldName 搜索
+        // 类型内搜索：先用 FindTypes 判定歧义/未找到（不能先经 FindMembers——其内部取首个候选会吞掉歧义）， 唯一候选再用其全名在类型内按 fieldName 搜索
         try
         {
             using var fs = File.OpenRead(assemblyFull);
@@ -154,8 +152,8 @@ public static class FieldAccessTool
     }
 
     /// <summary>
-    /// 将 fieldToken 文本解析为字段定义句柄：格式已由 <see cref="ArgumentValidators.ValidateToken"/> 校验，
-    /// 要求 Kind 为 FieldDefinition（0x04）且行号在 FieldDefinitions.Count 范围内；否则返回 null。
+    /// 将 fieldToken 文本解析为字段定义句柄：格式已由 <see cref="ArgumentValidators.ValidateToken"/> 校验， 要求 Kind 为
+    /// FieldDefinition（0x04）且行号在 FieldDefinitions.Count 范围内；否则返回 null。
     /// </summary>
     private static FieldDefinitionHandle? ResolveFieldToken(MetadataReader reader, string fieldToken)
     {
@@ -167,8 +165,8 @@ public static class FieldAccessTool
     }
 
     /// <summary>
-    /// 匹配多个字段时仅返回 #MEMBER 签名清单：元数据读取经共享缓存（重复查询直接命中），凡字段 token 属于匹配集合的
-    /// 字段渲染一行 `#MEMBER {name/token/signature/type}` JSON 行，agent 取目标字段的 token 再用 fieldToken 参数精确定位。
+    /// 匹配多个字段时仅返回 #MEMBER 签名清单：元数据读取经共享缓存（重复查询直接命中），凡字段 token 属于匹配集合的 字段渲染一行 `#MEMBER
+    /// {name/token/signature/type}` JSON 行，agent 取目标字段的 token 再用 fieldToken 参数精确定位。
     /// </summary>
     private static string RenderFieldList(string assemblyFull, IReadOnlyList<MemberMatch> matches, string typeName, string fieldName, string lines)
     {
@@ -196,8 +194,7 @@ public static class FieldAccessTool
     }
 
     /// <summary>
-    /// 唯一字段定位成功后的反向扫描：反扫全部非编译器生成类型方法体的字段访问指令，输出读取/写入/取地址三段，
-    /// 经共享缓存秒回（缓存签名含已解析的字段 token），降级解析计数接入头部提示。
+    /// 唯一字段定位成功后的反向扫描：反扫全部非编译器生成类型方法体的字段访问指令，输出读取/写入/取地址三段， 经共享缓存秒回（缓存签名含已解析的字段 token），降级解析计数接入头部提示。
     /// </summary>
     private static Task<string> RunScan(string assemblyFull, string typeName, string fieldName, bool byToken,
         MemberMatch match, string lines, CancellationToken cancellationToken)

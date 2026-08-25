@@ -1,8 +1,8 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// decompile_to_dir / decompile_to_project 工具的全部端到端验证场景：全量 / 项目形式 / typeName /
-/// timeoutSeconds / 缺参校验。 每个场景写独立输出子目录，避免互相覆盖；最终由入口统一清理并校验产物。
+/// decompile_to_dir / decompile_to_project 工具的全部端到端验证场景：全量 / 项目形式 / typeName / timeoutSeconds /
+/// 缺参校验。 每个场景写独立输出子目录，避免互相覆盖；最终由入口统一清理并校验产物。
 /// </summary>
 public static class DecompileToDirCases
 {

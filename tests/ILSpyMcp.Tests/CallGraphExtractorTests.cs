@@ -7,55 +7,12 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// CallGraphExtractor 方法体调用图提取用例：内部方法调用 / 构造调用 / 泛型实例化 / 跨程序集排除 /
-/// 编译器生成 target 过滤 / 访问器调用计入 / 字段访问不计入 / 反向调用者扫描。
-/// 素材：生成测试程序集（tests/TestData）中的 Caller/Callee/GenericCaller/GenericHelper/PropReader/FieldUser 等类型。
+/// CallGraphExtractor 方法体调用图提取用例：内部方法调用 / 构造调用 / 泛型实例化 / 跨程序集排除 / 编译器生成 target 过滤 / 访问器调用计入 /
+/// 字段访问不计入 / 反向调用者扫描。 素材：生成测试程序集（tests/TestData）中的
+/// Caller/Callee/GenericCaller/GenericHelper/PropReader/FieldUser 等类型。
 /// </summary>
 public class CallGraphExtractorTests
 {
-    /// <summary>
-    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
-    /// </summary>
-    private sealed class MetadataScope : IDisposable
-    {
-        private readonly FileStream _fs;
-        private readonly PEReader _pe;
-
-        public MetadataScope()
-        {
-            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
-            _pe = new PEReader(_fs);
-            Reader = _pe.GetMetadataReader();
-        }
-
-        public PEReader Pe => _pe;
-
-        public MetadataReader Reader { get; }
-
-        public void Dispose()
-        {
-            _pe.Dispose();
-            _fs.Dispose();
-        }
-    }
-
-    private static TypeDefinition GetType(MetadataReader reader, string typeFullName)
-    {
-        var handle = MetadataNaming.FindType(reader, typeFullName);
-        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
-        return reader.GetTypeDefinition(handle!.Value);
-    }
-
-    private static List<string> Extract(MetadataScope scope, string typeFullName)
-        => CallGraphExtractor.ExtractMethodBodyCallTypes(scope.Pe, GetType(scope.Reader, typeFullName)).ToList();
-
-    private static (List<string> Internal, List<string> External) ExtractWithExternal(MetadataScope scope, string typeFullName)
-    {
-        var (internalSet, external) = CallGraphExtractor.ExtractMethodBodyCallTypesWithExternal(
-            scope.Pe, GetType(scope.Reader, typeFullName));
-        return (internalSet.ToList(), external.ToList());
-    }
-
     [Fact]
     public void Caller_方法体调用内部方法_收集Callee()
     {
@@ -78,8 +35,8 @@ public class CallGraphExtractorTests
     [Fact]
     public void Caller_WithExternal_外部集合含SystemConsole_内部集合不变()
     {
-        // External 调 System.Console.WriteLine：WithExternal 收集 System.Console [System.Console]；
-        // 默认 ctor 调基类 Object..ctor 亦为 MemberRef 外部引用（System.Object）。内部集合与缺省 API 一致
+        // External 调 System.Console.WriteLine：WithExternal 收集 System.Console [System.Console]； 默认
+        // ctor 调基类 Object..ctor 亦为 MemberRef 外部引用（System.Object）。内部集合与缺省 API 一致
         using var scope = new MetadataScope();
         var (internalSet, external) = ExtractWithExternal(scope, "ILSpyMcp.Samples.Caller");
 
@@ -205,5 +162,48 @@ public class CallGraphExtractorTests
         using var scope = new MetadataScope();
         var detailed = CallGraphExtractor.ExtractMethodBodyCallTypesDetailed(scope.Pe, GetType(scope.Reader, "ILSpyMcp.Samples.Caller"));
         Assert.Equal(0, detailed.Aborted);
+    }
+
+    private static TypeDefinition GetType(MetadataReader reader, string typeFullName)
+    {
+        var handle = MetadataNaming.FindType(reader, typeFullName);
+        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
+        return reader.GetTypeDefinition(handle!.Value);
+    }
+
+    private static List<string> Extract(MetadataScope scope, string typeFullName)
+            => CallGraphExtractor.ExtractMethodBodyCallTypes(scope.Pe, GetType(scope.Reader, typeFullName)).ToList();
+
+    private static (List<string> Internal, List<string> External) ExtractWithExternal(MetadataScope scope, string typeFullName)
+    {
+        var (internalSet, external) = CallGraphExtractor.ExtractMethodBodyCallTypesWithExternal(
+            scope.Pe, GetType(scope.Reader, typeFullName));
+        return (internalSet.ToList(), external.ToList());
+    }
+
+    /// <summary>
+    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
+    /// </summary>
+    private sealed class MetadataScope : IDisposable
+    {
+        private readonly FileStream _fs;
+        private readonly PEReader _pe;
+
+        public MetadataScope()
+        {
+            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+            _pe = new PEReader(_fs);
+            Reader = _pe.GetMetadataReader();
+        }
+
+        public PEReader Pe => _pe;
+
+        public MetadataReader Reader { get; }
+
+        public void Dispose()
+        {
+            _pe.Dispose();
+            _fs.Dispose();
+        }
     }
 }

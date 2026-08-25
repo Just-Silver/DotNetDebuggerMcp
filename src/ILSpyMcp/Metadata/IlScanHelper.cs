@@ -1,5 +1,6 @@
-using System.Reflection.Metadata;
 using ICSharpCode.Decompiler.Disassembler;
+
+using System.Reflection.Metadata;
 
 namespace ILSpyMcp.Metadata;
 
@@ -20,15 +21,18 @@ internal static class IlScanHelper
                          or ILOpCode.Ldftn or ILOpCode.Ldvirtftn or ILOpCode.Calli:   // 方法/签名 token
                         onInstruction(new IlInstruction(code, il.ReadInt32()));
                         break;
+
                     case ILOpCode.Ldstr:                                              // UserString token
                         onInstruction(new IlInstruction(code, il.ReadInt32()));
                         break;
+
                     case ILOpCode.Ldfld or ILOpCode.Ldsfld or ILOpCode.Stfld or ILOpCode.Stsfld
                          or ILOpCode.Ldflda or ILOpCode.Ldsflda                       // 字段 token
                          or ILOpCode.Castclass or ILOpCode.Isinst or ILOpCode.Box or ILOpCode.Newarr
                          or ILOpCode.Ldtoken or ILOpCode.Constrained or ILOpCode.Sizeof: // 类型/字段等 token 类，消费方按需处理
                         onInstruction(new IlInstruction(code, il.ReadInt32()));
                         break;
+
                     default:
                         ILParser.SkipOperand(ref il, code);                            // 权威跳过，覆盖全部 opcode
                         break;

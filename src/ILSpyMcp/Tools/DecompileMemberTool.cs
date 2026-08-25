@@ -15,16 +15,14 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 反编译指定类型内单个或多个成员的实现体（成员级入口，如某个方法体）：按成员名在类型内定位成员并反编译合并输出，
-/// 或按 token 直接反编译单个成员。定位的多个成员全部反编译并合并输出（行号连续，各成员前有 #MEMBER JSON 结构化分隔行），
-/// 默认返回前约 8 KB、可用 lines 分页；定位数量超过上限时仅返回签名清单，不启动反编译。
+/// 反编译指定类型内单个或多个成员的实现体（成员级入口，如某个方法体）：按成员名在类型内定位成员并反编译合并输出， 或按 token
+/// 直接反编译单个成员。定位的多个成员全部反编译并合并输出（行号连续，各成员前有 #MEMBER JSON 结构化分隔行）， 默认返回前约 8 KB、可用 lines 分页；定位数量超过上限时仅返回签名清单，不启动反编译。
 /// </summary>
 [McpServerToolType]
 public static class DecompileMemberTool
 {
     /// <summary>
-    /// 按成员名子串定位并反编译成员（或按 token 直接反编译单个成员）：typeName 非空时在指定类型内搜索，省略时跨程序集搜索，
-    /// 经共享管道缓存与 lines 分页。
+    /// 按成员名子串定位并反编译成员（或按 token 直接反编译单个成员）：typeName 非空时在指定类型内搜索，省略时跨程序集搜索， 经共享管道缓存与 lines 分页。
     /// </summary>
     /// <param name="assembly">要反编译的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">在指定类型内搜索成员，全限定类型名；省略时跨程序集按成员名搜索（token 分支下可不填）。</param>
@@ -63,8 +61,7 @@ public static class DecompileMemberTool
         // 参数校验：memberName 必填（typeName 允许为空，省略时跨程序集按成员名搜索）
         if (!ArgumentValidators.ValidateMemberNameSearch(typeName, memberName, out var argError)) return argError;
 
-        // 纯元数据读取定位成员：typeName 为空走跨程序集搜索，否则在指定类型内搜索；typeToken 非空时按类型 token 精确定位
-        // （typeName 歧义消歧）；未命中类型/歧义/无匹配成员时直接返回提示，无匹配且存在相近名时附相近成员名
+        // 纯元数据读取定位成员：typeName 为空走跨程序集搜索，否则在指定类型内搜索；typeToken 非空时按类型 token 精确定位 （typeName 歧义消歧）；未命中类型/歧义/无匹配成员时直接返回提示，无匹配且存在相近名时附相近成员名
         var (matches, similarNames, effectiveTypeName, locateError) = LocateMembers(assemblyFull, typeName, typeToken, memberName);
         if (locateError is not null) return locateError;
 
@@ -90,8 +87,8 @@ public static class DecompileMemberTool
             })
             .ToArray();
 
-        // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）。不展示参数——对外工具没有 token 概念， 暴露内部 token 或反编译细节会误导
-        // agent（agent 面对的是 MCP 命名参数）
+        // 头部信息块：程序集绝对路径 + 目标描述（含匹配数）。不展示参数——对外工具没有 token 概念， 暴露内部 token 或反编译细节会误导 agent（agent 面对的是
+        // MCP 命名参数）
         var context = new FormatContext(assemblyFull, effectiveTypeName is null
             ? $"成员 {memberName}（跨程序集，{matches.Count} 个匹配）"
             : $"类型 {effectiveTypeName} 的成员 {memberName}（{matches.Count} 个匹配）");
@@ -115,10 +112,9 @@ public static class DecompileMemberTool
     }
 
     /// <summary>
-    /// 纯元数据读取定位成员：typeToken 非空时按类型定义 token 精确定位（typeName 歧义消歧），typeName 为空走跨程序集搜索，
-    /// 否则先用 FindTypes 判定歧义/未找到（歧义返回歧义提示、未找到返回附相近类型名的未找到提示），唯一候选再在类型内按
-    /// memberName 搜索（Error 非空，元数据秒回）；IO 类异常同样以 Error 返回「无法读取程序集元数据」提示。
-    /// EffectiveTypeName 非空表示本次是类型内搜索（供调用方做目标描述与「未找到」消息），typeToken/typeName 定位成功时返回类型全名。
+    /// 纯元数据读取定位成员：typeToken 非空时按类型定义 token 精确定位（typeName 歧义消歧），typeName 为空走跨程序集搜索， 否则先用 FindTypes
+    /// 判定歧义/未找到（歧义返回歧义提示、未找到返回附相近类型名的未找到提示），唯一候选再在类型内按 memberName 搜索（Error 非空，元数据秒回）；IO 类异常同样以
+    /// Error 返回「无法读取程序集元数据」提示。 EffectiveTypeName 非空表示本次是类型内搜索（供调用方做目标描述与「未找到」消息），typeToken/typeName 定位成功时返回类型全名。
     /// </summary>
     private static (IReadOnlyList<MemberMatch> Matches, IReadOnlyList<string> SimilarNames, string? EffectiveTypeName, string? Error)
         LocateMembers(string assemblyFull, string typeName, string typeToken, string memberName)
@@ -165,8 +161,8 @@ public static class DecompileMemberTool
     }
 
     /// <summary>
-    /// typeToken 分支：按类型定义 token 精确定位类型并取该类型全名作 EffectiveTypeName，再在类型内按 memberName 搜索。
-    /// token 格式先经 <see cref="ArgumentValidators.ValidateToken"/> 校验；Kind 非 TypeDefinition（0x02）或行号越界时返回中文提示。
+    /// typeToken 分支：按类型定义 token 精确定位类型并取该类型全名作 EffectiveTypeName，再在类型内按 memberName 搜索。 token 格式先经
+    /// <see cref="ArgumentValidators.ValidateToken"/> 校验；Kind 非 TypeDefinition（0x02）或行号越界时返回中文提示。
     /// </summary>
     private static (IReadOnlyList<MemberMatch> Matches, IReadOnlyList<string> SimilarNames, string? EffectiveTypeName, string? Error)
         LocateMembersByTypeToken(string assemblyFull, string typeToken, string memberName)
@@ -210,9 +206,9 @@ public static class DecompileMemberTool
     }
 
     /// <summary>
-    /// 匹配数超限时仅返回成员签名清单：元数据读取经共享缓存（重复查询直接命中），遍历全部非编译器生成类型的全部成员
-    /// （字段/方法/属性/事件），凡 token 属于匹配集合的成员渲染一行 `#MEMBER {name/token/signature/type}` JSON 行（type 为该成员所属类型全名）。
-    /// 按 token（而非成员名）匹配，避免同名重载成员被名字集合去重而丢失；签名经 <see cref="SignatureRenderer.RenderSingleMember"/> 渲染，
+    /// 匹配数超限时仅返回成员签名清单：元数据读取经共享缓存（重复查询直接命中），遍历全部非编译器生成类型的全部成员 （字段/方法/属性/事件），凡 token 属于匹配集合的成员渲染一行
+    /// `#MEMBER {name/token/signature/type}` JSON 行（type 为该成员所属类型全名）。 按
+    /// token（而非成员名）匹配，避免同名重载成员被名字集合去重而丢失；签名经 <see cref="SignatureRenderer.RenderSingleMember"/> 渲染，
     /// 支持字段/方法/属性/事件四类成员。清单同样受 lines 分页控制（缺省返回前约 8 KB）。
     /// </summary>
     private static string RenderSignatureList(string assemblyFull, string typeName, string memberName, IReadOnlyList<MemberMatch> matches, string lines)

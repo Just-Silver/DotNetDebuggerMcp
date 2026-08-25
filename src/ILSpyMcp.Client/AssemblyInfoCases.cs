@@ -1,8 +1,7 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// assembly_info 工具的全部端到端验证场景：程序集概览各字段（程序集名/目标框架/类型计数/引用清单）、
-/// 缺 assembly 校验提示与 lines 分页。
+/// assembly_info 工具的全部端到端验证场景：程序集概览各字段（程序集名/目标框架/类型计数/引用清单）、 缺 assembly 校验提示与 lines 分页。
 /// </summary>
 public static class AssemblyInfoCases
 {

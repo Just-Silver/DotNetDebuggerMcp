@@ -1,19 +1,17 @@
 using System.Collections.Immutable;
-using System.Reflection;
 using System.Reflection.Metadata;
 
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 纯元数据「继承/接口关系」：给定类型，输出基类链、实现的接口与程序集内直接继承/实现它的类型，供 hierarchy 工具使用。
-/// 基类链/接口的解析句柄可能为 TypeDefinition（同程序集）或 TypeReference（外部），统一按全名比较。
+/// 纯元数据「继承/接口关系」：给定类型，输出基类链、实现的接口与程序集内直接继承/实现它的类型，供 hierarchy 工具使用。 基类链/接口的解析句柄可能为
+/// TypeDefinition（同程序集）或 TypeReference（外部），统一按全名比较。
 /// </summary>
 public static class Hierarchy
 {
     /// <summary>
-    /// 基类链：从 type 沿 BaseType 上溯到 System.Object（含两端），返回全名列表。泛型基类（TypeSpecification 实例化，
-    /// 如 Derived&lt;T&gt; : Base&lt;T&gt;）渲染为带泛型参数的全名，且定义在程序集内时继续沿其上溯；
-    /// TypeReference（外部类型，如 System.Object）为链终点；畸形程序集基类循环时提前终止。
+    /// 基类链：从 type 沿 BaseType 上溯到 System.Object（含两端），返回全名列表。泛型基类（TypeSpecification 实例化， 如
+    /// Derived&lt;T&gt; : Base&lt;T&gt;）渲染为带泛型参数的全名，且定义在程序集内时继续沿其上溯； TypeReference（外部类型，如 System.Object）为链终点；畸形程序集基类循环时提前终止。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待查询的类型定义。</param>
@@ -37,8 +35,7 @@ public static class Hierarchy
                 current = reader.GetTypeDefinition((TypeDefinitionHandle)baseHandle);
                 continue;
             }
-            // TypeReference（外部类型）与 TypeSpecification（泛型基类实例化）均按全名加入；
-            // 泛型基类定义在程序集内时继续上溯其基类链，否则停止
+            // TypeReference（外部类型）与 TypeSpecification（泛型基类实例化）均按全名加入； 泛型基类定义在程序集内时继续上溯其基类链，否则停止
             var (baseName, baseDef) = ResolveType(reader, baseHandle, GetGenericParameterNames(reader, current.GetGenericParameters()));
             if (baseName is not null) chain.Add(baseName);
             if (baseDef is { } defHandle)
@@ -71,14 +68,13 @@ public static class Hierarchy
     }
 
     /// <summary>
-    /// 程序集内「直接继承 type 或实现其接口」的类型全名列表（跳过编译器生成类型与 type 自身），按元数据枚举序。
-    /// 注意语义：仅收集直接基类/直接接口等于 type 的类型；基类链上更深的上游不在此列（调用方可用 GetBaseChain 判定）。
-    /// 泛型基类/接口（TypeSpecification 实例化）按底层泛型定义类型比较，因此 QueryableProvider`2 : QueryableProvider`1
-    /// 能正确归入 QueryableProvider`1 的后代。
+    /// 程序集内「直接继承 type 或实现其接口」的类型全名列表（跳过编译器生成类型与 type 自身），按元数据枚举序。 注意语义：仅收集直接基类/直接接口等于 type
+    /// 的类型；基类链上更深的上游不在此列（调用方可用 GetBaseChain 判定）。 泛型基类/接口（TypeSpecification 实例化）按底层泛型定义类型比较，因此
+    /// QueryableProvider`2 : QueryableProvider`1 能正确归入 QueryableProvider`1 的后代。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待查询的类型定义。</param>
-    /// <param name="typeFullName">type 的规范全名（<see cref="MetadataNaming.FullName"/> 输出），用于基类/接口全名比较。</param>
+    /// <param name="typeFullName">type 的规范全名（ <see cref="MetadataNaming.FullName"/> 输出），用于基类/接口全名比较。</param>
     /// <returns>后代类型全名列表；无匹配时为空列表。</returns>
     public static IReadOnlyList<string> GetDescendants(MetadataReader reader, TypeDefinition type, string typeFullName)
     {
@@ -113,22 +109,18 @@ public static class Hierarchy
     }
 
     /// <summary>
-    /// 程序集内「直接或间接继承 type 或实现其接口」的类型全名列表（跳过编译器生成类型与 type 自身），按元数据枚举序。
-    /// 与 <see cref="GetDescendants"/> 的差异：不止收集直接子类/直接接口实现者，还沿继承/实现链继续下钻，
-    /// 收集所有后代（如接口的全部（间接）实现者、基类的所有子孙），一次调用即返回完整后代集合，
-    /// 供 hierarchy includeIndirect 使用，免 agent 递归多次调用。
-    /// 实现：一次遍历构建「全名 → 直接父类/接口全名列表」邻接表
-    /// （邻接边同时收录显示名与底层泛型定义全名，保证泛型实例化比较与 <see cref="GetDescendants"/> 一致），
-    /// 从 type 出发 BFS 到收敛（HashSet 去重）。
+    /// 程序集内「直接或间接继承 type 或实现其接口」的类型全名列表（跳过编译器生成类型与 type 自身），按元数据枚举序。 与 <see cref="GetDescendants"/>
+    /// 的差异：不止收集直接子类/直接接口实现者，还沿继承/实现链继续下钻， 收集所有后代（如接口的全部（间接）实现者、基类的所有子孙），一次调用即返回完整后代集合， 供 hierarchy
+    /// includeIndirect 使用，免 agent 递归多次调用。 实现：一次遍历构建「全名 → 直接父类/接口全名列表」邻接表
+    /// （邻接边同时收录显示名与底层泛型定义全名，保证泛型实例化比较与 <see cref="GetDescendants"/> 一致）， 从 type 出发 BFS 到收敛（HashSet 去重）。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待查询的类型定义。</param>
-    /// <param name="typeFullName">type 的规范全名（<see cref="MetadataNaming.FullName"/> 输出），用于基类/接口全名比较。</param>
+    /// <param name="typeFullName">type 的规范全名（ <see cref="MetadataNaming.FullName"/> 输出），用于基类/接口全名比较。</param>
     /// <returns>全部（直接+间接）后代类型全名列表；无匹配时为空列表。</returns>
     public static IReadOnlyList<string> GetDescendantsIncludingIndirect(MetadataReader reader, TypeDefinition type, string typeFullName)
     {
-        // 一次遍历构建名称索引与邻接表：邻接值同时收录「显示名」（泛型实例化如 GenericBase<int>）与
-        // 「底层泛型定义全名」（如 GenericBase`1），使泛型基类/接口实例化能沿定义全名正确连边。
+        // 一次遍历构建名称索引与邻接表：邻接值同时收录「显示名」（泛型实例化如 GenericBase<int>）与 「底层泛型定义全名」（如 GenericBase`1），使泛型基类/接口实例化能沿定义全名正确连边。
         var adjacency = new Dictionary<string, List<string>>();
         foreach (var handle in reader.TypeDefinitions)
         {
@@ -181,9 +173,9 @@ public static class Hierarchy
     }
 
     /// <summary>
-    /// 解析类型句柄为全名与底层类型定义句柄：TypeDefinition 返回自身；TypeReference 取 命名空间.名
-    /// （嵌套沿 ResolutionScope 递归拼接，用 + 分隔），底层定义不可得；TypeSpecification（泛型实例化等）解码签名取全名，
-    /// 若泛型定义是程序集内类型则一并返回其句柄（供基类链继续上溯、后代比较）；其余返回 (null, null)。
+    /// 解析类型句柄为全名与底层类型定义句柄：TypeDefinition 返回自身；TypeReference 取 命名空间.名 （嵌套沿 ResolutionScope 递归拼接，用 +
+    /// 分隔），底层定义不可得；TypeSpecification（泛型实例化等）解码签名取全名， 若泛型定义是程序集内类型则一并返回其句柄（供基类链继续上溯、后代比较）；其余返回
+    /// (null, null)。
     /// </summary>
     private static (string? Name, TypeDefinitionHandle? Definition) ResolveType(MetadataReader reader, EntityHandle handle, string[] typeParams)
     {
@@ -226,9 +218,24 @@ public static class Hierarchy
     }
 
     /// <summary>
-    /// 类型签名解码器：把 TypeSpecification 的签名编码渲染为全名字符串，并在遇到程序集内泛型定义（TypeDefinition）时
-    /// 记录其句柄到 <see cref="LastDefinition"/>，供基类链上溯与后代比较。只关注泛型实例化等类型编码，
-    /// 方法级泛型参数按占位渲染（基类/接口签名不涉及）。
+    /// 递归解析 TypeReference 为 命名空间.名；嵌套类型沿 ResolutionScope 递归拼接，与 <see
+    /// cref="MetadataNaming.FullName"/> 的 + 分隔保持一致。
+    /// </summary>
+    private static string ResolveTypeReference(MetadataReader reader, TypeReferenceHandle handle)
+    {
+        var tr = reader.GetTypeReference(handle);
+        var name = reader.GetString(tr.Name);
+        if (tr.ResolutionScope.Kind == HandleKind.TypeReference)
+        {
+            return $"{ResolveTypeReference(reader, (TypeReferenceHandle)tr.ResolutionScope)}+{name}";
+        }
+        var ns = reader.GetString(tr.Namespace);
+        return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+    }
+
+    /// <summary>
+    /// 类型签名解码器：把 TypeSpecification 的签名编码渲染为全名字符串，并在遇到程序集内泛型定义（TypeDefinition）时 记录其句柄到 <see
+    /// cref="LastDefinition"/>，供基类链上溯与后代比较。只关注泛型实例化等类型编码， 方法级泛型参数按占位渲染（基类/接口签名不涉及）。
     /// </summary>
     private sealed class TypeSignatureProvider : ISignatureTypeProvider<string, string[]>
     {
@@ -236,7 +243,9 @@ public static class Hierarchy
 
         public TypeSignatureProvider(MetadataReader reader) => _reader = reader;
 
-        /// <summary>签名解码中最近一次遇到的程序集内类型定义句柄（泛型实例化的底层定义）。</summary>
+        /// <summary>
+        /// 签名解码中最近一次遇到的程序集内类型定义句柄（泛型实例化的底层定义）。
+        /// </summary>
         public TypeDefinitionHandle? LastDefinition { get; private set; }
 
         public string GetPrimitiveType(PrimitiveTypeCode typeCode)
@@ -298,20 +307,5 @@ public static class Hierarchy
         public string GetModifiedType(string modifier, string unmodifiedType, bool isRequired) => unmodifiedType;
 
         public string GetFunctionPointerType(MethodSignature<string> signature) => "delegate*";
-    }
-
-    /// <summary>
-    /// 递归解析 TypeReference 为 命名空间.名；嵌套类型沿 ResolutionScope 递归拼接，与 <see cref="MetadataNaming.FullName"/> 的 + 分隔保持一致。
-    /// </summary>
-    private static string ResolveTypeReference(MetadataReader reader, TypeReferenceHandle handle)
-    {
-        var tr = reader.GetTypeReference(handle);
-        var name = reader.GetString(tr.Name);
-        if (tr.ResolutionScope.Kind == HandleKind.TypeReference)
-        {
-            return $"{ResolveTypeReference(reader, (TypeReferenceHandle)tr.ResolutionScope)}+{name}";
-        }
-        var ns = reader.GetString(tr.Namespace);
-        return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
     }
 }

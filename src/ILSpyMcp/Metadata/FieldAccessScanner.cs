@@ -1,15 +1,13 @@
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
-using ICSharpCode.Decompiler.Disassembler;
 
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 纯元数据「字段读写点反查」：扫描程序集全部非编译器生成类型的方法体 IL 的字段访问指令
-/// （ldfld/ldsfld 读取、stfld/stsfld 写入、ldflda/ldsflda 取地址），按目标字段（FieldDefinitionHandle）收集访问点来源
-/// （类型全名::成员签名），供 field_access 工具使用。
-/// 方法体读取经 PEReader.GetMethodBody，IL 解码经共享 IlScanHelper；解码异常安全中止并累计降级计数。
+/// 纯元数据「字段读写点反查」：扫描程序集全部非编译器生成类型的方法体 IL 的字段访问指令 （ldfld/ldsfld 读取、stfld/stsfld 写入、ldflda/ldsflda
+/// 取地址），按目标字段（FieldDefinitionHandle）收集访问点来源 （类型全名::成员签名），供 field_access 工具使用。 方法体读取经
+/// PEReader.GetMethodBody，IL 解码经共享 IlScanHelper；解码异常安全中止并累计降级计数。
 /// </summary>
 public sealed class FieldAccessScanner
 {
@@ -33,8 +31,7 @@ public sealed class FieldAccessScanner
 
     /// <summary>
     /// 反向扫描程序集全部非编译器生成类型的方法体，收集访问目标字段的成员。
-    /// 读取（ldfld/ldsfld）/写入（stfld/stsfld）/取地址（ldflda/ldsflda）分别成段，
-    /// 元素为 类型全名::成员签名 行，去重排序。
+    /// 读取（ldfld/ldsfld）/写入（stfld/stsfld）/取地址（ldflda/ldsflda）分别成段， 元素为 类型全名::成员签名 行，去重排序。
     /// </summary>
     /// <param name="target">目标字段的定义句柄。</param>
     /// <returns>读取/写入/取地址三段的访问点行列表。</returns>
@@ -96,8 +93,7 @@ public sealed class FieldAccessScanner
 
     /// <summary>
     /// 解码一个方法体的 IL 字节流（经 IlScanHelper 回调驱动）：字段访问指令按 opcode 分类后解析 token 判定是否命中目标字段，
-    /// 命中先记分类掩码，方法体扫描结束再统一渲染来源签名（免为无命中方法付出签名渲染成本）；
-    /// 解码异常时中止并累计 AbortedBodies，保留已收集部分。
+    /// 命中先记分类掩码，方法体扫描结束再统一渲染来源签名（免为无命中方法付出签名渲染成本）； 解码异常时中止并累计 AbortedBodies，保留已收集部分。
     /// </summary>
     private void ScanBody(MethodBodyBlock body, MethodDefinition method,
         FieldDefinitionHandle target, TypeDefinitionHandle targetDeclaringType,
@@ -130,8 +126,9 @@ public sealed class FieldAccessScanner
     }
 
     /// <summary>
-    /// 字段 token 是否指向目标字段：FieldDef 直比 token == target；MemberRef 沿 parent（TypeDef/TypeRef/TypeSpec）解析——
-    /// 内部字段且 declaring type == 目标声明类型 且 MemberRef.Name == 目标字段名 时命中。
+    /// 字段 token 是否指向目标字段：FieldDef 直比 token == target；MemberRef 沿
+    /// parent（TypeDef/TypeRef/TypeSpec）解析—— 内部字段且 declaring type == 目标声明类型 且 MemberRef.Name ==
+    /// 目标字段名 时命中。
     /// </summary>
     private bool MatchesField(int rawToken, FieldDefinitionHandle target, TypeDefinitionHandle targetDeclaringType,
         string targetDeclaringTypeName, string targetFieldName)
@@ -151,9 +148,8 @@ public sealed class FieldAccessScanner
     }
 
     /// <summary>
-    /// 判定 MemberRef 的 parent 是否解析为目标字段的声明类型：TypeDef 直比；TypeRef 经归属判定为内部且全名一致；
-    /// TypeSpecification 解码仅取签名最外层元素类型（即字段声明类型，泛型实参不参与）比对（覆盖泛型实例化字段如
-    /// GenericBox&lt;int&gt;.Data——实参类型只是实例化参数，不得被当作声明类型误归因）。
+    /// 判定 MemberRef 的 parent 是否解析为目标字段的声明类型：TypeDef 直比；TypeRef 经归属判定为内部且全名一致； TypeSpecification
+    /// 解码仅取签名最外层元素类型（即字段声明类型，泛型实参不参与）比对（覆盖泛型实例化字段如 GenericBox&lt;int&gt;.Data——实参类型只是实例化参数，不得被当作声明类型误归因）。
     /// </summary>
     private bool MemberRefParentIsTargetType(EntityHandle parent, TypeDefinitionHandle targetDeclaringType, string targetDeclaringTypeName)
     {
@@ -161,12 +157,14 @@ public sealed class FieldAccessScanner
         {
             case HandleKind.TypeDefinition:
                 return (TypeDefinitionHandle)parent == targetDeclaringType;
+
             case HandleKind.TypeReference:
                 var trHandle = (TypeReferenceHandle)parent;
                 var (isInternal, _) = MetadataNaming.TypeReferenceScope(_reader, trHandle);
                 if (!isInternal) return false;
                 var fullName = MetadataNaming.TypeReferenceFullName(_reader, trHandle);
                 return fullName == targetDeclaringTypeName;
+
             case HandleKind.TypeSpecification:
                 try
                 {
@@ -180,15 +178,13 @@ public sealed class FieldAccessScanner
                 }
             default:
                 return false;
-            // 其余 parent 作用域（如方法定义等非法字段父）非字段引用
+                // 其余 parent 作用域（如方法定义等非法字段父）非字段引用
         }
     }
 
     /// <summary>
     /// 签名解码器：仅捕获 TypeSpecification 签名最外层元素类型（字段声明类型）的内部 TypeDefinition 句柄——
-    /// 解码顺序保证根元素先于泛型实参产出，故仅收集第一个产出的元素（含根为 TypeRef/基元等外部元素时置位屏蔽后续实参），
-    /// 避免泛型实例化的实参类型被误判为字段声明类型。
-    /// 返回布尔只作占位，不参与任何判定。
+    /// 解码顺序保证根元素先于泛型实参产出，故仅收集第一个产出的元素（含根为 TypeRef/基元等外部元素时置位屏蔽后续实参）， 避免泛型实例化的实参类型被误判为字段声明类型。 返回布尔只作占位，不参与任何判定。
     /// </summary>
     private sealed class TypeDefCollector : ISignatureTypeProvider<bool, object?>
     {

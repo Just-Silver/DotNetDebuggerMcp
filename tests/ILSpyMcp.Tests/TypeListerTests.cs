@@ -13,18 +13,9 @@ public class TypeListerTests
 {
     // 生成测试程序集：601 个 class（Class0001-0600 + BigClass）+ interface（IAnimal 等）+ 编译器生成的 <Module>
     private static readonly string TestSamplesPath = TestDataPaths.TestSamplesDll;
+
     // 主项目程序集：含 struct（ToolPipelineResult 等）、enum、嵌套类型与编译器生成类型
     private static readonly string MainAssemblyPath = typeof(OutputFormatter).Assembly.Location;
-
-    /// <summary>
-    /// 打开程序集并保持 fs/pe 存活的情况下执行元数据断言。
-    /// </summary>
-    private static void WithReader(string path, Action<MetadataReader> action)
-    {
-        using var fs = File.OpenRead(path);
-        using var pe = new PEReader(fs);
-        action(pe.GetMetadataReader());
-    }
 
     [Fact]
     public void TestSamples_列出class_含样本类型且过滤编译器生成类型()
@@ -245,5 +236,15 @@ public class TypeListerTests
             Assert.True(byCategory['e'] >= 1, $"enum 应 >= 1，实际 {byCategory['e']}");
             Assert.True(byCategory['c'] >= 1, $"class 应 >= 1，实际 {byCategory['c']}");
         });
+    }
+
+    /// <summary>
+    /// 打开程序集并保持 fs/pe 存活的情况下执行元数据断言。
+    /// </summary>
+    private static void WithReader(string path, Action<MetadataReader> action)
+    {
+        using var fs = File.OpenRead(path);
+        using var pe = new PEReader(fs);
+        action(pe.GetMetadataReader());
     }
 }

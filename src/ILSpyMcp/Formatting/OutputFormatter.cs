@@ -3,42 +3,55 @@ using System.Text;
 namespace ILSpyMcp.Formatting;
 
 /// <summary>
-/// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞，
-/// IsCached 标注本次结果来自缓存命中（供 agent 感知重复查询低成本），Degraded 标注本次结果降级解析的方法体计数（仅新鲜扫描显示）。
+/// 格式化上下文：头部信息块所需的外界元数据（程序集路径、目标描述），由工具层传入；IsListing 区分「列类型」与「反编译」的措辞， IsCached 标注本次结果来自缓存命中（供
+/// agent 感知重复查询低成本），Degraded 标注本次结果降级解析的方法体计数（仅新鲜扫描显示）。
 /// </summary>
 public sealed record FormatContext(string AssemblyPath, string Target, bool IsListing = false, bool IsCached = false, int Degraded = 0);
 
 /// <summary>
 /// 标准输出结果格式化：默认按字符预算（UTF-8 字节）返回前若干行并附行数软上限，超限截断并提示用 lines 参数拉取；lines 参数按行号范围切片
-/// （单次同样受字节预算与行数软上限约束）。 传入 <see cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/总量/当前输出/剩余），给
-/// agent 明确代码归属与当前切片位置。
+/// （单次同样受字节预算与行数软上限约束）。 传入 <see cref="FormatContext"/> 时结果前置头部信息块（程序集/目标/总量/当前输出/剩余），给 agent 明确代码归属与当前切片位置。
 /// </summary>
 public static class OutputFormatter
 {
-    /// <summary>默认返回（不带 lines）的字符预算（UTF-8 字节），超过则截断并提示用 lines 拉取。</summary>
+    /// <summary>
+    /// 默认返回（不带 lines）的字符预算（UTF-8 字节），超过则截断并提示用 lines 拉取。
+    /// </summary>
     public const int DefaultMaxOutputChars = 8 * 1024;
 
-    /// <summary>默认返回（不带 lines）的行数软上限，防止短行密集输出在字节未超限时行数爆量。</summary>
+    /// <summary>
+    /// 默认返回（不带 lines）的行数软上限，防止短行密集输出在字节未超限时行数爆量。
+    /// </summary>
     public const int DefaultMaxLines = 1500;
 
-    /// <summary>lines 参数单次返回的字符预算（UTF-8 字节），低于 opencode 宿主 50KB 边界。</summary>
+    /// <summary>
+    /// lines 参数单次返回的字符预算（UTF-8 字节），低于 opencode 宿主 50KB 边界。
+    /// </summary>
     public const int LinesMaxOutputChars = 32 * 1024;
 
-    /// <summary>lines 参数单次返回的行数软上限。</summary>
+    /// <summary>
+    /// lines 参数单次返回的行数软上限。
+    /// </summary>
     public const int LinesMaxCount = 1900;
 
-    /// <summary>预算截断的终止原因：取到末尾未截断 / 字节预算先到 / 行数软上限先到。</summary>
-
-    /// <summary>成员 JSON 分隔行前缀（#MEMBER 空格 + JSON），供 decompile_member/call_chain/field_access 多匹配与超限清单统一生成。</summary>
-    public const string MemberLinePrefix = "#MEMBER ";
+    /// <summary>
+    /// 预算截断的终止原因：取到末尾未截断 / 字节预算先到 / 行数软上限先到。
+    /// </summary>
 
     /// <summary>
-    /// 生成成员 JSON 分隔行（含 #MEMBER 前缀）：`#MEMBER {MemberJson(...)}`。供 decompile_member/call_chain/field_access
-    /// 多匹配清单与分隔行统一拼接，避免各处手写前缀造成格式漂移。
+    /// 成员 JSON 分隔行前缀（#MEMBER 空格 + JSON），供 decompile_member/call_chain/field_access 多匹配与超限清单统一生成。
+    /// </summary>
+    public const string MemberLinePrefix = "#MEMBER ";
+
+    private enum BudgetLimit
+    { End, Chars, Lines }
+
+    /// <summary>
+    /// 生成成员 JSON 分隔行（含 #MEMBER 前缀）：`#MEMBER {MemberJson(...)}`。供
+    /// decompile_member/call_chain/field_access 多匹配清单与分隔行统一拼接，避免各处手写前缀造成格式漂移。
     /// </summary>
     public static string MemberLine(string name, string token, string? signature = null, string? type = null)
         => $"{MemberLinePrefix}{MemberJson(name, token, signature, type)}";
-    private enum BudgetLimit { End, Chars, Lines }
 
     /// <summary>
     /// 解析 lines 参数（格式 "start-end"，1-based 含两端），非法格式/边界返回错误提示。
@@ -77,9 +90,9 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 渲染成员 JSON 分隔行内容（不含 #MEMBER 前缀）：{name, token[, signature][, type]}。供 decompile_member 多匹配分隔行与超限
-    /// 签名清单共用，agent 免解析文本分隔线直接取 name/token。用 UnsafeRelaxedJsonEscaping 避免成员名含中文时 \uXXXX 转义
-    /// 导致 token 膨胀。
+    /// 渲染成员 JSON 分隔行内容（不含 #MEMBER 前缀）：{name, token[, signature][, type]}。供 decompile_member
+    /// 多匹配分隔行与超限 签名清单共用，agent 免解析文本分隔线直接取 name/token。用 UnsafeRelaxedJsonEscaping 避免成员名含中文时 \uXXXX
+    /// 转义 导致 token 膨胀。
     /// </summary>
     /// <param name="name">成员名。</param>
     /// <param name="token">成员 token（如 0x060004b2）。</param>
@@ -107,32 +120,7 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 追加 JSON 字符串字面量：转义引号、反斜杠与控制字符；非 ASCII 字符原样保留（避免 \uXXXX 转义膨胀 token）。
-    /// </summary>
-    private static void AppendJsonString(StringBuilder sb, string value)
-    {
-        sb.Append('"');
-        foreach (var c in value)
-        {
-            switch (c)
-            {
-                case '"': sb.Append("\\\""); break;
-                case '\\': sb.Append("\\\\"); break;
-                case '\n': sb.Append("\\n"); break;
-                case '\r': sb.Append("\\r"); break;
-                case '\t': sb.Append("\\t"); break;
-                default:
-                    if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
-                    else sb.Append(c);
-                    break;
-            }
-        }
-        sb.Append('"');
-    }
-
-    /// <summary>
-    /// 默认返回按字符预算（DefaultMaxOutputChars UTF-8 字节）与行数软上限（DefaultMaxLines）取前若干行（每行标注行号）；
-    /// 结果更大时截断并附操作提示（总行数由头部字段提供，此处不再重复）。
+    /// 默认返回按字符预算（DefaultMaxOutputChars UTF-8 字节）与行数软上限（DefaultMaxLines）取前若干行（每行标注行号）； 结果更大时截断并附操作提示（总行数由头部字段提供，此处不再重复）。
     /// </summary>
     /// <param name="lines">反编译结果行列表。</param>
     /// <returns>预算内前若干行的行号文本；超限时附截断提示。</returns>
@@ -151,8 +139,7 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 从缓存结果按行号切片返回（每行标注行号）；单次受字符预算（LinesMaxOutputChars UTF-8 字节）与行数软上限（LinesMaxCount）约束，
-    /// 超出时截断并提示剩余范围（总行数由头部字段提供，此处不再重复）。
+    /// 从缓存结果按行号切片返回（每行标注行号）；单次受字符预算（LinesMaxOutputChars UTF-8 字节）与行数软上限（LinesMaxCount）约束， 超出时截断并提示剩余范围（总行数由头部字段提供，此处不再重复）。
     /// </summary>
     /// <param name="lines">反编译结果行列表。</param>
     /// <param name="start">起始行号（1-based，含）。</param>
@@ -221,6 +208,30 @@ public static class OutputFormatter
     }
 
     /// <summary>
+    /// 追加 JSON 字符串字面量：转义引号、反斜杠与控制字符；非 ASCII 字符原样保留（避免 \uXXXX 转义膨胀 token）。
+    /// </summary>
+    private static void AppendJsonString(StringBuilder sb, string value)
+    {
+        sb.Append('"');
+        foreach (var c in value)
+        {
+            switch (c)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                default:
+                    if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4", System.Globalization.CultureInfo.InvariantCulture));
+                    else sb.Append(c);
+                    break;
+            }
+        }
+        sb.Append('"');
+    }
+
+    /// <summary>
     /// 计算单行经 NumberLines 渲染后的真实输出字节成本：行号位数 + 1(tab) + UTF8字节(行内容) + 1(换行)。
     /// 行号为该行在最终输出中的实际行号（1-based）。预算判据与宿主 opencode 的 UTF-8 字节截断同口径。
     /// </summary>
@@ -228,9 +239,8 @@ public static class OutputFormatter
         => lineNo.ToString().Length + 1 + Encoding.UTF8.GetByteCount(line) + 1;
 
     /// <summary>
-    /// 从 startIndex 起（0-based）取行，直到字符预算或行数软上限先到达（至少返回 1 行）；返回实际行数与终止原因。
-    /// 每行成本按 NumberLines 渲染后的真实输出字节计算：行号位数 + 1(tab) + UTF8字节(行内容) + 1(换行)，
-    /// 行号为该行在最终输出中的实际行号（startIndex + i + 1）。预算判据与宿主字节截断同口径。
+    /// 从 startIndex 起（0-based）取行，直到字符预算或行数软上限先到达（至少返回 1 行）；返回实际行数与终止原因。 每行成本按 NumberLines
+    /// 渲染后的真实输出字节计算：行号位数 + 1(tab) + UTF8字节(行内容) + 1(换行)， 行号为该行在最终输出中的实际行号（startIndex + i + 1）。预算判据与宿主字节截断同口径。
     /// </summary>
     private static (int Count, BudgetLimit Limit) CountLinesWithinBudget(List<string> lines, int startIndex, int maxChars, int maxLines)
     {
@@ -295,7 +305,7 @@ public static class OutputFormatter
 
     /// <summary>
     /// 生成头部信息块：程序集 / 目标 两行 + 总量与当前输出/剩余字段行 + 分隔线；输出含 //IL_ 未解析注释时在分隔线前附计数提示行，
-    /// 结果经元数据降级解析（ctx.Degraded > 0）时附降级解析计数提示行。
+    /// 结果经元数据降级解析（ctx.Degraded &gt; 0）时附降级解析计数提示行。
     /// 总量：反编译为「总行数」，列类型同时给出「匹配实体」与「总行数」（每行一个实体，行数=实体数）；当前输出与剩余统一按「行」定位。 头部为纯文本、不带行号前缀，避免与源码行号混淆。
     /// </summary>
     private static string BuildHeader(FormatContext ctx, List<string> lines, string linesParam)
@@ -357,8 +367,7 @@ public static class OutputFormatter
     }
 
     /// <summary>
-    /// 剩余字段：仅当本次输出因预算/行数截断时输出，告知剩余行数/KB 与建议的 lines 边界（边界经同一累计函数算出，照抄后恰好不超预算）。
-    /// 剩余整体可一次获取时给全量范围；否则给首个可行段并提示需分次获取。
+    /// 剩余字段：仅当本次输出因预算/行数截断时输出，告知剩余行数/KB 与建议的 lines 边界（边界经同一累计函数算出，照抄后恰好不超预算）。 剩余整体可一次获取时给全量范围；否则给首个可行段并提示需分次获取。
     /// </summary>
     private static string? DescribeRemaining(List<string> lines, string linesParam)
     {

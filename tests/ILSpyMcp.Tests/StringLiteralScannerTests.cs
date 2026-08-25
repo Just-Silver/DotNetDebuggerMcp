@@ -6,37 +6,11 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// StringLiteralScanner 字符串字面量反查用例：子串命中成员 / 忽略大小写 / typeName 限定范围。
-/// 素材：生成测试程序集（tests/TestData）中的 StringHolder（Log 含"不支持高性能计数器"、Query 含"ORDER BY GetDate()"、Get 返回"配置Key:SqlSugar:Enabled"）。
+/// StringLiteralScanner 字符串字面量反查用例：子串命中成员 / 忽略大小写 / typeName 限定范围。 素材：生成测试程序集（tests/TestData）中的
+/// StringHolder（Log 含"不支持高性能计数器"、Query 含"ORDER BY GetDate()"、Get 返回"配置Key:SqlSugar:Enabled"）。
 /// </summary>
 public class StringLiteralScannerTests
 {
-    /// <summary>
-    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
-    /// </summary>
-    private sealed class MetadataScope : IDisposable
-    {
-        private readonly FileStream _fs;
-        private readonly PEReader _pe;
-
-        public MetadataScope()
-        {
-            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
-            _pe = new PEReader(_fs);
-            Reader = _pe.GetMetadataReader();
-        }
-
-        public PEReader Pe => _pe;
-
-        public MetadataReader Reader { get; }
-
-        public void Dispose()
-        {
-            _pe.Dispose();
-            _fs.Dispose();
-        }
-    }
-
     [Fact]
     public void 子串搜索命中成员()
     {
@@ -67,5 +41,31 @@ public class StringLiteralScannerTests
 
         Assert.NotEmpty(hits);
         Assert.All(hits, h => Assert.Equal("ILSpyMcp.Samples.StringHolder", h.TypeFullName));
+    }
+
+    /// <summary>
+    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
+    /// </summary>
+    private sealed class MetadataScope : IDisposable
+    {
+        private readonly FileStream _fs;
+        private readonly PEReader _pe;
+
+        public MetadataScope()
+        {
+            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+            _pe = new PEReader(_fs);
+            Reader = _pe.GetMetadataReader();
+        }
+
+        public PEReader Pe => _pe;
+
+        public MetadataReader Reader { get; }
+
+        public void Dispose()
+        {
+            _pe.Dispose();
+            _fs.Dispose();
+        }
     }
 }

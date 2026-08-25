@@ -13,20 +13,9 @@ internal static class AppConfig
     public const long MaxCacheBytes = 64 * 1024 * 1024;
 
     /// <summary>
-    /// 单次反编译生成文本的字符数上限：进程内反编译完成后检查，超过即返回「建议改用 decompile_to_dir」提示且该结果不入缓存
-    /// （仅在生成完成后阻止超限文本返回与入缓存，不限制生成过程本身）。取值与缓存上限一致。
+    /// 单次反编译生成文本的字符数上限：进程内反编译完成后检查，超过即返回「建议改用 decompile_to_dir」提示且该结果不入缓存 （仅在生成完成后阻止超限文本返回与入缓存，不限制生成过程本身）。取值与缓存上限一致。
     /// </summary>
     public const long MaxOutputBytes = MaxCacheBytes;
-
-    /// <summary>
-    /// 缓存条目滑动过期时长：自最后一次 Get/Put 起超过该时长未访问即过期（固定 30 分钟，不可关闭）。
-    /// </summary>
-    public static readonly TimeSpan CacheEntrySlidingTtl = TimeSpan.FromMinutes(30);
-
-    /// <summary>
-    /// 缓存定时清理间隔：后台 Timer 每隔该时长扫描并清理过期条目（固定 5 分钟）。
-    /// </summary>
-    public static readonly TimeSpan CacheCleanupInterval = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// 全局操作默认超时秒数：所有 MCP 工具的 timeoutSeconds 参数默认值；工具可 per-call 覆盖。
@@ -44,8 +33,7 @@ internal static class AppConfig
     public const int ExternalExpandMaxDepth = 5;
 
     /// <summary>
-    /// call_chain 单次跨程序集调用展开最多展开的外部节点数：超过该节点数的后续外部调用不再展开，
-    /// 防 BCL 密集方法体在 includeExternal=true 时展开出数百节点拖慢查询。
+    /// call_chain 单次跨程序集调用展开最多展开的外部节点数：超过该节点数的后续外部调用不再展开， 防 BCL 密集方法体在 includeExternal=true 时展开出数百节点拖慢查询。
     /// </summary>
     public const int ExternalExpandMaxNodes = 200;
 
@@ -63,6 +51,16 @@ internal static class AppConfig
     /// NuGet 新版本检查磁盘缓存文件名（位于 <see cref="ILSpyMcp.UpdateCheck.UpdateChecker"/> 的缓存目录下）。
     /// </summary>
     public const string UpdateCheckCacheFileName = "update-check.json";
+
+    /// <summary>
+    /// 缓存条目滑动过期时长：自最后一次 Get/Put 起超过该时长未访问即过期（固定 30 分钟，不可关闭）。
+    /// </summary>
+    public static readonly TimeSpan CacheEntrySlidingTtl = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// 缓存定时清理间隔：后台 Timer 每隔该时长扫描并清理过期条目（固定 5 分钟）。
+    /// </summary>
+    public static readonly TimeSpan CacheCleanupInterval = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// 全局操作默认超时（由 <see cref="DefaultTimeoutSeconds"/> 派生）。

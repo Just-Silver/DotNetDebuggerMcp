@@ -1,6 +1,5 @@
 using ILSpyMcp.Metadata;
 using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using Xunit;
 
@@ -12,49 +11,11 @@ namespace ILSpyMcp.Tests;
 /// </summary>
 public class CallChainScannerTests
 {
-    /// <summary>
-    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
-    /// </summary>
-    private sealed class MetadataScope : IDisposable
-    {
-        private readonly FileStream _fs;
-        private readonly PEReader _pe;
-
-        public MetadataScope()
-        {
-            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
-            _pe = new PEReader(_fs);
-            Reader = _pe.GetMetadataReader();
-        }
-
-        public PEReader Pe => _pe;
-
-        public MetadataReader Reader { get; }
-
-        public void Dispose()
-        {
-            _pe.Dispose();
-            _fs.Dispose();
-        }
-    }
-
-    private static MethodDefinitionHandle GetMethod(MetadataReader reader, string typeFullName, string methodName)
-    {
-        var handle = MetadataNaming.FindType(reader, typeFullName);
-        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
-        var type = reader.GetTypeDefinition(handle!.Value);
-        foreach (var methodHandle in type.GetMethods())
-        {
-            if (reader.GetString(reader.GetMethodDefinition(methodHandle).Name) == methodName) return methodHandle;
-        }
-        throw new InvalidOperationException($"测试程序集中未找到 {typeFullName}.{methodName}");
-    }
-
     [Fact]
     public void ChainTop_Run_调用序列按IL序含重复()
     {
-        // Run { new ChainMid().Mid(); ChainMid.StaticMid(); ChainMid.StaticMid(); }
-        // IL 序：newobj ChainMid..ctor、callvirt ChainMid.Mid、call ChainMid.StaticMid ×2
+        // Run { new ChainMid().Mid(); ChainMid.StaticMid(); ChainMid.StaticMid(); } IL 序：newobj
+        // ChainMid..ctor、callvirt ChainMid.Mid、call ChainMid.StaticMid ×2
         using var scope = new MetadataScope();
         var scanner = new CallChainScanner(scope.Pe);
         var calls = scanner.ScanMethod(GetMethod(scope.Reader, "ILSpyMcp.Samples.ChainTop", "Run"));
@@ -96,5 +57,43 @@ public class CallChainScannerTests
         Assert.Equal("", external.Signature);
         Assert.StartsWith("System.Console", external.AssemblyFullName);
         Assert.Equal(1, external.ParamCount);
+    }
+
+    private static MethodDefinitionHandle GetMethod(MetadataReader reader, string typeFullName, string methodName)
+    {
+        var handle = MetadataNaming.FindType(reader, typeFullName);
+        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
+        var type = reader.GetTypeDefinition(handle!.Value);
+        foreach (var methodHandle in type.GetMethods())
+        {
+            if (reader.GetString(reader.GetMethodDefinition(methodHandle).Name) == methodName) return methodHandle;
+        }
+        throw new InvalidOperationException($"测试程序集中未找到 {typeFullName}.{methodName}");
+    }
+
+    /// <summary>
+    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
+    /// </summary>
+    private sealed class MetadataScope : IDisposable
+    {
+        private readonly FileStream _fs;
+        private readonly PEReader _pe;
+
+        public MetadataScope()
+        {
+            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+            _pe = new PEReader(_fs);
+            Reader = _pe.GetMetadataReader();
+        }
+
+        public PEReader Pe => _pe;
+
+        public MetadataReader Reader { get; }
+
+        public void Dispose()
+        {
+            _pe.Dispose();
+            _fs.Dispose();
+        }
     }
 }

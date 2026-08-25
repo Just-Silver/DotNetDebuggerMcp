@@ -9,32 +9,12 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// field_access 工具层用例：typeName+fieldName 定位字段 / fieldToken 定位 / 跨程序集多匹配 #MEMBER 清单 / 参数校验 / 未找到。
-/// 经 AppServices.ConfigureForTest 注入隔离缓存，与 ToolPipelineTests 等同属 AppServices collection 串行执行。
+/// field_access 工具层用例：typeName+fieldName 定位字段 / fieldToken 定位 / 跨程序集多匹配 #MEMBER 清单 / 参数校验 / 未找到。 经
+/// AppServices.ConfigureForTest 注入隔离缓存，与 ToolPipelineTests 等同属 AppServices collection 串行执行。
 /// </summary>
 [Collection("AppServices")]
 public class FieldAccessToolTests
 {
-    /// <summary>
-    /// 取测试程序集 FieldHolder.Data 字段的元数据 token（0x04 开头），供 fieldToken 用例使用。
-    /// </summary>
-    private static string FieldTokenOf()
-    {
-        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
-        using var pe = new PEReader(fs);
-        var reader = pe.GetMetadataReader();
-        var typeHandle = MetadataNaming.FindType(reader, "ILSpyMcp.Samples.FieldHolder");
-        Assert.True(typeHandle.HasValue, "测试程序集中未找到 FieldHolder");
-        foreach (var fieldHandle in reader.GetTypeDefinition(typeHandle.Value).GetFields())
-        {
-            if (reader.GetString(reader.GetFieldDefinition(fieldHandle).Name) == "Data")
-            {
-                return $"0x{MetadataTokens.GetToken(fieldHandle):x8}";
-            }
-        }
-        throw new InvalidOperationException("FieldHolder 未找到字段 Data");
-    }
-
     [Fact]
     public async Task FieldAccess_typeName加fieldName_输出三段且Writes含FieldWriter()
     {
@@ -148,5 +128,25 @@ public class FieldAccessToolTests
         var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "NoSuchField");
 
         Assert.Contains("未找到字段名包含", result);
+    }
+
+    /// <summary>
+    /// 取测试程序集 FieldHolder.Data 字段的元数据 token（0x04 开头），供 fieldToken 用例使用。
+    /// </summary>
+    private static string FieldTokenOf()
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        var typeHandle = MetadataNaming.FindType(reader, "ILSpyMcp.Samples.FieldHolder");
+        Assert.True(typeHandle.HasValue, "测试程序集中未找到 FieldHolder");
+        foreach (var fieldHandle in reader.GetTypeDefinition(typeHandle.Value).GetFields())
+        {
+            if (reader.GetString(reader.GetFieldDefinition(fieldHandle).Name) == "Data")
+            {
+                return $"0x{MetadataTokens.GetToken(fieldHandle):x8}";
+            }
+        }
+        throw new InvalidOperationException("FieldHolder 未找到字段 Data");
     }
 }

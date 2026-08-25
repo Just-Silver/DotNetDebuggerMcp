@@ -22,7 +22,8 @@ public static class DependenciesCases
         new ToolCallCase("dependencies", "类型不存在（应返回提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "No.Such.Type" },
             ExpectedContains: "未找到类型", MustNotContain: "at System", ExpectSuccess: false),
-        // includeExternal=true：Members.Changed 为 event EventHandler?（跨程序集），外部段应含 System.EventHandler 带程序集归属
+        // includeExternal=true：Members.Changed 为 event EventHandler?（跨程序集），外部段应含
+        // System.EventHandler 带程序集归属
         new ToolCallCase("dependencies", "Members includeExternal 外部段含 System.EventHandler",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Members", ["includeExternal"] = true },
             ExpectedContains: "System.EventHandler [System.Runtime]", MustNotContain: "at System"),

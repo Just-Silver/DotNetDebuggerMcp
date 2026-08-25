@@ -18,25 +18,31 @@ public readonly record struct ToolPipelineResult(string Text);
 /// </summary>
 public enum DecompileKind
 {
-    /// <summary>反编译指定类型：Target 为类型全名（如 System.String）。</summary>
+    /// <summary>
+    /// 反编译指定类型：Target 为类型全名（如 System.String）。
+    /// </summary>
     Type,
 
-    /// <summary>反编译指定成员：Target 为元数据 token（如 0x06000005）。</summary>
+    /// <summary>
+    /// 反编译指定成员：Target 为元数据 token（如 0x06000005）。
+    /// </summary>
     Member,
 
-    /// <summary>反编译整个程序集：Target 忽略。</summary>
+    /// <summary>
+    /// 反编译整个程序集：Target 忽略。
+    /// </summary>
     WholeModule,
 }
 
 /// <summary>
-/// 一次进程内反编译请求：Kind 决定反编译入口，Target 为类型全名或成员 token。 同一成员不同子串查询得到的 token 相同
-/// → 请求相同 → 缓存签名相同 → 共享缓存（原 decompile_member 语义保留）。
+/// 一次进程内反编译请求：Kind 决定反编译入口，Target 为类型全名或成员 token。 同一成员不同子串查询得到的 token 相同 → 请求相同 → 缓存签名相同 → 共享缓存（原
+/// decompile_member 语义保留）。
 /// </summary>
 public sealed record DecompileRequest(DecompileKind Kind, string Target);
 
 /// <summary>
-/// 一次反编译调用描述：程序集路径 + 反编译请求；缓存签名由 Kind+Target 统一派生（以 \u001F 拼接），
-/// 杜绝调用方手写签名导致缓存 key 错配。DisplayName/MemberName/MemberToken 仅影响合并展示，不参与缓存签名。
+/// 一次反编译调用描述：程序集路径 + 反编译请求；缓存签名由 Kind+Target 统一派生（以 \u001F 拼接）， 杜绝调用方手写签名导致缓存 key
+/// 错配。DisplayName/MemberName/MemberToken 仅影响合并展示，不参与缓存签名。
 /// </summary>
 public sealed class ToolCommand
 {
@@ -74,8 +80,8 @@ public sealed class ToolCommand
     public string? DisplayName { get; set; }
 
     /// <summary>
-    /// 可选成员名：与 <see cref="MemberToken"/> 同时提供时，合并输出前插入 `#MEMBER {"name","token"}` JSON 分隔行
-    /// （agent 免解析分隔线直接取 token）；仅影响合并展示，不参与缓存签名。优先级高于 <see cref="DisplayName"/>。
+    /// 可选成员名：与 <see cref="MemberToken"/> 同时提供时，合并输出前插入 `#MEMBER {"name","token"}` JSON 分隔行 （agent
+    /// 免解析分隔线直接取 token）；仅影响合并展示，不参与缓存签名。优先级高于 <see cref="DisplayName"/>。
     /// </summary>
     public string? MemberName { get; set; }
 
@@ -85,7 +91,7 @@ public sealed class ToolCommand
     public string? MemberToken { get; set; }
 
     /// <summary>
-    /// 可选成员所属类型全名：与 <see cref="MemberName"/>/<see cref="MemberToken"/> 同时提供时，JSON 分隔行附带 `type` 字段
+    /// 可选成员所属类型全名：与 <see cref="MemberName"/>/ <see cref="MemberToken"/> 同时提供时，JSON 分隔行附带 `type` 字段
     /// （跨程序集搜索时供 agent 分辨成员归属）；仅影响合并展示，不参与缓存签名。
     /// </summary>
     public string? MemberType { get; set; }
@@ -121,7 +127,9 @@ public sealed class ToolPipeline
     /// 以共享缓存与反编译探针构造执行管道。
     /// </summary>
     /// <param name="cache">共享反编译缓存。</param>
-    /// <param name="decompile">反编译探针：接收调用描述与取消令牌，返回反编译文本或错误提示；缺省经 <see cref="InProcessDecompiler"/> 静态入口按 Kind 分发。</param>
+    /// <param name="decompile">
+    /// 反编译探针：接收调用描述与取消令牌，返回反编译文本或错误提示；缺省经 <see cref="InProcessDecompiler"/> 静态入口按 Kind 分发。
+    /// </param>
     public ToolPipeline(DecompileCache cache, Func<ToolCommand, CancellationToken, string>? decompile = null)
     {
         _cache = cache;
@@ -129,8 +137,7 @@ public sealed class ToolPipeline
     }
 
     /// <summary>
-    /// 执行一次反编译调用：缓存命中直接返回；未命中则并发单飞回源（Lazy 保证同 key 只启动一次进程内反编译）后写缓存。 指定 lines
-    /// 时按行号切片，否则返回前约 8 KB；一切错误返回提示文本，不抛异常。
+    /// 执行一次反编译调用：缓存命中直接返回；未命中则并发单飞回源（Lazy 保证同 key 只启动一次进程内反编译）后写缓存。 指定 lines 时按行号切片，否则返回前约 8 KB；一切错误返回提示文本，不抛异常。
     /// </summary>
     /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
     /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前约 8 KB。</param>
@@ -155,8 +162,7 @@ public sealed class ToolPipeline
     }
 
     /// <summary>
-    /// 合并执行多条命令（decompile_member 多匹配场景）：各自走缓存/回源拿全量纯净行，按命令顺序合并为一个大行列表， 再统一做行号标注与
-    /// lines 分页/截断（总行数/当前输出均基于合并结果）。任一命令失败即返回错误提示，不抛异常。
+    /// 合并执行多条命令（decompile_member 多匹配场景）：各自走缓存/回源拿全量纯净行，按命令顺序合并为一个大行列表， 再统一做行号标注与 lines 分页/截断（总行数/当前输出均基于合并结果）。任一命令失败即返回错误提示，不抛异常。
     /// </summary>
     /// <param name="commands">多条调用描述（每个匹配成员一条，各自独立缓存）。</param>
     /// <param name="lines">lines 分页参数，格式 "start-end"；空字符串返回前约 8 KB。</param>
@@ -191,8 +197,8 @@ public sealed class ToolPipeline
     }
 
     /// <summary>
-    /// 取指定调用的全量纯净行列表：缓存命中直接返回；未命中则并发单飞回源后写缓存。错误向上抛出，由调用方转为提示文本。
-    /// 供既有执行入口与 call_chain 组合输出等场景复用（call_chain 需逐成员取体行后自行合并布局）。
+    /// 取指定调用的全量纯净行列表：缓存命中直接返回；未命中则并发单飞回源后写缓存。错误向上抛出，由调用方转为提示文本。 供既有执行入口与 call_chain
+    /// 组合输出等场景复用（call_chain 需逐成员取体行后自行合并布局）。
     /// </summary>
     /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
     /// <param name="timeout">本次回源超时。</param>
@@ -229,6 +235,25 @@ public sealed class ToolPipeline
     }
 
     /// <summary>
+    /// 默认反编译探针：按 <see cref="DecompileKind"/> 分发到 <see cref="InProcessDecompiler"/> 静态入口（类型/成员/整模块），
+    /// 并将取消令牌透传给引擎实现协作式中断。 生产路径恒走本实现；测试可注入替代探针（计数回源次数/制造失败）验证并发单飞与错误分支。
+    /// </summary>
+    /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
+    /// <param name="cancellationToken">取消令牌，透传给反编译引擎。</param>
+    /// <returns>反编译文本或错误提示。</returns>
+    private static string DecompileStatic(ToolCommand command, CancellationToken cancellationToken)
+    {
+        var request = command.Request;
+        return request.Kind switch
+        {
+            DecompileKind.Type => InProcessDecompiler.DecompileType(command.Assembly, request.Target, cancellationToken),
+            DecompileKind.Member => InProcessDecompiler.DecompileMember(command.Assembly, request.Target, cancellationToken),
+            DecompileKind.WholeModule => InProcessDecompiler.DecompileWholeModule(command.Assembly, cancellationToken),
+            _ => throw new ArgumentOutOfRangeException(nameof(request), $"未知反编译请求类型 {request.Kind}"),
+        };
+    }
+
+    /// <summary>
     /// 回源反编译：经 <see cref="InProcessDecompiler.RunWithTimeoutAsync"/> 在后台线程执行反编译探针并拆分行列表；
     /// 超时/取消提示与探针返回的错误提示（未找到类型/超限/非法 token 等）均识别后抛异常（走「错误转提示」路径且不入缓存，同 key 后续调用仍可重试）。
     /// </summary>
@@ -247,25 +272,5 @@ public sealed class ToolPipeline
         // 探针返回的错误提示（未找到类型/输出超限/非法或越界 token 等）同样不入缓存：抛异常由调用方转为提示文本，同 key 后续调用可重试
         if (InProcessDecompiler.IsErrorResult(text)) throw new InvalidOperationException(text);
         return OutputFormatter.SplitLines(text);
-    }
-
-    /// <summary>
-    /// 默认反编译探针：按 <see cref="DecompileKind"/> 分发到 <see cref="InProcessDecompiler"/> 静态入口（类型/成员/整模块），
-    /// 并将取消令牌透传给引擎实现协作式中断。
-    /// 生产路径恒走本实现；测试可注入替代探针（计数回源次数/制造失败）验证并发单飞与错误分支。
-    /// </summary>
-    /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
-    /// <param name="cancellationToken">取消令牌，透传给反编译引擎。</param>
-    /// <returns>反编译文本或错误提示。</returns>
-    private static string DecompileStatic(ToolCommand command, CancellationToken cancellationToken)
-    {
-        var request = command.Request;
-        return request.Kind switch
-        {
-            DecompileKind.Type => InProcessDecompiler.DecompileType(command.Assembly, request.Target, cancellationToken),
-            DecompileKind.Member => InProcessDecompiler.DecompileMember(command.Assembly, request.Target, cancellationToken),
-            DecompileKind.WholeModule => InProcessDecompiler.DecompileWholeModule(command.Assembly, cancellationToken),
-            _ => throw new ArgumentOutOfRangeException(nameof(request), $"未知反编译请求类型 {request.Kind}"),
-        };
     }
 }

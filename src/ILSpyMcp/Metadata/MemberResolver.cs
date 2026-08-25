@@ -42,8 +42,7 @@ public readonly record struct MemberSearchResult(bool TypeFound, IReadOnlyList<M
 
 /// <summary>
 /// 成员名搜索：纯元数据读取（PEReader + MetadataReader），不加载程序集、不反编译 IL。 经 <see cref="MetadataNaming.FindType"/>
-/// 按输入定位 TypeDefinition（+ 与 . 嵌套分隔均可），枚举其全部可搜索成员（字段/方法/属性/事件）并按名字子串匹配，
-/// 返回可直用于进程内成员反编译的 token。默认排除属性/事件访问器方法，无匹配时给出相近成员名供调用方拼「未找到」提示。
+/// 按输入定位 TypeDefinition（+ 与 . 嵌套分隔均可），枚举其全部可搜索成员（字段/方法/属性/事件）并按名字子串匹配， 返回可直用于进程内成员反编译的 token。默认排除属性/事件访问器方法，无匹配时给出相近成员名供调用方拼「未找到」提示。
 /// </summary>
 public static class MemberResolver
 {
@@ -54,7 +53,9 @@ public static class MemberResolver
     /// <param name="typeName">全限定类型名（嵌套类型以 + 或 . 连接，如 Outer+Inner / Outer.Inner）。</param>
     /// <param name="memberName">成员名子串，忽略大小写。</param>
     /// <param name="includeAccessors">为 true 时不过滤属性/事件访问器方法（get_/set_/add_/remove_）。</param>
-    /// <returns>TypeFound 为 false 表示未找到该类型；Matches 为匹配成员列表（可能为空）；SimilarNames 仅当 TypeFound 且 Matches 为空时非空。</returns>
+    /// <returns>
+    /// TypeFound 为 false 表示未找到该类型；Matches 为匹配成员列表（可能为空）；SimilarNames 仅当 TypeFound 且 Matches 为空时非空。
+    /// </returns>
     public static MemberSearchResult FindMembers(string assemblyPath, string typeName, string memberName, bool includeAccessors = false)
     {
         using var fs = File.OpenRead(assemblyPath);
@@ -83,9 +84,8 @@ public static class MemberResolver
     }
 
     /// <summary>
-    /// 在程序集全部非编译器生成类型的全部可搜索成员（字段/方法/属性/事件）中按名字子串搜索（忽略大小写），
-    /// 返回匹配成员及其所属类型全名。供 decompile_member 省略 typeName 时的跨程序集搜索；默认排除属性/事件访问器，
-    /// 无匹配时给出相近成员名。
+    /// 在程序集全部非编译器生成类型的全部可搜索成员（字段/方法/属性/事件）中按名字子串搜索（忽略大小写）， 返回匹配成员及其所属类型全名。供 decompile_member 省略
+    /// typeName 时的跨程序集搜索；默认排除属性/事件访问器， 无匹配时给出相近成员名。
     /// </summary>
     /// <param name="assemblyPath">程序集绝对路径。</param>
     /// <param name="memberName">成员名子串，忽略大小写。</param>
@@ -113,16 +113,14 @@ public static class MemberResolver
     }
 
     /// <summary>
-    /// 枚举类型的全部可搜索成员（字段→方法→属性→事件，与 SignatureRenderer 输出顺序一致），每个成员一条
-    /// (名字, token, 类型全名)。字段跳过名含 '&lt;' 的自动属性 backing field 与字段式事件的同名字段 backing field
-    /// （C# CS0102 保证源码不可能有同名字段+事件，事件名可安全代表该 backing field），
-    /// includeAccessors 为 false 时方法跳过属性/事件访问器（get_/set_/add_/remove_ 与显式接口实现含 '.' 的访问器）。
+    /// 枚举类型的全部可搜索成员（字段→方法→属性→事件，与 SignatureRenderer 输出顺序一致），每个成员一条 (名字, token, 类型全名)。字段跳过名含 '&lt;'
+    /// 的自动属性 backing field 与字段式事件的同名字段 backing field （C# CS0102 保证源码不可能有同名字段+事件，事件名可安全代表该 backing
+    /// field）， includeAccessors 为 false 时方法跳过属性/事件访问器（get_/set_/add_/remove_ 与显式接口实现含 '.' 的访问器）。
     /// </summary>
     private static IEnumerable<(string Name, string Token, string TypeName)> EnumerateSearchableMembers(MetadataReader reader, TypeDefinition type, bool includeAccessors)
     {
         var typeName = MetadataNaming.FullName(reader, type);
-        // 事件名集合：字段式事件（public event EventHandler Changed;）的同名私有 backing field 与事件重名，
-        // 字段枚举时以「字段名是否与事件同名」判定并跳过，避免同一事件被计成字段+事件两个匹配
+        // 事件名集合：字段式事件（public event EventHandler Changed;）的同名私有 backing field 与事件重名， 字段枚举时以「字段名是否与事件同名」判定并跳过，避免同一事件被计成字段+事件两个匹配
         var eventNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var eventHandle in type.GetEvents())
             eventNames.Add(reader.GetString(reader.GetEventDefinition(eventHandle).Name));

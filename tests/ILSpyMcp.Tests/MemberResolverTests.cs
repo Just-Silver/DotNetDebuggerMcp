@@ -88,8 +88,8 @@ public class MemberResolverTests
     [Fact]
     public void FindMembers_编译器生成类型_视为未找到类型()
     {
-        // 编译器生成类型（闭包 <>c__DisplayClass0_0）应被全局过滤：within-type 搜索返回 TypeFound=false，
-        // 避免对 <...> 类型按名搜出 >20 匹配时仅返回空签名清单（与跨程序集搜索的过滤不变量一致）
+        // 编译器生成类型（闭包 <>c__DisplayClass0_0）应被全局过滤：within-type 搜索返回 TypeFound=false， 避免对 <...> 类型按名搜出
+        // >20 匹配时仅返回空签名清单（与跨程序集搜索的过滤不变量一致）
         var (typeFound, matches, similar) = MemberResolver.FindMembers(
             TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.WithClosure+<>c__DisplayClass0_0", "");
 
@@ -163,8 +163,8 @@ public class MemberResolverTests
     [Fact]
     public void FindMembers_ThingImpl_显式接口属性访问器被排除()
     {
-        // 显式接口属性访问器元数据名为 ILSpyMcp.Samples.IThing.get_Value（含 '.'），默认必须排除；
-        // 搜索 "Value" 不应命中访问器方法（仅剩显式接口普通方法 Foo 不含 value 子串，故应无匹配）
+        // 显式接口属性访问器元数据名为 ILSpyMcp.Samples.IThing.get_Value（含 '.'），默认必须排除； 搜索 "Value"
+        // 不应命中访问器方法（仅剩显式接口普通方法 Foo 不含 value 子串，故应无匹配）
         var (typeFound, matches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.ThingImpl", "Value");
 
         Assert.True(typeFound);

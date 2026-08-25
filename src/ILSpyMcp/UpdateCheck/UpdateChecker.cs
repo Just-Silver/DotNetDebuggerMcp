@@ -52,8 +52,7 @@ public sealed class UpdateChecker
         => currentVersion is not null && latestVersion > currentVersion;
 
     /// <summary>
-    /// 同步读磁盘缓存（零网络），返回 NuGet 更新状态：是否有新版本与报告行。 无有效检查记录（无缓存/损坏/版本无法解析）返回 null，
-    /// 报告该段留白——由握手后台刷新补位供下次会话，绝不阻塞握手。
+    /// 同步读磁盘缓存（零网络），返回 NuGet 更新状态：是否有新版本与报告行。 无有效检查记录（无缓存/损坏/版本无法解析）返回 null， 报告该段留白——由握手后台刷新补位供下次会话，绝不阻塞握手。
     /// </summary>
     public NuGetUpdateStatus? GetCachedNuGetStatus()
     {

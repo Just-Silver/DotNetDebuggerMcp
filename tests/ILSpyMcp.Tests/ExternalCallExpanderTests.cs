@@ -1,7 +1,6 @@
 using ILSpyMcp.Configuration;
 using ILSpyMcp.Metadata;
 using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using Xunit;
 
@@ -14,51 +13,11 @@ namespace ILSpyMcp.Tests;
 /// </summary>
 public class ExternalCallExpanderTests
 {
-    /// <summary>
-    /// 持有主 dll（TestSamplesExt）的 PEReader，供 ScanMethod 取 ExtCaller.Run 的调用点（PE 释放后 reader 访问会崩）。
-    /// </summary>
-    private sealed class MainScope : IDisposable
-    {
-        private readonly FileStream _fs;
-        private readonly PEReader _pe;
-
-        public MainScope()
-        {
-            _fs = File.OpenRead(TestDataPaths.TestSamplesExtDll);
-            _pe = new PEReader(_fs);
-            Reader = _pe.GetMetadataReader();
-        }
-
-        public PEReader Pe => _pe;
-
-        public MetadataReader Reader { get; }
-
-        public void Dispose()
-        {
-            _pe.Dispose();
-            _fs.Dispose();
-        }
-    }
-
-    private static IReadOnlyList<CallSite> ScanExtCallerRun(MetadataReader reader, PEReader pe)
-    {
-        var handle = MetadataNaming.FindType(reader, "ILSpyMcp.SamplesExt.ExtCaller");
-        Assert.True(handle.HasValue, "测试程序集中未找到 ExtCaller");
-        var type = reader.GetTypeDefinition(handle!.Value);
-        foreach (var methodHandle in type.GetMethods())
-        {
-            var method = reader.GetMethodDefinition(methodHandle);
-            if (reader.GetString(method.Name) != "Run") continue;
-            return new CallChainScanner(pe).ScanMethod(methodHandle);
-        }
-        throw new InvalidOperationException("测试程序集中未找到 ExtCaller.Run");
-    }
-
     [Fact]
     public void ExtCaller_Run_跨程序集调用展开非空含Object构造函数()
     {
-        // Run { var c = new Callee(); c.Help(); }：外部调用点含 newobj Callee..ctor（AssemblyFullName 归属 TestSamples），
-        // 展开其方法体子序列应含 System.Object::.ctor（默认构造函数调用基类构造）。
+        // Run { var c = new Callee(); c.Help(); }：外部调用点含 newobj Callee..ctor（AssemblyFullName 归属
+        // TestSamples）， 展开其方法体子序列应含 System.Object::.ctor（默认构造函数调用基类构造）。
         using var scope = new MainScope();
         var external = Assert.Single(ScanExtCallerRun(scope.Reader, scope.Pe), c =>
             c.IsExternal && c.MemberName == ".ctor");
@@ -94,8 +53,8 @@ public class ExternalCallExpanderTests
     [Fact]
     public void 展开方法体解码中止_累计降级计数()
     {
-        // 把 TestSamplesExt 复制到临时目录并放置合成同名 TestSamples.dll（Callee 方法体 IL 截断 → 解码中止）：
-        // resolver 经主 dll 同目录定位到合成程序集，展开中止的方法体须累计进 AbortedBodies（供 call_chain 降级提示并入）。
+        // 把 TestSamplesExt 复制到临时目录并放置合成同名 TestSamples.dll（Callee 方法体 IL 截断 → 解码中止）： resolver 经主 dll
+        // 同目录定位到合成程序集，展开中止的方法体须累计进 AbortedBodies（供 call_chain 降级提示并入）。
         var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-expander-abort-test");
         Directory.CreateDirectory(tempDir);
         try
@@ -128,8 +87,8 @@ public class ExternalCallExpanderTests
     [Fact]
     public void 深度超限_最深层不再展开()
     {
-        // 自引用深链 DeepChain.dll（M0→M1→...→M6）：预修复无深度限制时 7 层全部展开（含 ::M6 调用: 头行）；
-        // 修复后深度达到 ExternalExpandMaxDepth 的子树不再展开，最深层 M6 的头行不再出现。
+        // 自引用深链 DeepChain.dll（M0→M1→...→M6）：预修复无深度限制时 7 层全部展开（含 ::M6 调用: 头行）； 修复后深度达到
+        // ExternalExpandMaxDepth 的子树不再展开，最深层 M6 的头行不再出现。
         var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-expander-depth-test");
         Directory.CreateDirectory(tempDir);
         try
@@ -162,5 +121,45 @@ public class ExternalCallExpanderTests
         // 深度/节点上限须为正整数且可正常生效（防误写 0/负数导致全部外部展开被截断）
         Assert.InRange(AppConfig.ExternalExpandMaxDepth, 1, 64);
         Assert.InRange(AppConfig.ExternalExpandMaxNodes, 1, 100_000);
+    }
+
+    private static IReadOnlyList<CallSite> ScanExtCallerRun(MetadataReader reader, PEReader pe)
+    {
+        var handle = MetadataNaming.FindType(reader, "ILSpyMcp.SamplesExt.ExtCaller");
+        Assert.True(handle.HasValue, "测试程序集中未找到 ExtCaller");
+        var type = reader.GetTypeDefinition(handle!.Value);
+        foreach (var methodHandle in type.GetMethods())
+        {
+            var method = reader.GetMethodDefinition(methodHandle);
+            if (reader.GetString(method.Name) != "Run") continue;
+            return new CallChainScanner(pe).ScanMethod(methodHandle);
+        }
+        throw new InvalidOperationException("测试程序集中未找到 ExtCaller.Run");
+    }
+
+    /// <summary>
+    /// 持有主 dll（TestSamplesExt）的 PEReader，供 ScanMethod 取 ExtCaller.Run 的调用点（PE 释放后 reader 访问会崩）。
+    /// </summary>
+    private sealed class MainScope : IDisposable
+    {
+        private readonly FileStream _fs;
+        private readonly PEReader _pe;
+
+        public MainScope()
+        {
+            _fs = File.OpenRead(TestDataPaths.TestSamplesExtDll);
+            _pe = new PEReader(_fs);
+            Reader = _pe.GetMetadataReader();
+        }
+
+        public PEReader Pe => _pe;
+
+        public MetadataReader Reader { get; }
+
+        public void Dispose()
+        {
+            _pe.Dispose();
+            _fs.Dispose();
+        }
     }
 }

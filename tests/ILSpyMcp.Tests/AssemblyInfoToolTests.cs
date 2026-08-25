@@ -5,8 +5,7 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// assembly_info 工具端到端单元用例：程序集概览各字段、引用清单、入口点（类库为无或无法解析）与参数校验。
-/// 纯元数据读取，直接调工具方法（与 MCP 调用同逻辑）。
+/// assembly_info 工具端到端单元用例：程序集概览各字段、引用清单、入口点（类库为无或无法解析）与参数校验。 纯元数据读取，直接调工具方法（与 MCP 调用同逻辑）。
 /// </summary>
 public class AssemblyInfoToolTests
 {

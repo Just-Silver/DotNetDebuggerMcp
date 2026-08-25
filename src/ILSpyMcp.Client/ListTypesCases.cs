@@ -1,7 +1,8 @@
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// list_types 工具的全部端到端验证场景：list 单值/组合 / lines / 编译器生成类型过滤 / nameContains / namespaceContains / 非法值 / 缺参校验。
+/// list_types 工具的全部端到端验证场景：list 单值/组合 / lines / 编译器生成类型过滤 / nameContains / namespaceContains / 非法值
+/// / 缺参校验。
 /// </summary>
 public static class ListTypesCases
 {

@@ -19,9 +19,8 @@ namespace ILSpyMcp.Tools;
 public static class SearchStringTool
 {
     /// <summary>
-    /// 按字符串字面量子串反查成员：扫描全部（或 typeName 指定）类型方法体 IL 的 ldstr 指令，
-    /// 按子串忽略大小写匹配用户字符串（业务文案/SQL 片段/配置 Key 等），输出每行
-    /// 类型全名::成员签名 + 转义后的字符串值 + 成员 token（token 可直接用于 decompile_member 的 token 参数反编译）。
+    /// 按字符串字面量子串反查成员：扫描全部（或 typeName 指定）类型方法体 IL 的 ldstr 指令， 按子串忽略大小写匹配用户字符串（业务文案/SQL 片段/配置 Key
+    /// 等），输出每行 类型全名::成员签名 + 转义后的字符串值 + 成员 token（token 可直接用于 decompile_member 的 token 参数反编译）。
     /// </summary>
     /// <param name="assembly">要反查的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="search">要搜索的字符串字面量子串（忽略大小写，必填），如 "配置Key"、"order by"。</param>

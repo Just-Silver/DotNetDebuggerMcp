@@ -33,9 +33,8 @@ public sealed record CacheEntryInfo(string AssemblyPath, string Signature, long 
 public sealed record CacheStats(int EntryCount, long TotalBytes, long MaxBytes, long HitCount, long MissCount, IReadOnlyList<CacheEntryInfo> Entries);
 
 /// <summary>
-/// 反编译结果内存缓存（线程安全 LRU，总上限可配置，默认 <see cref="AppConfig.MaxCacheBytes"/>；固定 30 分钟滑动过期 +
-/// 5 分钟定时清理，空闲即回收，MCP 常驻场景下不长期占用）。key = 程序集绝对路径 +
-/// 文件指纹（mtime+size）+ 参数签名， 不同参数组合各自独立缓存；程序集更新后指纹变化，同路径同签名的旧条目自动清理。
+/// 反编译结果内存缓存（线程安全 LRU，总上限可配置，默认 <see cref="AppConfig.MaxCacheBytes"/>；固定 30 分钟滑动过期 + 5
+/// 分钟定时清理，空闲即回收，MCP 常驻场景下不长期占用）。key = 程序集绝对路径 + 文件指纹（mtime+size）+ 参数签名， 不同参数组合各自独立缓存；程序集更新后指纹变化，同路径同签名的旧条目自动清理。
 /// </summary>
 public sealed class DecompileCache : IDisposable
 {
@@ -52,9 +51,13 @@ public sealed class DecompileCache : IDisposable
     private bool _disposed;
 
     /// <param name="maxBytes">缓存总字节上限，超出后按 LRU 驱逐；测试可传小值。</param>
-    /// <param name="slidingTtl">滑动过期时长；为 null 时取 <see cref="AppConfig.CacheEntrySlidingTtl"/>（固定 30 分钟）。测试可传小值。</param>
+    /// <param name="slidingTtl">
+    /// 滑动过期时长；为 null 时取 <see cref="AppConfig.CacheEntrySlidingTtl"/>（固定 30 分钟）。测试可传小值。
+    /// </param>
     /// <param name="now">时间源；为 null 时取 <see cref="DateTimeOffset.UtcNow"/>。测试可注入固定时钟。</param>
-    /// <param name="cleanupInterval">定时清理间隔；为 null 时取 <see cref="AppConfig.CacheCleanupInterval"/>（固定 5 分钟）。测试可传小值。</param>
+    /// <param name="cleanupInterval">
+    /// 定时清理间隔；为 null 时取 <see cref="AppConfig.CacheCleanupInterval"/>（固定 5 分钟）。测试可传小值。
+    /// </param>
     public DecompileCache(
         long maxBytes = AppConfig.MaxCacheBytes,
         TimeSpan? slidingTtl = null,
@@ -166,6 +169,17 @@ public sealed class DecompileCache : IDisposable
         }
     }
 
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
+        _timer?.Dispose();
+    }
+
     /// <summary>
     /// 文件指纹 = 最后修改时间 + 文件大小，用于判断程序集是否已更新。 dll 重新编译后 mtime/size 变化，指纹随之变化，旧缓存自动失效、重新反编译。
     /// </summary>
@@ -244,17 +258,6 @@ public sealed class DecompileCache : IDisposable
             if (_disposed) return;
             TrimExpired(_now());
         }
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        lock (_lock)
-        {
-            if (_disposed) return;
-            _disposed = true;
-        }
-        _timer?.Dispose();
     }
 
     private sealed class CacheEntry

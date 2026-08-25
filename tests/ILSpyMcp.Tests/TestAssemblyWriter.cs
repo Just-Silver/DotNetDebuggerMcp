@@ -11,6 +11,12 @@ namespace ILSpyMcp.Tests;
 internal static class TestAssemblyWriter
 {
     /// <summary>
+    /// 自引用深链链长（M0..M6 共 7 个方法）：M0→M1→...→M6 的外部调用链深度超过 <see
+    /// cref="ILSpyMcp.Configuration.AppConfig.ExternalExpandMaxDepth"/>，供 ExternalCallExpander 深度上限用例。
+    /// </summary>
+    private const int ChainLength = 7;
+
+    /// <summary>
     /// 构造名为 ILSpyMcp.TestSamples.dll 的最小程序集（与 TestSamplesExt.dll 的 AssemblyRef 同名、可被 resolver 定位）：
     /// 类型 ILSpyMcp.Samples.Callee 含 .ctor 与 Help 两方法，方法体为 call 指向越界 MemberRef 行——扫描解码时抛
     /// BadImageFormatException，触发 ExternalCallExpander.AbortedBodies 累计（供「降级计数并入」用例）。
@@ -55,29 +61,9 @@ internal static class TestAssemblyWriter
     }
 
     /// <summary>
-    /// 写入一个解码必中止的方法体：call 指向不存在的 MemberRef 行（token 越界）——扫描收集时 GetMemberReference 抛
-    /// BadImageFormatException，被 IlScanHelper 捕获并累计降级计数。
-    /// </summary>
-    private static int AddAbortedBody(MethodBodyStreamEncoder mbs)
-    {
-        var il = new BlobBuilder();
-        var encoder = new InstructionEncoder(il);
-        encoder.Call(MetadataTokens.MemberReferenceHandle(0xFF));
-        encoder.OpCode(ILOpCode.Ret);
-        return mbs.AddMethodBody(encoder, maxStack: 8);
-    }
-
-    /// <summary>
-    /// 自引用深链链长（M0..M6 共 7 个方法）：M0→M1→...→M6 的外部调用链深度超过
-    /// <see cref="ILSpyMcp.Configuration.AppConfig.ExternalExpandMaxDepth"/>，供 ExternalCallExpander 深度上限用例。
-    /// </summary>
-    private const int ChainLength = 7;
-
-    /// <summary>
-    /// 构造名为 DeepChain.dll 的自引用深链程序集：类型 ILSpyMcp.Deep.Chain 含 M0..M6 七个方法，每个方法经 MemberRef
-    /// （parent 为指向自身程序集 AssemblyRef 的 TypeRef，被 CallChainScanner 判为外部调用）调用下一个方法，构成
-    /// M0→M1→...→M6 的外部调用链。主 dll 同目录可解析自身（AssemblyRef 与自身同名），供展开深度超限用例
-    /// （预修复展开全部 7 层，修复后最深层 M6 不再展开）。
+    /// 构造名为 DeepChain.dll 的自引用深链程序集：类型 ILSpyMcp.Deep.Chain 含 M0..M6 七个方法，每个方法经 MemberRef （parent
+    /// 为指向自身程序集 AssemblyRef 的 TypeRef，被 CallChainScanner 判为外部调用）调用下一个方法，构成 M0→M1→...→M6 的外部调用链。主
+    /// dll 同目录可解析自身（AssemblyRef 与自身同名），供展开深度超限用例 （预修复展开全部 7 层，修复后最深层 M6 不再展开）。
     /// </summary>
     public static string WriteDeepChain(string dir)
     {
@@ -133,5 +119,18 @@ internal static class TestAssemblyWriter
             blob.WriteContentTo(fs);
         }
         return path;
+    }
+
+    /// <summary>
+    /// 写入一个解码必中止的方法体：call 指向不存在的 MemberRef 行（token 越界）——扫描收集时 GetMemberReference 抛
+    /// BadImageFormatException，被 IlScanHelper 捕获并累计降级计数。
+    /// </summary>
+    private static int AddAbortedBody(MethodBodyStreamEncoder mbs)
+    {
+        var il = new BlobBuilder();
+        var encoder = new InstructionEncoder(il);
+        encoder.Call(MetadataTokens.MemberReferenceHandle(0xFF));
+        encoder.OpCode(ILOpCode.Ret);
+        return mbs.AddMethodBody(encoder, maxStack: 8);
     }
 }

@@ -6,19 +6,17 @@ using System.Reflection.Metadata.Ecma335;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 类型成员一行签名渲染：给定 MetadataReader + TypeDefinition，输出该类型全部成员（字段/方法/属性/事件）
-/// 每成员一行的 C# 风格签名，供 ilspy_signature 工具做 API 地图。纯元数据解码（SignatureDecoder），
-/// 不加载程序集、不反编译 IL。
+/// 类型成员一行签名渲染：给定 MetadataReader + TypeDefinition，输出该类型全部成员（字段/方法/属性/事件） 每成员一行的 C# 风格签名，供
+/// ilspy_signature 工具做 API 地图。纯元数据解码（SignatureDecoder）， 不加载程序集、不反编译 IL。
 /// </summary>
 public static class SignatureRenderer
 {
     /// <summary>
-    /// 渲染指定类型全部成员的一行签名（每成员一行，API 地图）。每行行尾附成员元数据 token，
-    /// agent 看中某成员后可直接用于 decompile_member 的 token 参数反编译。
+    /// 渲染指定类型全部成员的一行签名（每成员一行，API 地图）。每行行尾附成员元数据 token， agent 看中某成员后可直接用于 decompile_member 的 token 参数反编译。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">待渲染的类型定义。</param>
-    /// <returns>成员签名行列表，顺序为字段、方法、属性、事件；属性/事件的访问器方法不单独出现，每行行尾附 `  0x...` token。</returns>
+    /// <returns>成员签名行列表，顺序为字段、方法、属性、事件；属性/事件的访问器方法不单独出现，每行行尾附 ` 0x...` token。</returns>
     public static IReadOnlyList<string> RenderTypeSignatures(MetadataReader reader, TypeDefinition type)
     {
         var provider = new Provider(reader);
@@ -59,16 +57,7 @@ public static class SignatureRenderer
     }
 
     /// <summary>
-    /// 行尾附成员元数据 token（如 `  0x06000505`，两个空格分隔），供 agent 直接用于 decompile_member 的 token 参数。
-    /// 只在 RenderTypeSignatures 的调用处拼接——RenderMethod 等被 RenderMemberSignature 复用（decompile_member 超限清单
-    /// 场景），在其内部拼 token 会污染 #MEMBER JSON 的 signature 字段。
-    /// </summary>
-    private static string WithToken(string line, EntityHandle handle)
-        => $"{line}  {MetadataNaming.FormatToken(MetadataTokens.GetToken(handle))}";
-
-    /// <summary>
-    /// 渲染单个方法成员的一行签名（供 decompile_member 超限清单等场景）。不做访问器过滤——调用方传的是明确要渲染的成员，
-    /// 属性/事件的访问器（get_/set_/add_/remove_）按原名渲染。
+    /// 渲染单个方法成员的一行签名（供 decompile_member 超限清单等场景）。不做访问器过滤——调用方传的是明确要渲染的成员， 属性/事件的访问器（get_/set_/add_/remove_）按原名渲染。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">成员所属的类型定义。</param>
@@ -83,8 +72,8 @@ public static class SignatureRenderer
     }
 
     /// <summary>
-    /// 渲染单个成员（字段/方法/属性/事件）的一行签名（供 decompile_member 超限清单等场景）。按 handle 的
-    /// Kind 分发到对应私有渲染器；不做访问器/backing field 过滤——调用方传的是明确要渲染的成员（搜索已过滤）。
+    /// 渲染单个成员（字段/方法/属性/事件）的一行签名（供 decompile_member 超限清单等场景）。按 handle 的 Kind
+    /// 分发到对应私有渲染器；不做访问器/backing field 过滤——调用方传的是明确要渲染的成员（搜索已过滤）。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="type">成员所属的类型定义。</param>
@@ -104,6 +93,14 @@ public static class SignatureRenderer
             _ => "<unknown>",
         };
     }
+
+    /// <summary>
+    /// 行尾附成员元数据 token（如 ` 0x06000505`，两个空格分隔），供 agent 直接用于 decompile_member 的 token 参数。 只在
+    /// RenderTypeSignatures 的调用处拼接——RenderMethod 等被 RenderMemberSignature 复用（decompile_member 超限清单
+    /// 场景），在其内部拼 token 会污染 #MEMBER JSON 的 signature 字段。
+    /// </summary>
+    private static string WithToken(string line, EntityHandle handle)
+        => $"{line}  {MetadataNaming.FormatToken(MetadataTokens.GetToken(handle))}";
 
     /// <summary>
     /// 构造构造函数展示名：类型名（+泛型参数列表），供 .ctor/.cctor 渲染代替元数据名。
@@ -141,8 +138,8 @@ public static class SignatureRenderer
 
     /// <summary>
     /// 渲染方法签名：访问级别 + [static/abstract/virtual/override/sealed override] + 返回类型 + 名字(+泛型参数) + 参数列表。
-    /// 构造函数/静态构造函数用类型名代替 .ctor/.cctor（无返回类型）。
-    /// NewSlot+Final（sealed virtual newslot）是编译器对隐式接口实现的标记，C# 源码为普通方法，不渲染任何修饰符。
+    /// 构造函数/静态构造函数用类型名代替 .ctor/.cctor（无返回类型）。 NewSlot+Final（sealed virtual
+    /// newslot）是编译器对隐式接口实现的标记，C# 源码为普通方法，不渲染任何修饰符。
     /// </summary>
     private static string RenderMethod(MetadataReader reader, MethodDefinition method, Provider provider, string[] typeParams, string ctorDisplayName)
     {
@@ -175,8 +172,7 @@ public static class SignatureRenderer
     }
 
     /// <summary>
-    /// 渲染属性签名：访问级别（取 get/set 访问器中可见性较高的那个，.NET 元数据属性表本身不存访问级别）+ 类型 + 名字 + { get; set; }，
-    /// 按实际存在的访问器输出。
+    /// 渲染属性签名：访问级别（取 get/set 访问器中可见性较高的那个，.NET 元数据属性表本身不存访问级别）+ 类型 + 名字 + { get; set; }， 按实际存在的访问器输出。
     /// </summary>
     private static string RenderProperty(MetadataReader reader, PropertyDefinition property, Provider provider, string[] typeParams)
     {
@@ -256,16 +252,14 @@ public static class SignatureRenderer
     }
 
     /// <summary>
-    /// 判断方法名是否为属性/事件访问器（get_X/set_X/add_/remove_）——此类方法不单独输出，由属性/事件行合并渲染。
-    /// C# 编译器保留这些前缀，用户方法名不会误伤。
+    /// 判断方法名是否为属性/事件访问器（get_X/set_X/add_/remove_）——此类方法不单独输出，由属性/事件行合并渲染。 C# 编译器保留这些前缀，用户方法名不会误伤。
     /// </summary>
     private static bool IsAccessorName(string name)
         => name.StartsWith("get_", StringComparison.Ordinal)
         || name.StartsWith("set_", StringComparison.Ordinal)
         || name.StartsWith("add_", StringComparison.Ordinal)
         || name.StartsWith("remove_", StringComparison.Ordinal)
-        // 显式接口实现的访问器方法元数据名为 Ns.IFoo.get_Value（含 '.'），同样属属性/事件访问器需排除；
-        // C# 用户方法名不允许 '.'（仅显式接口实现含 '.'），不会误伤
+        // 显式接口实现的访问器方法元数据名为 Ns.IFoo.get_Value（含 '.'），同样属属性/事件访问器需排除； C# 用户方法名不允许 '.'（仅显式接口实现含 '.'），不会误伤
         || name.Contains(".get_", StringComparison.Ordinal)
         || name.Contains(".set_", StringComparison.Ordinal)
         || name.Contains(".add_", StringComparison.Ordinal)

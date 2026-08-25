@@ -5,8 +5,8 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// search_string 工具层用例：命中 StringHolder 字符串 / 未命中 / typeName 限定 / 参数校验。
-/// 经 AppServices.ConfigureForTest 注入隔离缓存，与 ToolPipelineTests 等同属 AppServices collection 串行执行。
+/// search_string 工具层用例：命中 StringHolder 字符串 / 未命中 / typeName 限定 / 参数校验。 经
+/// AppServices.ConfigureForTest 注入隔离缓存，与 ToolPipelineTests 等同属 AppServices collection 串行执行。
 /// </summary>
 [Collection("AppServices")]
 public class SearchStringToolTests

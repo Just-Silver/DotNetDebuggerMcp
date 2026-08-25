@@ -11,45 +11,6 @@ public class ReferenceExtractorTests
     // 主项目程序集（作为测试依赖复制到 bin），含泛型实例化字段 Dictionary<CacheKey, CacheEntry> 与嵌套类型 CacheEntry；纯元数据读取
     private static readonly string AssemblyPath = typeof(OutputFormatter).Assembly.Location;
 
-    /// <summary>
-    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
-    /// </summary>
-    private sealed class MetadataScope : IDisposable
-    {
-        private readonly FileStream _fs;
-        private readonly PEReader _pe;
-
-        public MetadataScope(string path)
-        {
-            _fs = File.OpenRead(path);
-            _pe = new PEReader(_fs);
-            Reader = _pe.GetMetadataReader();
-        }
-
-        public MetadataReader Reader { get; }
-
-        public void Dispose()
-        {
-            _pe.Dispose();
-            _fs.Dispose();
-        }
-    }
-
-    private static List<string> Extract(MetadataReader reader, string typeFullName)
-    {
-        var handle = MetadataNaming.FindType(reader, typeFullName);
-        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
-        return ReferenceExtractor.ExtractMemberSignatureReferences(reader, reader.GetTypeDefinition(handle!.Value)).ToList();
-    }
-
-    private static (List<string> Internal, List<string> External) ExtractWithExternal(MetadataReader reader, string typeFullName)
-    {
-        var handle = MetadataNaming.FindType(reader, typeFullName);
-        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
-        var (internalSet, external) = ReferenceExtractor.ExtractMemberSignatureReferencesWithExternal(reader, reader.GetTypeDefinition(handle!.Value));
-        return (internalSet.ToList(), external.ToList());
-    }
-
     [Fact]
     public void DecompileCache_泛型实例化字段_收集内部类型()
     {
@@ -63,8 +24,8 @@ public class ReferenceExtractorTests
     [Fact]
     public void ToolPipeline_方法返回与字段_收集内部类型()
     {
-        // ExecuteAsync 返回 Task<ToolPipelineResult>；字段 _cache: DecompileCache、_inflight: ConcurrentDictionary<CacheKey,...>
-        // （泛型实例化归约收集 CacheKey）
+        // ExecuteAsync 返回 Task<ToolPipelineResult>；字段 _cache: DecompileCache、_inflight:
+        // ConcurrentDictionary<CacheKey,...> （泛型实例化归约收集 CacheKey）
         using var scope = new MetadataScope(AssemblyPath);
         var result = Extract(scope.Reader, "ILSpyMcp.Pipeline.ToolPipeline");
         Assert.Contains("ILSpyMcp.Pipeline.ToolPipelineResult", result);
@@ -106,5 +67,44 @@ public class ReferenceExtractorTests
         var (_, external) = ExtractWithExternal(scope.Reader, "ILSpyMcp.Samples.Members");
 
         Assert.Contains("System.EventHandler [System.Runtime]", external);
+    }
+
+    private static List<string> Extract(MetadataReader reader, string typeFullName)
+    {
+        var handle = MetadataNaming.FindType(reader, typeFullName);
+        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
+        return ReferenceExtractor.ExtractMemberSignatureReferences(reader, reader.GetTypeDefinition(handle!.Value)).ToList();
+    }
+
+    private static (List<string> Internal, List<string> External) ExtractWithExternal(MetadataReader reader, string typeFullName)
+    {
+        var handle = MetadataNaming.FindType(reader, typeFullName);
+        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
+        var (internalSet, external) = ReferenceExtractor.ExtractMemberSignatureReferencesWithExternal(reader, reader.GetTypeDefinition(handle!.Value));
+        return (internalSet.ToList(), external.ToList());
+    }
+
+    /// <summary>
+    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
+    /// </summary>
+    private sealed class MetadataScope : IDisposable
+    {
+        private readonly FileStream _fs;
+        private readonly PEReader _pe;
+
+        public MetadataScope(string path)
+        {
+            _fs = File.OpenRead(path);
+            _pe = new PEReader(_fs);
+            Reader = _pe.GetMetadataReader();
+        }
+
+        public MetadataReader Reader { get; }
+
+        public void Dispose()
+        {
+            _pe.Dispose();
+            _fs.Dispose();
+        }
     }
 }

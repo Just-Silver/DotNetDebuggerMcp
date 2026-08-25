@@ -6,45 +6,12 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// InterfaceUsageScanner 接口调用点扫描用例。
-/// 素材：生成测试程序集（tests/TestData）中的 IAnimal（Dog/SealedDog 直接实现）、IWorker（WorkerBase 直接实现、WorkerDerived 间接实现）
-/// 与 AnimalCaller.Run(IAnimal a) { a.Speak(); }（IAnimal.Speak 调用点，MethodDef 直比路径）。
+/// InterfaceUsageScanner 接口调用点扫描用例。 素材：生成测试程序集（tests/TestData）中的 IAnimal（Dog/SealedDog
+/// 直接实现）、IWorker（WorkerBase 直接实现、WorkerDerived 间接实现） 与 AnimalCaller.Run(IAnimal a) { a.Speak();
+/// }（IAnimal.Speak 调用点，MethodDef 直比路径）。
 /// </summary>
 public class InterfaceUsageScannerTests
 {
-    /// <summary>
-    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
-    /// </summary>
-    private sealed class MetadataScope : IDisposable
-    {
-        private readonly FileStream _fs;
-        private readonly PEReader _pe;
-
-        public MetadataScope()
-        {
-            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
-            _pe = new PEReader(_fs);
-            Reader = _pe.GetMetadataReader();
-        }
-
-        public PEReader Pe => _pe;
-
-        public MetadataReader Reader { get; }
-
-        public void Dispose()
-        {
-            _pe.Dispose();
-            _fs.Dispose();
-        }
-    }
-
-    private static TypeDefinitionHandle TypeHandle(MetadataReader reader, string typeFullName)
-    {
-        var handle = MetadataNaming.FindType(reader, typeFullName);
-        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
-        return handle.Value;
-    }
-
     [Fact]
     public void IAnimal_调用点_含AnimalCaller_Run到Speak()
     {
@@ -78,5 +45,38 @@ public class InterfaceUsageScannerTests
         scanner.FindCallSites(iface, "ILSpyMcp.Samples.IAnimal");
 
         Assert.Equal(0, scanner.AbortedBodies);
+    }
+
+    private static TypeDefinitionHandle TypeHandle(MetadataReader reader, string typeFullName)
+    {
+        var handle = MetadataNaming.FindType(reader, typeFullName);
+        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
+        return handle.Value;
+    }
+
+    /// <summary>
+    /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
+    /// </summary>
+    private sealed class MetadataScope : IDisposable
+    {
+        private readonly FileStream _fs;
+        private readonly PEReader _pe;
+
+        public MetadataScope()
+        {
+            _fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+            _pe = new PEReader(_fs);
+            Reader = _pe.GetMetadataReader();
+        }
+
+        public PEReader Pe => _pe;
+
+        public MetadataReader Reader { get; }
+
+        public void Dispose()
+        {
+            _pe.Dispose();
+            _fs.Dispose();
+        }
     }
 }

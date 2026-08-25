@@ -6,16 +6,15 @@ using System.Text;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 纯元数据「程序集概览」读取：目标框架、引用的程序集清单与入口点，供 assembly_info 工具输出。
-/// 与其它元数据组件一致只读 PEReader/MetadataReader，不加载程序集、不反编译 IL。
+/// 纯元数据「程序集概览」读取：目标框架、引用的程序集清单与入口点，供 assembly_info 工具输出。 与其它元数据组件一致只读
+/// PEReader/MetadataReader，不加载程序集、不反编译 IL。
 /// </summary>
 public static class AssemblyInfoReader
 {
     /// <summary>
-    /// 读取 TargetFrameworkAttribute 自定义特性声明的目标框架（如 ".NETCoreApp,Version=v10.0"）；
-    /// 特性缺失或解码失败时返回 null。
-    /// 特性 blob 以 2 字节 prolog（0x0001）开头，随后是第一个构造参数 SerString：
-    /// 压缩 uint32 字节长度 + UTF-8 字符（Roslyn 实际写入为 UTF-8，而非规范的 UTF-16）。
+    /// 读取 TargetFrameworkAttribute 自定义特性声明的目标框架（如 ".NETCoreApp,Version=v10.0"）； 特性缺失或解码失败时返回 null。
+    /// 特性 blob 以 2 字节 prolog（0x0001）开头，随后是第一个构造参数 SerString： 压缩 uint32 字节长度 + UTF-8 字符（Roslyn 实际写入为
+    /// UTF-8，而非规范的 UTF-16）。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <returns>目标框架标识；无特性/无法解析时返回 null。</returns>
@@ -53,8 +52,7 @@ public static class AssemblyInfoReader
         }).ToList();
 
     /// <summary>
-    /// 读取程序集入口点：COR 头 EntryPoint token 非 0 时定位方法并返回 `类型全名::方法名`；
-    /// 无入口点（如纯类库）或任何异常时返回 null。
+    /// 读取程序集入口点：COR 头 EntryPoint token 非 0 时定位方法并返回 `类型全名::方法名`； 无入口点（如纯类库）或任何异常时返回 null。
     /// </summary>
     /// <param name="pe">PE 读取器（读 COR 头）。</param>
     /// <param name="reader">元数据读取器。</param>

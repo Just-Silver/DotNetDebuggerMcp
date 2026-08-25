@@ -5,11 +5,10 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 纯元数据「接口调用点反查」：反扫程序集全部非编译器生成类型的方法体 IL 调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli），
-/// 凡调用 token 目标声明类型为指定接口（内部接口 MethodDef 直比句柄；外部接口 MemberRef 沿 parent TypeRef 全名判定）时，
-/// 记录 来源类型::来源成员名 → 接口成员名 调用点行，供 interface_usage 工具使用。
-/// 与 hierarchy 的实现者互补：本类回答「程序集内哪些方法体调用了接口成员」，hierarchy 回答「谁实现了它」。
-/// 方法体读取经 PEReader.GetMethodBody，IL 解码经共享 IlScanHelper；解码异常安全中止并累计降级计数。
+/// 纯元数据「接口调用点反查」：反扫程序集全部非编译器生成类型的方法体 IL 调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli）， 凡调用
+/// token 目标声明类型为指定接口（内部接口 MethodDef 直比句柄；外部接口 MemberRef 沿 parent TypeRef 全名判定）时， 记录 来源类型::来源成员名 →
+/// 接口成员名 调用点行，供 interface_usage 工具使用。 与 hierarchy 的实现者互补：本类回答「程序集内哪些方法体调用了接口成员」，hierarchy
+/// 回答「谁实现了它」。 方法体读取经 PEReader.GetMethodBody，IL 解码经共享 IlScanHelper；解码异常安全中止并累计降级计数。
 /// </summary>
 public sealed class InterfaceUsageScanner
 {
@@ -32,13 +31,12 @@ public sealed class InterfaceUsageScanner
     public int AbortedBodies => _abortedBodies;
 
     /// <summary>
-    /// 反扫程序集全部非编译器生成类型的方法体，收集调用指定接口成员的方法体调用点。
-    /// 调用 token 目标解析：内部接口经 MethodDef 声明类型直比 iface 句柄；外部接口经 MemberRef parent TypeRef 全名
-    /// 等于 ifaceFullName 判定；MethodSpec（泛型实例化调用）解包归约到方法再判。调用点元素为
+    /// 反扫程序集全部非编译器生成类型的方法体，收集调用指定接口成员的方法体调用点。 调用 token 目标解析：内部接口经 MethodDef 声明类型直比 iface 句柄；外部接口经
+    /// MemberRef parent TypeRef 全名 等于 ifaceFullName 判定；MethodSpec（泛型实例化调用）解包归约到方法再判。调用点元素为
     /// <c>来源类型::来源成员名 → 接口成员名</c> 行，去重排序。
     /// </summary>
     /// <param name="iface">目标接口的定义句柄（程序集内）。</param>
-    /// <param name="ifaceFullName">目标接口的规范全名（<see cref="MetadataNaming.FullName"/> 输出）。</param>
+    /// <param name="ifaceFullName">目标接口的规范全名（ <see cref="MetadataNaming.FullName"/> 输出）。</param>
     /// <returns>调用点行列表；程序集内无调用点时为空列表。</returns>
     public IReadOnlyList<string> FindCallSites(TypeDefinitionHandle iface, string ifaceFullName)
     {
@@ -111,9 +109,8 @@ public sealed class InterfaceUsageScanner
     }
 
     /// <summary>
-    /// 调用 token 目标是否指向接口成员：MethodDef 声明类型直比 iface 句柄，返回接口成员元数据名；
-    /// MemberRef parent 为接口（TypeRef 全名等于 ifaceFullName 或 TypeDef 句柄直比）时返回成员名；
-    /// MethodSpec（泛型实例化调用）解包归约到方法再判；其余返回 null。
+    /// 调用 token 目标是否指向接口成员：MethodDef 声明类型直比 iface 句柄，返回接口成员元数据名； MemberRef parent 为接口（TypeRef 全名等于
+    /// ifaceFullName 或 TypeDef 句柄直比）时返回成员名； MethodSpec（泛型实例化调用）解包归约到方法再判；其余返回 null。
     /// </summary>
     private string? ResolveInterfaceMember(int rawToken, TypeDefinitionHandle iface, string ifaceFullName)
     {
@@ -123,20 +120,23 @@ public sealed class InterfaceUsageScanner
             case HandleKind.MethodDefinition:
                 var methodDef = _reader.GetMethodDefinition((MethodDefinitionHandle)handle);
                 return methodDef.GetDeclaringType() == iface ? _reader.GetString(methodDef.Name) : null;
+
             case HandleKind.MemberReference:
                 var memberRef = _reader.GetMemberReference((MemberReferenceHandle)handle);
                 return MemberRefParentIsIface(memberRef.Parent, iface, ifaceFullName) ? _reader.GetString(memberRef.Name) : null;
+
             case HandleKind.MethodSpecification:
                 var spec = _reader.GetMethodSpecification((MethodSpecificationHandle)handle);
                 return ResolveInterfaceMember(MetadataTokens.GetToken(spec.Method), iface, ifaceFullName);
+
             default:
                 return null;
         }
     }
 
     /// <summary>
-    /// 判定 MemberRef 的 parent 是否为目标接口：TypeDef 直比 iface 句柄（内部接口经 MemberRef 访问）；
-    /// TypeRef 沿全名比较（跨程序集外部接口，如 BCL/NuGet 中类型全名等于目标接口全名）。其余 parent 作用域非接口。
+    /// 判定 MemberRef 的 parent 是否为目标接口：TypeDef 直比 iface 句柄（内部接口经 MemberRef 访问）； TypeRef
+    /// 沿全名比较（跨程序集外部接口，如 BCL/NuGet 中类型全名等于目标接口全名）。其余 parent 作用域非接口。
     /// </summary>
     private bool MemberRefParentIsIface(EntityHandle parent, TypeDefinitionHandle iface, string ifaceFullName)
     {
@@ -144,8 +144,10 @@ public sealed class InterfaceUsageScanner
         {
             case HandleKind.TypeDefinition:
                 return (TypeDefinitionHandle)parent == iface;
+
             case HandleKind.TypeReference:
                 return MetadataNaming.TypeReferenceFullName(_reader, (TypeReferenceHandle)parent) == ifaceFullName;
+
             default:
                 return false;
         }

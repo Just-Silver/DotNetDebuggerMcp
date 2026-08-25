@@ -11,16 +11,6 @@ public class SignatureRendererTests
     // 主项目程序集（作为测试依赖复制到 bin），含方法/构造函数/字段/属性，纯元数据读取
     private static readonly string AssemblyPath = typeof(OutputFormatter).Assembly.Location;
 
-    private static List<string> Render(string typeFullName)
-    {
-        using var fs = File.OpenRead(AssemblyPath);
-        using var pe = new PEReader(fs);
-        var reader = pe.GetMetadataReader();
-        var handle = MetadataNaming.FindType(reader, typeFullName);
-        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
-        return SignatureRenderer.RenderTypeSignatures(reader, reader.GetTypeDefinition(handle!.Value)).ToList();
-    }
-
     [Fact]
     public void 方法签名_含static与返回类型参数()
     {
@@ -86,7 +76,7 @@ public class SignatureRendererTests
     [Fact]
     public void 每行行尾附成员token()
     {
-        // API 地图每行行尾附 `  0x...` 成员元数据 token，agent 可直接用于 decompile_member 的 token 参数
+        // API 地图每行行尾附 ` 0x...` 成员元数据 token，agent 可直接用于 decompile_member 的 token 参数
         var lines = Render("ILSpyMcp.Formatting.OutputFormatter");
         Assert.NotEmpty(lines);
         Assert.All(lines, line => Assert.Matches(@"0x[0-9a-f]{8}$", line));
@@ -161,7 +151,16 @@ public class SignatureRendererTests
         Assert.Contains("FormatHead(", line);
     }
 
+    private static List<string> Render(string typeFullName)
+    {
+        using var fs = File.OpenRead(AssemblyPath);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        var handle = MetadataNaming.FindType(reader, typeFullName);
+        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {typeFullName}");
+        return SignatureRenderer.RenderTypeSignatures(reader, reader.GetTypeDefinition(handle!.Value)).ToList();
+    }
+
     // TODO(TestData 扩展后补)：主程序集当前无泛型类型定义/泛型方法，泛型参数渲染（List`1 实例化、
-    // GetGenericTypeParameter/GetGenericMethodParameter 取名字、方法名后 <T>）暂无可断言的真实成员；
-    // 待 tests/TestData 加入泛型样本类型后再补泛型断言。
+    // GetGenericTypeParameter/GetGenericMethodParameter 取名字、方法名后 <T>）暂无可断言的真实成员； 待 tests/TestData 加入泛型样本类型后再补泛型断言。
 }

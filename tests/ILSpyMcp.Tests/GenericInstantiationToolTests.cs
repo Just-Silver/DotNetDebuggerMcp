@@ -4,8 +4,7 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// generic_instantiations 工具层用例：typeName 无 arity 短名命中 / 带 arity 全名命中 / 方法体调用段 /
-/// 无实例化（无）占位 / 类型不存在 / 参数校验。
+/// generic_instantiations 工具层用例：typeName 无 arity 短名命中 / 带 arity 全名命中 / 方法体调用段 / 无实例化（无）占位 / 类型不存在 / 参数校验。
 /// </summary>
 public class GenericInstantiationToolTests
 {

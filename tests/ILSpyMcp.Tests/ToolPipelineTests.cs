@@ -9,8 +9,8 @@ namespace ILSpyMcp.Tests;
 
 /// <summary>
 /// 共享执行管道用例：缓存命中/并发单飞/lines 分页/合并/超时语义。多数用例经 <see cref="AppServices.ConfigureForTest"/>
-/// 注入小缓存走真实进程内反编译（tests/TestData 下测试程序集）；依赖可观测回源次数或制造失败的用例（并发单飞、合并失败、超时）
-/// 直接以本地 ToolPipeline + 反编译探针验证，不依赖真实反编译。与 CheckToolTests 同属 AppServices collection，串行执行避免静态状态竞态。
+/// 注入小缓存走真实进程内反编译（tests/TestData 下测试程序集）；依赖可观测回源次数或制造失败的用例（并发单飞、合并失败、超时） 直接以本地 ToolPipeline +
+/// 反编译探针验证，不依赖真实反编译。与 CheckToolTests 同属 AppServices collection，串行执行避免静态状态竞态。
 /// </summary>
 [Collection("AppServices")]
 public class ToolPipelineTests
@@ -21,39 +21,6 @@ public class ToolPipelineTests
     private const string TypeNoSuch = "No.Such.Type";
 
     private static readonly string SamplesDll = TestDataPaths.TestSamplesDll;
-
-    /// <summary>
-    /// 以 1MB 小缓存重建 AppServices（Cache/Pipeline 同源），测试结束恢复默认。
-    /// </summary>
-    private static void Init()
-    {
-        AppServices.ConfigureForTest(new DecompileCache(1 * 1024 * 1024));
-    }
-
-    /// <summary>
-    /// 类型反编译请求对应的缓存 key（用于断言缓存是否写入/命中）。
-    /// </summary>
-    private static CacheKey KeyForType(string typeName)
-        => AppServices.Cache.BuildKey(SamplesDll, new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, typeName)).Signature);
-
-    /// <summary>
-    /// 经共享管道反编译指定类型（默认前约 8 KB），带头部信息块上下文（与工具层行为一致）。
-    /// </summary>
-    private static async Task<ToolPipelineResult> ExecuteTypeAsync(string typeName, string lines = "")
-    {
-        var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, typeName));
-        var context = new FormatContext(SamplesDll, $"类型 {typeName}");
-        return await AppServices.Pipeline.ExecuteAsync(command, lines, context: context);
-    }
-
-    /// <summary>
-    /// 取格式化结果中头部信息块之后的正文字段（按 --- 分隔线切分），供比较不同头部标注（如缓存命中行）时的正文一致性。
-    /// </summary>
-    private static string FirstBody(string text)
-    {
-        var sep = text.IndexOf("\n---\n", StringComparison.Ordinal);
-        return sep < 0 ? text : text[(sep + 5)..];
-    }
 
     [Fact]
     public async Task 首次调用_回源并返回格式化结果()
@@ -402,5 +369,38 @@ public class ToolPipelineTests
         Assert.Equal("whole-module", whole.Signature);
         Assert.Equal(SamplesDll, type.Assembly);
         Assert.Equal(DecompileKind.Member, member.Request.Kind);
+    }
+
+    /// <summary>
+    /// 以 1MB 小缓存重建 AppServices（Cache/Pipeline 同源），测试结束恢复默认。
+    /// </summary>
+    private static void Init()
+    {
+        AppServices.ConfigureForTest(new DecompileCache(1 * 1024 * 1024));
+    }
+
+    /// <summary>
+    /// 类型反编译请求对应的缓存 key（用于断言缓存是否写入/命中）。
+    /// </summary>
+    private static CacheKey KeyForType(string typeName)
+        => AppServices.Cache.BuildKey(SamplesDll, new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, typeName)).Signature);
+
+    /// <summary>
+    /// 经共享管道反编译指定类型（默认前约 8 KB），带头部信息块上下文（与工具层行为一致）。
+    /// </summary>
+    private static async Task<ToolPipelineResult> ExecuteTypeAsync(string typeName, string lines = "")
+    {
+        var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, typeName));
+        var context = new FormatContext(SamplesDll, $"类型 {typeName}");
+        return await AppServices.Pipeline.ExecuteAsync(command, lines, context: context);
+    }
+
+    /// <summary>
+    /// 取格式化结果中头部信息块之后的正文字段（按 --- 分隔线切分），供比较不同头部标注（如缓存命中行）时的正文一致性。
+    /// </summary>
+    private static string FirstBody(string text)
+    {
+        var sep = text.IndexOf("\n---\n", StringComparison.Ordinal);
+        return sep < 0 ? text : text[(sep + 5)..];
     }
 }

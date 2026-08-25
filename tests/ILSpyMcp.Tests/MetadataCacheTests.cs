@@ -7,21 +7,13 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// 元数据工具共享缓存用例：<see cref="ToolExecutor.RunMetadata"/> 辅助（命中/未命中/错误不入缓存）与各元数据工具的二次命中断言。
-/// 与 ToolPipelineTests 同属 AppServices collection，串行执行避免静态状态竞态。
+/// 元数据工具共享缓存用例： <see cref="ToolExecutor.RunMetadata"/> 辅助（命中/未命中/错误不入缓存）与各元数据工具的二次命中断言。 与
+/// ToolPipelineTests 同属 AppServices collection，串行执行避免静态状态竞态。
 /// </summary>
 [Collection("AppServices")]
 public class MetadataCacheTests
 {
     private static readonly string SamplesDll = TestDataPaths.TestSamplesDll;
-
-    /// <summary>
-    /// 以 1MB 小缓存重建 AppServices（元数据工具与反编译工具共用同一缓存实例），测试结束恢复默认。
-    /// </summary>
-    private static void Init()
-    {
-        AppServices.ConfigureForTest(new DecompileCache(1 * 1024 * 1024));
-    }
 
     [Fact]
     public void RunMetadata_首次回源二次命中_且produce只执行一次()
@@ -289,5 +281,13 @@ public class MetadataCacheTests
         {
             AppServices.ResetForTest();
         }
+    }
+
+    /// <summary>
+    /// 以 1MB 小缓存重建 AppServices（元数据工具与反编译工具共用同一缓存实例），测试结束恢复默认。
+    /// </summary>
+    private static void Init()
+    {
+        AppServices.ConfigureForTest(new DecompileCache(1 * 1024 * 1024));
     }
 }

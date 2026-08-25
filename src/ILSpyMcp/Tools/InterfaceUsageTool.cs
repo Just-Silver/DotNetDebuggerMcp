@@ -19,10 +19,9 @@ namespace ILSpyMcp.Tools;
 public static class InterfaceUsageTool
 {
     /// <summary>
-    /// 输出指定接口的使用情况组合视图：程序集内实现该接口的类型（includeIndirect 时含全部间接实现者）、
-    /// 方法体调用接口成员的调用点（类型全名::成员名 → 接口成员名 行）与成员签名引用该接口的类型：
-    /// 元数据读取（PEReader），经共享缓存秒回。实现者段复用 hierarchy 的后代枚举，调用点段经
-    /// InterfaceUsageScanner 反扫全部非编译器生成类型方法体，引用段与 dependencies 的反向扫描同构。
+    /// 输出指定接口的使用情况组合视图：程序集内实现该接口的类型（includeIndirect 时含全部间接实现者）、 方法体调用接口成员的调用点（类型全名::成员名 → 接口成员名
+    /// 行）与成员签名引用该接口的类型： 元数据读取（PEReader），经共享缓存秒回。实现者段复用 hierarchy 的后代枚举，调用点段经 InterfaceUsageScanner
+    /// 反扫全部非编译器生成类型方法体，引用段与 dependencies 的反向扫描同构。
     /// </summary>
     /// <param name="assembly">要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">接口类型全名，格式与 list_types 输出一致（命名空间.类型，嵌套用 + 或 .，泛型带 arity）（必填）。</param>
@@ -85,8 +84,8 @@ public static class InterfaceUsageTool
     }
 
     /// <summary>
-    /// 反向扫描：遍历程序集全部类型（跳过编译器生成类型与自身），凡成员签名引用含目标类型全名的来源类型全名，按元数据枚举序收集。
-    /// 与 <see cref="DependenciesTool"/> 的反向扫描同构——成员签名（方法参数/返回、字段、属性、事件类型）中出现该接口的类型。
+    /// 反向扫描：遍历程序集全部类型（跳过编译器生成类型与自身），凡成员签名引用含目标类型全名的来源类型全名，按元数据枚举序收集。 与 <see
+    /// cref="DependenciesTool"/> 的反向扫描同构——成员签名（方法参数/返回、字段、属性、事件类型）中出现该接口的类型。
     /// </summary>
     private static List<string> FindReferrers(MetadataReader reader, TypeDefinition type, string typeFullName)
     {

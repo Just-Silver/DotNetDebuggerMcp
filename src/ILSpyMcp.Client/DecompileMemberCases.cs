@@ -5,8 +5,8 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Client;
 
 /// <summary>
-/// decompile_member 工具的全部端到端验证场景：按名搜索单成员/多成员/分隔头/访问器排除/相近名/无匹配/类型不存在/缺参校验。
-/// 匹配数超上限（&gt;20）仅返回签名清单由 ManyOverloads（21 个 Do 重载）覆盖，清单 token 可经 token 参数直接反编译单个成员（闭环）。
+/// decompile_member 工具的全部端到端验证场景：按名搜索单成员/多成员/分隔头/访问器排除/相近名/无匹配/类型不存在/缺参校验。 匹配数超上限（&gt;20）仅返回签名清单由
+/// ManyOverloads（21 个 Do 重载）覆盖，清单 token 可经 token 参数直接反编译单个成员（闭环）。
 /// </summary>
 public static class DecompileMemberCases
 {

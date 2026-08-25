@@ -66,8 +66,7 @@ public class CompilerGeneratedFilterTests
     [Fact]
     public void 嵌套编译器生成类型_短名不含尖括号也判定为生成()
     {
-        // <PrivateImplementationDetails>+__StaticArrayInitTypeSize=NN 的嵌套类型短名不含 '<'，
-        // 但外层链含 '<'（编译时常量数组下沉产物），按全名判定必须命中——验证修复前的漏网场景
+        // <PrivateImplementationDetails>+__StaticArrayInitTypeSize=NN 的嵌套类型短名不含 '<'， 但外层链含 '<'（编译时常量数组下沉产物），按全名判定必须命中——验证修复前的漏网场景
         using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
         using var pe = new PEReader(fs);
         var reader = pe.GetMetadataReader();

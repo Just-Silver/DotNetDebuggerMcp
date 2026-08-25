@@ -9,9 +9,8 @@ using Xunit;
 namespace ILSpyMcp.Tests;
 
 /// <summary>
-/// call_chain 工具层用例：token 定位起始方法输出调用序列与成员反编译、typeName+memberName 定位、
-/// includeExternal 外部调用行保留/过滤、多匹配签名清单提示、未找到/参数校验。
-/// 串行化使用 AppServices 静态状态（与 CheckToolTests/ToolPipelineTests 同一集合）。
+/// call_chain 工具层用例：token 定位起始方法输出调用序列与成员反编译、typeName+memberName 定位、 includeExternal
+/// 外部调用行保留/过滤、多匹配签名清单提示、未找到/参数校验。 串行化使用 AppServices 静态状态（与 CheckToolTests/ToolPipelineTests 同一集合）。
 /// </summary>
 [Collection("AppServices")]
 public class CallChainToolTests
@@ -135,8 +134,8 @@ public class CallChainToolTests
     public async Task CallChain_includeExternal_展开方法体解码中止_降级计数并入()
     {
         // 合成同名 ILSpyMcp.TestSamples.dll（Callee 方法体 IL 截断 → 解码中止）置于主 dll 同目录：ExtCaller.Run 对
-        // Callee..ctor 与 Callee.Help 的跨程序集调用均展开中止（2 处）——头部降级提示须并入 expander 计数，
-        // 证明展开完成后再合并 FormatContext.Degraded（展开前读取恒为 0）。
+        // Callee..ctor 与 Callee.Help 的跨程序集调用均展开中止（2 处）——头部降级提示须并入 expander 计数， 证明展开完成后再合并
+        // FormatContext.Degraded（展开前读取恒为 0）。
         AppServices.ConfigureForTest();
         var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-callchain-abort-test");
         Directory.CreateDirectory(tempDir);

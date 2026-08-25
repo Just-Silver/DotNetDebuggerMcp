@@ -9,8 +9,8 @@ using Microsoft.Extensions.Hosting;
 namespace ILSpyMcp;
 
 /// <summary>
-/// 命令行入口（McMaster.CommandLineUtils）。 无业务参数时启动 MCP 服务器（stdio 传输）；传入 -a/--assembly
-/// 等参数时 以命令行形式直接执行反编译/列类型/写盘，复用与 MCP 工具相同的校验与执行逻辑，便于调试。
+/// 命令行入口（McMaster.CommandLineUtils）。 无业务参数时启动 MCP 服务器（stdio 传输）；传入 -a/--assembly 等参数时
+/// 以命令行形式直接执行反编译/列类型/写盘，复用与 MCP 工具相同的校验与执行逻辑，便于调试。
 /// -v/--version 输出版本号，-h/--help 输出帮助信息。
 /// </summary>
 [HelpOption("-h|--help")]
@@ -189,10 +189,9 @@ public class ILSpyMcpCmd
     /// -s/-hc/-d/-cg/-iu/-gi/-cc 分别走 signature/hierarchy/dependencies/call_graph/interface_usage/generic_instantiations/call_chain
     /// （-i 让 hierarchy 含间接后代、interface_usage 含全部间接实现者，
     /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用、-cc 让 call_chain 保留外部调用行，
-    /// -tk 配合 -cg 按方法 token 反向定位调用点、配合 -cc 直接定位起始方法），-l 走 list_types
-    /// （-nc 提供类型名子串过滤、-ns 提供命名空间子串过滤），-ss 走 search_string（-t 限定类型），-fa 走 field_access
-    /// （-fn 指定字段名、-tk 指定字段 token、-t 限定字段所属类型），-mn 走 decompile_member
-    /// （-tt 按类型 token 精确定位，typeName 歧义消歧），否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
+    /// -tk 配合 -cg 按方法 token 反向定位调用点、配合 -cc 直接定位起始方法），-l 走 list_types （-nc 提供类型名子串过滤、-ns
+    /// 提供命名空间子串过滤），-ss 走 search_string（-t 限定类型），-fa 走 field_access （-fn 指定字段名、-tk 指定字段 token、-t
+    /// 限定字段所属类型），-mn 走 decompile_member （-tt 按类型 token 精确定位，typeName 歧义消歧），否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
         string assembly, string typeName, string memberName, string entityTypes, string nameContains, string namespaceContains,
@@ -268,6 +267,24 @@ public class ILSpyMcpCmd
     }
 
     /// <summary>
+    /// 组装握手期注入 <c>ServerInstructions</c> 的上下文文本：首行恒为 server 进程当前工作目录， 供 agent
+    /// 解析相对路径（assembly/outputDir）；其后可选追加 ilspymcp 更新报告（非空时换行拼接）。
+    /// </summary>
+    /// <param name="updateReport">
+    /// 更新报告文本（由 <see cref="EnvironmentChecker.BuildHandshakeText"/> 得到，可为空）。
+    /// </param>
+    /// <returns>注入文本；首行为 CWD 行，报告为空时仍返回该行。</returns>
+    internal static string BuildServerInstructions(string? updateReport)
+    {
+        var text = $"当前工作目录: {Environment.CurrentDirectory}";
+        if (!string.IsNullOrEmpty(updateReport))
+        {
+            text += Environment.NewLine + updateReport;
+        }
+        return text;
+    }
+
+    /// <summary>
     /// 默认执行：未指定业务参数（-a 或 -c）时启动 MCP 服务器；否则以命令行模式执行并输出结果。
     /// </summary>
     private async Task<int> OnExecuteAsync(CommandLineApplication app)
@@ -285,9 +302,8 @@ public class ILSpyMcpCmd
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
         // 握手期先执行更新检查（报告 ilspymcp 是否有新版本），状态由 StatusReport 会话内缓存、与 CLI -c 同源；
-        // 同步读磁盘缓存，无有效检查记录时返回空报告（不注入）。有新版本时注入文本带明确指令，要求 agent 在会话开始的回复中
-        // 主动告知用户并提供升级命令（陈述句会被 agent 当作背景信息而不转述）；已是最新时仅注入状态行。
-        // 握手期始终注入 server 工作目录供相对路径（assembly/outputDir）解析，另附更新报告。
+        // 同步读磁盘缓存，无有效检查记录时返回空报告（不注入）。有新版本时注入文本带明确指令，要求 agent 在会话开始的回复中 主动告知用户并提供升级命令（陈述句会被 agent
+        // 当作背景信息而不转述）；已是最新时仅注入状态行。 握手期始终注入 server 工作目录供相对路径（assembly/outputDir）解析，另附更新报告。
         string report;
         try
         {
@@ -308,21 +324,5 @@ public class ILSpyMcpCmd
         _ = AppServices.Updater.RefreshIfStaleAsync();
         await builder.Build().RunAsync();
         return 0;
-    }
-
-    /// <summary>
-    /// 组装握手期注入 <c>ServerInstructions</c> 的上下文文本：首行恒为 server 进程当前工作目录，
-    /// 供 agent 解析相对路径（assembly/outputDir）；其后可选追加 ilspymcp 更新报告（非空时换行拼接）。
-    /// </summary>
-    /// <param name="updateReport">更新报告文本（由 <see cref="EnvironmentChecker.BuildHandshakeText"/> 得到，可为空）。</param>
-    /// <returns>注入文本；首行为 CWD 行，报告为空时仍返回该行。</returns>
-    internal static string BuildServerInstructions(string? updateReport)
-    {
-        var text = $"当前工作目录: {Environment.CurrentDirectory}";
-        if (!string.IsNullOrEmpty(updateReport))
-        {
-            text += Environment.NewLine + updateReport;
-        }
-        return text;
     }
 }

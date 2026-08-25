@@ -5,12 +5,17 @@ using System.Text;
 namespace ILSpyMcp.Metadata;
 
 /// <summary>
-/// 类型全名渲染与定位：统一类型全名格式（命名空间.类型，嵌套用 +，泛型带 arity 如 GenericBox`1），
-/// 保证 list_types/signature/hierarchy 输出的名字可直接用于反编译工具与 decompile_member 定位（定位同时接受 + 与 . 两种嵌套分隔符，
-/// 并兼容 list_types 行首类别前缀如 "class Foo.Bar"——C# 关键字不可能是合法类型名前缀，直接复制即用）。
+/// 类型全名渲染与定位：统一类型全名格式（命名空间.类型，嵌套用 +，泛型带 arity 如 GenericBox`1）， 保证 list_types/signature/hierarchy
+/// 输出的名字可直接用于反编译工具与 decompile_member 定位（定位同时接受 + 与 . 两种嵌套分隔符， 并兼容 list_types 行首类别前缀如 "class
+/// Foo.Bar"——C# 关键字不可能是合法类型名前缀，直接复制即用）。
 /// </summary>
 public static class MetadataNaming
 {
+    /// <summary>
+    /// list_types 行首类别前缀（含尾随空格），与 ListTypesTool 的类别名一致。
+    /// </summary>
+    private static readonly string[] s_categoryPrefixes = { "class ", "interface ", "struct ", "delegate ", "enum " };
+
     /// <summary>
     /// 渲染 TypeDefinition 的全限定名：命名空间.类型，嵌套类型用 + 连接（Outer+Inner），泛型带 arity（GenericBox`1）。
     /// </summary>
@@ -30,17 +35,15 @@ public static class MetadataNaming
     }
 
     /// <summary>
-    /// 把元数据 token 值渲染为标准 0x 十六进制文本（8 位，如 0x06000005）。全仓成员 token 统一经此格式化，
-    /// 避免各扫描器/渲染器重复拼写 "0x{:x8}" 造成格式漂移。
+    /// 把元数据 token 值渲染为标准 0x 十六进制文本（8 位，如 0x06000005）。全仓成员 token 统一经此格式化， 避免各扫描器/渲染器重复拼写 "0x{:x8}" 造成格式漂移。
     /// </summary>
     /// <param name="token">元数据 token 值（如 <see cref="MetadataTokens.GetToken(EntityHandle)"/> 的整数形式）。</param>
     /// <returns>如 "0x06000005"。</returns>
     public static string FormatToken(int token) => $"0x{token:x8}";
 
     /// <summary>
-    /// 渲染 TypeReference 的全限定名（命名空间.名，嵌套沿 ResolutionScope 递归用 + 连接），与
-    /// <see cref="FullName(MetadataReader, TypeDefinition)"/> 的格式一致（供跨程序集外部类型渲染）。
-    /// 纯元数据读取，不加载外部程序集。
+    /// 渲染 TypeReference 的全限定名（命名空间.名，嵌套沿 ResolutionScope 递归用 + 连接），与 <see
+    /// cref="FullName(MetadataReader, TypeDefinition)"/> 的格式一致（供跨程序集外部类型渲染）。 纯元数据读取，不加载外部程序集。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="handle">待渲染的类型引用句柄。</param>
@@ -75,8 +78,10 @@ public static class MetadataNaming
             {
                 case HandleKind.ModuleDefinition:
                     return (true, null);
+
                 case HandleKind.AssemblyReference:
                     return (false, reader.GetString(reader.GetAssemblyReference((AssemblyReferenceHandle)scope).Name));
+
                 case HandleKind.TypeReference: // 嵌套类型：沿外层继续上溯
                     scope = reader.GetTypeReference((TypeReferenceHandle)scope).ResolutionScope;
                     continue;
@@ -87,8 +92,8 @@ public static class MetadataNaming
     }
 
     /// <summary>
-    /// 渲染跨程序集外部类型的归属条目：<c>全名 [程序集名]</c>（如 <c>System.Console [System.Console]</c>）；
-    /// 归属未知（如 ModuleReference 作用域）时输出 <c>全名 [&lt;外部&gt;]</c>。供 dependencies/call_graph 的外部段使用。
+    /// 渲染跨程序集外部类型的归属条目： <c>全名 [程序集名]</c>（如 <c>System.Console [System.Console]</c>）； 归属未知（如
+    /// ModuleReference 作用域）时输出 <c>全名 [&lt;外部&gt;]</c>。供 dependencies/call_graph 的外部段使用。
     /// </summary>
     /// <param name="fullName">类型全名（建议来自 <see cref="TypeReferenceFullName"/>）。</param>
     /// <param name="assemblyName">归属程序集名；未知时传 null。</param>
@@ -97,10 +102,9 @@ public static class MetadataNaming
         => $"{fullName} [{(assemblyName ?? "<外部>")}]";
 
     /// <summary>
-    /// 在程序集内按用户输入定位 TypeDefinition；未找到返回 null。
-    /// 输入可含两种嵌套分隔符（Probe.Outer+Inner 或 Probe.Outer.Inner）——匹配前将 + 统一归一化为 . 后比较。
-    /// 注意：命名空间与嵌套分隔的歧义（A.B.C 是命名空间 A.B 的类型 C，还是命名空间 A 的类型 B 的嵌套 C）时，
-    /// 返回 <see cref="FindTypes"/> 全部候选中的首个（枚举序）。
+    /// 在程序集内按用户输入定位 TypeDefinition；未找到返回 null。 输入可含两种嵌套分隔符（Probe.Outer+Inner 或
+    /// Probe.Outer.Inner）——匹配前将 + 统一归一化为 . 后比较。 注意：命名空间与嵌套分隔的歧义（A.B.C 是命名空间 A.B 的类型 C，还是命名空间 A 的类型
+    /// B 的嵌套 C）时， 返回 <see cref="FindTypes"/> 全部候选中的首个（枚举序）。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="input">用户输入的类型全名，如 "Probe.Outer+Inner"，可带 list_types 行首类别前缀（如 "class Probe.Outer"）。</param>
@@ -113,9 +117,8 @@ public static class MetadataNaming
     }
 
     /// <summary>
-    /// 在程序集内按用户输入定位全部 TypeDefinition 候选：输入与类型全名均将 + 归一化为 . 后比较，收集全部相等命中。
-    /// 命名空间与嵌套分隔存在歧义（如 A.B.C 既可能是命名空间 A.B 的类型 C，也可能是命名空间 A 的类型 B 的嵌套 C）时
-    /// 返回多个候选，供调用方判定歧义；无歧义时恒为 0 或 1 个。
+    /// 在程序集内按用户输入定位全部 TypeDefinition 候选：输入与类型全名均将 + 归一化为 . 后比较，收集全部相等命中。 命名空间与嵌套分隔存在歧义（如 A.B.C
+    /// 既可能是命名空间 A.B 的类型 C，也可能是命名空间 A 的类型 B 的嵌套 C）时 返回多个候选，供调用方判定歧义；无歧义时恒为 0 或 1 个。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="input">用户输入的类型全名，如 "Probe.Outer+Inner"，可带 list_types 行首类别前缀（如 "class Probe.Outer"）。</param>
@@ -134,8 +137,8 @@ public static class MetadataNaming
 
     /// <summary>
     /// 组装「类型名歧义」提示：列出全部候选全名与其类型定义 token（0x02 开头，可直接用于 decompile_member 的 typeToken 参数精确定位），
-    /// 首行按调用方传入的解法说明当前工具如何消歧（有 token 参数的写 token 用法，无 token 参数的写名称归一化固有的换名解法）。
-    /// 供工具按 typeName 定位到多个候选时提示 agent。
+    /// 首行按调用方传入的解法说明当前工具如何消歧（有 token 参数的写 token 用法，无 token 参数的写名称归一化固有的换名解法）。 供工具按 typeName
+    /// 定位到多个候选时提示 agent。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="input">用户输入的类型名（提示文本保留原始输入）。</param>
@@ -155,8 +158,8 @@ public static class MetadataNaming
     }
 
     /// <summary>
-    /// 在程序集全部非编译器生成类型中查找与输入相近的类型：类型全名或短名（最后一段）与查询名编辑距离 ≤ 2、
-    /// 或共享 ≥ 4 字符公共前缀即视为相近。返回全名（可直接复制用于定位），按名序排序取前 max 个。
+    /// 在程序集全部非编译器生成类型中查找与输入相近的类型：类型全名或短名（最后一段）与查询名编辑距离 ≤ 2、 或共享 ≥ 4
+    /// 字符公共前缀即视为相近。返回全名（可直接复制用于定位），按名序排序取前 max 个。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="input">用户输入的类型名（兼容 list_types 行首类别前缀，匹配前剥离）。</param>
@@ -183,8 +186,7 @@ public static class MetadataNaming
     }
 
     /// <summary>
-    /// 组装「未找到类型」提示：有相近类型时输出 <c>未找到类型 X。相近类型：A、B、C</c>（全名、可直接复制用于定位），
-    /// 否则保持 <c>未找到类型 X</c> 原文本（提示文本保留原始输入）。供各工具/反编译入口的未找到分支统一使用。
+    /// 组装「未找到类型」提示：有相近类型时输出 <c>未找到类型 X。相近类型：A、B、C</c>（全名、可直接复制用于定位）， 否则保持 <c>未找到类型 X</c> 原文本（提示文本保留原始输入）。供各工具/反编译入口的未找到分支统一使用。
     /// </summary>
     /// <param name="reader">元数据读取器。</param>
     /// <param name="input">用户输入的类型名。</param>
@@ -196,8 +198,8 @@ public static class MetadataNaming
     }
 
     /// <summary>
-    /// 剥离 list_types 行首类别前缀（"class "/"interface "/"struct "/"delegate "/"enum "，忽略大小写，前缀后需仍有内容）。
-    /// C# 关键字不可能作合法类型名前缀，故剥离安全；"interface1"/"structs" 等无空格分隔不受影响。
+    /// 剥离 list_types 行首类别前缀（"class "/"interface "/"struct "/"delegate "/"enum "，忽略大小写，前缀后需仍有内容）。 C#
+    /// 关键字不可能作合法类型名前缀，故剥离安全；"interface1"/"structs" 等无空格分隔不受影响。
     /// </summary>
     /// <param name="input">用户输入。</param>
     /// <returns>剥离前缀后的类型名；无前缀时原样返回。</returns>
@@ -212,9 +214,4 @@ public static class MetadataNaming
         }
         return input;
     }
-
-    /// <summary>
-    /// list_types 行首类别前缀（含尾随空格），与 ListTypesTool 的类别名一致。
-    /// </summary>
-    private static readonly string[] s_categoryPrefixes = { "class ", "interface ", "struct ", "delegate ", "enum " };
 }

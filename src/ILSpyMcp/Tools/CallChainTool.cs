@@ -15,9 +15,9 @@ using System.Reflection.PortableExecutable;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 方法级正向调用序列 + 反编译组合：按 token 或 typeName+memberName 定位起始方法，扫描其方法体按 IL 序列出调用序列
-/// （内部调用带成员 token，includeExternal=true 时保留跨程序集外部调用行），并对去重后的唯一内部成员逐条经共享管道反编译，
-/// 合并为「调用序列 + #MEMBER 分隔行 + 成员体」的一次输出。纯元数据定位起始方法 + 进程内反编译组合。
+/// 方法级正向调用序列 + 反编译组合：按 token 或 typeName+memberName 定位起始方法，扫描其方法体按 IL 序列出调用序列 （内部调用带成员
+/// token，includeExternal=true 时保留跨程序集外部调用行），并对去重后的唯一内部成员逐条经共享管道反编译， 合并为「调用序列 + #MEMBER 分隔行 +
+/// 成员体」的一次输出。纯元数据定位起始方法 + 进程内反编译组合。
 /// </summary>
 [McpServerToolType]
 public static class CallChainTool
@@ -28,7 +28,9 @@ public static class CallChainTool
     /// <param name="assembly">要分析的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="typeName">起始方法所属类型全名，格式与 list_types 输出一致（提供 token 时可不填）。</param>
     /// <param name="memberName">起始方法名子串（忽略大小写）；匹配多个方法时返回 #MEMBER 签名清单（提供 token 时可不填）。</param>
-    /// <param name="token">起始方法元数据 token（取 signature 行尾或 #MEMBER 的 token）：按 token 直接定位，忽略 memberName，typeName 可不填。</param>
+    /// <param name="token">
+    /// 起始方法元数据 token（取 signature 行尾或 #MEMBER 的 token）：按 token 直接定位，忽略 memberName，typeName 可不填。
+    /// </param>
     /// <param name="includeExternal">是否在调用序列中保留跨程序集外部调用行（带程序集归属，默认 false）。</param>
     /// <param name="lines">按行号范围读取结果，格式 "start-end"；缺省返回前约 8 KB。</param>
     /// <param name="timeoutSeconds">本次反编译回源超时秒数（默认 30）。</param>
@@ -139,10 +141,9 @@ public static class CallChainTool
     }
 
     /// <summary>
-    /// 组装合并行：`方法体调用序列:` + 序列行 + 空行 + `被调用成员反编译:` + 每唯一内部成员 #MEMBER 分隔行 + 反编译体行。
-    /// 匹配数超过上限时仅渲染 #MEMBER 签名清单（含 signature）不反编译；无内部调用时省略反编译段。
-    /// 任一成员反编译失败/超时返回可重试错误提示（Error 非空、Lines 为 null），不抛异常。
-    /// 返回 (合并行列表, 是否全部缓存命中, 错误提示)。
+    /// 组装合并行：`方法体调用序列:` + 序列行 + 空行 + `被调用成员反编译:` + 每唯一内部成员 #MEMBER 分隔行 + 反编译体行。 匹配数超过上限时仅渲染 #MEMBER
+    /// 签名清单（含 signature）不反编译；无内部调用时省略反编译段。 任一成员反编译失败/超时返回可重试错误提示（Error 非空、Lines 为 null），不抛异常。 返回
+    /// (合并行列表, 是否全部缓存命中, 错误提示)。
     /// </summary>
     private static async Task<(List<string>? Lines, bool AllCached, string? Error)> BuildMergedLinesAsync(
         IReadOnlyList<CallSite> callSites, IReadOnlyList<CallSite> uniqueInternal, bool includeExternal,
@@ -162,8 +163,8 @@ public static class CallChainTool
             var line = $"  {index}. {display}{tokenPart}";
             if (callSite.IsExternal && expander is not null)
             {
-                // 跨程序集调用展开：可解析则外部调用行后缩进追加展开行；解析失败在行尾标注终止。
-                // 搜索目录为空数组：主 dll 同目录由 resolver 构造自带、CWD 由 expander 恒加，无需重复传
+                // 跨程序集调用展开：可解析则外部调用行后缩进追加展开行；解析失败在行尾标注终止。 搜索目录为空数组：主 dll 同目录由 resolver 构造自带、CWD 由
+                // expander 恒加，无需重复传
                 var expansion = expander.Expand(callSite, Array.Empty<string>());
                 if (expansion.Count == 0)
                 {
@@ -215,8 +216,8 @@ public static class CallChainTool
             }
             catch (Exception ex)
             {
-                // 任一成员反编译失败/超时：返回可重试提示文本而非抛异常（与 ExecuteMergedAsync 语义一致：丢弃已拼部分，不写缓存，同 key 可重试）。
-                // 底层 GetSourceLinesAsync 抛出的异常 Message 已带「反编译失败：」前缀（InProcessDecompiler 兜底），不再重复包装
+                // 任一成员反编译失败/超时：返回可重试提示文本而非抛异常（与 ExecuteMergedAsync 语义一致：丢弃已拼部分，不写缓存，同 key 可重试）。 底层
+                // GetSourceLinesAsync 抛出的异常 Message 已带「反编译失败：」前缀（InProcessDecompiler 兜底），不再重复包装
                 return (null, false, ex.Message.StartsWith(AppText.DecompileFailurePrefix, StringComparison.Ordinal) ? ex.Message : $"{AppText.DecompileFailurePrefix}{ex.Message}");
             }
             allCached &= fromCache;
@@ -256,8 +257,7 @@ public static class CallChainTool
     }
 
     /// <summary>
-    /// 解析元数据 token 文本为方法定义句柄：要求 Kind 为 MethodDefinition（0x06）且行号在 MethodDefinitions.Count 范围内；
-    /// 否则返回 null。
+    /// 解析元数据 token 文本为方法定义句柄：要求 Kind 为 MethodDefinition（0x06）且行号在 MethodDefinitions.Count 范围内； 否则返回 null。
     /// </summary>
     private static MethodDefinitionHandle? ResolveMethodToken(MetadataReader reader, string token)
     {

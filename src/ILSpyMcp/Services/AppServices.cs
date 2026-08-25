@@ -6,8 +6,7 @@ using ILSpyMcp.UpdateCheck;
 namespace ILSpyMcp.Services;
 
 /// <summary>
-/// 进程级共享服务容器：缓存、执行管道、进程内反编译服务、NuGet 查询全会话单例，避免每个工具各自持有独立实例。 测试可经
-/// <see cref="ConfigureForTest"/> 替换缓存。
+/// 进程级共享服务容器：缓存、执行管道、进程内反编译服务、NuGet 查询全会话单例，避免每个工具各自持有独立实例。 测试可经 <see cref="ConfigureForTest"/> 替换缓存。
 /// </summary>
 internal static class AppServices
 {
@@ -34,14 +33,14 @@ internal static class AppServices
     public static UpdateChecker Updater = new(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
 
     /// <summary>
-    /// 环境自检状态：会话内只真实组装一次，后续直接复用缓存状态（CLI -c 与 MCP 握手按各自方式组装文本）。 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入 UpdateCheck 层，避免反向引用。
+    /// 环境自检状态：会话内只真实组装一次，后续直接复用缓存状态（CLI -c 与 MCP 握手按各自方式组装文本）。 单飞保证并发首次调用只执行一次完整检查。依赖经参数传入
+    /// UpdateCheck 层，避免反向引用。
     /// </summary>
     public static Lazy<Task<UpdateChecker.NuGetUpdateStatus?>> StatusReport =
         new(() => EnvironmentChecker.BuildStatusAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
 
     /// <summary>
-    /// 测试注入：以指定缓存（缺省为默认 <see cref="AppConfig.MaxCacheBytes"/> 上限的缓存）重建 Cache/Pipeline， 使工具层可在可控
-    /// 缓存状态下测试。
+    /// 测试注入：以指定缓存（缺省为默认 <see cref="AppConfig.MaxCacheBytes"/> 上限的缓存）重建 Cache/Pipeline， 使工具层可在可控 缓存状态下测试。
     /// </summary>
     /// <param name="cache">测试用缓存；缺省为默认上限的缓存。</param>
     internal static void ConfigureForTest(DecompileCache? cache = null)

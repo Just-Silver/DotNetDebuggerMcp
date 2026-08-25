@@ -10,8 +10,7 @@ using System.Text;
 namespace ILSpyMcp.Tools;
 
 /// <summary>
-/// 输出进程内共享缓存的状态：总占用/上限、条目数、命中率与逐条目占用明细。供用户评估缓存大小设置（MaxCacheBytes）是否合适、
-/// 定位占用大头；无程序集参数（缓存是进程级全局的，与具体程序集无关）。
+/// 输出进程内共享缓存的状态：总占用/上限、条目数、命中率与逐条目占用明细。供用户评估缓存大小设置（MaxCacheBytes）是否合适、 定位占用大头；无程序集参数（缓存是进程级全局的，与具体程序集无关）。
 /// </summary>
 [McpServerToolType]
 public static class CacheStatsTool
@@ -87,8 +86,7 @@ public static class CacheStatsTool
     }
 
     /// <summary>
-    /// 把缓存签名（工具前缀 + \u001F + 参数）渲染为可读形式：工具名 + 冒号 + 参数；参数内 \u001F 分隔替换为竖线便于阅读；
-    /// 无参数时只显示工具名；未知前缀原样展示。
+    /// 把缓存签名（工具前缀 + \u001F + 参数）渲染为可读形式：工具名 + 冒号 + 参数；参数内 \u001F 分隔替换为竖线便于阅读； 无参数时只显示工具名；未知前缀原样展示。
     /// </summary>
     private static string DescribeSignature(string signature)
     {

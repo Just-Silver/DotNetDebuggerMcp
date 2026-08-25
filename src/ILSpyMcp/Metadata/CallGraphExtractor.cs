@@ -8,14 +8,15 @@ namespace ILSpyMcp.Metadata;
 
 /// <summary>
 /// 纯元数据「方法体调用图」：扫描类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli），
-/// 提取程序集内部被调用的类型（编译器生成类型不计）与跨程序集外部类型（WithExternal 路径，带程序集归属），供 call_graph
-/// 工具使用。与 ReferenceExtractor 的签名级引用互补：本类基于方法体执行流而非成员签名。
-/// IL 解码经共享 IlScanHelper（基于 ICSharpCode.Decompiler.Disassembler.ILParser 权威跳表）：只提取调用边 token，
-/// 解码异常安全中止并累计降级计数；
-/// 同程序集成员调用编译器通常发 MethodDef/FieldDef 直接 token，MemberRef 兜底沿 ResolutionScope 回溯判定内部/外部。
+/// 提取程序集内部被调用的类型（编译器生成类型不计）与跨程序集外部类型（WithExternal 路径，带程序集归属），供 call_graph 工具使用。与 ReferenceExtractor
+/// 的签名级引用互补：本类基于方法体执行流而非成员签名。 IL 解码经共享 IlScanHelper（基于 ICSharpCode.Decompiler.Disassembler.ILParser
+/// 权威跳表）：只提取调用边 token， 解码异常安全中止并累计降级计数； 同程序集成员调用编译器通常发 MethodDef/FieldDef 直接 token，MemberRef 兜底沿
+/// ResolutionScope 回溯判定内部/外部。
 /// </summary>
 public static class CallGraphExtractor
 {
+    private static readonly GenericContext EmptyContext = new(Array.Empty<string>(), Array.Empty<string>());
+
     /// <summary>
     /// 提取指定类型全部方法体调用的程序集内部类型全名（去重、按元数据枚举序）。
     /// </summary>
@@ -26,11 +27,10 @@ public static class CallGraphExtractor
         => ExtractMethodBodyCallTypesDetailed(pe, type).Internal;
 
     /// <summary>
-    /// 提取指定类型全部方法体调用的程序集内部与跨程序集外部类型。内部集合语义与
-    /// <see cref="ExtractMethodBodyCallTypes"/> 完全一致；外部集合为方法体调用指令（MemberRef 兜底解析）中出现的跨程序集
-    /// 类型，条目格式 <c>全名 [程序集名]</c>（如 <c>System.Console [System.Console]</c>），程序集名取元数据
-    /// AssemblyReference.Name（纯元数据，不加载外部程序集），未知归属输出 <c>全名 [&lt;外部&gt;]</c>，按全名排序去重。
-    /// 编译器生成 target 过滤只对内部集合生效（外部类型非编译器生成）。
+    /// 提取指定类型全部方法体调用的程序集内部与跨程序集外部类型。内部集合语义与 <see cref="ExtractMethodBodyCallTypes"/>
+    /// 完全一致；外部集合为方法体调用指令（MemberRef 兜底解析）中出现的跨程序集 类型，条目格式 <c>全名 [程序集名]</c>（如 <c>System.Console
+    /// [System.Console]</c>），程序集名取元数据 AssemblyReference.Name（纯元数据，不加载外部程序集），未知归属输出 <c>全名
+    /// [&lt;外部&gt;]</c>，按全名排序去重。 编译器生成 target 过滤只对内部集合生效（外部类型非编译器生成）。
     /// </summary>
     /// <param name="pe">程序集 PE 读取器（方法体位于 PE 数据段，需经 PEReader 读取）。</param>
     /// <param name="type">待扫描的类型定义。</param>
@@ -43,8 +43,8 @@ public static class CallGraphExtractor
     }
 
     /// <summary>
-    /// 提取指定类型全部方法体调用的内部/外部类型集合，并返回解码降级计数（AbortedBodies：因 IL 损坏而中止解码的方法体数）。
-    /// 内部/外部集合语义与 <see cref="ExtractMethodBodyCallTypesWithExternal"/> 完全一致，供调用方感知解码完整性。
+    /// 提取指定类型全部方法体调用的内部/外部类型集合，并返回解码降级计数（AbortedBodies：因 IL 损坏而中止解码的方法体数）。 内部/外部集合语义与 <see
+    /// cref="ExtractMethodBodyCallTypesWithExternal"/> 完全一致，供调用方感知解码完整性。
     /// </summary>
     /// <param name="pe">程序集 PE 读取器（方法体位于 PE 数据段，需经 PEReader 读取）。</param>
     /// <param name="type">待扫描的类型定义。</param>
@@ -82,9 +82,8 @@ public static class CallGraphExtractor
     }
 
     /// <summary>
-    /// 方法级反向调用点：遍历程序集全部非编译器生成类型的方法体，凡调用指令指向指定方法 token 的来源方法，
-    /// 以 <c>类型全名::成员签名</c> 行收集（泛型实例化 MethodSpec 调用解包归约到目标方法；编译器生成类型的方法体不计）。
-    /// 供 call_graph 的 token 参数做类型级反查的细化——直接回答「程序集内哪些方法体调用了这个具体方法」。
+    /// 方法级反向调用点：遍历程序集全部非编译器生成类型的方法体，凡调用指令指向指定方法 token 的来源方法， 以 <c>类型全名::成员签名</c> 行收集（泛型实例化
+    /// MethodSpec 调用解包归约到目标方法；编译器生成类型的方法体不计）。 供 call_graph 的 token 参数做类型级反查的细化——直接回答「程序集内哪些方法体调用了这个具体方法」。
     /// </summary>
     /// <param name="pe">程序集 PE 读取器。</param>
     /// <param name="token">目标方法元数据 token（0x 开头的十六进制，如 0x06000005）。</param>
@@ -119,17 +118,17 @@ public static class CallGraphExtractor
         private readonly Provider _provider;
         private Dictionary<string, TypeDefinitionHandle>? _typeDefsByName;
 
-        /// <summary>
-        /// 解码中止计数：方法体 IL 解码遇损坏（IlScanHelper 解码异常）时累加，供调用方感知解码完整性。
-        /// </summary>
-        public int AbortedBodies { get; private set; }
-
         public BodyScanner(PEReader pe)
         {
             _pe = pe;
             _reader = pe.GetMetadataReader();
             _provider = new Provider(_collected, _external);
         }
+
+        /// <summary>
+        /// 解码中止计数：方法体 IL 解码遇损坏（IlScanHelper 解码异常）时累加，供调用方感知解码完整性。
+        /// </summary>
+        public int AbortedBodies { get; private set; }
 
         public MetadataReader Reader => _reader;
 
@@ -145,8 +144,8 @@ public static class CallGraphExtractor
         }
 
         /// <summary>
-        /// 扫描一个类型定义的全部方法体（含访问器方法体，属性 getter 内的调用同样是该类型的行为调用）。
-        /// callerTarget 非空时启用方法级反向定位：凡方法体调用指令指向该方法的来源方法记入 <see cref="_callers"/>。
+        /// 扫描一个类型定义的全部方法体（含访问器方法体，属性 getter 内的调用同样是该类型的行为调用）。 callerTarget
+        /// 非空时启用方法级反向定位：凡方法体调用指令指向该方法的来源方法记入 <see cref="_callers"/>。
         /// </summary>
         public void ScanType(TypeDefinition type, MethodDefinitionHandle? callerTarget = null)
         {
@@ -226,6 +225,7 @@ public static class CallGraphExtractor
                         CollectMethodToken(instr.RawToken);
                         if (callerTarget is not null && MatchesToken(instr.RawToken, callerTarget.Value)) RecordCaller(sourceMethod);
                         break;
+
                     case ILOpCode.Calli:
                         CollectSignatureToken(instr.RawToken);
                         break;
@@ -244,9 +244,11 @@ public static class CallGraphExtractor
                 case HandleKind.MethodDefinition:
                     CollectType(_reader.GetMethodDefinition((MethodDefinitionHandle)handle).GetDeclaringType());
                     break;
+
                 case HandleKind.MemberReference:
                     CollectMemberParent(_reader.GetMemberReference((MemberReferenceHandle)handle).Parent);
                     break;
+
                 case HandleKind.MethodSpecification:
                     var spec = _reader.GetMethodSpecification((MethodSpecificationHandle)handle);
                     CollectMethodToken(MetadataTokens.GetToken(spec.Method));
@@ -263,8 +265,8 @@ public static class CallGraphExtractor
         }
 
         /// <summary>
-        /// 方法调用 token 是否指向目标方法：MethodDef 直接比较；MethodSpec 解包 spec.Method 再比较（覆盖泛型实例化调用
-        /// 如 GenericHelper.Echo&lt;int&gt; 的 MethodSpec 归约到 GenericHelper.Echo）。
+        /// 方法调用 token 是否指向目标方法：MethodDef 直接比较；MethodSpec 解包 spec.Method 再比较（覆盖泛型实例化调用 如
+        /// GenericHelper.Echo&lt;int&gt; 的 MethodSpec 归约到 GenericHelper.Echo）。
         /// </summary>
         private bool MatchesToken(int rawToken, MethodDefinitionHandle target)
         {
@@ -289,8 +291,8 @@ public static class CallGraphExtractor
         }
 
         /// <summary>
-        /// 解析 MemberRef 的 parent：TypeDefinition 直收；TypeReference 沿 ResolutionScope 判定内部并映射回定义、外部收集归属；
-        /// TypeSpecification 解码泛型实参收集。
+        /// 解析 MemberRef 的 parent：TypeDefinition 直收；TypeReference 沿 ResolutionScope
+        /// 判定内部并映射回定义、外部收集归属； TypeSpecification 解码泛型实参收集。
         /// </summary>
         private void CollectMemberParent(EntityHandle parent)
         {
@@ -299,9 +301,11 @@ public static class CallGraphExtractor
                 case HandleKind.TypeDefinition:
                     CollectType((TypeDefinitionHandle)parent);
                     break;
+
                 case HandleKind.TypeReference:
                     CollectTypeReference((TypeReferenceHandle)parent);
                     break;
+
                 case HandleKind.TypeSpecification:
                     try
                     {
@@ -335,8 +339,8 @@ public static class CallGraphExtractor
         }
 
         /// <summary>
-        /// 解析 MemberRef parent 的 TypeReference：内部类型映射回 TypeDef 句柄收集（编译器生成类型过滤）；跨程序集外部类型
-        /// 用 全名 [程序集名] 加入外部集合（外部类型非编译器生成，不做过滤）。归属判定与全名渲染共用 MetadataNaming 的
+        /// 解析 MemberRef parent 的 TypeReference：内部类型映射回 TypeDef 句柄收集（编译器生成类型过滤）；跨程序集外部类型 用 全名 [程序集名]
+        /// 加入外部集合（外部类型非编译器生成，不做过滤）。归属判定与全名渲染共用 MetadataNaming 的
         /// TypeReferenceScope/TypeReferenceFullName helper。
         /// </summary>
         private void CollectTypeReference(TypeReferenceHandle handle)
@@ -385,8 +389,6 @@ public static class CallGraphExtractor
         }
     }
 
-    private static readonly GenericContext EmptyContext = new(Array.Empty<string>(), Array.Empty<string>());
-
     /// <summary>
     /// 泛型参数上下文：类型级与方法级泛型参数名数组，签名解码时按索引取名字（与 SignatureRenderer 一致）。
     /// </summary>
@@ -394,9 +396,8 @@ public static class CallGraphExtractor
 
     /// <summary>
     /// 签名解码器：只为触发类型解析回调、收集程序集内部 TypeDefinition 与跨程序集外部 TypeReference（格式 全名 [程序集名]）；
-    /// 返回字符串只是占位，不参与任何展示（与 ReferenceExtractor.Provider 同构，用于 MethodSpec 泛型实参、TypeSpecification
-    /// 父类型与 calli 函数指针签名）。内部类型的泛型实参经 GetTypeFromDefinition 收集，外部泛型实参/泛型实例化的外部类型
-    /// 经 GetTypeFromReference 收集——与内部集合语义对称。
+    /// 返回字符串只是占位，不参与任何展示（与 ReferenceExtractor.Provider 同构，用于 MethodSpec 泛型实参、TypeSpecification 父类型与
+    /// calli 函数指针签名）。内部类型的泛型实参经 GetTypeFromDefinition 收集，外部泛型实参/泛型实例化的外部类型 经 GetTypeFromReference 收集——与内部集合语义对称。
     /// </summary>
     private sealed class Provider : ISignatureTypeProvider<string, GenericContext>
     {
@@ -434,14 +435,23 @@ public static class CallGraphExtractor
             => reader.GetTypeSpecification(handle).DecodeSignature(this, genericContext);
 
         public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments) => "";
+
         public string GetGenericTypeParameter(GenericContext genericContext, int index) => $"T{index}";
+
         public string GetGenericMethodParameter(GenericContext genericContext, int index) => $"T{index}";
+
         public string GetArrayType(string elementType, ArrayShape shape) => "";
+
         public string GetSZArrayType(string elementType) => "";
+
         public string GetByReferenceType(string elementType) => "";
+
         public string GetPointerType(string elementType) => "";
+
         public string GetPinnedType(string elementType) => "";
+
         public string GetModifiedType(string modifier, string unmodifiedType, bool isRequired) => "";
+
         public string GetFunctionPointerType(MethodSignature<string> signature) => "";
     }
 }

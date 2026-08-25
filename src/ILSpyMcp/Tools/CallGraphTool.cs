@@ -17,12 +17,13 @@ public static class CallGraphTool
 {
     /// <summary>
     /// 输出指定类型全部方法体 IL 调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli）引用的程序集内部类型，
-    /// 以及程序集内方法体调用了它的类型：元数据读取（PEReader），经共享缓存秒回。
-    /// includeExternal 为 true 时追加输出方法体调用的跨程序集外部类型（带程序集归属）。
-    /// 与 dependencies 的成员签名引用互补：本工具基于方法体执行流（行为级），签名级引用另见 dependencies。
+    /// 以及程序集内方法体调用了它的类型：元数据读取（PEReader），经共享缓存秒回。 includeExternal 为 true
+    /// 时追加输出方法体调用的跨程序集外部类型（带程序集归属）。 与 dependencies 的成员签名引用互补：本工具基于方法体执行流（行为级），签名级引用另见 dependencies。
     /// </summary>
     /// <param name="assembly">要查询的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
-    /// <param name="typeName">类型全名，格式与 list_types 输出一致（命名空间.类型，嵌套用 + 或 .，泛型带 arity）（类型级双向调用关系必填；提供 token 时可不填）。</param>
+    /// <param name="typeName">
+    /// 类型全名，格式与 list_types 输出一致（命名空间.类型，嵌套用 + 或 .，泛型带 arity）（类型级双向调用关系必填；提供 token 时可不填）。
+    /// </param>
     /// <param name="token">方法元数据 token（取 signature 行尾或 #MEMBER 的 token）：按 token 反向定位程序集内调用该方法的成员（方法级调用点）。</param>
     /// <param name="includeExternal">是否同时输出跨程序集外部类型引用（如 BCL/NuGet，带程序集归属，默认 false；token 分支下忽略）。</param>
     /// <param name="lines">按行号范围读取结果，格式 "start-end"；缺省返回前约 8 KB。</param>

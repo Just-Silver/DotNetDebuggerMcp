@@ -1,4 +1,3 @@
-using ICSharpCode.Decompiler.Disassembler;
 using System.Collections.Immutable;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -14,21 +13,23 @@ namespace ILSpyMcp.Metadata;
 /// <param name="MemberName">成员元数据原始名（如 .ctor / Mid / get_Value）。</param>
 /// <param name="Signature">内部调用为 <see cref="SignatureRenderer.RenderMemberSignature"/> 渲染的成员签名；外部调用为空串。</param>
 /// <param name="MemberToken">内部调用为方法定义 token（0x06 开头，可直接用于进程内成员反编译）；外部调用为 null。</param>
-/// <param name="AssemblyFullName">外部调用的归属程序集完整名（如 System.Console, Version=…）；内部调用为 null，未知归属也为 null。</param>
+/// <param name="AssemblyFullName">
+/// 外部调用的归属程序集完整名（如 System.Console, Version=…）；内部调用为 null，未知归属也为 null。
+/// </param>
 /// <param name="ParamCount">外部调用为 MemberRef 方法签名的参数个数；内部调用恒为 -1。</param>
 public readonly record struct CallSite(
     bool IsExternal, string TypeFullName, string MemberName, string Signature,
     string? MemberToken, string? AssemblyFullName, int ParamCount);
 
 /// <summary>
-/// 方法级正向调用序列扫描器：纯元数据读取（PEReader + MetadataReader），不加载程序集、不反编译 IL。
-/// 对单个方法体按 IL 序解码调用指令（call/callvirt/newobj/jmp/ldftn/ldvirtftn），提取方法调用点——
-/// MethodDef 直判程序集内部；MemberRef 沿 ResolutionScope 判定内部/外部（内部映射回类型定义并定位方法）；
-/// MethodSpec 解包归约到方法（泛型实例化）；calli 的 StandaloneSignature 函数指针跳过不展开。
-/// IL 解码经共享 IlScanHelper（ICSharpCode.Decompiler.Disassembler.ILParser 权威跳表），解码异常安全中止并累计降级计数。
+/// 方法级正向调用序列扫描器：纯元数据读取（PEReader + MetadataReader），不加载程序集、不反编译 IL。 对单个方法体按 IL
+/// 序解码调用指令（call/callvirt/newobj/jmp/ldftn/ldvirtftn），提取方法调用点—— MethodDef 直判程序集内部；MemberRef 沿
+/// ResolutionScope 判定内部/外部（内部映射回类型定义并定位方法）； MethodSpec 解包归约到方法（泛型实例化）；calli 的 StandaloneSignature
+/// 函数指针跳过不展开。 IL 解码经共享 IlScanHelper（ICSharpCode.Decompiler.Disassembler.ILParser 权威跳表），解码异常安全中止并累计降级计数。
 /// </summary>
 public sealed class CallChainScanner
 {
+    private static readonly EmptyGenericParams EmptyParams = new();
     private readonly PEReader _pe;
     private readonly MetadataReader _reader;
     private int _abortedBodies;
@@ -50,8 +51,8 @@ public sealed class CallChainScanner
     public int AbortedBodies => _abortedBodies;
 
     /// <summary>
-    /// 扫描单个方法的调用序列：按 IL 序返回全部方法调用点（内部调用 MemberToken 为方法定义 token、
-    /// 外部调用 AssemblyFullName/ParamCount 填充）；无方法体（abstract/pinvoke/internal call）时返回空。
+    /// 扫描单个方法的调用序列：按 IL 序返回全部方法调用点（内部调用 MemberToken 为方法定义 token、 外部调用 AssemblyFullName/ParamCount
+    /// 填充）；无方法体（abstract/pinvoke/internal call）时返回空。
     /// </summary>
     /// <param name="method">待扫描的方法定义句柄。</param>
     /// <returns>按 IL 序的调用点列表；无方法体或解码中止时可能为空（保留已收集部分）。</returns>
@@ -79,15 +80,14 @@ public sealed class CallChainScanner
                      or ILOpCode.Ldftn or ILOpCode.Ldvirtftn:
                     CollectMethodToken(instr.RawToken, result);
                     break;
-                // Calli：StandaloneSignature 函数指针，跳过不展开
+                    // Calli：StandaloneSignature 函数指针，跳过不展开
             }
         }, () => _abortedBodies++);
         return result;
     }
 
     /// <summary>
-    /// 收集调用 token 指向的调用点：MethodDef 直取声明类型（内部）；MemberRef 沿 parent 判定内外部；
-    /// MethodSpec 解包 spec.Method 递归处理（泛型实例化归约到泛型方法定义）。
+    /// 收集调用 token 指向的调用点：MethodDef 直取声明类型（内部）；MemberRef 沿 parent 判定内外部； MethodSpec 解包 spec.Method 递归处理（泛型实例化归约到泛型方法定义）。
     /// </summary>
     private void CollectMethodToken(int rawToken, List<CallSite> result)
     {
@@ -97,9 +97,11 @@ public sealed class CallChainScanner
             case HandleKind.MethodDefinition:
                 CollectMethodDefinition((MethodDefinitionHandle)handle, result);
                 break;
+
             case HandleKind.MemberReference:
                 CollectMemberReference((MemberReferenceHandle)handle, result);
                 break;
+
             case HandleKind.MethodSpecification:
                 var spec = _reader.GetMethodSpecification((MethodSpecificationHandle)handle);
                 CollectMethodToken(MetadataTokens.GetToken(spec.Method), result);
@@ -126,8 +128,8 @@ public sealed class CallChainScanner
     }
 
     /// <summary>
-    /// MemberRef 调用：parent 为 TypeDefinition 直收内部；TypeReference 经 <see cref="MetadataNaming.TypeReferenceScope"/>
-    /// 判定内外部（内部映射回类型定义，外部填归属与参数个数）；TypeSpecification 解码取泛型定义再判内外部。
+    /// MemberRef 调用：parent 为 TypeDefinition 直收内部；TypeReference 经 <see
+    /// cref="MetadataNaming.TypeReferenceScope"/> 判定内外部（内部映射回类型定义，外部填归属与参数个数）；TypeSpecification 解码取泛型定义再判内外部。
     /// </summary>
     private void CollectMemberReference(MemberReferenceHandle handle, List<CallSite> result)
     {
@@ -138,9 +140,11 @@ public sealed class CallChainScanner
             case HandleKind.TypeDefinition:
                 CollectInternalMemberReference((TypeDefinitionHandle)memberRef.Parent, memberRef, name, result);
                 break;
+
             case HandleKind.TypeReference:
                 CollectTypeReferenceMember((TypeReferenceHandle)memberRef.Parent, memberRef, name, result);
                 break;
+
             case HandleKind.TypeSpecification:
                 var (def, refHandle) = ResolveTypeSpecDefinition((TypeSpecificationHandle)memberRef.Parent);
                 if (def is not null)
@@ -174,8 +178,7 @@ public sealed class CallChainScanner
     }
 
     /// <summary>
-    /// MemberRef 指向程序集内部类型的调用点：定位到该类型内同名同参数个数的方法定义（MemberToken 需为方法定义 token
-    /// 才能用于进程内成员反编译），编译器生成类型过滤；无法定位具体方法时跳过。
+    /// MemberRef 指向程序集内部类型的调用点：定位到该类型内同名同参数个数的方法定义（MemberToken 需为方法定义 token 才能用于进程内成员反编译），编译器生成类型过滤；无法定位具体方法时跳过。
     /// </summary>
     private void CollectInternalMemberReference(TypeDefinitionHandle typeDef, MemberReference memberRef, string name, List<CallSite> result)
     {
@@ -194,8 +197,7 @@ public sealed class CallChainScanner
     }
 
     /// <summary>
-    /// 在类型定义内按成员名 + 参数个数定位方法定义：参数个数匹配优先（区分重载）；无参数个数匹配时取首个同名（参数个数
-    /// 无法解码时的兜底）；无同名方法返回 null。
+    /// 在类型定义内按成员名 + 参数个数定位方法定义：参数个数匹配优先（区分重载）；无参数个数匹配时取首个同名（参数个数 无法解码时的兜底）；无同名方法返回 null。
     /// </summary>
     private MethodDefinitionHandle? FindMethodDef(TypeDefinitionHandle typeDef, string name, int paramCount)
     {
@@ -212,8 +214,8 @@ public sealed class CallChainScanner
     }
 
     /// <summary>
-    /// 组装外部调用点：Signature 空、MemberToken 空、AssemblyFullName 为归属程序集完整名（未知归属为 null）、
-    /// ParamCount 为 MemberRef 方法签名参数个数。
+    /// 组装外部调用点：Signature 空、MemberToken 空、AssemblyFullName 为归属程序集完整名（未知归属为 null）、 ParamCount 为
+    /// MemberRef 方法签名参数个数。
     /// </summary>
     private CallSite BuildExternalCallSite(string typeFullName, string memberName, MemberReference memberRef, string? assemblyName)
     {
@@ -298,8 +300,6 @@ public sealed class CallChainScanner
         return false;
     }
 
-    private static readonly EmptyGenericParams EmptyParams = new();
-
     /// <summary>
     /// 泛型参数上下文：call_chain 只需参数个数与底层类型，不关心泛型参数名，统一空上下文。
     /// </summary>
@@ -313,18 +313,31 @@ public sealed class CallChainScanner
         public static readonly CountingProvider Instance = new();
 
         public string GetPrimitiveType(PrimitiveTypeCode typeCode) => "";
+
         public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) => "";
+
         public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) => "";
+
         public string GetTypeFromSpecification(MetadataReader reader, EmptyGenericParams genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => "";
+
         public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments) => "";
+
         public string GetGenericTypeParameter(EmptyGenericParams genericContext, int index) => "";
+
         public string GetGenericMethodParameter(EmptyGenericParams genericContext, int index) => "";
+
         public string GetArrayType(string elementType, ArrayShape shape) => "";
+
         public string GetSZArrayType(string elementType) => "";
+
         public string GetByReferenceType(string elementType) => "";
+
         public string GetPointerType(string elementType) => "";
+
         public string GetPinnedType(string elementType) => "";
+
         public string GetModifiedType(string modifier, string unmodifiedType, bool isRequired) => "";
+
         public string GetFunctionPointerType(MethodSignature<string> signature) => "";
     }
 
@@ -337,26 +350,39 @@ public sealed class CallChainScanner
         public TypeReferenceHandle? Reference { get; private set; }
 
         public string GetPrimitiveType(PrimitiveTypeCode typeCode) => "";
+
         public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
         {
             Definition ??= handle;
             return "";
         }
+
         public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
         {
             Reference ??= handle;
             return "";
         }
+
         public string GetTypeFromSpecification(MetadataReader reader, EmptyGenericParams genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => "";
+
         public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments) => "";
+
         public string GetGenericTypeParameter(EmptyGenericParams genericContext, int index) => "";
+
         public string GetGenericMethodParameter(EmptyGenericParams genericContext, int index) => "";
+
         public string GetArrayType(string elementType, ArrayShape shape) => "";
+
         public string GetSZArrayType(string elementType) => "";
+
         public string GetByReferenceType(string elementType) => "";
+
         public string GetPointerType(string elementType) => "";
+
         public string GetPinnedType(string elementType) => "";
+
         public string GetModifiedType(string modifier, string unmodifiedType, bool isRequired) => "";
+
         public string GetFunctionPointerType(MethodSignature<string> signature) => "";
     }
 }
