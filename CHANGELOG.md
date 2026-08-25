@@ -8,8 +8,11 @@
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-08-25
+
 ### Changed
 
+- **缓存固定 30 分钟滑动过期 + 5 分钟定时清理（行为变化）**：`DecompileCache` 原为仅容量 LRU（64 MB 满时驱逐），MCP 以 daemon 常驻时空闲仍占满内存；现固定 30 分钟滑动过期（`Get` 命中刷新过期时间，`Put` 顺带清理过期条目）+ 5 分钟后台定时扫描清理过期条目，常驻空闲后内存自动回落；容量 LRU 与指纹失效保持不变
 - **`hierarchy` 空段占位（行为变化）**：基类链/接口/继承实现者三段中空段由「整段省略」改为输出 `（无）` 占位，与 `dependencies`/`call_graph`/`interface_usage` 等同族工具一致——此前 agent 无法区分「确实没有」与「输出不完整」，且容易按同族工具占位惯例类比推断而误判
 - **`interface_usage` 非接口校验（行为变化）**：`typeName` 定位到非接口类型时返回中文提示（「X 不是接口类型，interface_usage 仅适用于接口；查类的继承/后代请用 hierarchy」），不再对普通类输出貌似有效的三段伪结果，避免 agent 误以为该类型是接口
 - **工具描述修正（行为无变化）**：`decompile_member` 无匹配提示改为「未找到；存在相近成员名时附相近列表」（此前措辞暗示总有相近名）；`call_chain` 区分两处 `#MEMBER` 清单触发条件——起始方法名多匹配返回清单是「定位步骤（不反编译）」，被调内部成员超过 20 个才仅返回其签名清单；`decompile_member` 的 `typeToken` 说明优先级（提供时按 typeToken 定位、忽略 typeName）；`decompile_to_dir` 注明文件名规则（`{TypeName}.decompiled.cs`，嵌套类型保留 `+` 分隔）；`list_types` 措辞「显示类」改为「闭包/显示类」

@@ -19,6 +19,16 @@ internal static class AppConfig
     public const long MaxOutputBytes = MaxCacheBytes;
 
     /// <summary>
+    /// 缓存条目滑动过期时长：自最后一次 Get/Put 起超过该时长未访问即过期（固定 30 分钟，不可关闭）。
+    /// </summary>
+    public static readonly TimeSpan CacheEntrySlidingTtl = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// 缓存定时清理间隔：后台 Timer 每隔该时长扫描并清理过期条目（固定 5 分钟）。
+    /// </summary>
+    public static readonly TimeSpan CacheCleanupInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// 全局操作默认超时秒数：所有 MCP 工具的 timeoutSeconds 参数默认值；工具可 per-call 覆盖。
     /// </summary>
     public const int DefaultTimeoutSeconds = 30;

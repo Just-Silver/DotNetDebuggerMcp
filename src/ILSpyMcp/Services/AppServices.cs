@@ -46,7 +46,9 @@ internal static class AppServices
     /// <param name="cache">测试用缓存；缺省为默认上限的缓存。</param>
     internal static void ConfigureForTest(DecompileCache? cache = null)
     {
+        var old = Cache;
         Cache = cache ?? new DecompileCache();
+        old.Dispose();
         Pipeline = new ToolPipeline(Cache);
         NuGet = new NuGetClient();
         Updater = new UpdateChecker(Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N")),
@@ -59,7 +61,9 @@ internal static class AppServices
     /// </summary>
     internal static void ResetForTest()
     {
+        var old = Cache;
         Cache = new DecompileCache();
+        old.Dispose();
         Pipeline = new ToolPipeline(Cache);
         NuGet = new NuGetClient();
         Updater = new UpdateChecker(queryLatest: id => NuGet.GetLatestStableVersionAsync(id));

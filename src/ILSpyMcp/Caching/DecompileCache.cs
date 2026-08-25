@@ -33,21 +33,40 @@ public sealed record CacheEntryInfo(string AssemblyPath, string Signature, long 
 public sealed record CacheStats(int EntryCount, long TotalBytes, long MaxBytes, long HitCount, long MissCount, IReadOnlyList<CacheEntryInfo> Entries);
 
 /// <summary>
-/// 反编译结果内存缓存（线程安全 LRU，总上限可配置，默认 <see cref="AppConfig.MaxCacheBytes"/>）。key = 程序集绝对路径 +
+/// 反编译结果内存缓存（线程安全 LRU，总上限可配置，默认 <see cref="AppConfig.MaxCacheBytes"/>；固定 30 分钟滑动过期 +
+/// 5 分钟定时清理，空闲即回收，MCP 常驻场景下不长期占用）。key = 程序集绝对路径 +
 /// 文件指纹（mtime+size）+ 参数签名， 不同参数组合各自独立缓存；程序集更新后指纹变化，同路径同签名的旧条目自动清理。
 /// </summary>
-public sealed class DecompileCache
+public sealed class DecompileCache : IDisposable
 {
     private readonly long _maxBytes;
+    private readonly TimeSpan _slidingTtl;
+    private readonly Func<DateTimeOffset> _now;
+    private readonly Timer? _timer;
     private readonly Dictionary<CacheKey, CacheEntry> _map = new();
     private readonly LinkedList<CacheKey> _lru = new();
     private readonly Lock _lock = new();
     private long _totalBytes;
     private long _hitCount;
     private long _missCount;
+    private bool _disposed;
 
     /// <param name="maxBytes">缓存总字节上限，超出后按 LRU 驱逐；测试可传小值。</param>
-    public DecompileCache(long maxBytes = AppConfig.MaxCacheBytes) => _maxBytes = maxBytes;
+    /// <param name="slidingTtl">滑动过期时长；为 null 时取 <see cref="AppConfig.CacheEntrySlidingTtl"/>（固定 30 分钟）。测试可传小值。</param>
+    /// <param name="now">时间源；为 null 时取 <see cref="DateTimeOffset.UtcNow"/>。测试可注入固定时钟。</param>
+    /// <param name="cleanupInterval">定时清理间隔；为 null 时取 <see cref="AppConfig.CacheCleanupInterval"/>（固定 5 分钟）。测试可传小值。</param>
+    public DecompileCache(
+        long maxBytes = AppConfig.MaxCacheBytes,
+        TimeSpan? slidingTtl = null,
+        Func<DateTimeOffset>? now = null,
+        TimeSpan? cleanupInterval = null)
+    {
+        _maxBytes = maxBytes;
+        _slidingTtl = slidingTtl ?? AppConfig.CacheEntrySlidingTtl;
+        _now = now ?? (() => DateTimeOffset.UtcNow);
+        var interval = cleanupInterval ?? AppConfig.CacheCleanupInterval;
+        _timer = new Timer(OnTimer, null, interval, interval);
+    }
 
     /// <summary>
     /// 构造缓存 key。相对路径以当前工作目录为基准解析为绝对路径； Windows 下统一小写，避免 C:\a.dll 与 c:\a.dll 生成双缓存条目。
@@ -64,10 +83,10 @@ public sealed class DecompileCache
     }
 
     /// <summary>
-    /// 读取缓存条目；未命中返回 null，命中即刷新 LRU 访问时间。命中/未命中均累计计数（供命中率统计）。
+    /// 读取缓存条目；未命中返回 null，命中即刷新 LRU 访问时间与滑动过期时间。过期视为未命中。
     /// </summary>
     /// <param name="key">缓存键。</param>
-    /// <returns>命中的行列表；未命中为 null。</returns>
+    /// <returns>命中的行列表；未命中或已过期为 null。</returns>
     public List<string>? Get(CacheKey key)
     {
         lock (_lock)
@@ -77,8 +96,16 @@ public sealed class DecompileCache
                 _missCount++;
                 return null;
             }
+            var now = _now();
+            if (IsExpired(entry, now))
+            {
+                RemoveEntry(key);
+                _missCount++;
+                return null;
+            }
             _hitCount++;
             entry.Hits++;
+            entry.LastAccess = now;
             _lru.Remove(entry.Node!);
             _lru.AddFirst(entry.Node!); // 命中即移到队首，供 LRU 使用
             return entry.Lines;
@@ -103,7 +130,7 @@ public sealed class DecompileCache
     }
 
     /// <summary>
-    /// 写入缓存条目；同 key 覆盖，程序集更新旧条目清理，超限按 LRU 驱逐。
+    /// 写入缓存条目；同 key 覆盖，程序集更新旧条目清理，过期条目清理，超限按 LRU 驱逐。
     /// </summary>
     /// <param name="key">缓存键。</param>
     /// <param name="lines">反编译结果行列表。</param>
@@ -111,18 +138,20 @@ public sealed class DecompileCache
     {
         lock (_lock)
         {
+            var now = _now();
             if (_map.TryGetValue(key, out var entry))
             {
                 _totalBytes -= entry.TotalBytes;
                 _lru.Remove(entry.Node!);
                 entry.Lines = lines;
                 entry.TotalBytes = OutputFormatter.CountBytes(lines);
+                entry.LastAccess = now;
                 _totalBytes += entry.TotalBytes;
                 _lru.AddFirst(entry.Node!);
             }
             else
             {
-                var newEntry = new CacheEntry { Lines = lines, TotalBytes = OutputFormatter.CountBytes(lines) };
+                var newEntry = new CacheEntry { Lines = lines, TotalBytes = OutputFormatter.CountBytes(lines), LastAccess = now };
                 newEntry.Node = _lru.AddFirst(key);
                 _map[key] = newEntry;
                 _totalBytes += newEntry.TotalBytes;
@@ -130,6 +159,8 @@ public sealed class DecompileCache
 
             // 程序集更新（指纹变化）后，主动删除同路径、同签名、但指纹不同的旧条目（dll 更新留下的孤儿）
             RemoveStaleSameAssembly(key);
+            // 顺带清理所有已过期的冷数据，再做容量 LRU
+            TrimExpired(now);
             // 总量超限时从队尾逐个驱逐最久未访问条目，直到不超限或只剩当前条目
             EvictIfOver();
         }
@@ -193,11 +224,45 @@ public sealed class DecompileCache
         }
     }
 
+    private bool IsExpired(CacheEntry entry, DateTimeOffset now) => now - entry.LastAccess > _slidingTtl;
+
+    private void TrimExpired(DateTimeOffset now)
+    {
+        foreach (var k in _map.Keys.ToList())
+        {
+            if (_map.TryGetValue(k, out var e) && IsExpired(e, now))
+            {
+                RemoveEntry(k);
+            }
+        }
+    }
+
+    private void OnTimer(object? _)
+    {
+        lock (_lock)
+        {
+            if (_disposed) return;
+            TrimExpired(_now());
+        }
+    }
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        lock (_lock)
+        {
+            if (_disposed) return;
+            _disposed = true;
+        }
+        _timer?.Dispose();
+    }
+
     private sealed class CacheEntry
     {
         public List<string> Lines = null!;
         public long TotalBytes;
         public long Hits;
+        public DateTimeOffset LastAccess;
         public LinkedListNode<CacheKey>? Node;
     }
 }

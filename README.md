@@ -50,7 +50,7 @@ dotnet tool uninstall --global ilspymcp # 卸载
 
 - **输出带头部信息块**：`程序集 / 目标 / 总行数 / 当前输出 / 剩余` + `---` 分隔线，命中缓存时追加 `缓存: 命中`。
 - **行号与分页**：结果按 `行号<TAB>内容` 输出，默认返回前约 8 KB，可用 `lines="start-end"`（如 `200-400`）按行号分页，单次最多约 32 KB。
-- **缓存**：除写盘工具外全部结果按 `程序集 + 参数` 共享缓存（64 MB LRU，程序集更新自动失效），超时/失败不入缓存。
+- **缓存**：除写盘工具外全部结果按 `程序集 + 参数` 共享缓存（64 MB LRU，固定 30 分钟滑动过期 + 5 分钟定时清理，程序集更新自动失效），超时/失败不入缓存。
 - **类型名格式**：与 `ilspy_list_types` 输出一致（`命名空间.类型`，嵌套用 `+`，泛型带 arity 如 ``GenericBox`1``），行首类别前缀（如 `class Foo.Bar`）可直接复用。
 - **Token 闭环**：`ilspy_signature` 每行行尾附成员 token（`0x06…`），`#MEMBER` 分隔行含 `token`，均可直接用于 `ilspy_decompile_member` / `ilspy_call_graph` / `ilspy_call_chain` / `ilspy_field_access` 精确定位。
 
@@ -295,3 +295,4 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 ## License
 
 MIT
+
