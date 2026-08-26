@@ -29,7 +29,7 @@ jobs:
         run: dotnet build -c Release src/ILSpyMcp/ILSpyMcp.csproj
 
       - name: Test
-        run: dotnet test --project tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj -c Release --no-build
+        run: dotnet test --project tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj -c Release
 
       # 仅版本标签（v*）时打包并发布。先从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]）作为 GitHub Release 正文
       # 写入 release-body.md（缺失则构建失败，防止静默无说明发布）；NuGet 包本身不再内嵌日志，PackageReleaseNotes 改为指向 GitHub Release 页链接。
