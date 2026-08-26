@@ -2,12 +2,12 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "description": "内置 ICSharpCode.Decompiler 的反编译 MCP 服务器，可反编译 .NET 程序集为 C# 源码或列出类型，开箱即用、无需额外安装反编译工具。",
   "name": "io.github.just-silver/ilspymcp",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "packages": [
     {
       "registryType": "nuget",
       "identifier": "ilspymcp",
-      "version": "1.3.1",
+      "version": "1.3.2",
       "transport": {
         "type": "stdio"
       },

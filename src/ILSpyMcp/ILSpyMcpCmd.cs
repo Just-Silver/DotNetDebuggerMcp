@@ -5,6 +5,7 @@ using ILSpyMcp.UpdateCheck;
 using McMaster.Extensions.CommandLineUtils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace ILSpyMcp;
 
@@ -301,6 +302,10 @@ public class ILSpyMcpCmd
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
+        // stdout 只承载 MCP 协议消息：Host 默认注册的 Console 日志写 stdout，会与 JSON-RPC 响应
+        // 在并发下交错撕坏协议帧，导致客户端永远等不到响应。这里清掉默认提供者后把全部日志显式路由到 stderr。
+        builder.Logging.ClearProviders();
+        builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
         // 握手期先执行更新检查（报告 ilspymcp 是否有新版本），状态由 StatusReport 会话内缓存、与 CLI -c 同源；
         // 同步读磁盘缓存，无有效检查记录时返回空报告（不注入）。有新版本时注入文本带明确指令，要求 agent 在会话开始的回复中 主动告知用户并提供升级命令（陈述句会被 agent
         // 当作背景信息而不转述）；已是最新时仅注入状态行。 握手期始终注入 server 工作目录供相对路径（assembly/outputDir）解析，另附更新报告。

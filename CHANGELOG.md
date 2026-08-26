@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-08-26
+
+### Fixed
+
+- **并发请求挂死修复**：MCP 模式下 `Host.CreateApplicationBuilder` 默认注册的 Console 日志写 stdout，与 JSON-RPC 响应共用同一条管道且互不协调；多个请求并发时日志行与响应字节交错可能撕坏响应帧，客户端永远等不到对应 id 的结果（表现为调用长时间无返回，12 路并发下必现）。现启动时清除默认日志提供者并把全部日志显式路由到 stderr（`ClearProviders` + `LogToStandardErrorThreshold = Trace`），stdout 只承载协议消息——与「日志必须走 stderr」的既有输出约定对齐
+
 ## [1.3.1] - 2026-08-25
 
 ### Changed
