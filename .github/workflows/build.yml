@@ -28,6 +28,11 @@ jobs:
       - name: Build
         run: dotnet build -c Release src/ILSpyMcp/ILSpyMcp.csproj
 
+      # 测试数据 dll（tests/TestData/*.dll）被 git 忽略，CI 上需先用仓库内脚本再生产供单测使用
+      - name: Generate test data
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+
       - name: Test
         run: dotnet test --project tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj -c Release
 
