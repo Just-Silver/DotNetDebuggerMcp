@@ -18,7 +18,7 @@ public class CacheStatsToolTests
         AppServices.ConfigureForTest(new DecompileCache(1024));
         try
         {
-            var result = await CacheStatsTool.CacheStats();
+            var result = await CacheStatsTool.CacheStats(cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("当前占用: 0 B / 1.0 KB（0.0%）", result);
             Assert.Contains("条目数: 0", result);
@@ -46,7 +46,7 @@ public class CacheStatsToolTests
             cache.Get(big);
             cache.Get(new CacheKey(@"C:\data\other.dll", "fp", "nope")); // 未命中
 
-            var result = await CacheStatsTool.CacheStats();
+            var result = await CacheStatsTool.CacheStats(cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("条目数: 2", result);
             Assert.Contains("命中 2 次，未命中 1 次（66.7%）", result);
@@ -74,7 +74,7 @@ public class CacheStatsToolTests
                 cache.Put(cache.BuildKey(@"C:\data\a.dll", $"sig-{i}"), new List<string> { $"line{i}" });
             }
 
-            var result = await CacheStatsTool.CacheStats(lines: "1-1");
+            var result = await CacheStatsTool.CacheStats(lines: "1-1", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("1\t", result); // 带行号的明细切片
             Assert.DoesNotContain("2\t", result);

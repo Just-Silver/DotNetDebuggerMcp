@@ -21,7 +21,7 @@ public class FieldAccessToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "Data");
+            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "Data", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("读取该字段的成员:", result);
             Assert.Contains("写入该字段的成员:", result);
@@ -43,7 +43,7 @@ public class FieldAccessToolTests
         try
         {
             var token = FieldTokenOf();
-            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldToken: token);
+            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldToken: token, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("ILSpyMcp.Samples.FieldWriter::", result);
             Assert.Contains("ILSpyMcp.Samples.FieldUser::", result);
@@ -61,7 +61,7 @@ public class FieldAccessToolTests
         try
         {
             // 跨程序集搜字段名含 "D"：Uses.Derived / Uses.Dog / FieldHolder.Data 多个字段命中 → #MEMBER 清单
-            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldName: "D");
+            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldName: "D", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("#MEMBER", result);
             Assert.Contains("fieldToken", result);
@@ -79,7 +79,7 @@ public class FieldAccessToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "Data");
+            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "Data", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("取地址的成员:", result);
             Assert.Contains("（无）", result);
@@ -93,7 +93,7 @@ public class FieldAccessToolTests
     [Fact]
     public async Task FieldAccess_缺fieldName_返回必填提示()
     {
-        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll);
+        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("请指定 fieldName", result);
     }
@@ -101,7 +101,7 @@ public class FieldAccessToolTests
     [Fact]
     public async Task FieldAccess_fieldToken非法_返回提示()
     {
-        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldToken: "0xZZZZ");
+        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldToken: "0xZZZZ", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("不是有效的元数据 token", result);
     }
@@ -109,7 +109,7 @@ public class FieldAccessToolTests
     [Fact]
     public async Task FieldAccess_fieldToken为方法token_返回提示()
     {
-        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldToken: "0x06000001");
+        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldToken: "0x06000001", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("不是字段定义的元数据 token", result);
     }
@@ -117,7 +117,7 @@ public class FieldAccessToolTests
     [Fact]
     public async Task FieldAccess_typeName不存在_返回未找到提示()
     {
-        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "No.Such.Type", "Data");
+        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "No.Such.Type", "Data", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("未找到类型", result);
     }
@@ -125,7 +125,7 @@ public class FieldAccessToolTests
     [Fact]
     public async Task FieldAccess_fieldName未匹配_返回未找到字段提示()
     {
-        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "NoSuchField");
+        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "NoSuchField", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("未找到字段名包含", result);
     }

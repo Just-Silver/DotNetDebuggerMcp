@@ -15,7 +15,7 @@ public class AssemblyInfoToolTests
     [Fact]
     public async Task AssemblyInfo_测试程序集_含程序集名版本目标框架类型计数引用与入口点()
     {
-        var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll);
+        var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("程序集: ILSpyMcp.TestSamples", result);
         Assert.Contains("版本: ", result);
@@ -31,7 +31,7 @@ public class AssemblyInfoToolTests
     [Fact]
     public async Task AssemblyInfo_测试程序集_类型计数与类别自洽()
     {
-        var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll);
+        var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll, cancellationToken: TestContext.Current.CancellationToken);
 
         // 601 个 class（Class0001-0600 + BigClass）→ 概览中 class 计数应 >= 600
         var match = System.Text.RegularExpressions.Regex.Match(result, @"class:\s*(\d+)");
@@ -46,7 +46,7 @@ public class AssemblyInfoToolTests
     [Fact]
     public async Task AssemblyInfo_主程序集_引用清单含SystemRuntime且目标框架可读()
     {
-        var result = await AssemblyInfoTool.AssemblyInfo(MainAssembly);
+        var result = await AssemblyInfoTool.AssemblyInfo(MainAssembly, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("引用的程序集:", result);
         Assert.Contains("System.Runtime", result);
@@ -58,7 +58,7 @@ public class AssemblyInfoToolTests
     [Fact]
     public async Task AssemblyInfo_缺assembly_返回必填提示()
     {
-        var result = await AssemblyInfoTool.AssemblyInfo("");
+        var result = await AssemblyInfoTool.AssemblyInfo("", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("请指定 assembly", result);
     }
@@ -66,7 +66,7 @@ public class AssemblyInfoToolTests
     [Fact]
     public async Task AssemblyInfo_assembly不存在_返回文件不存在提示()
     {
-        var result = await AssemblyInfoTool.AssemblyInfo(@"C:\no\such\file.dll");
+        var result = await AssemblyInfoTool.AssemblyInfo(@"C:\no\such\file.dll", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("程序集文件不存在", result);
     }
@@ -74,7 +74,7 @@ public class AssemblyInfoToolTests
     [Fact]
     public async Task AssemblyInfo_lines分页_返回带行号切片()
     {
-        var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll, lines: "1-3");
+        var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll, lines: "1-3", cancellationToken: TestContext.Current.CancellationToken);
 
         // 头部信息块前置，body 首行为 "1\t程序集: ..."
         Assert.Contains("程序集信息", result); // 头部目标行
@@ -85,7 +85,7 @@ public class AssemblyInfoToolTests
     [Fact]
     public async Task AssemblyInfo_lines非法格式_返回格式提示()
     {
-        var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll, lines: "abc");
+        var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll, lines: "abc", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("lines 参数格式应为", result);
     }

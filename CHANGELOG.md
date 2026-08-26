@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### 依赖更新
+
+- `ModelContextProtocol` 2.1.0 → 2.2.0（上游为小版本更新：HTTP 扩展包新增混合会话模式与 header 解码边界修复，stdio 场景行为无变化）
+
 ## [1.3.2] - 2026-08-26
 
 ### Fixed

@@ -36,7 +36,7 @@
     <PackageReference Include="ICSharpCode.Decompiler" Version="11.0.0.9375" />
     <PackageReference Include="McMaster.Extensions.Hosting.CommandLine" Version="5.1.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
-    <PackageReference Include="ModelContextProtocol" Version="2.1.0" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>

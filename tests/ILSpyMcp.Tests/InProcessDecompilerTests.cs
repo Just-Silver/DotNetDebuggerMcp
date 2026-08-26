@@ -13,7 +13,7 @@ public class InProcessDecompilerTests
     [Fact]
     public void DecompileType_命中BigClass_包含类声明与方法()
     {
-        var result = InProcessDecompiler.DecompileType(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass");
+        var result = InProcessDecompiler.DecompileType(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("class BigClass", result);
         Assert.Contains("BigMethod", result);
@@ -22,7 +22,7 @@ public class InProcessDecompilerTests
     [Fact]
     public void DecompileType_未找到类型_返回中文提示()
     {
-        var result = InProcessDecompiler.DecompileType(TestDataPaths.TestSamplesDll, "No.Such.Type");
+        var result = InProcessDecompiler.DecompileType(TestDataPaths.TestSamplesDll, "No.Such.Type", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("未找到类型", result);
     }
@@ -32,8 +32,8 @@ public class InProcessDecompilerTests
     {
         // 定位改经 MetadataNaming.FindType（+ 归一化为 .），两种分隔写法都应命中同一个嵌套类型
         var assembly = typeof(InProcessDecompilerTests).Assembly.Location;
-        var plus = InProcessDecompiler.DecompileType(assembly, "ILSpyMcp.Tests.InProcessDecompilerTests+TestNested");
-        var dot = InProcessDecompiler.DecompileType(assembly, "ILSpyMcp.Tests.InProcessDecompilerTests.TestNested");
+        var plus = InProcessDecompiler.DecompileType(assembly, "ILSpyMcp.Tests.InProcessDecompilerTests+TestNested", cancellationToken: TestContext.Current.CancellationToken);
+        var dot = InProcessDecompiler.DecompileType(assembly, "ILSpyMcp.Tests.InProcessDecompilerTests.TestNested", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(plus, dot);
         Assert.Contains("class TestNested", plus);
@@ -42,7 +42,7 @@ public class InProcessDecompilerTests
     [Fact]
     public void DecompileType_程序集路径无效_返回中文错误提示()
     {
-        var result = InProcessDecompiler.DecompileType(Path.Combine(Path.GetTempPath(), "no-such-assembly.dll"), "X");
+        var result = InProcessDecompiler.DecompileType(Path.Combine(Path.GetTempPath(), "no-such-assembly.dll"), "X", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("反编译失败", result);
     }
@@ -54,7 +54,7 @@ public class InProcessDecompilerTests
         try
         {
             File.WriteAllText(fake, "not an assembly");
-            var result = InProcessDecompiler.DecompileType(fake, "X");
+            var result = InProcessDecompiler.DecompileType(fake, "X", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("反编译失败", result);
         }
@@ -72,7 +72,7 @@ public class InProcessDecompilerTests
         Assert.True(typeFound);
         var token = Assert.Single(matches, m => m.Name == "BigMethod").Token;
 
-        var result = InProcessDecompiler.DecompileMember(TestDataPaths.TestSamplesDll, token);
+        var result = InProcessDecompiler.DecompileMember(TestDataPaths.TestSamplesDll, token, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("BigMethod", result);
         Assert.DoesNotContain("反编译失败", result);
@@ -81,7 +81,7 @@ public class InProcessDecompilerTests
     [Fact]
     public void DecompileMember_token非十六进制_返回非法token提示()
     {
-        var result = InProcessDecompiler.DecompileMember(TestDataPaths.TestSamplesDll, "abc");
+        var result = InProcessDecompiler.DecompileMember(TestDataPaths.TestSamplesDll, "abc", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("不是有效的元数据 token", result);
     }
@@ -90,7 +90,7 @@ public class InProcessDecompilerTests
     public void DecompileMember_token越界_返回未引用提示()
     {
         // 0x06FFFFFF：MethodDef 表、row 数远超本程序集方法数，应判越界
-        var result = InProcessDecompiler.DecompileMember(TestDataPaths.TestSamplesDll, "0x06FFFFFF");
+        var result = InProcessDecompiler.DecompileMember(TestDataPaths.TestSamplesDll, "0x06FFFFFF", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("未引用本模块的类型或成员", result);
     }
@@ -98,7 +98,7 @@ public class InProcessDecompilerTests
     [Fact]
     public void DecompileWholeModule_返回包含多个类的文本()
     {
-        var result = InProcessDecompiler.DecompileWholeModule(TestDataPaths.TestSamplesDll);
+        var result = InProcessDecompiler.DecompileWholeModule(TestDataPaths.TestSamplesDll, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("class BigClass", result);
         Assert.Contains("class Callee", result);
@@ -110,7 +110,7 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass");
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             Assert.Contains("1 个文件", result);
@@ -132,7 +132,7 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, null);
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, null, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             Assert.Contains("1 个文件", result);
@@ -153,7 +153,7 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "No.Such.Type");
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "No.Such.Type", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("未找到类型", result);
             Assert.Equal(0, Directory.Exists(dir) ? Directory.GetFiles(dir).Length : 0);
@@ -170,7 +170,7 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Circle");
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Circle", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             Assert.Contains("2 个文件", result);
@@ -193,7 +193,7 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass,No.Such.Type");
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass,No.Such.Type", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             Assert.Contains("1 个文件", result);
@@ -213,7 +213,7 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "No.A,No.B");
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "No.A,No.B", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("未找到：No.A、No.B", result);
             Assert.Contains("0 个文件", result);
@@ -231,7 +231,7 @@ public class InProcessDecompilerTests
         var outDir = Path.Combine(Path.GetTempPath(), "ilspymcp-tests-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, outDir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Members");
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, outDir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
             Assert.Contains("ILSpyMcp.Samples.BigClass.decompiled.cs", result);
             Assert.Contains("ILSpyMcp.Samples.Members.decompiled.cs", result);
         }
@@ -244,7 +244,7 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false);
+            var result = InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             Assert.Contains("来源", result);
@@ -266,11 +266,11 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false);
+            InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false, cancellationToken: TestContext.Current.CancellationToken);
             var csproj = Path.Combine(dir, "ILSpyMcp.TestSamples.csproj");
             File.WriteAllText(csproj, new string(' ', 200000) + "GARBAGE_TRAILING_MARKER");
 
-            var result = InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false);
+            var result = InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             var content = File.ReadAllText(csproj);
@@ -318,7 +318,7 @@ public class InProcessDecompilerTests
             TimeSpan.FromSeconds(30),
             cts.Token,
             "反编译已取消");
-        await Task.Delay(100);
+        await Task.Delay(100, cancellationToken: TestContext.Current.CancellationToken);
         cts.Cancel();
 
         Assert.Equal("反编译已取消", await task);
@@ -341,12 +341,12 @@ public class InProcessDecompilerTests
             TimeSpan.FromSeconds(30),
             cts.Token,
             "反编译已取消");
-        await Task.Delay(100);
+        await Task.Delay(100, cancellationToken: TestContext.Current.CancellationToken);
         cts.Cancel();
 
         var result = await task;
         // 取消后 work 线程尚需短暂时间完成置位（Task.WhenAny 可能先选中 delay 直接返回 timeoutHint），轮询等待以观察到信号
-        Assert.True(workSawSignal.Wait(TimeSpan.FromSeconds(5)), "work 未收到取消信号：取消令牌未真正传入 work（接线为空跑）");
+        Assert.True(workSawSignal.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken), "work 未收到取消信号：取消令牌未真正传入 work（接线为空跑）");
         Assert.Equal("反编译已取消", result);
     }
 

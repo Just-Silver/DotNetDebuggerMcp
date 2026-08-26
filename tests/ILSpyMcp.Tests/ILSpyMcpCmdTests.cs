@@ -32,7 +32,8 @@ public class ILSpyMcpCmdTests
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: true, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
             interfaceUsage: false, genericInstantiations: false,
-            token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false);
+            token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("ILSpyMcp.Samples.Caller::", result);
     }
@@ -48,7 +49,8 @@ public class ILSpyMcpCmdTests
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: false, callChain: true, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
             interfaceUsage: false, genericInstantiations: false,
-            token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false);
+            token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("方法体调用序列:", result);
         Assert.Contains("ChainMid::", result);
@@ -64,7 +66,8 @@ public class ILSpyMcpCmdTests
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: false, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
             interfaceUsage: true, genericInstantiations: false,
-            token: "", typeToken: "", lines: "", timeoutSeconds: 30, check: false);
+            token: "", typeToken: "", lines: "", timeoutSeconds: 30, check: false,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("实现该接口的类型:", result);
         Assert.Contains("ILSpyMcp.Samples.Dog", result);
@@ -81,7 +84,8 @@ public class ILSpyMcpCmdTests
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: false, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
             interfaceUsage: false, genericInstantiations: true,
-            token: "", typeToken: "", lines: "", timeoutSeconds: 30, check: false);
+            token: "", typeToken: "", lines: "", timeoutSeconds: 30, check: false,
+            cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("成员签名中的泛型实例化:", result);
         Assert.Contains("ILSpyMcp.Samples.GenericUser::", result);

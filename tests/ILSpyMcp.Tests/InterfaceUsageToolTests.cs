@@ -11,7 +11,7 @@ public class InterfaceUsageToolTests
     [Fact]
     public async Task InterfaceUsage_IWorker_实现者段含WorkerBase()
     {
-        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.IWorker");
+        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.IWorker", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("实现该接口的类型:", result);
         Assert.Contains("ILSpyMcp.Samples.WorkerBase", result);
@@ -22,7 +22,7 @@ public class InterfaceUsageToolTests
     [Fact]
     public async Task InterfaceUsage_IWorker_includeIndirect_含间接实现者WorkerDerived()
     {
-        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.IWorker", includeIndirect: true);
+        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.IWorker", includeIndirect: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("ILSpyMcp.Samples.WorkerDerived", result);
     }
@@ -30,7 +30,7 @@ public class InterfaceUsageToolTests
     [Fact]
     public async Task InterfaceUsage_IAnimal_调用点段含AnimalCaller()
     {
-        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.IAnimal");
+        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.IAnimal", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("ILSpyMcp.Samples.AnimalCaller::Run → Speak", result);
     }
@@ -38,7 +38,7 @@ public class InterfaceUsageToolTests
     [Fact]
     public async Task InterfaceUsage_IWorker_无调用点与引用_输出无占位()
     {
-        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.IWorker");
+        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.IWorker", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("（无）", result);
     }
@@ -46,7 +46,7 @@ public class InterfaceUsageToolTests
     [Fact]
     public async Task InterfaceUsage_类型不存在_返回未找到提示()
     {
-        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "No.Such.Type");
+        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "No.Such.Type", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("未找到类型", result);
     }
@@ -55,7 +55,7 @@ public class InterfaceUsageToolTests
     public async Task InterfaceUsage_传class_返回非接口提示()
     {
         // Dog 为 class（实现 IAnimal）：interface_usage 仅适用于接口，非接口应返回中文提示而非输出貌似有效的三段伪结果
-        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Dog");
+        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Dog", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("不是接口类型", result);
         Assert.DoesNotContain("实现该接口的类型:", result);
@@ -64,7 +64,7 @@ public class InterfaceUsageToolTests
     [Fact]
     public async Task InterfaceUsage_缺typeName_返回必填提示()
     {
-        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "");
+        var result = await InterfaceUsageTool.InterfaceUsage(TestDataPaths.TestSamplesDll, "", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("请指定 typeName", result);
     }

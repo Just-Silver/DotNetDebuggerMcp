@@ -84,7 +84,7 @@ public class ToolPipelineTests
         gate.Reset(); // 阻塞探针：首调（零超时）必超时
         try
         {
-            var miss = await pipeline.ExecuteAsync(command, "", TimeSpan.Zero);
+            var miss = await pipeline.ExecuteAsync(command, "", TimeSpan.Zero, cancellationToken: TestContext.Current.CancellationToken);
             Assert.Contains("反编译失败", miss.Text); // 零超时 → 超时提示转错误
             Assert.Null(cache.Get(key)); // 超时不写缓存
         }
@@ -93,11 +93,11 @@ public class ToolPipelineTests
             gate.Set(); // 放行后台探针，避免残留阻塞线程
         }
 
-        var hit = await pipeline.ExecuteAsync(command, "", TimeSpan.FromSeconds(60));
+        var hit = await pipeline.ExecuteAsync(command, "", TimeSpan.FromSeconds(60), cancellationToken: TestContext.Current.CancellationToken);
         Assert.DoesNotContain("反编译失败", hit.Text); // 重试成功
         Assert.NotNull(cache.Get(key));
 
-        var cached = await pipeline.ExecuteAsync(command, "", TimeSpan.Zero);
+        var cached = await pipeline.ExecuteAsync(command, "", TimeSpan.Zero, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(hit.Text, cached.Text); // 命中缓存，不再受零超时影响
     }
 
@@ -200,7 +200,7 @@ public class ToolPipelineTests
         {
             // 绕过工具层校验直接调 pipeline，空路径触发 BuildKey 的 Path.GetFullPath 抛异常
             var command = new ToolCommand("", new DecompileRequest(DecompileKind.Type, "X"));
-            var result = await AppServices.Pipeline.ExecuteAsync(command, "");
+            var result = await AppServices.Pipeline.ExecuteAsync(command, "", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("反编译失败", result.Text);
         }
@@ -249,7 +249,7 @@ public class ToolPipelineTests
                 .ToArray();
             Assert.NotEmpty(commands);
 
-            var result = await AppServices.Pipeline.ExecuteMergedAsync(commands, "");
+            var result = await AppServices.Pipeline.ExecuteMergedAsync(commands, "", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.StartsWith("1\t#MEMBER {\"name\":\"BigHelper\"", result.Text); // JSON 分隔行计入行号且为首行
             Assert.Contains("#MEMBER {\"name\":\"BigHelper2\"", result.Text);
@@ -272,7 +272,7 @@ public class ToolPipelineTests
         var ok = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "Ok")) { DisplayName = "Ok" };
         var bad = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "Bad")) { DisplayName = "Bad" };
 
-        var result = await pipeline.ExecuteMergedAsync(new[] { ok, bad }, "");
+        var result = await pipeline.ExecuteMergedAsync(new[] { ok, bad }, "", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("反编译失败", result.Text); // 任一命令失败即整体返回错误提示
         Assert.Contains("未找到类型 Bad", result.Text);
@@ -293,10 +293,10 @@ public class ToolPipelineTests
                 .ToArray();
 
             var context = new FormatContext(SamplesDll, "成员");
-            var first = await AppServices.Pipeline.ExecuteMergedAsync(commands, "", context: context);
+            var first = await AppServices.Pipeline.ExecuteMergedAsync(commands, "", cancellationToken: TestContext.Current.CancellationToken, context: context);
             Assert.DoesNotContain("缓存:", first.Text); // 首调各命令均回源，不标注缓存
 
-            var second = await AppServices.Pipeline.ExecuteMergedAsync(commands, "", context: context);
+            var second = await AppServices.Pipeline.ExecuteMergedAsync(commands, "", cancellationToken: TestContext.Current.CancellationToken, context: context);
             Assert.Contains("缓存:   命中（重复查询成本低）", second.Text); // 各命令均命中缓存 → 标注缓存
             Assert.Equal(FirstBody(first.Text), FirstBody(second.Text)); // 正文一致（仅头部缓存标注行不同）
             foreach (var cmd in commands)
@@ -326,8 +326,8 @@ public class ToolPipelineTests
             var cmdPart = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, part.Token));
             Assert.Equal(cmdFull.Signature, cmdPart.Signature); // 签名相同 → 共享缓存 key（原语义保留）
 
-            var r1 = await AppServices.Pipeline.ExecuteAsync(cmdFull, "");
-            var r2 = await AppServices.Pipeline.ExecuteAsync(cmdPart, "");
+            var r1 = await AppServices.Pipeline.ExecuteAsync(cmdFull, "", cancellationToken: TestContext.Current.CancellationToken);
+            var r2 = await AppServices.Pipeline.ExecuteAsync(cmdPart, "", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(r1.Text, r2.Text);
         }
@@ -345,7 +345,7 @@ public class ToolPipelineTests
         {
             var command = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.WholeModule, ""));
             var context = new FormatContext(SamplesDll, "整个程序集");
-            var result = await AppServices.Pipeline.ExecuteAsync(command, "", context: context);
+            var result = await AppServices.Pipeline.ExecuteAsync(command, "", cancellationToken: TestContext.Current.CancellationToken, context: context);
 
             Assert.Contains("using System", result.Text); // 整模块反编译产物（using 头）
             Assert.Contains("已截断", result.Text); // 652 个类型远超默认输出预算

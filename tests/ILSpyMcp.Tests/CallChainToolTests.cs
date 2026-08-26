@@ -21,7 +21,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainTopRunToken());
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainTopRunToken(), cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("方法体调用序列:", result);
             Assert.Contains("被调用成员反编译:", result);
@@ -41,7 +41,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.ChainTop", "Run");
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.ChainTop", "Run", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("方法体调用序列:", result);
             Assert.Contains("ILSpyMcp.Samples.ChainMid::Mid()", result);
@@ -61,7 +61,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainMidMidToken());
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainMidMidToken(), cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("方法体调用序列:", result);
             Assert.DoesNotContain("System.Console::WriteLine", result);
@@ -78,7 +78,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainMidMidToken(), includeExternal: true);
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainMidMidToken(), includeExternal: true, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("System.Console::WriteLine", result);
             Assert.Contains("[System.Console]", result);
@@ -96,7 +96,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesExtDll, token: ExtCallerRunToken(), includeExternal: true);
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesExtDll, token: ExtCallerRunToken(), includeExternal: true, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("ILSpyMcp.TestSamples::ILSpyMcp.Samples.Callee::.ctor 调用:", result);
             Assert.Contains("System.Object::.ctor", result);
@@ -119,7 +119,7 @@ public class CallChainToolTests
         try
         {
             File.Copy(TestDataPaths.TestSamplesExtDll, tempDll, overwrite: true);
-            var result = await CallChainTool.CallChain(tempDll, token: ExtCallerRunToken(), includeExternal: true);
+            var result = await CallChainTool.CallChain(tempDll, token: ExtCallerRunToken(), includeExternal: true, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("（未找到程序集 ILSpyMcp.TestSamples，视为框架/外部调用未展开）", result);
         }
@@ -144,7 +144,7 @@ public class CallChainToolTests
             TestAssemblyWriter.WriteCorruptTestSamples(tempDir);
             var tempMain = Path.Combine(tempDir, "ILSpyMcp.TestSamplesExt.dll");
             File.Copy(TestDataPaths.TestSamplesExtDll, tempMain, overwrite: true);
-            var result = await CallChainTool.CallChain(tempMain, token: ExtCallerRunToken(), includeExternal: true);
+            var result = await CallChainTool.CallChain(tempMain, token: ExtCallerRunToken(), includeExternal: true, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("ILSpyMcp.TestSamples::ILSpyMcp.Samples.Callee::.ctor 调用:", result);
             Assert.Contains("本结果含 2 处降级解析", result);
@@ -163,7 +163,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "Big");
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "Big", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("#MEMBER", result);
             Assert.Contains("3 个匹配", result);
@@ -181,7 +181,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "NoSuchMethod");
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "NoSuchMethod", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("未找到名称包含", result);
         }
@@ -197,7 +197,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "No.Such.Type", "Run");
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "No.Such.Type", "Run", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("未找到类型", result);
         }
@@ -213,7 +213,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "", "Run");
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, "", "Run", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("请指定 typeName", result);
         }
@@ -230,7 +230,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: "0x04000001");
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: "0x04000001", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("不是方法的元数据 token", result);
         }
@@ -246,7 +246,7 @@ public class CallChainToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: "0xZZZZ");
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: "0xZZZZ", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("不是有效的元数据 token", result);
         }
@@ -265,7 +265,7 @@ public class CallChainToolTests
             (_, _) => throw new InvalidOperationException("模拟反编译失败"));
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainTopRunToken());
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainTopRunToken(), cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("反编译失败", result);
             Assert.Contains("模拟反编译失败", result);
@@ -293,7 +293,7 @@ public class CallChainToolTests
         gate.Reset(); // 阻塞探针：成员反编译必超时
         try
         {
-            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainTopRunToken(), timeoutSeconds: 1);
+            var result = await CallChainTool.CallChain(TestDataPaths.TestSamplesDll, token: ChainTopRunToken(), timeoutSeconds: 1, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("反编译超时", result);
             Assert.Contains("可调大 timeoutSeconds", result);

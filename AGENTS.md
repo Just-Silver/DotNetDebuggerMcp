@@ -10,7 +10,7 @@ MCP 工具是 agent 的 API：参数、默认值、输出格式、提示文案�
 
 - **所有 MCP 工具参数必须带默认值（如 `string assembly = ""`，不声明为可空）**。SDK 依据参数是否有默认值判断必填：无默认值的参数缺参时会在绑定阶段直接抛异常，返回 Tool Error（`The arguments dictionary is missing a value for the required parameter ...`），agent 拿不到错误原因。带默认值后缺参进入方法体，由校验返回中文提示。校验集中在共享 `ArgumentValidators` 静态类（`ValidateAssembly`/`ValidateRequired`/`ValidateMemberNameSearch`/`ValidateList`/`ValidateOutputDir`/`ValidateTimeoutSeconds`），方法返回 `bool` + `out string? error`，失败时返回中文提示文本。
 - 工具方法返回 `Task<string>`，一切错误（参数校验、反编译失败）均返回提示文本，不抛异常。
-- **stdout 只承载 MCP 协议消息；日志必须走 stderr——此配置位于 `ILSpyMcpCmd.OnExecuteAsync` 的 MCP 启动分支（`ClearProviders` + `AddConsole(LogToStandardErrorThreshold = Trace)`），严禁删除或改动**。历史教训（1.3.1 及之前）：文档声称日志已配置，但实际代码中不存在任何 Logging 配置，`Host.CreateApplicationBuilder` 默认注册的 Console 日志（见 `Microsoft.Extensions.Hosting` 的 `HostingHostBuilderExtensions.AddDefaultServices` → `logging.AddConsole()`）把全部 info 级日志写进 stdout；该管道同时承载 JSON-RPC 响应（`StdioServerTransport` 经 `BufferedStream` + `_sendLock` 写入，与 Console 日志的写入者互不协调），单请求时客户端恰好跳过噪声行侥幸正常，**并发请求下日志行与响应字节交错会撕坏响应帧**，客户端永远等不到对应 id 的结果（agent 客户端内 12 路并发 100% 挂死）。改动启动逻辑/升级 Hosting 包时必须重验：裸 stdio 握手后 stdout 噪声行应为 0；回归护栏为 `McpSessionConcurrencyTests`（真实子进程 + stdio 会话级并发，超时自动抓线程栈取证）。另注意：日志全量走 stderr 后，宿主必须持续排空子进程 stderr（opencode 等主流实现都会做），自研测试脚本若重定向 stderr 而不读取，会把 server 卡死在日志写入上。
+- **stdout 只承载 MCP 协议消息；日志必须走 stderr——此配置位于 `ILSpyMcpCmd.OnExecuteAsync` 的 MCP 启动分支（`ClearProviders` + `AddConsole(LogToStandardErrorThreshold = Trace)`），严禁删除或改动**。历史教训（1.3.1 及之前）：文档声称日志已配置，但实际代码中不存在任何 Logging 配置，`Host.CreateApplicationBuilder` 默认注册的 Console 日志（见 `Microsoft.Extensions.Hosting` 的 `HostingHostBuilderExtensions.AddDefaultServices` → `logging.AddConsole()`）把全部 info 级日志写进 stdout；该管道同时承载 JSON-RPC 响应（`StdioServerTransport` 经 `BufferedStream` + `_sendLock` 写入，与 Console 日志的写入者互不协调），单请求时客户端恰好跳过噪声行侥幸正常，**并发请求下日志行与响应字节交错会撕坏响应帧**，客户端永远等不到对应 id 的结果（agent 客户端内 12 路并发 100% 挂死）。改动启动逻辑/升级 Hosting 包时必须重验：裸 stdio 握手后 stdout 噪声行应为 0；回归护栏为 `McpSessionConcurrencyTests`（真实子进程 + stdio 会话级并发，超时自动失败并报告已完成调用数）。另注意：日志全量走 stderr 后，宿主必须持续排空子进程 stderr（opencode 等主流实现都会做），自研测试脚本若重定向 stderr 而不读取，会把 server 卡死在日志写入上。
 - 工具的 `[Description]` 与所有提示用中文，必填参数标注「（必填）」。
 - **`[Description]` 面向 agent（MCP 调用方），不是给人类开发者看的**：只写 agent 决策需要的行为、默认值、必填、示例与限制；不得出现实现细节或设计动机类措辞（如「agent 友好」「供 agent 决策」等），这类说明写代码注释或本文件。
 - **有默认值的工具参数，`[Description]` 必须注明默认值**（如「默认 30」「默认 true」「缺省返回前约 8 KB」），否则 agent 无从感知当前默认行为。
@@ -42,8 +42,8 @@ MCP 工具是 agent 的 API：参数、默认值、输出格式、提示文案�
 
 ```bash
 dotnet build -c Release src/ILSpyMcp/ILSpyMcp.csproj
-dotnet test tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj   # 单元测试
-dotnet test tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj --filter "FullyQualifiedName~DecompileCache"   # 只跑单套测试
+dotnet test --project tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj   # 单元测试（xunit.v3 + MTP 模式，global.json 已配置 test.runner）
+dotnet test --project tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj -- --filter-class "ILSpyMcp.Tests.DecompileCacheTests"   # 只跑单套测试
 dotnet run -c Release --project src/ILSpyMcp.Client/ILSpyMcp.Client.csproj   # 调全部工具做端到端验证
 ```
 
