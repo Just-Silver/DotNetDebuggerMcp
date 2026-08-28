@@ -13,7 +13,7 @@
     <!-- Set recommended package metadata -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageId>ilspymcp</PackageId>
-    <Version>1.3.2</Version>
+    <Version>1.4.0</Version>
     <ToolCommandName>ilspymcp</ToolCommandName>
     <Authors>Just-Silver</Authors>
     <RepositoryType>git</RepositoryType>
