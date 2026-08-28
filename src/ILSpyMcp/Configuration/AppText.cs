@@ -22,6 +22,15 @@ internal static class AppText
     public const string UnresolvedAssemblyAnnotation = "未找到程序集 {0}，视为框架/外部调用未展开";
 
     /// <summary>
+    /// MCP 握手 ServerInstructions 注入的服务器功能简介（首行 CWD 之后）：面向 agent 的能力概述与使用约定， 必须保持简短——ServerInstructions
+    /// 常驻 agent 上下文且过长会被截断。新增工具若改变能力类别需同步本常量。
+    /// </summary>
+    public const string HandshakeFeatureIntro =
+        "本服务器是进程内 ILSpy 反编译 MCP（引擎随包内置，无需外部安装反编译工具）：可反编译类型/成员并批量写盘（全量或项目形式），" +
+        "并可元数据秒回查询列类型/成员签名/继承层级/依赖/调用图/程序集信息/字符串反查/字段访问/接口实现/泛型实例化/调用链/缓存状态。" +
+        "assembly 与 outputDir 相对路径基于上方「当前工作目录」；结果带行号，长输出用 lines=\"start-end\" 分页获取。";
+
+    /// <summary>
     /// 判定提示文本是否以反编译失败前缀开头（InProcessDecompiler.IsErrorResult 与 CallChainTool 反编译失败判重共用， 与 <see
     /// cref="DecompileFailurePrefix"/> 同源，改前缀无需改此处）。
     /// </summary>

@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **MCP 握手注入功能简介（行为变化）**：`ServerInstructions` 在「当前工作目录」之后新增一段服务器能力概览（进程内反编译/写盘 + 元数据秒回查询 + 相对路径与 `lines` 分页约定）。opencode 2 等客户端握手期只注入 `ServerInstructions` 而不全量注入工具描述，此前 agent 在会话内对 ilspy 服务器能力一无所知；简介刻意保持简短以防上下文截断
+
 ### 依赖更新
 
 - `ModelContextProtocol` 2.1.0 → 2.2.0（上游为小版本更新：HTTP 扩展包新增混合会话模式与 header 解码边界修复，stdio 场景行为无变化）

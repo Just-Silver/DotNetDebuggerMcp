@@ -1,4 +1,5 @@
 using ILSpyMcp;
+using ILSpyMcp.Configuration;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -93,21 +94,26 @@ public class ILSpyMcpCmdTests
     }
 
     [Fact]
-    public void BuildServerInstructions_含更新报告_首行为CWD行后接报告()
+    public void BuildServerInstructions_含更新报告_首行为CWD行后接功能简介与报告()
     {
         const string report = "ilspymcp 已是最新版本";
         var text = ILSpyMcpCmd.BuildServerInstructions(report);
 
         var lines = text.Split([Environment.NewLine], StringSplitOptions.None);
         Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", lines[0]);
+        Assert.Contains(AppText.HandshakeFeatureIntro, text);
         Assert.Contains(report, text);
     }
 
     [Fact]
-    public void BuildServerInstructions_报告为空_仅CWD行()
+    public void BuildServerInstructions_报告为空_仍含CWD行与功能简介()
     {
-        Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", ILSpyMcpCmd.BuildServerInstructions(null));
-        Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", ILSpyMcpCmd.BuildServerInstructions(""));
+        var text = ILSpyMcpCmd.BuildServerInstructions(null);
+
+        var lines = text.Split([Environment.NewLine], StringSplitOptions.None);
+        Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", lines[0]);
+        Assert.Contains(AppText.HandshakeFeatureIntro, text);
+        Assert.Equal(text, ILSpyMcpCmd.BuildServerInstructions(""));
     }
 
     /// <summary>
