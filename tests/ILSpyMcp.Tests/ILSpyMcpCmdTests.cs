@@ -94,27 +94,44 @@ public class ILSpyMcpCmdTests
     }
 
     [Fact]
-    public void BuildServerInstructions_含更新报告_首行为CWD行后接功能简介与报告()
+    public void BuildServerInstructions_含更新报告_简介后接更新报告()
     {
         const string report = "ilspymcp 已是最新版本";
         var text = ILSpyMcpCmd.BuildServerInstructions(report);
 
-        var lines = text.Split([Environment.NewLine], StringSplitOptions.None);
-        Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", lines[0]);
+        Assert.StartsWith("## 服务器简介", text);
+        Assert.Contains("## 工具一览", text);
+        Assert.Contains("## 使用约定", text);
         Assert.Contains(AppText.HandshakeFeatureIntro, text);
-        Assert.Contains(report, text);
+        Assert.EndsWith(report, text);
     }
 
     [Fact]
-    public void BuildServerInstructions_报告为空_仍含CWD行与功能简介()
+    public void BuildServerInstructions_报告为空_仅功能简介()
     {
-        var text = ILSpyMcpCmd.BuildServerInstructions(null);
-
-        var lines = text.Split([Environment.NewLine], StringSplitOptions.None);
-        Assert.Equal($"当前工作目录: {Environment.CurrentDirectory}", lines[0]);
-        Assert.Contains(AppText.HandshakeFeatureIntro, text);
-        Assert.Equal(text, ILSpyMcpCmd.BuildServerInstructions(""));
+        Assert.Equal(AppText.HandshakeFeatureIntro, ILSpyMcpCmd.BuildServerInstructions(null));
+        Assert.Equal(AppText.HandshakeFeatureIntro, ILSpyMcpCmd.BuildServerInstructions(""));
     }
+
+    [Fact]
+    public void BuildServerInstructions_工具一览_包含全部16个工具()
+    {
+        var text = AppText.HandshakeFeatureIntro;
+        foreach (var tool in AllHandshakeTools)
+        {
+            Assert.Contains($"**`{tool}`**", text);
+        }
+    }
+
+    /// <summary>
+    /// 握手功能简介「工具一览」应覆盖的全部 MCP 工具（与 Tools 目录工具类一一对应；新增工具需同步 <see cref="AppText.HandshakeFeatureIntro"/>）。
+    /// </summary>
+    private static readonly string[] AllHandshakeTools =
+    [
+        "decompile", "decompile_member", "decompile_to_dir", "decompile_to_project",
+        "list_types", "signature", "hierarchy", "dependencies", "call_graph", "assembly_info",
+        "search_string", "field_access", "interface_usage", "generic_instantiations", "call_chain", "cache_stats",
+    ];
 
     /// <summary>
     /// 取测试程序集 ChainTop.Run 的元数据 token，供 -cc 分发用例。

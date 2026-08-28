@@ -8,9 +8,15 @@ namespace ILSpyMcp.UpdateCheck;
 internal static class EnvironmentChecker
 {
     /// <summary>
+    /// 握手注入「## 更新状态」段的标题（ServerInstructions 全量 Markdown 分节，与功能简介的「## 服务器简介/工具一览/使用约定」同构；
+    /// 仅更新报告段使用，CLI -c 走 <see cref="UpdateChecker.GetCachedNuGetLine"/> 不含此标题）。
+    /// </summary>
+    private const string UpdateStatusHeading = "## 更新状态";
+
+    /// <summary>
     /// 握手注入中新版本分支的指令前缀：显式要求 agent 主动转述，ServerInstructions 是背景上下文，陈述句不会让 agent 主动告知用户。
     /// </summary>
-    private const string HandshakeNoticePrefix = "【更新提示】ilspymcp 有新版本，请在会话开始的第一条回复中主动告知用户（不要等用户询问），转述以下内容：";
+    private const string HandshakeNoticePrefix = "**【更新提示】**：ilspymcp 有新版本，请在会话开始的第一条回复中主动告知用户（不要等用户询问），转述以下内容：";
 
     /// <summary>
     /// 组装环境自检状态（首次调用时执行，结果由 <see cref="ILSpyMcp.Services.AppServices.StatusReport"/> 缓存）。
@@ -24,15 +30,18 @@ internal static class EnvironmentChecker
     }
 
     /// <summary>
-    /// 组装 MCP 握手注入文本：有新版本时在报告前附加明确指令，要求 agent 在会话开始的回复中主动告知用户并提供升级命令； 已是最新时仅注入状态行（背景信息，不打扰用户）；无有效检查记录返回空字符串（不注入）。
+    /// 组装 MCP 握手注入文本（ServerInstructions 的「## 更新状态」段）：有新版本时在报告前附加明确指令，要求 agent 在会话开始的回复中主动告知用户并提供升级命令；
+    /// 已是最新时仅注入状态行（背景信息，不打扰用户）；无有效检查记录返回空字符串（整段不注入）。
+    /// 状态行（<see cref="UpdateChecker.NuGetUpdateStatus.Line"/>）与 CLI -c 共用来源，不在本方法内改写。
     /// </summary>
     /// <param name="status">NuGet 更新状态（由 <see cref="BuildStatusAsync"/> 得到）。</param>
     /// <returns>注入 ServerInstructions 的提示文本；无有效检查记录时为空字符串。</returns>
     public static string BuildHandshakeText(UpdateChecker.NuGetUpdateStatus? status)
     {
         if (status is null) return "";
-        return status.HasNewVersion
-            ? $"{HandshakeNoticePrefix}{status.Line}"
+        var body = status.HasNewVersion
+            ? HandshakeNoticePrefix + status.Line
             : status.Line;
+        return $"{UpdateStatusHeading}{Environment.NewLine}{Environment.NewLine}{body}";
     }
 }

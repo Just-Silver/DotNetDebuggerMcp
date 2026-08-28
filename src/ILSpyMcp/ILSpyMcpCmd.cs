@@ -268,20 +268,20 @@ public class ILSpyMcpCmd
     }
 
     /// <summary>
-    /// 组装握手期注入 <c>ServerInstructions</c> 的上下文文本：首行恒为 server 进程当前工作目录， 供 agent
-    /// 解析相对路径（assembly/outputDir）；其后追加服务器功能简介（<see cref="AppText.HandshakeFeatureIntro"/>，面向 agent 的能力概述，
-    /// 保持简短）；最后可选追加 ilspymcp 更新报告（非空时换行拼接）。
+    /// 组装握手期注入 <c>ServerInstructions</c> 的上下文文本：Markdown 功能简介（<see cref="AppText.HandshakeFeatureIntro"/>，服务器简介/
+    /// 工具一览/使用约定三块标题分节，面向 agent 的触发条件与全量工具索引）；更新报告非空时空行分隔追加（「## 更新状态」段自带标题）。
+    /// 工作目录不再注入——客户端环境已在系统上下文中提供，简介的使用约定段仅提示相对路径基于当前工作目录。
     /// </summary>
     /// <param name="updateReport">
     /// 更新报告文本（由 <see cref="EnvironmentChecker.BuildHandshakeText"/> 得到，可为空）。
     /// </param>
-    /// <returns>注入文本；首行为 CWD 行，其后恒为功能简介，报告为空时不再追加。</returns>
+    /// <returns>注入文本；报告为空时仅返回功能简介。</returns>
     internal static string BuildServerInstructions(string? updateReport)
     {
-        var text = $"当前工作目录: {Environment.CurrentDirectory}{Environment.NewLine}{AppText.HandshakeFeatureIntro}";
+        var text = AppText.HandshakeFeatureIntro;
         if (!string.IsNullOrEmpty(updateReport))
         {
-            text += Environment.NewLine + updateReport;
+            text += Environment.NewLine + Environment.NewLine + updateReport;
         }
         return text;
     }

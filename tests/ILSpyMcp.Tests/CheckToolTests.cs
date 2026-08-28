@@ -79,6 +79,7 @@ public class CheckToolTests
 
         var text = EnvironmentChecker.BuildHandshakeText(status);
 
+        Assert.StartsWith("## 更新状态", text);
         Assert.Contains("主动告知用户", text);
         Assert.Contains("NuGet 最新 2.0.0", text);
         Assert.Contains("dotnet tool update --global ilspymcp", text);
@@ -91,8 +92,9 @@ public class CheckToolTests
 
         var text = EnvironmentChecker.BuildHandshakeText(status);
 
+        Assert.StartsWith("## 更新状态", text);
         Assert.DoesNotContain("主动告知用户", text);
-        Assert.Equal(status.Line, text);
+        Assert.Contains(status.Line, text);
     }
 
     [Fact]
