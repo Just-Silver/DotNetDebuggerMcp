@@ -30,7 +30,27 @@ dotnet tool uninstall --global ilspymcp # 卸载
 
 ## 接入 opencode
 
-`opencode.json` 中注册本地 MCP：
+### opencode v2
+
+`opencode.json`（或 `opencode.jsonc`）中注册本地 MCP，服务器名称放在 `mcp.servers` 下：
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "ilspy": {
+        "type": "local",
+        "command": ["ilspymcp"]
+      }
+    }
+  }
+}
+```
+
+### opencode v1
+
+v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 ```json
 {
@@ -44,7 +64,7 @@ dotnet tool uninstall --global ilspymcp # 卸载
 }
 ```
 
-重启 opencode 后工具以 `ilspy_*` 前缀暴露。握手时 server 会注入当前工作目录，`assembly` / `outputDir` 的相对路径以此解析。
+重启 opencode 后工具以 `ilspy_*` 前缀暴露（v2 中工具名为 `<服务器名>_<工具名>`）。`assembly` / `outputDir` 的相对路径以 opencode 会话的工作目录解析。
 
 ## 核心约定
 
