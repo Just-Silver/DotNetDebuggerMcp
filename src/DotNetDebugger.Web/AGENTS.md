@@ -13,11 +13,13 @@ Components/
   Pages/Debugger.razor   动态调试页（控制条 + 状态 + 左树右代码 + 面板 + AgentView 订阅）
   Debugger/CodeViewer.razor   Monaco 编辑器封装（.razor.js 是互操作桥）
   Debugger/TypeTree.razor     左侧类型树（程序集→命名空间→类型→成员，BB TreeView 懒加载）
+  Debugger/LogPanel.razor     联调诊断面板（最右列，展示 MemoryLog 环形日志）
 Services/
   AgentViewContext.cs   宿主→Web「agent 正在看什么」可观察共享状态（核心链路）
   TypeTreeData.cs       程序集类型/成员枚举数据源（纯元数据秒回，一次枚举缓存）
   DocumentStore.cs      反编译文档缓存 + 停点 IL→行映射
   DebugViewService.cs   调试命令/状态查询（经 WebHostBootstrap.Manager 共享会话）
+  MemoryLog.cs          进程内环形内存日志（联调诊断，MaxEntries=2000，组件/服务打点）
 WebHostBootstrap.cs     宿主→Web 装配入口（静态注入 DebugSessionManager + AgentViewContext）
 ```
 
@@ -81,8 +83,8 @@ WebHostBootstrap.cs     宿主→Web 装配入口（静态注入 DebugSessionMan
 
 ## Web 启动（--web）与生命周期
 
-- Web 由宿主 `--web` 分支或 `web_open` MCP 工具拉起（`WebHostBootstrap.Build` + `RunWithBrowserAsync`，自动端口 + 拉浏览器）。Web 随 MCP 进程存亡。
-- **MCP server 默认不应带 --web 启动**（用户可能只用反编译）；要看可视化由 agent 调 `web_open`（幂等）按需拉起。opencode.json 的 MCP server command 不加 --web。
+- Web 由宿主 `--web` 分支拉起（`WebHostBootstrap.Build` + `RunWithBrowserAsync`，自动端口 + 拉浏览器，默认直达 `/debugger`）。Web 随 MCP 进程存亡；`--web` 双 host 并联（`Task.WhenAll(mcpTask, webTask)`，任一侧结束等另一侧自然完成）。宿主与 Web 共享同一 `DebugSessionManager` 单例（`WebHostBootstrap.Configure` 注入）。
+- **`web_open` 幂等 MCP 工具是规划待办（`docs/ROADMAP.md`），当前未实现**——Web 只能靠宿主 CLI 加 `--web` 拉起。仓库根 `opencode.json` 的 MCP command 现带 `--web` 仅为联调便利，产品方向仍是默认不带（用户可能只用反编译）。
 - 日志纪律：Web host 日志必须走 stderr（`LogToStandardErrorThreshold`），严禁写 stdout（MCP 协议帧在 stdout）。
 
 ## 验证
