@@ -1,4 +1,4 @@
-using DotNetDebugger.Engine.Models;
+﻿using DotNetDebugger.Engine.Models;
 using Xunit;
 
 namespace DotNetDebugger.Session.Tests;
@@ -16,7 +16,7 @@ public sealed class DebugSessionManagerTests
 
         await using var manager = new DebugSessionManager();
         // delay 4s：launch 后有足够窗口观察 Running
-        var active = await manager.LaunchAsync($"{TestTarget.DebugTargetExe} 3 4", timeoutSeconds: 15);
+        var active = await manager.LaunchAsync($"{TestTarget.DebugTargetExe} 3 4", timeoutSeconds: 15, TestContext.Current.CancellationToken);
 
         Assert.NotNull(manager.Active);
         Assert.Same(active, manager.Active);
@@ -26,7 +26,7 @@ public sealed class DebugSessionManagerTests
         // 注：P2 引擎 attach 后进程停（初始同步点），需显式 continue 才运行。此处只验证管理器可建会话。
         Assert.NotNull(manager.GetInfo());
 
-        await manager.CloseAsync();
+        await manager.CloseAsync(TestContext.Current.CancellationToken);
         Assert.Null(manager.Active);
     }
 
@@ -34,18 +34,18 @@ public sealed class DebugSessionManagerTests
     public async Task Attach_ThenContinue_ProcessRunsToExit_BufferTracksExited()
     {
         using var target = TestTarget.StartDebugTarget("2 3");
-        await Task.Delay(800); // 等 CLR 加载
+        await Task.Delay(800, TestContext.Current.CancellationToken); // 等 CLR 加载
 
         await using var manager = new DebugSessionManager();
-        var active = await manager.AttachAsync(target.Id);
+        var active = await manager.AttachAsync(target.Id, TestContext.Current.CancellationToken);
 
         // 显式 continue 让进程运行（P2 引擎 attach 后进程停在初始同步点）
-        await active.Session.ContinueAsync();
+        await active.Session.ContinueAsync(TestContext.Current.CancellationToken);
 
         // 等 buffer 状态到 Exited（进程 delay 3s 后 Work 跑完退出；兜底 15s）
         var deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline && active.Buffer.CurrentState != DebugSessionState.Exited)
-            await Task.Delay(100);
+            await Task.Delay(100, TestContext.Current.CancellationToken);
 
         Assert.Equal(DebugSessionState.Exited, active.Buffer.CurrentState);
         target.WaitForExit(5000);

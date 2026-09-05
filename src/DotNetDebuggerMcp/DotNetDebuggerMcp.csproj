@@ -37,7 +37,7 @@
 
   <ItemGroup>
     <PackageReference Include="McMaster.Extensions.Hosting.CommandLine" Version="5.1.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <!-- Microsoft.Extensions.Hosting 不直引：Web SDK 已带 AspNetCore.App 框架引用（内含 Hosting，NU1510） -->
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
   </ItemGroup>
 

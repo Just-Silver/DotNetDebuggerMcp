@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using DotNetDebugger.Engine.Models;
 using DotNetDebugger.Engine.Session;
 using Xunit;
@@ -18,23 +18,23 @@ public sealed class ExceptionBreakpointTests
 
         // throw 模式 + 5s delay（attach 窗口）
         using var target = DebugTargetProcess.Start("1 throw 5");
-        await Task.Delay(800);
+        await Task.Delay(800, TestContext.Current.CancellationToken);
         Assert.False(target.HasExited, "DebugTarget(throw) 提前退出");
 
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id);
+        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
         var reader = ConsumeAsync(session.Events, events);
-        await Task.Delay(200);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
 
         // 设异常断点：全部 first-chance 异常停下
-        await session.SetExceptionBreakpointAsync(); // typeName 空 = 全部
-        await session.ContinueAsync();
+        await session.SetExceptionBreakpointAsync(null, TestContext.Current.CancellationToken); // typeName 空 = 全部
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
 
         // 等 ExceptionHit（进程 delay 5s 后抛异常；兜底 15s）
         var deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline &&
                !events.Any(e => e.Kind == DebugEventKind.ExceptionHit))
-            await Task.Delay(100);
+            await Task.Delay(100, TestContext.Current.CancellationToken);
 
         Assert.Contains(events, e => e.Kind == DebugEventKind.ExceptionHit);
         var hit = events.Last(e => e.Kind == DebugEventKind.ExceptionHit);
@@ -42,10 +42,10 @@ public sealed class ExceptionBreakpointTests
         Assert.True(payload.ThreadId > 0);
 
         // 命中后清理（进程是未处理异常，会崩——detach 让进程走完）
-        await session.DisconnectAsync();
+        await session.DisconnectAsync(TestContext.Current.CancellationToken);
         target.WaitForExit(10000);
         Assert.True(target.HasExited);
-        reader.Wait(2000);
+        await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
     }
 
     private static async Task ConsumeAsync(IAsyncEnumerable<DebugEvent> src, List<DebugEvent> into)

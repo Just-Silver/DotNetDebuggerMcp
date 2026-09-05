@@ -9,6 +9,17 @@ namespace DotNetDebuggerMcp.DebugCli;
 /// </summary>
 public static class DebugCliRunner
 {
+    /// <summary>
+    /// 一次性调试主流程：起目标进程（attach 稳定区模式）→ 设断点 → Continue → 等命中 →
+    /// 打印命中线程调用栈与局部变量/参数 → 恢复执行至退出。
+    /// </summary>
+    /// <param name="exePathWithArgs">目标 exe 路径（可含启动参数，空格拆分；参数供构造 attach 稳定窗口）。</param>
+    /// <param name="methodToken">断点方法 token（mdMethodDef，0x06 开头）。</param>
+    /// <param name="ilOffset">断点 IL 偏移。</param>
+    /// <param name="workingDirectory">目标进程工作目录；空则用当前目录。</param>
+    /// <param name="timeoutSeconds">断点命中与退出的兜底超时秒数。</param>
+    /// <param name="ct">取消令牌。</param>
+    /// <returns>退出码：0 成功，1 失败（原因已写 stderr）。</returns>
     public static async Task<int> RunAsync(string exePathWithArgs, int methodToken, int ilOffset,
         string? workingDirectory, int timeoutSeconds, CancellationToken ct)
     {

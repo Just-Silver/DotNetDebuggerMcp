@@ -1,4 +1,4 @@
-using DotNetDebuggerMcp.Tests;
+﻿using DotNetDebuggerMcp.Tests;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Diagnostics;
@@ -106,7 +106,7 @@ public sealed class DebugMcpToolsTests
             var r = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
             return r;
         }).ToArray();
-        var results = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(20));
+        var results = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         Assert.All(results, r => Assert.True(r.IsError != true));
         Assert.All(results, r => Assert.Contains("会话状态", r.Text()));
 

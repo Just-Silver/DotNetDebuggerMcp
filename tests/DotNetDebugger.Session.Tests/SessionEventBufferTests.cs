@@ -1,4 +1,4 @@
-using System.Reflection.Metadata;
+﻿using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using DotNetDebugger.Engine.Models;
@@ -16,7 +16,7 @@ public sealed class SessionEventBufferTests
     public async Task WaitForStop_NoEvents_TimesOutReturnsNull()
     {
         await using var buffer = new SessionEventBuffer();
-        var stop = await buffer.WaitForStopAsync(TimeSpan.FromMilliseconds(300));
+        var stop = await buffer.WaitForStopAsync(TimeSpan.FromMilliseconds(300), TestContext.Current.CancellationToken);
         Assert.Null(stop); // 无事件：放弃等待
         Assert.Equal(DebugSessionState.None, buffer.CurrentState);
     }
@@ -37,33 +37,33 @@ public sealed class SessionEventBufferTests
         Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
 
         using var target = TestTarget.StartDebugTarget("2 4");
-        await Task.Delay(800);
+        await Task.Delay(800, TestContext.Current.CancellationToken);
         Assert.False(target.HasExited);
 
         var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
         Assert.True(workToken > 0);
 
-        await using var session = await DebugSession.AttachAsync(target.Id);
+        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
         await using var buffer = new SessionEventBuffer();
         buffer.Start(session);
-        await Task.Delay(200); // 让消费任务追上缓冲事件
+        await Task.Delay(200, TestContext.Current.CancellationToken); // 让消费任务追上缓冲事件
 
-        var bp = await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0);
+        var bp = await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0, TestContext.Current.CancellationToken);
         Assert.True(bp.IsBound);
 
         // 先等后继续：WaitForStopAsync 应在断点命中时被 SnapshotChanged 唤醒
-        var waitTask = buffer.WaitForStopAsync(TimeSpan.FromSeconds(15));
-        await session.ContinueAsync();
+        var waitTask = buffer.WaitForStopAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
 
-        var stop = await waitTask.WaitAsync(TimeSpan.FromSeconds(20));
+        var stop = await waitTask.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         Assert.NotNull(stop);
         Assert.Equal(bp.Id, stop.BreakpointId);
         Assert.Equal(DebugEventKind.BreakpointHit, stop.Kind);
         Assert.Equal(DebugSessionState.Stopped, buffer.CurrentState);
 
-        await session.ContinueAsync(); // 恢复让目标退出
+        await session.ContinueAsync(TestContext.Current.CancellationToken); // 恢复让目标退出
         var exitDeadline = DateTime.UtcNow.AddSeconds(10);
-        while (DateTime.UtcNow < exitDeadline && !target.HasExited) await Task.Delay(100);
+        while (DateTime.UtcNow < exitDeadline && !target.HasExited) await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.True(target.HasExited, "DebugTarget 在断点恢复后未正常退出");
     }
 

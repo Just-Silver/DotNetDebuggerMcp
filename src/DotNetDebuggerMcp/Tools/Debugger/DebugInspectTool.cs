@@ -3,6 +3,7 @@ using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
 
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 
 namespace DotNetDebuggerMcp.Tools.Debugger;
 
@@ -25,10 +26,9 @@ public static class DebugInspectTool
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
         CancellationToken cancellationToken = default)
     {
-        var (active, error) = RequireStopped();
-        if (error is not null) return error;
+        if (!TryRequireStopped(out var active, out var error)) return error;
 
-        var tid = threadId > 0 ? threadId : active!.Buffer.StoppedThreadId;
+        var tid = threadId > 0 ? threadId : active.Buffer.StoppedThreadId;
         if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";
 
         try
@@ -82,10 +82,9 @@ public static class DebugInspectTool
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
         CancellationToken cancellationToken = default)
     {
-        var (active, error) = RequireStopped();
-        if (error is not null) return error;
+        if (!TryRequireStopped(out var active, out var error)) return error;
 
-        var tid = threadId > 0 ? threadId : active!.Buffer.StoppedThreadId;
+        var tid = threadId > 0 ? threadId : active.Buffer.StoppedThreadId;
         if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";
 
         try
@@ -118,12 +117,26 @@ public static class DebugInspectTool
         return line;
     }
 
-    private static (DotNetDebugger.Session.ActiveDebugSession? Active, string? Error) RequireStopped()
+    /// <summary>
+    /// 前置校验：存在活动调试会话且进程处于 Stopped（断点/异常/单步停点）。
+    /// 返回 false 时 <paramref name="active"/> 为 null、<paramref name="error"/> 带中文提示（调用方直接返回该提示）。
+    /// </summary>
+    private static bool TryRequireStopped(
+        [NotNullWhen(true)] out DotNetDebugger.Session.ActiveDebugSession? active,
+        [NotNullWhen(false)] out string? error)
     {
-        var active = DebugSessionService.Manager.Active;
-        if (active is null) return (null, "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。");
+        active = DebugSessionService.Manager.Active;
+        if (active is null)
+        {
+            error = "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。";
+            return false;
+        }
         if (active.Buffer.CurrentState != DebugSessionState.Stopped)
-            return (active, "进程未停在断点/异常（当前非 Stopped 状态）。先 debug_continue 运行至断点停下，再读栈/变量。");
-        return (active, null);
+        {
+            error = "进程未停在断点/异常（当前非 Stopped 状态）。先 debug_continue 运行至断点停下，再读栈/变量。";
+            return false;
+        }
+        error = null;
+        return true;
     }
 }

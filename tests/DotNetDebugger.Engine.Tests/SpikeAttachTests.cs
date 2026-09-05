@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using ClrDebug;
 using Xunit;
@@ -21,7 +21,7 @@ public sealed class SpikeAttachTests
         // 先启动目标进程：3 次迭代 + 5s 启动延迟（提供 attach 窗口，随后自然退出验证 ExitProcess）
         using var target = DebugTargetProcess.Start("3 5");
         // 等待目标进入 Main 稳定区（避免 attach 太早，CLR 未加载）
-        await Task.Delay(800);
+        await Task.Delay(800, TestContext.Current.CancellationToken);
         Assert.False(target.HasExited, "DebugTarget 提前退出");
 
         var sawCreate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -72,14 +72,14 @@ public sealed class SpikeAttachTests
                 sawExit.TrySetException(ex);
             }
         });
-        mtaThread.SetApartmentState(ApartmentState.MTA);
+        // .NET Core 起新线程默认即 MTA（ClrDebug 要求；显式 SetApartmentState 仅 STA 需要且触发 CA1416）
         mtaThread.Start();
 
         // 等待 CreateProcess 回调 + 目标自然退出（n=2 约 20ms 后 done → exit）
-        var create = await sawCreate.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        var create = await sawCreate.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         Assert.True(create, mtaError is null ? "未收到 CreateProcess 回调" : $"MTA 线程异常: {mtaError}");
         target.WaitForExit(10000);
-        var exit = await sawExit.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        var exit = await sawExit.Task.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         Assert.True(exit, "未收到 ExitProcess 回调");
         Assert.True(target.HasExited);
         mtaThread.Join(2000);

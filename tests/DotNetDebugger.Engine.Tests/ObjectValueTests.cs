@@ -1,4 +1,4 @@
-using System.Reflection.Metadata;
+﻿using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using DotNetDebugger.Engine.Models;
@@ -20,32 +20,32 @@ public sealed class ObjectValueTests
         Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
 
         using var target = DebugTargetProcess.Start("bag 5");
-        await Task.Delay(800);
+        await Task.Delay(800, TestContext.Current.CancellationToken);
         Assert.False(target.HasExited);
 
         var bagToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "WorkBag");
         Assert.True(bagToken > 0, "DebugTarget 中未找到 WorkBag 方法");
 
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id);
+        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
         var reader = ConsumeAsync(session.Events, events);
-        await Task.Delay(200);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
 
-        var bp = await session.SetBreakpointAsync("DebugTarget.dll", bagToken, 0);
+        var bp = await session.SetBreakpointAsync("DebugTarget.dll", bagToken, 0, TestContext.Current.CancellationToken);
         Assert.True(bp.Id > 0);
-        await session.ContinueAsync();
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
 
         var deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline &&
                !events.Any(e => e.Kind == DebugEventKind.BreakpointHit))
-            await Task.Delay(100);
+            await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.Contains(events, e => e.Kind == DebugEventKind.BreakpointHit);
 
         var hit = events.Last(e => e.Kind == DebugEventKind.BreakpointHit);
         var payload = Assert.IsType<BreakpointHitPayload>(hit.Payload);
         var threadId = payload.ThreadId;
 
-        var vars = await session.GetVariablesAsync(threadId);
+        var vars = await session.GetVariablesAsync(threadId, TestContext.Current.CancellationToken);
         var b = vars["arguments"].First(v => v.Name == "b");
         var children = b.Value.Children;
         Assert.NotNull(children);
@@ -55,11 +55,11 @@ public sealed class ObjectValueTests
         Assert.Equal("5", n.Value.Display);
 
         // 恢复并退出
-        await session.ContinueAsync();
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
         var exitDeadline = DateTime.UtcNow.AddSeconds(10);
-        while (DateTime.UtcNow < exitDeadline && !target.HasExited) await Task.Delay(100);
+        while (DateTime.UtcNow < exitDeadline && !target.HasExited) await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.True(target.HasExited, "读取变量后未正常退出");
-        reader.Wait(2000);
+        await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
     }
 
     private static async Task ConsumeAsync(IAsyncEnumerable<DebugEvent> src, List<DebugEvent> into)

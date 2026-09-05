@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -21,20 +21,20 @@ public sealed class StepTests
         Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
 
         using var target = DebugTargetProcess.Start("5 5");
-        await Task.Delay(800);
+        await Task.Delay(800, TestContext.Current.CancellationToken);
         Assert.False(target.HasExited);
 
         var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
         Assert.True(workToken > 0);
 
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id);
+        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
         var reader = ConsumeAsync(session.Events, events);
-        await Task.Delay(200);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
 
         // 断点 + 继续 → 命中
-        await session.SetBreakpointAsync("DebugTarget.dll", workToken, 0);
-        await session.ContinueAsync();
+        await session.SetBreakpointAsync("DebugTarget.dll", workToken, 0, TestContext.Current.CancellationToken);
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
         await WaitForAsync(() => events.Any(e => e.Kind == DebugEventKind.BreakpointHit), 15_000);
 
         // 单步 over 3 次，每次等 StepCompleted；断言位置推进
@@ -44,7 +44,7 @@ public sealed class StepTests
         for (var i = 0; i < 3; i++)
         {
             var before = events.Count(e => e.Kind == DebugEventKind.StepCompleted);
-            await session.StepOverAsync();
+            await session.StepOverAsync(TestContext.Current.CancellationToken);
             await WaitForAsync(() => events.Count(e => e.Kind == DebugEventKind.StepCompleted) > before, 15_000);
             var stepEvt = events.Last(e => e.Kind == DebugEventKind.StepCompleted);
             var payload = Assert.IsType<StepCompletedPayload>(stepEvt.Payload);
@@ -56,17 +56,17 @@ public sealed class StepTests
         Assert.Contains(events, e => e.Kind == DebugEventKind.StepCompleted);
 
         // 最终 Continue 到退出
-        await session.ContinueAsync();
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
         var exitDeadline = DateTime.UtcNow.AddSeconds(10);
-        while (DateTime.UtcNow < exitDeadline && !target.HasExited) await Task.Delay(100);
+        while (DateTime.UtcNow < exitDeadline && !target.HasExited) await Task.Delay(100, TestContext.Current.CancellationToken);
         Assert.True(target.HasExited, "DebugTarget 在单步后未正常退出");
-        reader.Wait(2000);
+        await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
     }
 
     private static async Task WaitForAsync(Func<bool> cond, int timeoutMs)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-        while (DateTime.UtcNow < deadline && !cond()) await Task.Delay(50);
+        while (DateTime.UtcNow < deadline && !cond()) await Task.Delay(50, TestContext.Current.CancellationToken);
         Assert.True(cond(), "等待条件超时未满足");
     }
 

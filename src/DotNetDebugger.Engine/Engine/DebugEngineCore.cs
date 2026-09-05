@@ -84,7 +84,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
             }
         });
         _thread.IsBackground = true;
-        _thread.SetApartmentState(ApartmentState.MTA); // ClrDebug 硬性要求 MTA
+        // .NET Core 起新线程默认即 MTA（满足 ClrDebug 硬性要求；显式 SetApartmentState 仅 STA 需要且触发 CA1416）
         _thread.Name = "DebugEngineMTA";
         _thread.Start();
 

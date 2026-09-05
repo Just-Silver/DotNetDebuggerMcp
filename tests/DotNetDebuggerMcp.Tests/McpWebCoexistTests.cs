@@ -1,4 +1,4 @@
-using ModelContextProtocol.Client;
+﻿using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Net;
 using System.Net.Sockets;
@@ -67,7 +67,7 @@ public sealed class McpWebCoexistTests
             }
             catch
             {
-                await Task.Delay(300);
+                await Task.Delay(300, TestContext.Current.CancellationToken);
             }
         }
         return null;
