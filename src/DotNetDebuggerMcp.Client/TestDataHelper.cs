@@ -57,11 +57,10 @@ public static class TestDataHelper
     public static string RepoRoot { get; } = FindRepoRoot();
 
     /// <summary>
-    /// 测试程序集路径：自动选取 tests/TestData 下第一个 .dll。
+    /// 测试程序集路径：明确指向主样本 ILSpyMcp.TestSamples.dll（tests/TestData 下可能还有 Ext/DebugTarget 等，
+    /// 不能按「第一个 dll」取——字母序会选错）。
     /// </summary>
-    public static string Dll { get; } = Directory.GetFiles(Path.Combine(RepoRoot, "tests", "TestData"), "*.dll")
-        .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-        .First();
+    public static string Dll { get; } = Path.Combine(RepoRoot, "tests", "TestData", "ILSpyMcp.TestSamples.dll");
 
     /// <summary>
     /// 跨程序集测试程序集（引用 TestSamples.dll 的 Callee），供 call_chain includeExternal 跨程序集展开用例。
