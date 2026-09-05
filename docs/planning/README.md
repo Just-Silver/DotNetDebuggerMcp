@@ -21,8 +21,8 @@
 
 ## 当前状态
 
-- **阶段**：**P1（仓库改名与拆分）已完成** ✅（425 测试全绿 + Client 端到端全过）；**P2（动态调试引擎 v1）已完成** ✅（feature/p2-engine-v1 分支：Engine 库 + 6 集成测试 + CLI -dbg，反编译 425 测试零回归 + Client 端到端全过）。
-- **已拍板决策**（decisions D1-D11）：
+- **阶段**：**P1（改名拆分）已完成** ✅；**P2（调试引擎 v1）已完成** ✅；**P3（会话层 + MCP 调试工具面）已完成** ✅（feature/p3-mcp-tools：Session 库 + debug_* 工具 + 触发条件导向握手简介，Engine 6 + Session 5 + 宿主 427 全绿 + Client 端到端全过）。
+- **已拍板决策**（decisions D1-D12）：
   1. 现有反编译改名保留 → Decompiler 库；新增动态调试引擎（Engine）；主 MCP+Web 宿主（McpHost）。先引擎/MCP 后 Web。
   2. 5 项目拆分：`DotNetDebugger.Decompiler` / `.Engine` / `.Session` / `.Web` / `DotNetDebuggerMcp`(exe)，进程合一。
   3. 命名 **DotNet-Debugger-MCP**（包 id `dotnet-debugger-mcp`）；MCP 注册名建议 `dotnetdebugger`。

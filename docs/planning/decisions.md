@@ -2,6 +2,12 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D12 · P3 调试工具面与握手简介（用户拍板）
+- 决策：调试 MCP 工具用 `debug_*` 前缀（debug_launch/attach/disconnect/state/breakpoint_*/continue/step/stack/threads/variables/exceptions）。
+- 决策：控制工具（launch/continue/step）**异步返回 + 默认 timeoutSeconds 参数**；停点信息经查询工具（debug_state/debug_stack/debug_variables）获取，控制工具不等停。
+- 决策：**握手 ServerInstructions 改为触发条件导向**——去掉「工具一览」，只留「## 何时使用」（反编译/调试两类场景触发条件），agent 经 MCP 工具目录发现工具。
+- 日期：2026-09-05。
+
 ## D11 · P2 测试目标与验证形态、交付边界（用户拍板）
 - 决策：**P2 单测调试目标 = generate-testdata.ps1 追加生成 `DebugTarget.exe`**（含固定方法/断点锚点/按需跑固定逻辑等待断点；沿用脚本生成+git 忽略模式，token 稳定可预测）。
 - 决策：**Engine 验证形态 = 测试进程直接 attach**（xUnit 测试进程作为调试器宿主，启动 DebugTarget 子进程并 attach；符合真实形态：宿主进程调 ClrDebug attach 子进程）。
