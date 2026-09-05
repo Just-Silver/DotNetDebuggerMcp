@@ -21,6 +21,17 @@ public sealed class SessionEventBuffer : IAsyncDisposable
     public StopContext? LastStop { get { lock (_gate) return _lastStop; } }
     public int StoppedThreadId => LastStop?.ThreadId ?? -1;
 
+    /// <summary>当前断点快照（引擎事件驱动更新；无会话/未变更过为空）。</summary>
+    public IReadOnlyList<BreakpointSnapshot> CurrentBreakpoints { get { lock (_gate) return _breakpoints; } }
+
+    /// <summary>会话快照变化事件（状态或停点变化后触发；订阅方自行切线程）。UI 推送通道，替代轮询。</summary>
+    public event Action<DebugSessionState, StopContext?>? SnapshotChanged;
+
+    /// <summary>断点集合变化事件（快照全量；引擎 BreakpointsChanged 事件驱动，替代轮询）。</summary>
+    public event Action<IReadOnlyList<BreakpointSnapshot>>? BreakpointsChanged;
+
+    private IReadOnlyList<BreakpointSnapshot> _breakpoints = [];
+
     /// <summary>开始消费事件流（Session 创建后立即调用，避免错过停点）。</summary>
     public void Start(DebugSession session)
     {
@@ -41,6 +52,10 @@ public sealed class SessionEventBuffer : IAsyncDisposable
 
     private void OnEvent(DebugEvent e)
     {
+        DebugSessionState prevState;
+        StopContext? prevStop;
+        lock (_gate) { prevState = _state; prevStop = _lastStop; }
+
         switch (e.Kind)
         {
             case DebugEventKind.SessionStateChanged:
@@ -79,7 +94,20 @@ public sealed class SessionEventBuffer : IAsyncDisposable
                     }
                 }
                 break;
+            case DebugEventKind.BreakpointsChanged:
+                if (e.Payload is BreakpointsChangedPayload bpc)
+                {
+                    lock (_gate) _breakpoints = bpc.Breakpoints;
+                    BreakpointsChanged?.Invoke(bpc.Breakpoints);
+                }
+                break;
         }
+
+        DebugSessionState nextState;
+        StopContext? nextStop;
+        lock (_gate) { nextState = _state; nextStop = _lastStop; }
+        if (nextState != prevState || !ReferenceEquals(nextStop, prevStop))
+            SnapshotChanged?.Invoke(nextState, nextStop);
     }
 
     public async ValueTask DisposeAsync()

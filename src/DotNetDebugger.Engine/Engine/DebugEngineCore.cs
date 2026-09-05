@@ -228,7 +228,12 @@ public sealed class DebugEngineCore : IAsyncDisposable
 
     /// <summary>设置断点（模块须已加载）。</summary>
     public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, CancellationToken ct = default)
-        => PostAsyncResult(() => _breakpoints.Add(moduleName, methodToken, ilOffset), ct);
+        => PostAsyncResult(() =>
+        {
+            var bp = _breakpoints.Add(moduleName, methodToken, ilOffset);
+            PublishBreakpointsChanged();
+            return bp;
+        }, ct);
 
     /// <summary>当前登记断点快照（经命令泵读，与增删互斥；Web 监视器红点渲染数据源）。</summary>
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
@@ -239,10 +244,20 @@ public sealed class DebugEngineCore : IAsyncDisposable
         => PostAsyncResult(() => _breakpoints.GetModulePath(moduleName), ct);
 
     public Task<bool> RemoveBreakpointAsync(int id, CancellationToken ct = default)
-        => PostAsyncResult(() => _breakpoints.Remove(id), ct);
+        => PostAsyncResult(() =>
+        {
+            var removed = _breakpoints.Remove(id);
+            if (removed) PublishBreakpointsChanged();
+            return removed;
+        }, ct);
 
     public Task ClearBreakpointsAsync(CancellationToken ct = default)
-        => PostAsync(() => { _breakpoints.Clear(); return Task.CompletedTask; }, ct);
+        => PostAsync(() =>
+        {
+            _breakpoints.Clear();
+            PublishBreakpointsChanged();
+            return Task.CompletedTask;
+        }, ct);
 
     /// <summary>设置 first-chance 异常过滤器（null=全部放行）。</summary>
     public Task SetExceptionFilterAsync(ExceptionBreakpointFilter? filter, CancellationToken ct = default)
@@ -455,6 +470,12 @@ public sealed class DebugEngineCore : IAsyncDisposable
     internal void Log(string level, string message)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.EngineLog,
             new EngineLogPayload(level, message)));
+
+    /// <summary>断点集合变更事件（设/删/清后在命令泵内发布；快照全量，UI 推送替代轮询）。</summary>
+    private void PublishBreakpointsChanged()
+        => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.BreakpointsChanged,
+            new BreakpointsChangedPayload(_breakpoints.Breakpoints
+                .Select(b => new BreakpointSnapshot(b.Id, b.ModuleName, b.MethodToken, b.IlOffset)).ToList())));
 
     /// <summary>读线程栈顶 IL 帧位置（供断点/步/异常事件附 top frame）。回调线程调用。</summary>
     internal FrameLocation? ReadTopFrame(CorDebugThread thread)

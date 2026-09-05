@@ -9,6 +9,7 @@ public enum DebugEventKind
     ExceptionHit,
     ThreadsChanged,
     EngineLog,
+    BreakpointsChanged,
 }
 
 /// <summary>
@@ -50,3 +51,9 @@ public sealed record ThreadsChangedPayload(IReadOnlyList<DebugThreadInfo> Thread
 
 /// <summary>引擎日志事件载荷。</summary>
 public sealed record EngineLogPayload(string Level, string Message);
+
+/// <summary>断点集合变更事件载荷（快照全量；设/删/清后在命令泵内发布，UI 推送替代轮询）。</summary>
+public sealed record BreakpointsChangedPayload(IReadOnlyList<BreakpointSnapshot> Breakpoints);
+
+/// <summary>断点快照（不含运行时绑定信息）。</summary>
+public sealed record BreakpointSnapshot(int Id, string ModuleName, int MethodToken, int IlOffset);

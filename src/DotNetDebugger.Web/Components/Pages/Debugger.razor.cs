@@ -2,6 +2,8 @@ using System.Reflection.Metadata;
 using DotNetDebugger.Decompiler.Document;
 using DotNetDebugger.Engine.Models;
 using DotNetDebugger.Engine.Session;
+using DotNetDebugger.Session;
+using DotNetDebugger.Session.Models;
 using DotNetDebugger.Web.Components.Debugger;
 using DotNetDebugger.Web.Services;
 
@@ -14,8 +16,9 @@ public partial class Debugger
     private TypeTree? _tree;
     private readonly DebugViewService _debug = new();
     private SourceDocument? _doc;
-    private IReadOnlyList<DebugBreakpoint> _breakpoints = [];   // 会话断点快照（红点渲染数据源）
-    private string _lastBpSignature = "";                       // 断点集合签名（变化才重推装饰，避免 500ms 轮询空转）
+    private IReadOnlyList<BreakpointSnapshot> _breakpoints = [];   // 会话断点快照（红点渲染数据源，断点事件推送）
+    private SessionEventBuffer? _subscribedBuffer;                  // 当前订阅快照推送的事件缓冲（随活动会话切换）
+    private string _lastBpSignature = "";                       // 断点集合签名（变化才重推装饰）
     private string _targetPath = "";
     private string? _state;          // 会话状态文本
     private string? _lastStopText;   // 最近停点
@@ -25,8 +28,6 @@ public partial class Debugger
     private IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>> _variables =
         new Dictionary<string, IReadOnlyList<DebugVariable>>();
     private IReadOnlyList<DebugThreadInfo> _threads = [];
-    private CancellationTokenSource? _pollCts;
-    private System.Timers.Timer? _pollTimer;
     private long _lastAgentRevision = -1;   // 已处理的 agent 上下文版本
     private int _lastCursorToken;           // 光标联动已选中的方法 token（变化才动树，防扰动）
     private int _selectedMemberToken;       // 当前选中成员（树点叶子/光标联动/停点），编辑器行区间高亮用
@@ -49,19 +50,66 @@ public partial class Debugger
 
     protected override void OnInitialized()
     {
-        // 轮询会话状态（500ms）——SessionEventBuffer 快照刷新
-        _pollCts = new CancellationTokenSource();
-        _pollTimer = new System.Timers.Timer(500) { AutoReset = true };
-        _pollTimer.Elapsed += async (_, _) => await PollStateAsync();
-        _pollTimer.Start();
+        // 事件推送（替代轮询）：会话快照（状态/停点）与断点集合变化均经事件推到电路；
+        // 栈/变量/线程仅在停点变化时读一次（对齐 dnSpyEx：停点期间值不变）。非 --web 场景防御性 try
+        try
+        {
+            WebHostBootstrap.Manager.ActiveSessionChanged += OnActiveSessionChanged;
+            SubscribeBuffer(WebHostBootstrap.Manager.Active);
+        }
+        catch { /* 未注入 Manager（非 --web 场景）：跳过 */ }
 
         // 订阅 agent 视图上下文：agent 反编译/浏览类型时自动联动（树加载程序集 + 右侧显示代码）
-        // 宿主 --web 启动已 Configure 注入 AgentView；非 --web 页面不可达，防御性 try
         try
         {
             WebHostBootstrap.AgentView.Changed += OnAgentViewChanged;
         }
         catch { /* 未注入 AgentView（非 --web 场景）：跳过订阅 */ }
+    }
+
+    /// <summary>活动会话切换（agent 经 MCP 启动/断开/替换均触发）：重订阅事件推送并同步快照。</summary>
+    private void OnActiveSessionChanged(ActiveDebugSession? active)
+    {
+        _ = InvokeAsync(() =>
+        {
+            _lastStopKey = 0;   // 会话切换：停点基线复位，新会话首个停点必触发跟随
+            SubscribeBuffer(active);
+        });
+    }
+
+    /// <summary>订阅当前活动会话的事件缓冲（快照 + 断点）；订阅后立即同步一次当前快照（页面晚开不丢状态）。</summary>
+    private void SubscribeBuffer(ActiveDebugSession? active)
+    {
+        var buffer = active?.Buffer;
+        if (ReferenceEquals(_subscribedBuffer, buffer)) return;
+        if (_subscribedBuffer is not null)
+        {
+            _subscribedBuffer.SnapshotChanged -= OnSnapshotChanged;
+            _subscribedBuffer.BreakpointsChanged -= OnBreakpointsChanged;
+        }
+        _subscribedBuffer = buffer;
+        if (_subscribedBuffer is not null)
+        {
+            _subscribedBuffer.SnapshotChanged += OnSnapshotChanged;
+            _subscribedBuffer.BreakpointsChanged += OnBreakpointsChanged;
+        }
+        _ = InvokeAsync(RefreshState);
+    }
+
+    /// <summary>会话快照推送（状态/停点变化；Buffer 事件消费线程触发 → 转电路线程刷新）。</summary>
+    private void OnSnapshotChanged(DebugSessionState state, StopContext? stop) => _ = InvokeAsync(RefreshState);
+
+    /// <summary>断点集合推送（引擎命令泵设/删/清后发出；MCP agent 与 Web 同源）。</summary>
+    private void OnBreakpointsChanged(IReadOnlyList<BreakpointSnapshot> breakpoints)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _breakpoints = breakpoints;
+            var signature = string.Join(",", _breakpoints.Select(b => b.Id));
+            if (signature == _lastBpSignature) return;
+            _lastBpSignature = signature;
+            await ApplyDecorationsAsync();
+        });
     }
 
     /// <summary>TypeTree 首次渲染就绪回调：此时 _tree 已 ready。补同步 agent 上下文（页面晚开错过早期动作）。
@@ -120,11 +168,6 @@ public partial class Debugger
         });
     }
 
-    private async Task PollStateAsync()
-    {
-        try { await InvokeAsync(RefreshState); } catch { }
-    }
-
     private async Task RefreshState()
     {
         var info = _debug.SessionInfo;
@@ -159,23 +202,26 @@ public partial class Debugger
             _stack = [];
             _variables = new Dictionary<string, IReadOnlyList<DebugVariable>>();
         }
-        // 断点快照轮询：agent 随时可能经 MCP 设/清断点，签名变化才重推装饰（避免 500ms 轮询空转 JS interop）
-        try { _breakpoints = await _debug.GetBreakpointsAsync(); }
-        catch { /* 会话刚断开等瞬时失败：沿用旧快照 */ }
-        var bpSignature = string.Join(",", _breakpoints.Select(b => b.Id));
-        var bpChanged = bpSignature != _lastBpSignature;
+        // 断点快照：事件推送常态下由 OnBreakpointsChanged 维护；此处兜底同步一次（页面晚开/订阅建立）
+        await RefreshBreakpointsAsync();
         StateHasChanged();
-        if (bpChanged)
-        {
-            _lastBpSignature = bpSignature;
-            await ApplyDecorationsAsync();
-        }
         if (stopChanged)
         {
             await ApplyDecorationsAsync();   // 新停点：高亮 + 滚动定位（含单步/步入/异常）
             await SelectStopTypeAsync();     // 树跟随停点类型
             StateHasChanged();
         }
+    }
+
+    /// <summary>拉取当前断点快照；签名变化才重推装饰。</summary>
+    private async Task RefreshBreakpointsAsync()
+    {
+        try { _breakpoints = await _debug.GetBreakpointsAsync(); }
+        catch { return; }
+        var signature = string.Join(",", _breakpoints.Select(b => b.Id));
+        if (signature == _lastBpSignature) return;
+        _lastBpSignature = signature;
+        await ApplyDecorationsAsync();
     }
 
     /// <summary>停点跟随（无条件）：命中模块 == 当前文档 → 树内定位；否则经 Engine 模块路径查询反查磁盘文件、
@@ -393,8 +439,16 @@ public partial class Debugger
 
     public void Dispose()
     {
-        _pollCts?.Cancel();
-        _pollTimer?.Dispose();
+        try
+        {
+            WebHostBootstrap.Manager.ActiveSessionChanged -= OnActiveSessionChanged;
+            if (_subscribedBuffer is not null)
+            {
+                _subscribedBuffer.SnapshotChanged -= OnSnapshotChanged;
+                _subscribedBuffer.BreakpointsChanged -= OnBreakpointsChanged;
+            }
+        }
+        catch { /* 非 --web 场景 */ }
         try { WebHostBootstrap.AgentView.Changed -= OnAgentViewChanged; } catch { }
     }
 }

@@ -40,6 +40,10 @@ public sealed class DebugSessionManager : IAsyncDisposable
     /// <summary>agent 轨迹日志（跨会话累积，P4 Web 回放源）。</summary>
     public AgentActionLog Actions { get; } = new();
 
+    /// <summary>活动会话变更事件（新会话激活/关闭/替换后触发，参数为最新活动会话或 null）。
+    /// Web 页面据此重订阅会话事件推送；订阅方自行切线程。</summary>
+    public event Action<ActiveDebugSession?>? ActiveSessionChanged;
+
     /// <summary>启动新进程并附加（async 返回，不等停点；超时秒由调用方传）。</summary>
     public async Task<ActiveDebugSession> LaunchAsync(string commandLine, int timeoutSeconds, CancellationToken ct = default)
     {
@@ -100,6 +104,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
             try { await toClose.Session.DisconnectAsync(ct); } catch { }
             await toClose.DisposeAsync();
         }
+        ActiveSessionChanged?.Invoke(null);
     }
 
     /// <summary>会话摘要（供 debug_state）。无活动会话返回 null。</summary>
@@ -134,6 +139,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
                 await old.DisposeAsync();
             });
         }
+        ActiveSessionChanged?.Invoke(active);
         return active;
     }
 

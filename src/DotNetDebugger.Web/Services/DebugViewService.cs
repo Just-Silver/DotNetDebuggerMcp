@@ -61,12 +61,16 @@ public sealed class DebugViewService
         }
     }
 
-    /// <summary>当前会话已登记断点快照（无活动会话返回空；代码视图红点渲染数据源）。</summary>
-    public async Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
+    /// <summary>当前会话断点快照（无活动会话返回空；红点渲染数据源）。常态经 BreakpointsChanged 事件推送，此为兜底查询。</summary>
+    public async Task<IReadOnlyList<BreakpointSnapshot>> GetBreakpointsAsync(CancellationToken ct = default)
     {
         var active = Active;
         if (active is null) return [];
-        try { return await active.Session.GetBreakpointsAsync(ct); }
+        try
+        {
+            var list = await active.Session.GetBreakpointsAsync(ct);
+            return list.Select(b => new BreakpointSnapshot(b.Id, b.ModuleName, b.MethodToken, b.IlOffset)).ToList();
+        }
         catch { return []; }
     }
 
