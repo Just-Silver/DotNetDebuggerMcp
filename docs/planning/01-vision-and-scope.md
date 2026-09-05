@@ -79,14 +79,19 @@
 | 前端框架 | **React + TypeScript + Vite**；时间线自绘列表；时序/调用图 mermaid.js 按需加载 |
 | IL→反编译行 | 服务端用 ICSharpCode.Decompiler `SequencePointBuilder`（同设置产出映射表），事件到行号**服务端解析后**再推浏览器 |
 
-## 6. 里程碑草图（待实施计划细化）
+## 6. 里程碑（已按 D7 定稿）
 
-1. M0 仓库/命名落地 + 解决方案拆分（3 项目骨架），现有反编译代码无损迁入子项目 A。
-2. M1 动态调试引擎 v1 最小闭环：附加已运行进程 → 断点（token）→ continue → 命中 → 读栈/变量 → step。CLI 驱动验证。
-3. M2 事件总线 + MCP 调试工具面（launch/attach/breakpoint/continue/step/stack/variables/…）经 stdio 可用。
-4. M3 WebUI v1：SSE + Monaco 渲染上述事件流，agent 轨迹时间线。
-5. M4 表达式求值安全子集 + 异常断点 + PDB 行断点增强。
-6. M5 打磨：README/示例/打包/CI/端到端护栏（含 stdio 并发回归）。
+**顺序原则**：先引擎/MCP 后 Web；总览 spec + 分阶段实施计划。每阶段独立落地交付、可 review。
+
+| 阶段 | 内容 | 交付物 |
+|---|---|---|
+| **P1 仓库改名与拆分** | 仓库 → DotNet-Debugger-MCP；解决方案拆 3 项目骨架；现有反编译/静态分析代码无损迁入子项目 A；命名空间/PackageId/CLI/注册名/README/CHANGELOG/CI 全量同步 | 可构建、全测试通过的改名后仓库 |
+| **P2 动态调试引擎 v1** | 子项目 B：会话管理(启动/附加/断开) + token/IL 断点 + continue + step into/over/out + 线程/栈/局部变量 + 异常断点 + 统一 DebugEvent 流 | 引擎库 + CLI 驱动验证 + 引擎单测 |
+| **P3 MCP 调试工具面** | 调试会话服务/事件总线接入主项目；新增 debug_* 工具（session/breakpoint/continue/step/stack/variables/threads/exceptions…）经 stdio 可用；并发串行化护栏 | MCP 工具集 + 端到端验证 + 文档 |
+| **P4 WebUI** | Kestrel 内嵌 + SSE + Monaco 渲染调试过程 + agent 轨迹时间线（回放）；控制面 MCP 与展示面 Web 解耦 | WebUI + 端到端验证 |
+| **P5 打磨发布** | README/示例/打包/CI/版本 1.5.0 发布 | 发布版 |
+
+> v2 候选（不阻塞）：表达式求值安全子集、PDB 行断点、模块延迟绑定、EventPipe/ClrMD 旁路、多会话。
 
 ## 7. 命名（用户问题 6，已拍板 2026-09-05）
 

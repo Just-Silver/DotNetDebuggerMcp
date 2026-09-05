@@ -2,10 +2,13 @@
 
 > 最新在上。澄清后把「问题+结论」移入 decisions.md。
 
+## #5 子项目 A（反编译库）与 B（调试引擎）正式库名
+- 状态：**待澄清**（写入 spec 前需定）
+- 问题：decisions D6 给了建议值（A=DotNetDecompiler/DotNetDebugger.Decompiler；B=DotNetDebugger.Engine）。用户是否有偏好？还是按建议值写入 spec？
+- 背景：命名已定 DotNet-Debugger-MCP（D6）。
+
 ## #4 WebUI 技术栈与实施时机确认（下一大项）
-- 状态：**待澄清**
-- 问题：WebUI（SSE+Monaco+React，research/04）是否仍按 v1 范围中的 M4 里程碑推进，还是先只做 MCP 工具面（无 Web）把动态调试跑稳后再上 Web？WebUI 的具体设计（面板布局/事件协议/回放）在何时细化（设计文档阶段 or M3 前）？
-- 背景：decisions D4/D5。
+- 状态：**已解决**（2026-09-05，decisions D7）→ 先引擎/MCP 后 Web；Web 设计在 M3 前单独细化。
 
 ## #2 命名决策（已拍板 2026-09-05）
 - 状态：**已解决** → 主项目/仓库名 **DotNet-Debugger-MCP**（decisions.md D6，01 §7 已更新）。
