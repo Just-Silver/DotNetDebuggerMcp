@@ -374,3 +374,4 @@ FodyWeavers.xsd
 # Git worktree scratch directories (isolated feature branches)
 .worktrees/
 
+.zcode/
