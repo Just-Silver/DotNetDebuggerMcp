@@ -13,10 +13,17 @@ public sealed class BreakpointManager
     private readonly Dictionary<string, CorDebugModule> _modules = new(StringComparer.OrdinalIgnoreCase);
     private int _nextId = 1;
 
-    /// <summary>模块加载时登记（供按名查找）。</summary>
+    /// <summary>模块加载时登记（供按名查找；Name 可能是全路径，归一化为文件名）。</summary>
     public void TrackModule(CorDebugModule module)
     {
-        try { _modules[SafeName(module)] = module; }
+        try
+        {
+            var name = SafeName(module);
+            // CorDebugModule.Name 实际返回全路径（spike 实测）；归一化为文件名 + 保留全路径双键
+            var fileName = Path.GetFileName(name);
+            _modules[fileName] = module;
+            _modules[name] = module;
+        }
         catch { /* 登记失败忽略 */ }
     }
 
@@ -68,9 +75,22 @@ public sealed class BreakpointManager
         _breakpoints.Clear();
     }
 
-    /// <summary>回调命中时匹配是哪个登记的断点（按 RuntimeBreakpoint 引用相等，最稳）。</summary>
+    /// <summary>
+    /// 回调命中时匹配登记的断点。注意：不能按 RuntimeBreakpoint 引用比较——ClrDebug 的
+    /// CorDebugBreakpoint.New 每次事件都新建 wrapper（源码核对），命中事件的 Breakpoint 是新的 wrapper 实例。
+    /// 须按 函数 token + IL offset 内容匹配（sharpdbg 用原生 COM 接口比较可行，wrapper 必须内容比较）。
+    /// </summary>
     public DebugBreakpoint? Match(CorDebugFunctionBreakpoint hit)
-        => _breakpoints.FirstOrDefault(b => ReferenceEquals(b.RuntimeBreakpoint, hit));
+    {
+        var hitFunction = hit.Function;
+        if (hitFunction is null) return null;
+        var hitToken = hitFunction.Token.Value;
+        var hitOffset = hit.Offset;
+        return _breakpoints.FirstOrDefault(b =>
+            b.RuntimeBreakpoint is not null
+            && (uint)b.MethodToken == hitToken
+            && b.IlOffset == hitOffset);
+    }
 
     private static string SafeName(CorDebugModule m)
     {

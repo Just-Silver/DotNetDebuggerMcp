@@ -87,7 +87,35 @@ public sealed class DebugEngineCore : IAsyncDisposable
         _handler = new CallbackHandler(this, _callback, _breakpoints);
         var result = bootstrap(_dbgshim);
         _corDebug = result.CorDebug;
+        // 等 CreateProcess 回调设置 _process（attach 后回调异步到达；最多等 3s）
+        var procDeadline = DateTime.UtcNow.AddSeconds(3);
+        while (_process is null && DateTime.UtcNow < procDeadline) Thread.Sleep(20);
+        // attach 后枚举已加载模块登记（attach 已运行进程不补发 LoadModule——API 参考 §9.5）
+        if (_process is not null) SyncLoadedModules();
         PublishState(state, state == DebugSessionState.Launching ? "launched" : "attached");
+    }
+
+    /// <summary>枚举进程已加载模块登记到 BreakpointManager（attach 已运行进程用）。</summary>
+    private void SyncLoadedModules()
+    {
+        try
+        {
+            foreach (var ad in _process!.AppDomains)
+            {
+                foreach (var asm in ad.Assemblies)
+                {
+                    foreach (var mod in asm.Modules)
+                    {
+                        try { _breakpoints.TrackModule(mod); }
+                        catch { /* 单个模块登记失败忽略 */ }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("warn", $"枚举已加载模块失败: {ex.Message}");
+        }
     }
 
     // ---- 命令泵 ----

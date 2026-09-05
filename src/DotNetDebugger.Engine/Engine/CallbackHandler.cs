@@ -15,8 +15,9 @@ public sealed class CallbackHandler
     private readonly BreakpointManager _breakpoints;
     private volatile ExceptionBreakpointFilter? _exceptionFilter;
 
-    // 停点挂起标志：置位时 OnAnyEvent 不 Continue（进程保持停止，等外部 continue 命令）
-    private volatile bool _holdContinue;
+    // 停点挂起标志：置位时 OnAnyEvent 不 Continue（进程保持停止，等外部 continue 命令）。
+    // 初始为 true：attach/launch 后进程停在初始同步点（可安全设断点），由外部首次 ContinueAsync 恢复。
+    private volatile bool _holdContinue = true;
 
     public CallbackHandler(DebugEngineCore core, CorDebugManagedCallback cb, BreakpointManager breakpoints)
     {
