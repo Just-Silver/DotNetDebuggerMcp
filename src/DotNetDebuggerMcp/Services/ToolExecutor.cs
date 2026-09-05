@@ -61,9 +61,21 @@ internal static class ToolExecutor
 
     /// <summary>
     /// 经共享执行管道反编译/列类型（缓存命中 → 回源 → 行号标注 + lines 分页 + 头部信息块）。
+    /// 反编译调用同时写入「agent 当前查看上下文」（AgentViewService），供 Web 监视器联动左侧树/右侧代码。
     /// </summary>
     public static async Task<string> RunPipelineAsync(ToolCommand command, string lines, TimeSpan timeout, CancellationToken cancellationToken, FormatContext context)
-        => (await AppServices.Pipeline.ExecuteAsync(command, lines, timeout, cancellationToken, context)).Text;
+    {
+        // agent 视图联动：反编译了什么类型/成员 → 写入共享上下文（Web 订阅侧据此展开树/切代码）。
+        // Member 时 Target 为成员 token，经 MemberType 带所属类型全名（decompile_member 提供）；无则只记成员 token。
+        var typeName = command.Request.Kind switch
+        {
+            DecompileKind.Type => command.Request.Target,
+            DecompileKind.Member => command.MemberType,
+            _ => null,
+        };
+        AgentViewService.Context.Update(command.Assembly, typeName, command.MemberName ?? command.MemberToken);
+        return (await AppServices.Pipeline.ExecuteAsync(command, lines, timeout, cancellationToken, context)).Text;
+    }
 
     /// <summary>
     /// 经共享执行管道合并反编译（decompile_member 多匹配，各自缓存后合并、行号连续）。

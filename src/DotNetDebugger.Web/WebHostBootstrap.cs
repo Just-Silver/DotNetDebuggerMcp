@@ -1,3 +1,4 @@
+using DotNetDebugger.Web.Services;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -8,20 +9,29 @@ using Microsoft.Extensions.Logging;
 namespace DotNetDebugger.Web;
 
 /// <summary>
-/// 宿主 → Web 装配入口：宿主调 <see cref="Configure"/> 传入共享 DebugSessionManager，再经 <see cref="Build"/>
-/// 得 WebApplication 启动入口。Web 只依赖 Session 库类型，不反引宿主（spec §9.1 显式注入）。
-/// 组件经 <see cref="Manager"/> 访问共享调试会话。
+/// 宿主 → Web 装配入口：宿主调 <see cref="Configure"/> 传入共享 DebugSessionManager 与 AgentViewContext，再经 <see cref="Build"/>
+/// 得 WebApplication 启动入口。Web 只依赖 Session 库类型与自身 Services，不反引宿主（spec §9.1 显式注入）。
+/// 组件经 <see cref="Manager"/> 访问共享调试会话、经 <see cref="AgentView"/> 订阅 agent 当前查看上下文。
 /// </summary>
 public static class WebHostBootstrap
 {
     private static DotNetDebugger.Session.DebugSessionManager? _manager;
+    private static AgentViewContext? _agentView;
 
     /// <summary>宿主注入的共享调试会话管理器（Configure 未调用前访问抛异常）。</summary>
     public static DotNetDebugger.Session.DebugSessionManager Manager => _manager
         ?? throw new InvalidOperationException("WebHostBootstrap.Configure 未调用（宿主需先注入 DebugSessionManager）");
 
-    /// <summary>宿主装配时注入共享调试会话管理器。</summary>
-    public static void Configure(DotNetDebugger.Session.DebugSessionManager manager) => _manager = manager;
+    /// <summary>宿主注入的「agent 当前查看上下文」共享状态（Configure 未调用前访问抛异常）。</summary>
+    public static AgentViewContext AgentView => _agentView
+        ?? throw new InvalidOperationException("WebHostBootstrap.Configure 未调用（宿主需先注入 AgentViewContext）");
+
+    /// <summary>宿主装配时注入共享调试会话管理器与 agent 视图上下文。</summary>
+    public static void Configure(DotNetDebugger.Session.DebugSessionManager manager, AgentViewContext agentView)
+    {
+        _manager = manager;
+        _agentView = agentView;
+    }
 
     /// <summary>
     /// 构建并配置 WebApplication。port=0 时 Kestrel 自动选空闲端口（防端口占用启动失败），
