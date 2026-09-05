@@ -11,8 +11,9 @@
 ### Added
 
 - **Web 调试展示面（`--web`，P4）**：宿主新增 `--web` 启动 Blazor Server 网页（内嵌 Kestrel，`--web-port` 指定端口，缺省自动选空闲端口并拉起默认浏览器）。页面提供反编译代码视图（Monaco 编辑器，语法高亮 + 断点/当前执行行装饰 + 随明暗主题切换）+ 动态调试面板（调用栈/局部变量/线程，BB 组件）+ 最小控制（启动并附加/断点/继续/单步/断开），与 MCP agent 共享同一调试会话（agent 经 `debug_*` 工具调试时浏览器可实时观看）；默认暗色 Fluent 主题。反编译 IL→行映射基于 ICSharpCode.Decompiler 序列点（无 PDB 亦可语句级定位）
+- **`web_open` 按需开启 Web 监视器（行为变化）**：新增 `dotnetdebugger_web_open` 工具——agent 按需打开 Web 调试监视器，**幂等**（进程内只起一个 Kestrel，重复调用返回同一地址，不重复拉起浏览器）；缺省端口 0 = 自动选空闲端口，可传 `port` 指定。MCP server **默认不再开启 Web**：`--web` 保留为启动时手动开启，与 `web_open` 收敛同一幂等启动入口（混用不重复启动）——此前配置 `--web` 常驻的客户端可去掉该参数，改为 agent 会话中按需调用
 - **动态调试 MCP 工具面（P3）**：新增 `dotnetdebugger_debug_*` 系列工具——会话（`debug_launch`/`debug_attach`/`debug_disconnect`/`debug_state`）、控制（`debug_continue`/`debug_step` into/over/out、`debug_wait` 等待停点直接返回停点现场，免轮询）、断点（`debug_breakpoint_set`/`_remove`/`_clear`/`_list`，按 模块+方法 token+IL offset；模块未加载时登记待绑定、加载后自动绑定）、观察（`debug_stack`/`debug_threads`/`debug_variables`）、异常断点（`debug_exceptions`/`_clear`）。控制工具**异步返回（带默认超时）**，停点信息经查询工具或 `debug_wait` 获取。新增 `DotNetDebugger.Session` 库（会话管理 + 停点事件缓冲 + agent 轨迹日志）
-- **动态调试引擎 v1（`DotNetDebugger.Engine` 库）**：进程内 .NET 调试引擎（ICorDebug 通道，ClrDebug + DbgShim），支持启动/附加目标进程、按方法 token+IL offset 下断点、continue、单步、读线程/调用栈/局部变量（标量）、first-chance 异常断点、统一 `DebugEvent` 事件流；宿主另有 `-dbg` CLI 一次性调试命令
+- **动态调试引擎 v1（`DotNetDebugger.Engine` 库）**：进程内 .NET 调试引擎（ICorDebug 通道，ClrDebug + DbgShim），支持启动/附加目标进程、按方法 token+IL offset 下断点、continue、单步（PDB 序列点语句级；无 PDB 退化为单条 IL 指令步进）、读线程/调用栈/局部变量（对象/数组一级展开 children）、first-chance 异常断点、统一 `DebugEvent` 事件流；宿主另有 `-dbg` CLI 一次性调试命令
 - **测试设施**：`tests/TestData` 追加可执行调试目标 `DebugTarget.exe`；新增 `DotNetDebugger.Engine.Tests`（真实子进程 attach/断点/单步/状态/异常）与 `DotNetDebugger.Session.Tests`（会话管理/轨迹）集成测试，串行执行避免 ICorDebug 会话干扰
 
 ### Fixed
