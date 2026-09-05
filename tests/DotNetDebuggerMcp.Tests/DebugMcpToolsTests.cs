@@ -75,6 +75,31 @@ public sealed class DebugMcpToolsTests
         Assert.True(disc.IsError != true, disc.Text());
     }
 
+    [Fact]
+    public async Task DebugState_ConcurrentQueries_AllReturn()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe));
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 6", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        // 单会话内并发 12 路 debug_state：验证 Session 管理器线程安全 + stdio 不撕帧
+        var tasks = Enumerable.Range(0, 12).Select(async _ =>
+        {
+            var r = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+            return r;
+        }).ToArray();
+        var results = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(20));
+        Assert.All(results, r => Assert.True(r.IsError != true));
+        Assert.All(results, r => Assert.Contains("会话状态", r.Text()));
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
     private static async Task<CallToolResult> CallAsync(McpClient mcp, string tool, IReadOnlyDictionary<string, object?> args)
         => await mcp.CallToolAsync(tool, args, cancellationToken: TestContext.Current.CancellationToken);
 
