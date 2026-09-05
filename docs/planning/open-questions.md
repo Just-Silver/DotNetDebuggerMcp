@@ -16,6 +16,7 @@
   - **实测追加修复（第 4 个 bug）**：Monaco `create` 在 `monaco` 全局未就绪时静默返回且永不重试（AMD editor.main.js 异步初始化晚于 script 标签），编辑器永久空白、装饰/内容全失效——桥改为轮询重试创建 + `setValue` 先到时暂存文本建后回放。
 - **agent 动作事件时序**：Blazor Server 页面未开/电路未建立时 AgentView.Changed 无订阅者事件丢失；页面晚开靠 OnReady 补同步 AgentView.Snapshot。冷启动空树（产品：无 agent 动作不预加载）。
 - **待办**：razor 双文件拆分（Debugger.razor + Debugger.razor.cs code-behind，Blazor 规范）；MCP server 不应默认 --web（产品方向：agent 调幂等 `web_open` 工具按需开，未实现——opencode.json 现仍带 --web 仅为联调）。
+- **规划流程待办**：本计划完成后 `plans/2026-09-05-p4-2-webui.md` 归档 `archive/plans/` + 勾选 checkbox + 更新 `README.md` 状态行；`feature/p4-monitor` 分支本地不存在（实际工作在 `master`），规划文档与实际分支不符需澄清。
 
 ## #6 WebUI 代码视图与推送通道（已解决 2026-09-05）
 - 已解决，见 decisions D4：Monaco 作 Blazor 互操作组件、推送走 Blazor Server SignalR 电路、无 React/Vite/SSE。残留（面板 BB 组件分工、事件→Blazor 刷新机制）已并入 P4 spec，不再单列。
