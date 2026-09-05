@@ -2,7 +2,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 纯元数据「字段读写点反查」：扫描程序集全部非编译器生成类型的方法体 IL 的字段访问指令 （ldfld/ldsfld 读取、stfld/stsfld 写入、ldflda/ldsflda

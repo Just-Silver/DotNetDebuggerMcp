@@ -1,6 +1,6 @@
 using System.Reflection.Metadata;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 编译器生成类型判定：list_types 默认过滤、hierarchy/dependencies 跳过共用同一规则。 判定依据：C# 编译器生成的类型名必然含

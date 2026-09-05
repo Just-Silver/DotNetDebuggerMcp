@@ -4,7 +4,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 纯元数据「方法体调用图」：扫描类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli），

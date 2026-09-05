@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Reflection.Metadata;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 纯元数据「类型列表」：按类别组合枚举程序集的实体类型（跳过编译器生成类型），供 list_types 工具使用。 类别判定规则：enum/delegate 按基类全名判定，interface

@@ -2,7 +2,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 一个匹配成员：方法名、元数据 token（可直接用于进程内成员反编译）与其所属类型全名。

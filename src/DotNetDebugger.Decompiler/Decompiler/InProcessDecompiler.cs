@@ -2,17 +2,17 @@ using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.ProjectDecompiler;
 using ICSharpCode.Decompiler.Metadata;
-using ILSpyMcp.Configuration;
-using ILSpyMcp.Metadata;
+using DotNetDebugger.Decompiler.Configuration;
+using DotNetDebugger.Decompiler.Metadata;
 using System.Globalization;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 
-namespace ILSpyMcp.Decompiler;
+namespace DotNetDebugger.Decompiler.Decompiler;
 
 /// <summary>
 /// 进程内反编译服务：以 ICSharpCode.Decompiler 库在进程内完成反编译。 每次调用独立构建 PEFile + UniversalAssemblyResolver +
-/// DecompilerSettings + CSharpDecompiler，用完即释放； 全部入口 try/catch 兜底返回中文提示，不抛异常（纯元数据定位用 ILSpyMcp.Metadata.MetadataNaming）。
+/// DecompilerSettings + CSharpDecompiler，用完即释放； 全部入口 try/catch 兜底返回中文提示，不抛异常（纯元数据定位用 DotNetDebugger.Decompiler.Metadata.MetadataNaming）。
 /// </summary>
 public sealed class InProcessDecompiler
 {
@@ -53,12 +53,12 @@ public sealed class InProcessDecompiler
         catch (Exception ex)
         {
             // work 本身抛出的异常不向上传播，兜底返回中文提示（后台任务异常不可被外部观察，此处就地降级）
-            return $"{AppText.DecompileFailurePrefix}{ex.Message}";
+            return $"{DecompilerText.DecompileFailurePrefix}{ex.Message}";
         }
     }
 
     /// <summary>
-    /// 反编译指定类型到文本；未找到类型返回中文提示；输出超 <see cref="AppConfig.MaxOutputBytes"/> 字符时返回改用写盘提示。
+    /// 反编译指定类型到文本；未找到类型返回中文提示；输出超 <see cref="DecompilerConfig.MaxOutputBytes"/> 字符时返回改用写盘提示。
     /// </summary>
     /// <param name="assemblyPath">程序集文件路径（dll/exe）。</param>
     /// <param name="typeName">类型全名，兼容 +/ . 嵌套分隔与泛型 arity（如 GenericBox`1）。</param>
@@ -212,19 +212,19 @@ public sealed class InProcessDecompiler
         }
         catch (IOException ex)
         {
-            return $"{AppText.DecompileFailurePrefix}IO 错误（{ex.Message}）";
+            return $"{DecompilerText.DecompileFailurePrefix}IO 错误（{ex.Message}）";
         }
         catch (UnauthorizedAccessException ex)
         {
-            return $"{AppText.DecompileFailurePrefix}无访问权限（{ex.Message}）";
+            return $"{DecompilerText.DecompileFailurePrefix}无访问权限（{ex.Message}）";
         }
         catch (BadImageFormatException ex)
         {
-            return $"{AppText.DecompileFailurePrefix}程序集格式无效（{ex.Message}）";
+            return $"{DecompilerText.DecompileFailurePrefix}程序集格式无效（{ex.Message}）";
         }
         catch (Exception ex)
         {
-            return $"{AppText.DecompileFailurePrefix}{ex.Message}";
+            return $"{DecompilerText.DecompileFailurePrefix}{ex.Message}";
         }
     }
 
@@ -238,7 +238,7 @@ public sealed class InProcessDecompiler
     {
         // 全部错误提示前缀：Execute/RunWithTimeoutAsync 的「反编译失败：」兜底、未找到类型、输出超限、 「元数据 token
         // …未引用…」越界、「反编译已取消」（引擎检查点中断）、以及以引号开头的非法 token 提示 （正常反编译文本不可能以这些开头）
-        return AppText.StartsWithDecompileFailure(text)
+        return DecompilerText.StartsWithDecompileFailure(text)
             || text.StartsWith("反编译已取消", StringComparison.Ordinal)
             || text.StartsWith("未找到类型 ", StringComparison.Ordinal)
             || text.StartsWith("反编译输出超过上限", StringComparison.Ordinal)
@@ -294,30 +294,30 @@ public sealed class InProcessDecompiler
         }
         catch (IOException ex)
         {
-            return $"{AppText.DecompileFailurePrefix}IO 错误（{ex.Message}）";
+            return $"{DecompilerText.DecompileFailurePrefix}IO 错误（{ex.Message}）";
         }
         catch (UnauthorizedAccessException ex)
         {
-            return $"{AppText.DecompileFailurePrefix}无访问权限（{ex.Message}）";
+            return $"{DecompilerText.DecompileFailurePrefix}无访问权限（{ex.Message}）";
         }
         catch (BadImageFormatException ex)
         {
-            return $"{AppText.DecompileFailurePrefix}程序集格式无效（{ex.Message}）";
+            return $"{DecompilerText.DecompileFailurePrefix}程序集格式无效（{ex.Message}）";
         }
         catch (Exception ex)
         {
-            return $"{AppText.DecompileFailurePrefix}{ex.Message}";
+            return $"{DecompilerText.DecompileFailurePrefix}{ex.Message}";
         }
     }
 
     /// <summary>
-    /// 文本输出超 <see cref="AppConfig.MaxOutputBytes"/> 字符数时返回改用写盘提示，否则原样返回。
+    /// 文本输出超 <see cref="DecompilerConfig.MaxOutputBytes"/> 字符数时返回改用写盘提示，否则原样返回。
     /// </summary>
     /// <param name="text">反编译生成的文本。</param>
     /// <returns>原文本或超限提示。</returns>
     private static string CheckOutputSize(string text)
     {
-        return text.Length > AppConfig.MaxOutputBytes ? "反编译输出超过上限，建议改用 decompile_to_dir" : text;
+        return text.Length > DecompilerConfig.MaxOutputBytes ? "反编译输出超过上限，建议改用 decompile_to_dir" : text;
     }
 
     /// <summary>

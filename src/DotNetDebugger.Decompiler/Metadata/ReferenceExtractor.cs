@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using System.Reflection.Metadata;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 纯元数据「成员签名内部类型引用」：解码类型的全部成员签名（方法参数+返回、字段、属性、事件），收集签名中出现的本程序集 TypeDefinition 集合（泛型实例化归约到定义，跨程序集

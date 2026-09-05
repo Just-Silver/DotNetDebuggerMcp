@@ -4,7 +4,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Text;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 泛型实例化扫描结果：两段使用点行列表（类型::成员签名 → 实例化），均已去重排序。

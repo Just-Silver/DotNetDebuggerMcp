@@ -2,7 +2,7 @@ using ICSharpCode.Decompiler.Disassembler;
 
 using System.Reflection.Metadata;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 internal static class IlScanHelper
 {

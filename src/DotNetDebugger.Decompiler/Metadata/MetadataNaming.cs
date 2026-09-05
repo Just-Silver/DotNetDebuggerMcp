@@ -2,7 +2,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Text;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 类型全名渲染与定位：统一类型全名格式（命名空间.类型，嵌套用 +，泛型带 arity 如 GenericBox`1）， 保证 list_types/signature/hierarchy

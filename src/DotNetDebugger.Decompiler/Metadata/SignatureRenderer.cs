@@ -3,7 +3,7 @@ using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 类型成员一行签名渲染：给定 MetadataReader + TypeDefinition，输出该类型全部成员（字段/方法/属性/事件） 每成员一行的 C# 风格签名，供

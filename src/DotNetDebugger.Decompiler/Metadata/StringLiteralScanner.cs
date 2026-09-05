@@ -2,7 +2,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 纯元数据「字符串字面量反查」：扫描程序集全部（或指定）类型的方法体 IL 的 ldstr 指令， 按用户字符串子串（忽略大小写）匹配，反查字符串字面量所在的成员，供 search_string

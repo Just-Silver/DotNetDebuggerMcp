@@ -3,7 +3,7 @@ using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using System.Text;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 纯元数据「程序集概览」读取：目标框架、引用的程序集清单与入口点，供 assembly_info 工具输出。 与其它元数据组件一致只读

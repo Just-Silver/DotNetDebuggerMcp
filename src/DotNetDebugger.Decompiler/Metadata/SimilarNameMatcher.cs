@@ -1,4 +1,4 @@
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 相近名匹配：编辑距离 ≤ 2 或与查询名共享 ≥ 4 字符公共前缀视为相近，供「未找到类型/未找到成员」时给 agent 相近名提示。 算法集中于此，MemberResolver（成员名）与 MetadataNaming（类型名）共用同一套判定，避免两处实现漂移。

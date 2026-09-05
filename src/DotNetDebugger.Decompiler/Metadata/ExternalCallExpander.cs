@@ -1,11 +1,11 @@
 using ICSharpCode.Decompiler.Metadata;
-using ILSpyMcp.Configuration;
+using DotNetDebugger.Decompiler.Configuration;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 using AssemblyNameRef = ICSharpCode.Decompiler.Metadata.AssemblyNameReference;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 跨程序集调用链展开：将 call_chain 的外部调用点解析到磁盘程序集（主 dll 同目录 / CWD / searchDirs / deps.json NuGet 缓存 / 共享框架 /
@@ -42,8 +42,8 @@ public sealed class ExternalCallExpander : IDisposable
     /// <summary>
     /// 展开单个外部调用点：经 UniversalAssemblyResolver 定位归属程序集（主 dll 同目录由 resolver 构造自带， searchDirs 逐目录追加，另恒含
     /// CWD），按类型全名 + 成员名 + 参数个数定位方法并扫描其方法体序列， 返回展开行（首行 <c>{程序集}::{类型}::{成员} 调用:</c> + 子序列行）。
-    /// 子序列内的跨程序集调用递归展开，深度超过 <see cref="AppConfig.ExternalExpandMaxDepth"/> 或已展开节点数超过 <see
-    /// cref="AppConfig.ExternalExpandMaxNodes"/> 时子树不再展开（返回空，调用方标注终止）； 解析失败/找不到/已访问（防环）同样返回空列表。
+    /// 子序列内的跨程序集调用递归展开，深度超过 <see cref="DecompilerConfig.ExternalExpandMaxDepth"/> 或已展开节点数超过 <see
+    /// cref="DecompilerConfig.ExternalExpandMaxNodes"/> 时子树不再展开（返回空，调用方标注终止）； 解析失败/找不到/已访问（防环）同样返回空列表。
     /// </summary>
     /// <param name="external">
     /// 外部调用点（AssemblyFullName 为归属程序集完整名，TypeFullName/MemberName/ParamCount 用于定位）。
@@ -87,8 +87,8 @@ public sealed class ExternalCallExpander : IDisposable
     private IReadOnlyList<string> ExpandCore(CallSite external, UniversalAssemblyResolver resolver,
                 HashSet<(string Path, int Token)> visited, int depth)
     {
-        if (depth >= AppConfig.ExternalExpandMaxDepth) return Array.Empty<string>(); // 深度超限：子树不再展开
-        if (_nodesThisExpand >= AppConfig.ExternalExpandMaxNodes) return Array.Empty<string>(); // 节点预算耗尽
+        if (depth >= DecompilerConfig.ExternalExpandMaxDepth) return Array.Empty<string>(); // 深度超限：子树不再展开
+        if (_nodesThisExpand >= DecompilerConfig.ExternalExpandMaxNodes) return Array.Empty<string>(); // 节点预算耗尽
         if (string.IsNullOrEmpty(external.AssemblyFullName)) return Array.Empty<string>();
         try
         {

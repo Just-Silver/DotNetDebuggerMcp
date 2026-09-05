@@ -2,7 +2,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-namespace ILSpyMcp.Metadata;
+namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 纯元数据「接口调用点反查」：反扫程序集全部非编译器生成类型的方法体 IL 调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli）， 凡调用
