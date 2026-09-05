@@ -8,21 +8,26 @@
 
 | 文件 | 内容 |
 |---|---|
-| `01-vision-and-scope.md` | 愿景：三项目模块化拆分（静态分析 / 动态调试 / 主 MCP+Web）、范围、约束、里程碑草图、命名候选 |
+| `01-vision-and-scope.md` | 愿景：5 项目模块化拆分（Decompiler/Engine/Session/Web/McpHost）、范围、约束、里程碑 P1-P5、命名定稿 |
 | `research/01-debugger-tech-landscape.md` | **动态调试依赖库调研**：四路线能力/许可/工作量对比 + 推荐组合 |
 | `research/02-dnspy-source-structure.md` | 本地 `E:\Code\Projects\Externals\dnSpy` 源码摸底：调试栈能否作为库嵌入 |
 | `research/03-ilspy-source-structure.md` | 本地 `E:\Code\Projects\Externals\ILSpy` 源码摸底：反编译库/调试映射能力 |
-| `research/04-webui-realtime-stack.md` | **Web 实时渲染技术调研**：代码视图 / SSE / 前端框架 / IL→行映射 |
-| `decisions.md` | 决策记录（最新在上）：已拍板的关键决策与理由 |
-| `open-questions.md` | 开放问题清单（最新在上）：待澄清/待调研，回答后移入 decisions.md |
+| `research/04-webui-realtime-stack.md` | **Web 实时渲染技术调研**（含 2026-09-05 Superseded：React/SSE → Blazor Server + BootstrapBlazor） |
+| `research/05-dependency-packages.md` | 依赖包清单（ClrDebug/DbgShim/Roslyn/ICorDebug/ClrMD 概念澄清） |
+| `specs/2026-09-05-overview-design.md` | **总览设计 spec**（已确认） |
+| `plans/2026-09-05-p1-rename-and-split.md` | **P1 实施计划**（改名+拆分，已写待执行） |
+| `decisions.md` | 决策记录 D1-D9（最新在上） |
+| `open-questions.md` | 开放问题清单（最新在上），回答后移入 decisions.md |
 
 ## 当前状态
 
-- **阶段**：调研与澄清中（brainstorming 前半程）。分支已建，调研资料已落盘。
-- **已确认方向**（用户拍板）：
-  1. 现有 ilspy（反编译/静态分析）改名保留，作为独立子项目/模块。
-  2. 新增动态调试（dnSpyEx 式）子项目，先实现调试，再整合。
-  3. 主项目作为对外 MCP 服务 + 拉起 WebUI 实时渲染「agent 主导调试过程」。
-  4. 模块化开发，主项目引用两个子项目。
-  5. 本机已有源码：`E:\Code\Projects\Externals\ILSpy`、`E:\Code\Projects\Externals\dnSpy`。
-- **待定大项**：命名（见 `01-vision-and-scope.md` §7）、调试引擎技术路线确认、MCP 工具面设计、Web UI 设计、实施计划拆分。
+- **阶段**：总览 spec 已确认；P1 实施计划已写（`plans/2026-09-05-p1-rename-and-split.md`），待执行。
+- **已拍板决策**（decisions D1-D9）：
+  1. 现有反编译改名保留 → Decompiler 库；新增动态调试引擎（Engine）；主 MCP+Web 宿主（McpHost）。先引擎/MCP 后 Web。
+  2. 5 项目拆分：`DotNetDebugger.Decompiler` / `.Engine` / `.Session` / `.Web` / `DotNetDebuggerMcp`(exe)，进程合一。
+  3. 命名 **DotNet-Debugger-MCP**（包 id `dotnet-debugger-mcp`）；MCP 注册名建议 `dotnetdebugger`。
+  4. 调试技术路线：ClrDebug + DbgShim + 自研引擎（MIT）；dnSpyEx(GPL)/debug-mcp(AGPL) 只 clean-room 参考。
+  5. v1 引擎 = 最小 agent 调试闭环（不含表达式求值）；表达式求值/PDB 行断点列 v2。
+  6. Web 栈 = **Blazor Server + BootstrapBlazor + Monaco 互操作**（SignalR 电路推送）。
+  7. P1 执行策略 = **同仓重建**（先建 5 项目再迁源码，验证绿后删旧）。
+- **待办**：P1 计划执行（从 master 开实现分支）→ P2-P5 计划依次产出。残留开放项见 `open-questions.md`。
