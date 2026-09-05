@@ -7,4 +7,9 @@
     <RootNamespace>DotNetDebugger.Session</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\DotNetDebugger.Engine\DotNetDebugger.Engine.csproj" />
+    <ProjectReference Include="..\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
+  </ItemGroup>
+
 </Project>
