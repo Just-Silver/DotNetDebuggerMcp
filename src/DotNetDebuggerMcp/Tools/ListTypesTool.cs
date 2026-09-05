@@ -35,7 +35,7 @@ public static class ListTypesTool
     /// <param name="assembly">要列类型的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="list">实体类型类别组合：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 "csi"（必填）。</param>
     /// <param name="nameContains">类型名子串过滤（忽略大小写，默认空=不过滤），如 "Box" 只返回名称含 Box 的类型。</param>
-    /// <param name="namespaceContains">命名空间子串过滤（忽略大小写，默认空=不过滤），嵌套类型按最外层声明类型的命名空间归属；如 "ILSpyMcp" 只返回命名空间含 ILSpyMcp 的类型。</param>
+    /// <param name="namespaceContains">命名空间子串过滤（忽略大小写，默认空=不过滤），嵌套类型按最外层声明类型的命名空间归属；如 "MyApp.Core" 只返回命名空间含 MyApp.Core 的类型。</param>
     /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多约 32 KB）；缺省返回前约 8 KB。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的类型列表或错误提示文本。</returns>

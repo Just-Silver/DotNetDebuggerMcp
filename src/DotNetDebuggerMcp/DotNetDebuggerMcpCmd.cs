@@ -15,7 +15,7 @@ namespace DotNetDebuggerMcp;
 /// -v/--version 输出版本号，-h/--help 输出帮助信息。
 /// </summary>
 [HelpOption("-h|--help")]
-[VersionOptionFromMember("-v|--version", Description = "显示 ilspymcp 版本号。", MemberName = nameof(Version))]
+[VersionOptionFromMember("-v|--version", Description = "显示 dotnet-debugger-mcp 版本号。", MemberName = nameof(Version))]
 public class DotNetDebuggerMcpCmd
 {
     /// <summary>
@@ -175,9 +175,9 @@ public class DotNetDebuggerMcpCmd
     public int TimeoutSeconds { get; } = AppConfig.DefaultTimeoutSeconds;
 
     /// <summary>
-    /// 检查当前 ilspymcp 是否有新版本。无需 -a。
+    /// 检查当前 dotnet-debugger-mcp 是否有新版本。无需 -a。
     /// </summary>
-    [Option("-c|--check", "检查当前 ilspymcp 是否有新版本（查询 NuGet，结果会话内缓存，仅首次真实检查）。", CommandOptionType.NoValue)]
+    [Option("-c|--check", "检查当前 dotnet-debugger-mcp 是否有新版本（查询 NuGet，结果会话内缓存，仅首次真实检查）。", CommandOptionType.NoValue)]
     public bool Check { get; }
 
     /// <summary>
@@ -307,7 +307,7 @@ public class DotNetDebuggerMcpCmd
         // 在并发下交错撕坏协议帧，导致客户端永远等不到响应。这里清掉默认提供者后把全部日志显式路由到 stderr。
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
-        // 握手期先执行更新检查（报告 ilspymcp 是否有新版本），状态由 StatusReport 会话内缓存、与 CLI -c 同源；
+        // 握手期先执行更新检查（报告 dotnet-debugger-mcp 是否有新版本），状态由 StatusReport 会话内缓存、与 CLI -c 同源；
         // 同步读磁盘缓存，无有效检查记录时返回空报告（不注入）。有新版本时注入文本带明确指令，要求 agent 在会话开始的回复中 主动告知用户并提供升级命令（陈述句会被 agent
         // 当作背景信息而不转述）；已是最新时仅注入状态行。 握手期始终注入 server 工作目录供相对路径（assembly/outputDir）解析，另附更新报告。
         string report;

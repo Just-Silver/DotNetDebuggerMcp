@@ -1,6 +1,6 @@
-# ilspymcp
+# DotNet-Debugger-MCP（dotnet-debugger-mcp）
 
-内置 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy) 的 .NET 反编译 MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测与源码写盘。反编译引擎随包内置，开箱即用。
+内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测与源码写盘，开箱即用。**动态调试能力规划中（P2+）**。
 
 ## 目录
 
@@ -21,12 +21,12 @@
 ## 安装
 
 ```bash
-dotnet tool install --global ilspymcp   # 安装
-dotnet tool update --global ilspymcp    # 升级
-dotnet tool uninstall --global ilspymcp # 卸载
+dotnet tool install --global dotnet-debugger-mcp   # 安装
+dotnet tool update --global dotnet-debugger-mcp    # 升级
+dotnet tool uninstall --global dotnet-debugger-mcp # 卸载
 ```
 
-查看版本 / 帮助：`ilspymcp -v` / `ilspymcp -h`
+查看版本 / 帮助：`dotnet-debugger-mcp -v` / `dotnet-debugger-mcp -h`
 
 ## 接入 opencode
 
@@ -39,9 +39,9 @@ dotnet tool uninstall --global ilspymcp # 卸载
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
-      "ilspy": {
+      "dotnetdebugger": {
         "type": "local",
-        "command": ["ilspymcp"]
+        "command": ["dotnet-debugger-mcp"]
       }
     }
   }
@@ -56,23 +56,23 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "ilspy": {
+    "dotnetdebugger": {
       "type": "local",
-      "command": ["ilspymcp"]
+      "command": ["dotnet-debugger-mcp"]
     }
   }
 }
 ```
 
-重启 opencode 后工具以 `ilspy_*` 前缀暴露（v2 中工具名为 `<服务器名>_<工具名>`）。`assembly` / `outputDir` 的相对路径以 opencode 会话的工作目录解析。
+重启 opencode 后工具以 `dotnetdebugger_*` 前缀暴露（v2 中工具名为 `<服务器名>_<工具名>`）。`assembly` / `outputDir` 的相对路径以 opencode 会话的工作目录解析。
 
 ## 核心约定
 
 - **输出带头部信息块**：`程序集 / 目标 / 总行数 / 当前输出 / 剩余` + `---` 分隔线，命中缓存时追加 `缓存: 命中`。
 - **行号与分页**：结果按 `行号<TAB>内容` 输出，默认返回前约 8 KB，可用 `lines="start-end"`（如 `200-400`）按行号分页，单次最多约 32 KB。
 - **缓存**：除写盘工具外全部结果按 `程序集 + 参数` 共享缓存（64 MB LRU，固定 30 分钟滑动过期 + 5 分钟定时清理，程序集更新自动失效），超时/失败不入缓存。
-- **类型名格式**：与 `ilspy_list_types` 输出一致（`命名空间.类型`，嵌套用 `+`，泛型带 arity 如 ``GenericBox`1``），行首类别前缀（如 `class Foo.Bar`）可直接复用。
-- **Token 闭环**：`ilspy_signature` 每行行尾附成员 token（`0x06…`），`#MEMBER` 分隔行含 `token`，均可直接用于 `ilspy_decompile_member` / `ilspy_call_graph` / `ilspy_call_chain` / `ilspy_field_access` 精确定位。
+- **类型名格式**：与 `dotnetdebugger_list_types` 输出一致（`命名空间.类型`，嵌套用 `+`，泛型带 arity 如 ``GenericBox`1``），行首类别前缀（如 `class Foo.Bar`）可直接复用。
+- **Token 闭环**：`dotnetdebugger_signature` 每行行尾附成员 token（`0x06…`），`#MEMBER` 分隔行含 `token`，均可直接用于 `dotnetdebugger_decompile_member` / `dotnetdebugger_call_graph` / `dotnetdebugger_call_chain` / `dotnetdebugger_field_access` 精确定位。
 
 ## 工具一览
 
@@ -80,69 +80,69 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 | 工具 | 用途 |
 | ---- | ---- |
-| `ilspy_decompile` | 按类型反编译源码到 stdout（类型级，含全部成员） |
-| `ilspy_decompile_member` | 按成员名子串或 token 反编译一个或多个成员，多匹配合并输出、超 20 个仅列签名 |
-| `ilspy_decompile_to_dir` | 反编译写入目录（全量或 `typeName` 逗号分隔批量，单文件输出） |
-| `ilspy_decompile_to_project` | 以可编译项目形式反编译整个程序集到目录（按命名空间嵌套） |
-| `ilspy_call_chain` | 从起始方法出发的正向调用序列 + 被调用内部成员反编译 |
+| `dotnetdebugger_decompile` | 按类型反编译源码到 stdout（类型级，含全部成员） |
+| `dotnetdebugger_decompile_member` | 按成员名子串或 token 反编译一个或多个成员，多匹配合并输出、超 20 个仅列签名 |
+| `dotnetdebugger_decompile_to_dir` | 反编译写入目录（全量或 `typeName` 逗号分隔批量，单文件输出） |
+| `dotnetdebugger_decompile_to_project` | 以可编译项目形式反编译整个程序集到目录（按命名空间嵌套） |
+| `dotnetdebugger_call_chain` | 从起始方法出发的正向调用序列 + 被调用内部成员反编译 |
 
 ### 结构探测（纯元数据，秒回）
 
 | 工具 | 用途 |
 | ---- | ---- |
-| `ilspy_list_types` | 列出实体类型（c/i/s/d/e 可组合），支持名称/命名空间子串过滤；默认过滤编译器生成类型 |
-| `ilspy_signature` | 类型成员签名 API 地图（字段/方法/属性/事件），行尾附 token（`0x06` 方法/`0x04` 字段等） |
-| `ilspy_hierarchy` | 基类链（上溯 `System.Object`）/ 接口 / 程序集内继承实现者；`includeIndirect=true` 一次返回全部间接后代 |
-| `ilspy_dependencies` | 成员签名引用的内部类型及反向引用；`includeExternal=true` 追加 `全名 [程序集名]` 外部类型 |
-| `ilspy_call_graph` | 方法体调用关系清单（双向，扫描 `call`/`callvirt`/`newobj` 等）；`token` 模式反向定位调用点，`includeExternal` 同上 |
-| `ilspy_interface_usage` | 接口组合视图：实现者 + 调用点（`类型::成员 → 接口成员`）+ 签名引用；`includeIndirect` 含子接口/实现者子类 |
-| `ilspy_generic_instantiations` | 泛型实例化的两段使用点：签名中 / 方法体调用中；`typeName` 可带或不带 `` `1`` arity |
-| `ilspy_search_string` | 按字符串字面量子串反查成员（忽略大小写），输出 `类型::成员 字符串值 token` |
-| `ilspy_field_access` | 追踪字段的读/写/取地址三段来源（空段输出 `（无）`） |
-| `ilspy_assembly_info` | 程序集概览：名称版本、目标框架、引用清单、类型计数、入口点 |
+| `dotnetdebugger_list_types` | 列出实体类型（c/i/s/d/e 可组合），支持名称/命名空间子串过滤；默认过滤编译器生成类型 |
+| `dotnetdebugger_signature` | 类型成员签名 API 地图（字段/方法/属性/事件），行尾附 token（`0x06` 方法/`0x04` 字段等） |
+| `dotnetdebugger_hierarchy` | 基类链（上溯 `System.Object`）/ 接口 / 程序集内继承实现者；`includeIndirect=true` 一次返回全部间接后代 |
+| `dotnetdebugger_dependencies` | 成员签名引用的内部类型及反向引用；`includeExternal=true` 追加 `全名 [程序集名]` 外部类型 |
+| `dotnetdebugger_call_graph` | 方法体调用关系清单（双向，扫描 `call`/`callvirt`/`newobj` 等）；`token` 模式反向定位调用点，`includeExternal` 同上 |
+| `dotnetdebugger_interface_usage` | 接口组合视图：实现者 + 调用点（`类型::成员 → 接口成员`）+ 签名引用；`includeIndirect` 含子接口/实现者子类 |
+| `dotnetdebugger_generic_instantiations` | 泛型实例化的两段使用点：签名中 / 方法体调用中；`typeName` 可带或不带 `` `1`` arity |
+| `dotnetdebugger_search_string` | 按字符串字面量子串反查成员（忽略大小写），输出 `类型::成员 字符串值 token` |
+| `dotnetdebugger_field_access` | 追踪字段的读/写/取地址三段来源（空段输出 `（无）`） |
+| `dotnetdebugger_assembly_info` | 程序集概览：名称版本、目标框架、引用清单、类型计数、入口点 |
 
 ### 辅助
 
 | 工具 | 用途 |
 | ---- | ---- |
-| `ilspy_cache_stats` | 共享缓存状态：占用/上限、条目数、命中率与逐条明细 |
+| `dotnetdebugger_cache_stats` | 共享缓存状态：占用/上限、条目数、命中率与逐条明细 |
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
 
 ## 命令行调试
 
-MCP 模式外，`ilspymcp` 可直接以命令行执行同等功能，便于本地调试。参数与 MCP 工具一一对应。
+MCP 模式外，`dotnet-debugger-mcp` 可直接以命令行执行同等功能，便于本地调试。参数与 MCP 工具一一对应。
 
 ### 反编译
 
 ```bash
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program                          # ilspy_decompile
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Main                  # ilspy_decompile_member 按名
-ilspymcp -a bin/Debug/MyApp.dll -mn Main                                   # 跨程序集按名（省略 -t）
-ilspymcp -a bin/Debug/MyApp.dll -tt 0x02000004 -mn Main                    # 按类型 token 消歧后搜成员
-ilspymcp -a bin/Debug/MyApp.dll -o src                                     # ilspy_decompile_to_dir 全量
-ilspymcp -a bin/Debug/MyApp.dll -o src -t "MyApp.IWorker,MyApp.Worker"     # 批量写盘多类型
-ilspymcp -a bin/Debug/MyApp.dll -o src -p --nested-directories             # ilspy_decompile_to_project
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program                          # dotnetdebugger_decompile
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Main                  # dotnetdebugger_decompile_member 按名
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -mn Main                                   # 跨程序集按名（省略 -t）
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -tt 0x02000004 -mn Main                    # 按类型 token 消歧后搜成员
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -o src                                     # dotnetdebugger_decompile_to_dir 全量
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -o src -t "MyApp.IWorker,MyApp.Worker"     # 批量写盘多类型
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -o src -p --nested-directories             # dotnetdebugger_decompile_to_project
 ```
 
 ### 结构探测
 
 ```bash
-ilspymcp -a bin/Debug/MyApp.dll -ai                                        # ilspy_assembly_info
-ilspymcp -a bin/Debug/MyApp.dll -l csi                                     # ilspy_list_types
-ilspymcp -a bin/Debug/MyApp.dll -l c -nc Box -ns ILSpyMcp                 # 名称/命名空间过滤
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -s                        # ilspy_signature
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc [-i]                  # ilspy_hierarchy (-i 含间接后代)
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -d [-x]                   # ilspy_dependencies (-x 含外部)
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg [-x]                  # ilspy_call_graph
-ilspymcp -a bin/Debug/MyApp.dll -cg -tk 0x06000005                         # 按方法 token 反向定位调用者
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.IWorker -iu [-i]                  # ilspy_interface_usage
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.GenericBox -gi                    # ilspy_generic_instantiations
-ilspymcp -a bin/Debug/MyApp.dll -ss "配置Key" [-t MyApp.Program]           # ilspy_search_string
-ilspymcp -a bin/Debug/MyApp.dll -fa -t MyApp.Program -fn _count            # ilspy_field_access 按名
-ilspymcp -a bin/Debug/MyApp.dll -fa -tk 0x04000005                         # 按字段 token
-ilspymcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc [-x]        # ilspy_call_chain
-ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按方法 token 定位起始方法
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -ai                                        # dotnetdebugger_assembly_info
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -l csi                                     # dotnetdebugger_list_types
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -l c -nc Box -ns MyApp.Core                 # 名称/命名空间过滤
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -s                        # dotnetdebugger_signature
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc [-i]                  # dotnetdebugger_hierarchy (-i 含间接后代)
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -d [-x]                   # dotnetdebugger_dependencies (-x 含外部)
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg [-x]                  # dotnetdebugger_call_graph
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -cg -tk 0x06000005                         # 按方法 token 反向定位调用者
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.IWorker -iu [-i]                  # dotnetdebugger_interface_usage
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.GenericBox -gi                    # dotnetdebugger_generic_instantiations
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -ss "配置Key" [-t MyApp.Program]           # dotnetdebugger_search_string
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -fa -t MyApp.Program -fn _count            # dotnetdebugger_field_access 按名
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -fa -tk 0x04000005                         # 按字段 token
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc [-x]        # dotnetdebugger_call_chain
+dotnet-debugger-mcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按方法 token 定位起始方法
 ```
 
 ### 通用参数
@@ -175,13 +175,13 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 | `-x` | `--external` | 同时输出/展开跨程序集外部类型（配合 `-d`/`-cg`/`-cc`） |
 | `-ln` | `--lines` | 行号分页 `start-end` |
 | | `--timeout` | 超时秒数（默认 30） |
-| `-c` | `--check` | 检查 ilspymcp 新版本（无需 `-a`） |
+| `-c` | `--check` | 检查 dotnet-debugger-mcp 新版本（无需 `-a`） |
 | `-v` | `--version` | 版本号 |
 | `-h` | `--help` | 帮助 |
 
 ## 工具参数
 
-### `ilspy_decompile`
+### `dotnetdebugger_decompile`
 
 | 参数 | 说明 | 必填 | 默认 |
 | ---- | ---- | ---- | ---- |
@@ -190,7 +190,7 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 | `lines` | 行号范围 `start-end`，缺省前约 8 KB | 否 | — |
 | `timeoutSeconds` | 超时秒数 | 否 | 30 |
 
-### `ilspy_decompile_member`
+### `dotnetdebugger_decompile_member`
 
 | 参数 | 说明 | 必填 | 默认 |
 | ---- | ---- | ---- | ---- |
@@ -204,7 +204,7 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 
 多匹配合并输出、各成员前 `#MEMBER {"name","token","type"}` 分隔行；超过 20 个仅返回签名清单；无匹配时附相近成员名。
 
-### `ilspy_decompile_to_dir` / `ilspy_decompile_to_project`
+### `dotnetdebugger_decompile_to_dir` / `dotnetdebugger_decompile_to_project`
 
 | 参数 | 说明 | 必填 | 默认 |
 | ---- | ---- | ---- | ---- |
@@ -214,7 +214,7 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 | `nestedDirectories` | （仅 to_project）按命名空间嵌套目录 | 否 | true |
 | `timeoutSeconds` | 超时秒数 | 否 | 30 |
 
-### `ilspy_list_types`
+### `dotnetdebugger_list_types`
 
 | 参数 | 说明 | 必填 | 默认 |
 | ---- | ---- | ---- | ---- |
@@ -224,7 +224,7 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 | `namespaceContains` | 命名空间子串过滤，忽略大小写 | 否 | 空=不过滤 |
 | `lines` | 行号范围 | 否 | — |
 
-### `ilspy_signature`
+### `dotnetdebugger_signature`
 
 | 参数 | 说明 | 必填 | 默认 |
 | ---- | ---- | ---- | ---- |
@@ -234,33 +234,33 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 
 每行一成员签名，行尾附 token（`0x06`/`0x04`/`0x17`/`0x14`），可直接用于 `decompile_member`；未找到时附相近类型名。
 
-### `ilspy_hierarchy` / `ilspy_interface_usage` / `ilspy_generic_instantiations`
+### `dotnetdebugger_hierarchy` / `dotnetdebugger_interface_usage` / `dotnetdebugger_generic_instantiations`
 
 | 工具 | 参数 | 说明 |
 | ---- | ---- | ---- |
-| `ilspy_hierarchy` | `assembly` + `typeName` 必填，`includeIndirect` 默认 false，`lines` | 基类链/接口/继承实现者；`includeIndirect` 含全部间接后代 |
-| `ilspy_interface_usage` | `assembly` + `typeName`（须为接口）必填，`includeIndirect` 默认 false，`lines` | 实现者 + 调用点 + 签名引用组合视图；非接口提示用 `hierarchy` |
-| `ilspy_generic_instantiations` | `assembly` + `typeName` 必填，`lines` | 签名中 / 方法体中的两段实例化；`typeName` 可带/不带 `` `1``，短名亦命中 |
+| `dotnetdebugger_hierarchy` | `assembly` + `typeName` 必填，`includeIndirect` 默认 false，`lines` | 基类链/接口/继承实现者；`includeIndirect` 含全部间接后代 |
+| `dotnetdebugger_interface_usage` | `assembly` + `typeName`（须为接口）必填，`includeIndirect` 默认 false，`lines` | 实现者 + 调用点 + 签名引用组合视图；非接口提示用 `hierarchy` |
+| `dotnetdebugger_generic_instantiations` | `assembly` + `typeName` 必填，`lines` | 签名中 / 方法体中的两段实例化；`typeName` 可带/不带 `` `1``，短名亦命中 |
 
-### `ilspy_dependencies` / `ilspy_call_graph`
-
-| 工具 | 参数 | 说明 |
-| ---- | ---- | ---- |
-| `ilspy_dependencies` | `assembly` + `typeName` 必填，`includeExternal` 默认 false，`lines` | 签名引用内部类型及反向引用；外部格式 `全名 [程序集名]` |
-| `ilspy_call_graph` | `assembly` 必填，`typeName`（`token` 模式可不填）+ `token`/`includeExternal`/`lines` | 类型级双向调用；`token` 模式反向输出 `类型::成员` 调用点行 |
-
-### `ilspy_search_string` / `ilspy_field_access` / `ilspy_assembly_info` / `ilspy_cache_stats`
+### `dotnetdebugger_dependencies` / `dotnetdebugger_call_graph`
 
 | 工具 | 参数 | 说明 |
 | ---- | ---- | ---- |
-| `ilspy_search_string` | `assembly` + `search` 必填，`typeName?` + `lines` | 字符串字面量反查，忽略大小写；输出 `类型::成员 字符串值 token` |
-| `ilspy_field_access` | `assembly` 必填，`typeName?` + `fieldName`/`fieldToken` + `lines` | 读/写/取地址三段来源，空段 `（无）`；`fieldToken` 为 `0x04` 开头 |
-| `ilspy_assembly_info` | `assembly` 必填，`lines` | 程序集概览（元数据秒回） |
-| `ilspy_cache_stats` | 仅 `lines` | 无 `assembly` 参数；按占用降序列条目 |
+| `dotnetdebugger_dependencies` | `assembly` + `typeName` 必填，`includeExternal` 默认 false，`lines` | 签名引用内部类型及反向引用；外部格式 `全名 [程序集名]` |
+| `dotnetdebugger_call_graph` | `assembly` 必填，`typeName`（`token` 模式可不填）+ `token`/`includeExternal`/`lines` | 类型级双向调用；`token` 模式反向输出 `类型::成员` 调用点行 |
+
+### `dotnetdebugger_search_string` / `dotnetdebugger_field_access` / `dotnetdebugger_assembly_info` / `dotnetdebugger_cache_stats`
+
+| 工具 | 参数 | 说明 |
+| ---- | ---- | ---- |
+| `dotnetdebugger_search_string` | `assembly` + `search` 必填，`typeName?` + `lines` | 字符串字面量反查，忽略大小写；输出 `类型::成员 字符串值 token` |
+| `dotnetdebugger_field_access` | `assembly` 必填，`typeName?` + `fieldName`/`fieldToken` + `lines` | 读/写/取地址三段来源，空段 `（无）`；`fieldToken` 为 `0x04` 开头 |
+| `dotnetdebugger_assembly_info` | `assembly` 必填，`lines` | 程序集概览（元数据秒回） |
+| `dotnetdebugger_cache_stats` | 仅 `lines` | 无 `assembly` 参数；按占用降序列条目 |
 
 > 以上未找到类型时均附相近类型名提示；除 `cache_stats` 外结果均可缓存，命中时头部标注。
 
-### `ilspy_call_chain`
+### `dotnetdebugger_call_chain`
 
 | 参数 | 说明 | 必填 | 默认 |
 | ---- | ---- | ---- | ---- |
@@ -298,8 +298,8 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 **调用关系**
 
 - > 查询 `MyApp.Program` 的方法体调用了哪些类型 / 哪些类型调用了它（含外部）
-- > 查询哪些方法调用了 `MyApp.Program.Parse`（先 `signature` 取 token，再 `ilspy_call_graph token=...`）
-- > 追踪 `MyApp.Program.Parse` 的正向调用序列并反编译被调成员（`ilspy_call_chain`，`includeExternal=true` 展开同目录/NuGet 可解析的外部调用）
+- > 查询哪些方法调用了 `MyApp.Program.Parse`（先 `signature` 取 token，再 `dotnetdebugger_call_graph token=...`）
+- > 追踪 `MyApp.Program.Parse` 的正向调用序列并反编译被调成员（`dotnetdebugger_call_chain`，`includeExternal=true` 展开同目录/NuGet 可解析的外部调用）
 
 **搜索与字段**
 
@@ -310,7 +310,7 @@ ilspymcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按
 **写盘与缓存**
 
 - > 反编译 `bin/Debug/MyApp.dll` 到 `src`（全量 / 指定多类型 / 项目形式嵌套目录）
-- > 查看缓存占用与命中率（`ilspy_cache_stats`）
+- > 查看缓存占用与命中率（`dotnetdebugger_cache_stats`）
 
 ## License
 

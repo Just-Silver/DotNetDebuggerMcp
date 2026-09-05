@@ -32,7 +32,7 @@ internal static class AppText
     /// </summary>
     public const string HandshakeFeatureIntro =
         "## 服务器简介\n\n" +
-        "本服务器是进程内 **ILSpy 反编译 MCP**（引擎随包内置，无需外部安装反编译工具）。**当需要反编译或分析 .NET 程序集（.dll/.exe，含第三方/无源码程序集）时使用本服务器**。\n\n" +
+        "本服务器内置反编译引擎（ICSharpCode.Decompiler，随包分发，无需外部安装反编译工具），提供 .NET 程序集反编译与静态分析能力。**当需要反编译或分析 .NET 程序集（.dll/.exe，含第三方/无源码程序集）时使用本服务器**。\n\n" +
         "## 工具一览\n\n" +
         "- **`decompile`**：反编译指定类型的完整实现\n" +
         "- **`decompile_member`**：按成员名子串或 token 反编译成员（多匹配前插 `#MEMBER` JSON 分隔行取 token）\n" +

@@ -26,7 +26,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Build
-        run: dotnet build -c Release src/ILSpyMcp/ILSpyMcp.csproj
+        run: dotnet build -c Release src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj
 
       # 测试数据 dll（tests/TestData/*.dll）被 git 忽略，CI 上需先用仓库内脚本再生产供单测使用
       - name: Generate test data
@@ -34,7 +34,7 @@ jobs:
         run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
 
       - name: Test
-        run: dotnet test --project tests/ILSpyMcp.Tests/ILSpyMcp.Tests.csproj -c Release
+        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release
 
       # 仅版本标签（v*）时打包并发布。先从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]）作为 GitHub Release 正文
       # 写入 release-body.md（缺失则构建失败，防止静默无说明发布）；NuGet 包本身不再内嵌日志，PackageReleaseNotes 改为指向 GitHub Release 页链接。
@@ -59,7 +59,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
-          dotnet pack src/ILSpyMcp/ILSpyMcp.csproj -c Release --no-build -o artifacts "-p:PackageReleaseNotes=https://github.com/Just-Silver/ILSpyMcp/releases/tag/v$tag"
+          dotnet pack src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj -c Release --no-build -o artifacts "-p:PackageReleaseNotes=https://github.com/Just-Silver/DotNet-Debugger-MCP/releases/tag/v$tag"
 
       # OIDC 交换出短期 NuGet API 密钥（有效期 1 小时，勿提前获取）
       - name: NuGet login (OIDC -> temp API key)

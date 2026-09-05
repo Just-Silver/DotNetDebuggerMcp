@@ -201,7 +201,7 @@ public class UpdateCheckerTests
 
             Assert.NotNull(line);
             Assert.Contains("NuGet 最新 99.0.0", line);
-            Assert.Contains("dotnet tool update --global ilspymcp", line);
+            Assert.Contains("dotnet tool update --global dotnet-debugger-mcp", line);
             Assert.Contains(AppConfig.NuGetPackageId, line);
         }
         finally

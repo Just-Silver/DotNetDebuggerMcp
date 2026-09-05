@@ -25,7 +25,7 @@ internal static class AppConfig
     /// <summary>
     /// 本工具发布的 NuGet 包 id，环境自检（CLI -c/握手注入）用它查询是否有新版本。
     /// </summary>
-    public const string NuGetPackageId = "ilspymcp";
+    public const string NuGetPackageId = "dotnet-debugger-mcp";
 
     /// <summary>
     /// NuGet flatcontainer 版本清单 API 前缀（拼上包 id 即得完整 URL）。

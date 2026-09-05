@@ -2,6 +2,12 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D10 · P1 测试样本命名空间保留（用户拍板）
+- 决策：tests/TestData 样本命名空间 `ILSpyMcp.Samples`/`ILSpyMcp.SamplesExt` 与 dll 名 `ILSpyMcp.TestSamples(.Ext).dll` **保留不变**（后续再改）。产品代码/配置已全部脱钩新名；测试样本是虚构隔离程序集，不影响脱钩目标。
+- 理由：改动面最小、回归风险低（改名需动 40 文件/312 处断言 + 重新生成 dll）。
+- 后续改时联动：generate-testdata.ps1、Client Cases、Tests 全部 `ILSpyMcp.Samples*` 字符串、TestDataPaths/TestDataHelper/TestAssemblyWriter、`.gitignore` 无关。
+- 日期：2026-09-05。
+
 ## D1 · 三项目模块化拆分（用户拍板）
 - 决策：现 ilspy（反编译/静态分析）**改名保留为子项目 A**；**新增子项目 B 动态调试引擎**（dnSpyEx 式，先实现）；**主项目作为对外 MCP 服务 + 拉起 WebUI** 渲染 agent 主导的调试过程；主项目引用两个子项目，模块化开发。先实现动态调试，再做主项目整合。
 - 理由：反编译功能已完善，只缺动态调试；模块化便于独立演进与复用（CLI/测试/CI 各自独立）。

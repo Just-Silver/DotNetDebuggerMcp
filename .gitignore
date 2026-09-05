@@ -4,7 +4,7 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # Test data (verification assemblies) and temp output of the e2e client
-tests/.ilspymcp-client-out/
+tests/.dotnetdebugger-client-out/
 tests/TestData/*.dll
 
 # superpowers 规划/执行过程产物（计划文档、SDD 工作区），不进版本库
