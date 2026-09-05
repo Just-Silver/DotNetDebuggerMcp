@@ -37,12 +37,21 @@ public sealed class StepTests
         await session.ContinueAsync();
         await WaitForAsync(() => events.Any(e => e.Kind == DebugEventKind.BreakpointHit), 15_000);
 
-        // 单步 over 3 次，每次等 StepCompleted
+        // 单步 over 3 次，每次等 StepCompleted；断言位置推进
+        //（回归护栏：裸 thread.CreateStepper().Step() 会原地完成、offset 恒为 0——修复后 StepRange 语句区间步进。
+        //  首步必须离开方法入口；后续每次 offset 必须变化——for 循环回边允许跳回循环头，但不可原地踏步）
+        var lastOffset = 0;   // 断点在 Work 入口 +0
         for (var i = 0; i < 3; i++)
         {
             var before = events.Count(e => e.Kind == DebugEventKind.StepCompleted);
             await session.StepOverAsync();
             await WaitForAsync(() => events.Count(e => e.Kind == DebugEventKind.StepCompleted) > before, 15_000);
+            var stepEvt = events.Last(e => e.Kind == DebugEventKind.StepCompleted);
+            var payload = Assert.IsType<StepCompletedPayload>(stepEvt.Payload);
+            var offset = payload.TopFrame?.IlOffset ?? -1;
+            Assert.True(i == 0 ? offset > 0 : offset != lastOffset,
+                $"第 {i + 1} 次单步未推进：offset={offset}（上一次 {lastOffset}）——检查 DebugTarget.pdb 是否已拷出及 StepRange 语句区间逻辑");
+            lastOffset = offset;
         }
         Assert.Contains(events, e => e.Kind == DebugEventKind.StepCompleted);
 

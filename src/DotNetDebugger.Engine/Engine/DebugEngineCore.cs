@@ -269,15 +269,47 @@ public sealed class DebugEngineCore : IAsyncDisposable
         {
             var thread = GetStoppedThread()
                 ?? throw new InvalidOperationException("无停住的线程（先让进程停在断点/异常/步完成再单步）");
+            if (thread.ActiveFrame is not CorDebugILFrame ilf)
+                throw new InvalidOperationException("当前帧非 IL 帧，无法单步");
             // 清停点挂起 + 停住线程标记：步进命令本身要恢复执行
             _handler?.ReleaseInitialHold();
             _stoppedThreadId = -1;
-            if (stepIn is bool b) { thread.CreateStepper().Step(b); }
-            else { thread.CreateStepper().StepOut(); }
+
+            // 帧级 stepper + 掩码 + 语句 IL 区间（PDB 序列点）——参考 sharpdbg。
+            // 坑：线程级裸 CreateStepper().Step() 会立即完成、StepCompleted 落回同一 IP（实测原地 +0x0 不推进）。
+            var stepper = ilf.CreateStepper();
+            stepper.SetInterceptMask(CorDebugIntercept.INTERCEPT_ALL
+                & ~(CorDebugIntercept.INTERCEPT_SECURITY | CorDebugIntercept.INTERCEPT_CLASS_INIT));
+            stepper.SetUnmappedStopMask(CorDebugUnmappedStop.STOP_NONE);
+            if (stepIn is null)
+            {
+                stepper.StepOut();
+            }
+            else
+            {
+                var range = TryGetStatementRange(ilf);
+                if (range is { } r)
+                    stepper.StepRange(stepIn.Value, new[] { new COR_DEBUG_STEP_RANGE { startOffset = r.Start, endOffset = r.End } }, 1);
+                else
+                    stepper.Step(stepIn.Value); // 无 PDB 回退：裸 Step（可能原地完成，效果退化为 continue）
+            }
             SafeContinue(_process);
             PublishState(DebugSessionState.Running, stepIn is null ? "step out" : stepIn.Value ? "step into" : "step over");
             return Task.CompletedTask;
         }, ct);
+
+    /// <summary>当前 IP 所在语句的 IL 区间（模块旁 PDB 序列点；无 PDB/未命中返回 null → 回退裸 Step）。命令泵内调用。</summary>
+    private (int Start, int End)? TryGetStatementRange(CorDebugILFrame ilf)
+    {
+        try
+        {
+            var modulePath = ilf.Function?.Module?.Name;
+            var ilSize = ilf.Function?.ILCode?.Size;
+            if (string.IsNullOrEmpty(modulePath) || ilSize is not int size || size <= 0) return null;
+            return SymbolNameResolver.GetStatementIlRange(modulePath, (int)ilf.FunctionToken.Value, ilf.IP.pnOffset, size);
+        }
+        catch { return null; }
+    }
 
     // ---- 状态读取（停顿时） ----
 

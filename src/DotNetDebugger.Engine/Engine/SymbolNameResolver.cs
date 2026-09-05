@@ -92,4 +92,36 @@ internal static class SymbolNameResolver
         foreach (var (slot, name) in byIndex) names[slot] = name;
         return names;
     }
+
+    /// <summary>
+    /// 当前 IL offset 所在语句的 IL 区间 [start,end)（PDB 序列点；单步 StepRange 用）。
+    /// start = 含 ilOffset（或其前最近）的非隐藏序列点偏移，end = 其后下一个序列点偏移（无则 IL 末尾）。
+    /// 隐藏序列点（编译器生成，StartLine=HiddenLine）不参与边界。无 PDB/无序列点/ilOffset 早于首点返回 null。
+    /// </summary>
+    public static (int Start, int End)? GetStatementIlRange(string modulePath, int methodToken, int ilOffset, int ilSize)
+    {
+        var pdbPath = Path.ChangeExtension(modulePath, ".pdb");
+        if (!File.Exists(pdbPath)) return null;
+
+        using var pdbFs = File.OpenRead(pdbPath);
+        using var provider = MetadataReaderProvider.FromPortablePdbStream(pdbFs);
+        var mr = provider.GetMetadataReader();
+
+        var methodHandle = MetadataTokens.MethodDefinitionHandle(methodToken);
+        var sps = mr.GetMethodDebugInformation(methodHandle).GetSequencePoints()
+            .Where(sp => sp.StartLine != SequencePoint.HiddenLine)
+            .Select(sp => sp.Offset)
+            .Distinct()
+            .OrderBy(offset => offset)
+            .ToList();
+        if (sps.Count == 0 || ilOffset < sps[0]) return null;
+
+        int? start = null;
+        foreach (var offset in sps)
+        {
+            if (offset <= ilOffset) start = offset;
+            else return (start!.Value, offset);
+        }
+        return (start!.Value, ilSize);
+    }
 }
