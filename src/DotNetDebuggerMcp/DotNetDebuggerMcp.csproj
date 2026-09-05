@@ -42,6 +42,12 @@
     <ProjectReference Include="..\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Engine\DotNetDebugger.Engine.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Session\DotNetDebugger.Session.csproj" />
+    <ProjectReference Include="..\DotNetDebugger.Web\DotNetDebugger.Web.csproj" />
+  </ItemGroup>
+
+  <!-- P4 内嵌 Web：宿主 exe 起 Kestrel/Blazor 需 AspNetCore.App 框架引用（框架引用，不随 PackAsTool 携带版本） -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <!-- 宿主测试项目访问宿主 internals（如 ILSpyMcpCmd 内部方法） -->

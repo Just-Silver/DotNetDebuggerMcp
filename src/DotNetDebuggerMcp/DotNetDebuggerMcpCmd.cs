@@ -200,6 +200,18 @@ public class DotNetDebuggerMcpCmd
     public int DebugBreakpointOffset { get; } = 0;
 
     /// <summary>
+    /// 以 Web 模式启动：MCP 常驻同时起 Kestrel（浏览器看调试现场）；无 MCP 业务参数时页面可人工 launch/attach。
+    /// </summary>
+    [Option("--web", "以 Web 模式启动：MCP 常驻同时起 Kestrel（浏览器可看 agent 调试现场）；配合 --web-port 指定端口。", CommandOptionType.NoValue)]
+    public bool Web { get; }
+
+    /// <summary>
+    /// Web 监听端口（配合 --web，默认 8090）。
+    /// </summary>
+    [Option("--web-port <port>", "Web 监听端口（配合 --web，默认 8090）。", CommandOptionType.SingleValue)]
+    public int WebPort { get; } = 8090;
+
+    /// <summary>
     /// 版本号文本（由 -v/--version 触发输出），与 NuGet 包版本保持一致。
     /// </summary>
     public string Version => AppConfig.NuGetPackageId + " " + (AppConfig.CurrentVersion?.ToString(3) ?? "unknown");
@@ -333,6 +345,17 @@ public class DotNetDebuggerMcpCmd
                 CallChain, FieldAccess, External, Indirect, AssemblyInfo, InterfaceUsage, GenericInstantiations,
                 Token, TypeToken, Lines, TimeoutSeconds, Check));
             return 0;
+        }
+
+        if (Web)
+        {
+            // --web 模式：注入共享调试会话管理器并起 Kestrel（Blazor Server 展示面）。
+            // 双模式：默认继续走 MCP 常驻（agent 调试时浏览器看现场）；无 MCP 会话时页面人工 launch/attach。
+            DotNetDebugger.Web.WebHostBootstrap.Configure(DebugSessionService.Manager);
+            var webApp = DotNetDebugger.Web.WebHostBootstrap.Build(WebPort, Array.Empty<string>());
+            // Web host 与 MCP host 并联：Task.Run 起 Web，不阻塞下方 MCP RunAsync（共享进程生命周期，退出信号 Task 4 联动处理）
+            _ = webApp.RunAsync();
+            Console.Error.WriteLine($"[web] DotNet Debugger Web 已启动：http://127.0.0.1:{WebPort}");
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());

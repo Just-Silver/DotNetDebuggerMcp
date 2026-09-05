@@ -1,10 +1,21 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>DotNetDebugger.Web</RootNamespace>
+    <!-- RCL 类库（被宿主承载）：抑制 Web SDK 默认生成 Main 入口 -->
+    <OutputType>Library</OutputType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BootstrapBlazor" Version="10.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DotNetDebugger.Session\DotNetDebugger.Session.csproj" />
+    <ProjectReference Include="..\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
+  </ItemGroup>
 
 </Project>
