@@ -69,6 +69,9 @@ public sealed class DebugSessionManager : IAsyncDisposable
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // 调试目标后台运行：隐藏控制台窗口（避免每次启动弹命令框；输出已重定向不丢失）
+            CreateNoWindow = true,
+            WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
         };
         using var process = System.Diagnostics.Process.Start(psi)
             ?? throw new InvalidOperationException($"无法启动目标进程：{exePath}");

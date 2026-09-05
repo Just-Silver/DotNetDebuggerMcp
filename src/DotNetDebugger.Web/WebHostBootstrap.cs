@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,7 +24,8 @@ public static class WebHostBootstrap
     public static void Configure(DotNetDebugger.Session.DebugSessionManager manager) => _manager = manager;
 
     /// <summary>
-    /// 构建并配置 WebApplication（Kestrel 监听 127.0.0.1:port）。
+    /// 构建并配置 WebApplication。port=0 时 Kestrel 自动选空闲端口（防端口占用启动失败），
+    /// 实际地址经 <see cref="RunWithBrowserAsync"/> 在 StartAsync 后读取。
     /// 日志纪律：Web host 独立于 MCP builder，默认 Console 写 stdout 会撕坏 MCP 协议帧——
     /// 必须显式 ClearProviders + AddConsole(LogToStandardErrorThreshold)，日志全走 stderr。
     /// </summary>
@@ -32,7 +34,8 @@ public static class WebHostBootstrap
         var builder = WebApplication.CreateBuilder(args);
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
-        builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+        // port 0 = 自动选空闲端口（Kestrel 官方机制，无占用冲突）；>0 = 显式指定
+        builder.WebHost.UseUrls(port > 0 ? $"http://127.0.0.1:{port}" : "http://127.0.0.1:0");
         // 从 build output（dotnet build 产物，非 publish）运行时服务 RCL/框架静态资产：
         // 官方文档要求 UseStaticWebAssets 把 SWA 虚拟文件系统挂到 webroot（否则 RCL _content 资产 dev 不可用）
         builder.WebHost.UseStaticWebAssets();
@@ -51,5 +54,45 @@ public static class WebHostBootstrap
         app.MapRazorComponents<Components.App>()
             .AddInteractiveServerRenderMode();
         return app;
+    }
+
+    /// <summary>
+    /// 启动 Web host，监听成功后返回实际地址（port=0 自动选时读 IServerAddressesFeature）并拉起默认浏览器
+    /// （用户拍板：只要 --web 就拉，失败静默不打扰）。随后 WaitForShutdownAsync 等停止。
+    /// </summary>
+    public static async Task<string> RunWithBrowserAsync(WebApplication app)
+    {
+        await app.StartAsync();
+        var url = GetActualAddress(app);
+        TryOpenBrowser(url);
+        return url;
+    }
+
+    /// <summary>读 Kestrel 实际监听地址（StartAsync 后有效；port=0 自动选时 Addresses 已含真实端口）。</summary>
+    public static string GetActualAddress(WebApplication app)
+    {
+        try
+        {
+            var server = app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
+            var feature = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+            return feature?.Addresses.FirstOrDefault() ?? "http://127.0.0.1:0";
+        }
+        catch
+        {
+            return "http://127.0.0.1:0";
+        }
+    }
+
+    /// <summary>经系统 shell 打开默认浏览器（Windows .NET Core 标准做法：UseShellExecute）。失败静默。</summary>
+    public static void TryOpenBrowser(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch
+        {
+            // 无默认浏览器/无头环境：静默不打扰
+        }
     }
 }

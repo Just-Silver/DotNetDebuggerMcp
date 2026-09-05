@@ -1,11 +1,46 @@
 @page "/debugger"
+@using DotNetDebugger.Engine.Models
 @using DotNetDebugger.Web.Services
+@using System.Reflection.Metadata
+@implements IDisposable
 
 <PageTitle>调试器</PageTitle>
 
 <h3>动态调试</h3>
 
-<div class="row mb-2">
+<!-- 调试会话控制条 -->
+<div class="card mb-2">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-6">
+                <input @bind="_targetPath" class="form-control form-control-sm" placeholder="目标程序（exe，可带参数），如 DebugTarget.exe 2 8" />
+            </div>
+            <div class="col-auto">
+                <Button IsAsync="true" Color="Color.Primary" Size="Size.Small" OnClick="LaunchTarget">启动并附加</Button>
+                <Button IsAsync="true" Color="Color.Secondary" Size="Size.Small" class="ms-1" OnClick="DemoBreakpoint">演示断点+运行</Button>
+                <Button IsAsync="true" Color="Color.Danger" Size="Size.Small" class="ms-1" OnClick="Disconnect">断开</Button>
+            </div>
+            <div class="col-auto ms-auto">
+                <Button IsAsync="true" Color="Color.Success" Size="Size.Small" OnClick="StepOver">单步</Button>
+                <Button IsAsync="true" Color="Color.Success" Size="Size.Small" class="ms-1" OnClick="StepInto">步入</Button>
+                <Button IsAsync="true" Color="Color.Info" Size="Size.Small" class="ms-1" OnClick="ContinueRun">继续</Button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 会话状态 -->
+@if (_state is not null)
+{
+    <div class="alert alert-@(_state == "已停止" ? "warning" : "secondary") py-1 small mb-1">
+        <strong>会话状态：@_state</strong>
+        @if (_lastStopText is not null) { <span class="ms-2 text-warning">@_lastStopText</span> }
+        @if (_ctrlMessage is not null) { <span class="ms-2 text-info">@_ctrlMessage</span> }
+    </div>
+}
+
+<!-- 反编译浏览 -->
+<div class="row g-2 mb-2">
     <div class="col-md-5">
         <input @bind="_assemblyPath" class="form-control form-control-sm" placeholder="程序集路径（dll/exe）" />
     </div>
@@ -14,7 +49,6 @@
     </div>
     <div class="col-md-3">
         <Button IsAsync="true" Color="Color.Primary" Size="Size.Small" OnClick="LoadType">反编译显示</Button>
-        <Button IsAsync="true" Color="Color.Secondary" Size="Size.Small" class="ms-1" OnClick="DemoStop">演示停点</Button>
     </div>
 </div>
 @if (_loading)
@@ -24,11 +58,7 @@
 else if (_doc is { IsSuccess: true } && _doc.Error is null)
 {
     <div class="text-muted small mb-1">
-        已加载 @_doc.TypeFullName（@_doc.Lines.Length 行，@_doc.Mapping.Count 条 IL→行映射）
-        @if (_stopInfo is not null)
-        {
-            <span class="ms-2 text-success">停点：方法 token=0x@(_stopInfo.Value.MethodToken.ToString("x8")) offset=@_stopInfo.Value.Offset → 行 @_stopInfo.Value.Line</span>
-        }
+        已加载 @_doc.TypeFullName（@_doc.Lines.Length 行，@_doc.Mapping.Count 条映射）
     </div>
 }
 else if (_doc is not null)
@@ -36,50 +66,156 @@ else if (_doc is not null)
     <div class="text-danger small mb-1">@_doc.Error</div>
 }
 
-<div style="height:65vh;border:1px solid #dee2e6;">
+<div style="height:55vh;border:1px solid #dee2e6;">
     <CodeViewer @ref="_viewer" />
 </div>
 
 @code {
     private CodeViewer? _viewer;
     private readonly DocumentStore _store = new();
+    private readonly DebugViewService _debug = new();
     private SourceDocument? _doc;
-    private (int MethodToken, int Offset, int Line)? _stopInfo;
     private string _assemblyPath = "";
     private string _typeName = "ILSpyMcp.Samples.BigClass";
+    private string _targetPath = "";
+    private string? _state;          // 会话状态文本
+    private string? _lastStopText;   // 最近停点
+    private string? _ctrlMessage;    // 控制操作结果
     private bool _loading;
+    private CancellationTokenSource? _pollCts;
+    private System.Timers.Timer? _pollTimer;
+    /// <summary>演示目标 DebugTarget.exe（从仓库根上溯定位 tests/TestData）。</summary>
+    private static string DemoAssembly
+    {
+        get
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir is not null)
+            {
+                if (File.Exists(Path.Combine(dir.FullName, "DotNetDebuggerMcp.slnx"))) break;
+                dir = dir.Parent;
+            }
+            var path = dir is null ? "" : Path.Combine(dir.FullName, "tests", "TestData", "DebugTarget.exe");
+            return File.Exists(path) ? path : "";
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        // 轮询会话状态（500ms）——SessionEventBuffer 快照刷新
+        _pollCts = new CancellationTokenSource();
+        _pollTimer = new System.Timers.Timer(500) { AutoReset = true };
+        _pollTimer.Elapsed += async (_, _) => await PollStateAsync();
+        _pollTimer.Start();
+    }
+
+    private async Task PollStateAsync()
+    {
+        try { await InvokeAsync(RefreshState); } catch { }
+    }
+
+    private void RefreshState()
+    {
+        var info = _debug.SessionInfo;
+        _state = info?.State switch
+        {
+            DebugSessionState.Stopped => "已停止",
+            DebugSessionState.Running => "运行中",
+            DebugSessionState.Exited => "已退出",
+            DebugSessionState.Detached => "已断开",
+            _ => null,
+        };
+        _lastStopText = info?.LastStop is { } stop ? $"{stop.Kind} @ {stop.TopFrame} (thread {stop.ThreadId})" : null;
+        StateHasChanged();
+    }
+
+    private async Task LaunchTarget()
+    {
+        if (string.IsNullOrWhiteSpace(_targetPath)) _targetPath = DemoAssembly + " 3 8";
+        _ctrlMessage = await _debug.LaunchAndAttachAsync(_targetPath.Trim());
+        RefreshState();
+    }
+
+    /// <summary>演示闭环：启动 DebugTarget + Work 断点 + continue（Work token 从目标 dll 元数据解析）。</summary>
+    private async Task DemoBreakpoint()
+    {
+        if (string.IsNullOrWhiteSpace(_targetPath)) _targetPath = DemoAssembly + " 3 8";
+        var parts = _targetPath.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (!File.Exists(parts[0]))
+        {
+            _ctrlMessage = $"目标不存在：{parts[0]}";
+            return;
+        }
+        _ctrlMessage = await _debug.LaunchAndAttachAsync(_targetPath.Trim());
+        // 解析 Work token（目标 dll 与 exe 同目录）
+        var dll = Path.ChangeExtension(parts[0], ".dll");
+        var token = FindMethodToken(dll, "Work");
+        if (token <= 0) { _ctrlMessage += "；未找到 Work 方法 token"; return; }
+        var module = Path.GetFileName(dll);
+        _ctrlMessage += "；" + await _debug.SetBreakpointAsync(module, token, 0);
+        _ctrlMessage += "；" + await _debug.ContinueAsync();
+        RefreshState();
+    }
+
+    private async Task ContinueRun() { _ctrlMessage = await _debug.ContinueAsync(); RefreshState(); await ApplyStopHighlightAsync(); }
+    private async Task StepOver() { _ctrlMessage = await _debug.StepAsync("over"); RefreshState(); await ApplyStopHighlightAsync(); }
+    private async Task StepInto() { _ctrlMessage = await _debug.StepAsync("into"); RefreshState(); await ApplyStopHighlightAsync(); }
+
+    private async Task Disconnect() { _ctrlMessage = await _debug.DisconnectAsync(); _state = null; _lastStopText = null; }
 
     private async Task LoadType()
     {
         if (string.IsNullOrWhiteSpace(_assemblyPath) || string.IsNullOrWhiteSpace(_typeName) || _viewer is null) return;
         _loading = true;
-        _stopInfo = null;
-        await InvokeAsync(StateHasChanged);   // 先渲染加载指示，再执行反编译
+        await InvokeAsync(StateHasChanged);
         try
         {
             _doc = await _store.GetOrLoadAsync(_assemblyPath.Trim(), _typeName.Trim());
             if (_doc.IsSuccess)
             {
                 await _viewer.SetValueAsync(_doc.Text);
-                await _viewer.SetDecorationsAsync([], null);
+                await ApplyStopHighlightAsync();
             }
         }
-        finally
-        {
-            _loading = false;
-        }
+        finally { _loading = false; }
     }
 
-    /// <summary>演示停点：取当前文档首个方法首个映射的 IL offset，高亮其行（Task 4 接真实 Session 停点）。</summary>
-    private async Task DemoStop()
+    /// <summary>停点联动：若当前文档含停点方法 token，映射其 IL offset 高亮语句行。</summary>
+    private async Task ApplyStopHighlightAsync()
     {
         if (_viewer is null || _doc is null || !_doc.IsSuccess) return;
-        var first = _doc.Mapping.FirstOrDefault();
-        if (first is null) return;
-        var line = DocumentStore.GetStopLine(_doc, first.MethodToken, first.IlOffset);
+        var info = _debug.SessionInfo;
+        if (info?.State != DebugSessionState.Stopped || info.LastStop?.TopFrame is not { } frame) return;
+        // 模块名匹配（文档程序集短名 = 停点模块名）
+        if (!frame.ModuleName.Equals(Path.GetFileName(_doc.AssemblyPath), StringComparison.OrdinalIgnoreCase)) return;
+        var line = DocumentStore.GetStopLine(_doc, frame.MethodToken, frame.IlOffset);
         if (line is null) return;
-        _stopInfo = (first.MethodToken, first.IlOffset, line.Value);
         await _viewer.SetDecorationsAsync([], line);
         await _viewer.RevealLineAsync(line.Value);
+    }
+
+    private static int FindMethodToken(string dll, string methodName)
+    {
+        if (!File.Exists(dll)) return 0;
+        using var fs = File.OpenRead(dll);
+        using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
+        var mr = pe.GetMetadataReader();
+        foreach (var th in mr.TypeDefinitions)
+        {
+            var td = mr.GetTypeDefinition(th);
+            foreach (var mh in td.GetMethods())
+            {
+                var md = mr.GetMethodDefinition(mh);
+                if (mr.GetString(md.Name) == methodName)
+                    return System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(mh);
+            }
+        }
+        return 0;
+    }
+
+    public void Dispose()
+    {
+        _pollCts?.Cancel();
+        _pollTimer?.Dispose();
     }
 }

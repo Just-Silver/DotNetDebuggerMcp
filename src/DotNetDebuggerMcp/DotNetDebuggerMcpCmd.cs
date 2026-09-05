@@ -206,10 +206,10 @@ public class DotNetDebuggerMcpCmd
     public bool Web { get; }
 
     /// <summary>
-    /// Web 监听端口（配合 --web，默认 8090）。
+    /// Web 监听端口（配合 --web）。缺省 0 = 自动选空闲端口（启动后提示实际 URL 并拉起浏览器）。
     /// </summary>
-    [Option("--web-port <port>", "Web 监听端口（配合 --web，默认 8090）。", CommandOptionType.SingleValue)]
-    public int WebPort { get; } = 8090;
+    [Option("--web-port <port>", "Web 监听端口（配合 --web）。缺省 0 = 自动选空闲端口（防占用冲突，启动后提示实际 URL）。", CommandOptionType.SingleValue)]
+    public int WebPort { get; } = 0;
 
     /// <summary>
     /// 版本号文本（由 -v/--version 触发输出），与 NuGet 包版本保持一致。
@@ -355,8 +355,8 @@ public class DotNetDebuggerMcpCmd
             // Web host 与 MCP host 并联，进程生命周期由二者共同决定（WhenAll：任一侧结束进程等另一侧自然完成）。
             DotNetDebugger.Web.WebHostBootstrap.Configure(DebugSessionService.Manager);
             var webApp = DotNetDebugger.Web.WebHostBootstrap.Build(WebPort, Array.Empty<string>());
-            webTask = webApp.RunAsync();
-            Console.Error.WriteLine($"[web] DotNet Debugger Web 已启动：http://127.0.0.1:{WebPort}");
+            // 起 Web（自动端口）→ 拉浏览器 → stderr 提示实际 URL → 等停；Web host 与 MCP host 并联（WhenAll）
+            webTask = RunWebAsync(webApp);
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
@@ -397,5 +397,13 @@ public class DotNetDebuggerMcpCmd
             await mcpTask;
         }
         return 0;
+
+        // --web：起 Web host → 拉浏览器 → stderr 提示实际 URL → 等停（供 webTask 并联）
+        async Task RunWebAsync(WebApplication webApp)
+        {
+            var url = await DotNetDebugger.Web.WebHostBootstrap.RunWithBrowserAsync(webApp);
+            Console.Error.WriteLine($"[web] DotNet Debugger Web 已启动：{url}");
+            await webApp.WaitForShutdownAsync();
+        }
     }
 }
