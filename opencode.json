@@ -4,7 +4,7 @@
     "servers": {
       "dotnetdebugger": {
         "type": "local",
-        "command": ["./src/DotNetDebuggerMcp/bin/Debug/net10.0/DotNetDebuggerMcp.exe"]
+        "command": ["./src/DotNetDebuggerMcp/bin/Debug/net10.0/DotNetDebuggerMcp.exe", "--web"]
       }
     }
   }

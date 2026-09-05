@@ -6,10 +6,11 @@
 
 <PageTitle>调试器</PageTitle>
 
-<h3>动态调试</h3>
+<div class="d-flex flex-column" style="height:100%;min-height:0;">
+<h3 class="mb-2" style="flex:0 0 auto;">动态调试</h3>
 
 <!-- 调试会话控制条 -->
-<div class="card mb-2">
+<div class="card mb-2" style="flex:0 0 auto;">
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
             <div class="col-md-6">
@@ -32,25 +33,25 @@
 <!-- 会话状态 -->
 @if (_state is not null)
 {
-    <div class="alert alert-@(_state == "已停止" ? "warning" : "secondary") py-1 small mb-1">
+    <div class="alert alert-@(_state == "已停止" ? "warning" : "secondary") py-1 small mb-1" style="flex:0 0 auto;">
         <strong>会话状态：@_state</strong>
         @if (_lastStopText is not null) { <span class="ms-2 text-warning">@_lastStopText</span> }
         @if (_ctrlMessage is not null) { <span class="ms-2 text-info">@_ctrlMessage</span> }
     </div>
 }
 
-<!-- 主布局：左类型树 + 右代码/面板 -->
-<div class="row g-2" style="height:calc(100vh - 190px);">
-    <!-- 左：类型浏览树（agent 上下文自动加载程序集，点类型反编译右侧显示） -->
-    <div class="col-3 d-flex flex-column" style="border:1px solid #dee2e6;border-radius:4px;overflow:auto;">
-        <div class="small text-secondary px-2 py-1 border-bottom">类型浏览（agent 反编译过的程序集）</div>
-        <div class="flex-grow-1" style="min-height:0;">
-            <TypeTree @ref="_tree" TypeClicked="ShowTypeAsync" AssemblyLoaded="OnAssemblyLoaded" />
+<!-- 主布局：左类型树 + 右代码/面板（flex 撑满视口剩余，不硬编码高度） -->
+<div class="d-flex flex-grow-1" style="min-height:0;gap:8px;">
+    <!-- 左：类型浏览树（.tree-view height:100% 需父有确定高度；滚动由 BB .tree-root.scroll 内嵌，勿外包 overflow div） -->
+    <div class="d-flex flex-column" style="width:24%;min-width:220px;border:1px solid #dee2e6;border-radius:4px;">
+        <div class="small text-secondary px-2 py-1 border-bottom" style="flex:0 0 auto;">类型浏览（agent 反编译过的程序集）</div>
+        <div class="flex-grow-1" style="min-height:0;display:flex;flex-direction:column;">
+            <TypeTree @ref="_tree" TypeClicked="ShowTypeAsync" AssemblyLoaded="OnAssemblyLoaded" OnReady="OnTreeReady" />
         </div>
     </div>
     <!-- 右：代码视图 + 面板 -->
-    <div class="col-9 d-flex flex-column">
-        <div class="d-flex align-items-center mb-1 small">
+    <div class="d-flex flex-column flex-grow-1" style="min-width:0;min-height:0;">
+        <div class="d-flex align-items-center mb-1 small" style="flex:0 0 auto;">
             @if (_loading)
             {
                 <span class="text-muted"><i class="fa-solid fa-spin fa-spinner me-1"></i>反编译中，请稍候…</span>
@@ -69,13 +70,13 @@
                 <span class="text-muted">在左侧树选择类型，或等 agent 反编译时自动跟随</span>
             }
         </div>
-        <div class="row g-2 flex-grow-1" style="min-height:0;">
-            <div class="col-8 d-flex flex-column" style="min-height:0;">
-                <div class="flex-grow-1" style="border:1px solid #dee2e6;">
-                    <CodeViewer @ref="_viewer" />
-                </div>
+        <div class="d-flex flex-grow-1" style="min-height:0;min-width:0;gap:8px;">
+            <!-- 代码视图：Monaco 容器必须有确定高度（flex 链落像素）才内部滚动 -->
+            <div class="flex-grow-1 d-flex" style="min-width:0;border:1px solid #dee2e6;">
+                <CodeViewer @ref="_viewer" />
             </div>
-            <div class="col-4" style="overflow:auto;">
+            <!-- 面板列 -->
+            <div class="d-flex flex-column" style="width:30%;min-width:220px;overflow:auto;">
                 <!-- 调用栈 -->
                 <Card HeaderText="@($"调用栈（{_stack.Count}）")" class="mb-2">
                     <BodyTemplate>
@@ -142,6 +143,11 @@
             </div>
         </div>
     </div>
+    <!-- 最右：内存日志列（联调诊断） -->
+    <div class="d-flex flex-column" style="width:20%;min-width:200px;max-width:320px;border:1px solid #dee2e6;border-radius:4px;">
+        <LogPanel />
+    </div>
+</div>
 </div>
 
 @code {
@@ -195,6 +201,26 @@
         catch { /* 未注入 AgentView（非 --web 场景）：跳过订阅 */ }
     }
 
+    /// <summary>TypeTree 首次渲染就绪回调：此时 _tree 已 ready。补同步 agent 上下文（页面晚开错过早期动作）。
+    /// 页面冷启动为空树——跳转完全由 agent 驱动（真实场景：无 agent 动作不预加载任何类型）。</summary>
+    private async Task OnTreeReady()
+    {
+        try
+        {
+            var snap = WebHostBootstrap.AgentView.Snapshot();
+            if (snap.Revision > _lastAgentRevision)
+            {
+                _lastAgentRevision = snap.Revision;
+                if (snap.AssemblyPath is not null && snap.TypeFullName is not null)
+                {
+                    await _tree!.SelectTypeAsync(snap.AssemblyPath, snap.TypeFullName);
+                    await ShowTypeAsync(snap.AssemblyPath, snap.TypeFullName);
+                }
+            }
+        }
+        catch (Exception ex) { MemoryLog.Write("AgentView", $"OnTreeReady 异常: {ex.Message}"); }
+    }
+
     private void OnAgentViewChanged(DotNetDebugger.Web.Services.AgentViewSnapshot snap)
     {
         // 宿主工具线程触发 → 转到 UI 线程处理，避免跨线程渲染
@@ -203,9 +229,18 @@
             if (snap.AssemblyPath is null || snap.TypeFullName is null) return;
             if (snap.Revision <= _lastAgentRevision) return;
             _lastAgentRevision = snap.Revision;
-            // 1) 树加载程序集（已加载则忽略）；2) 右侧显示该类型
-            if (_tree is not null) _tree.LoadAssembly(snap.AssemblyPath);
-            await ShowTypeAsync(snap.AssemblyPath, snap.TypeFullName);
+            try
+            {
+                MemoryLog.Write("AgentView", $"rev={snap.Revision} → {Path.GetFileName(snap.AssemblyPath)}::{snap.TypeFullName} (_tree={( _tree is null ? "null" : "ok")}, _viewer={(_viewer is null ? "null" : "ok")})");
+                bool treeOk = false;
+                if (_tree is not null)
+                    treeOk = await _tree.SelectTypeAsync(snap.AssemblyPath, snap.TypeFullName);
+                MemoryLog.Write("AgentView", treeOk ? "树定位成功" : "树定位失败/跳过");
+                await ShowTypeAsync(snap.AssemblyPath, snap.TypeFullName);
+                _ctrlMessage = $"[agent] {Path.GetFileName(snap.AssemblyPath)}::{snap.TypeFullName}";
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex) { MemoryLog.Write("AgentView", $"异常: {ex}"); }
         });
     }
 

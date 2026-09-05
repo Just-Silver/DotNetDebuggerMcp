@@ -68,13 +68,14 @@ public static class WebHostBootstrap
 
     /// <summary>
     /// 启动 Web host，监听成功后返回实际地址（port=0 自动选时读 IServerAddressesFeature）并拉起默认浏览器
-    /// （用户拍板：只要 --web 就拉，失败静默不打扰）。随后 WaitForShutdownAsync 等停止。
+    /// （用户拍板：只要 --web 就拉，失败静默不打扰）。默认直达 /debugger 工作台（首页保留作入口/说明）。
+    /// 随后 WaitForShutdownAsync 等停止。
     /// </summary>
     public static async Task<string> RunWithBrowserAsync(WebApplication app)
     {
         await app.StartAsync();
         var url = GetActualAddress(app);
-        TryOpenBrowser(url);
+        TryOpenBrowser($"{url}/debugger");
         return url;
     }
 

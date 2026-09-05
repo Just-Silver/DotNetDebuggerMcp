@@ -1,0 +1,68 @@
+@using DotNetDebugger.Web.Services
+@inject IJSRuntime Js
+
+@* 内存日志面板（联调诊断，嵌在 Debugger 页最右）：环形缓冲最近条目，1s 自动刷新。 *@
+
+<div class="d-flex flex-column h-100">
+    <div class="d-flex align-items-center small px-2 py-1 border-bottom" style="flex:0 0 auto;">
+        <span class="text-secondary">内存日志</span>
+        <Button Size="Size.ExtraSmall" Color="Color.Primary" class="ms-1" OnClick="Refresh">刷</Button>
+        <Button Size="Size.ExtraSmall" Color="Color.Info" class="ms-1" OnClick="CopyAll">复制</Button>
+        <Button Size="Size.ExtraSmall" Color="Color.Danger" class="ms-1" OnClick="Clear">清</Button>
+        <span class="text-muted ms-auto">@_count</span>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;font-family:Consolas,monospace;font-size:11px;background:#0d1117;color:#c9d1d9;">
+        @foreach (var entry in _logs)
+        {
+            <div class="px-1" style="border-bottom:1px solid #21262d;white-space:pre-wrap;word-break:break-all;">
+                <span style="color:#8b949e;">@entry.UtcTimestamp.ToString("HH:mm:ss")</span>
+                <span style="color:#58a6ff;">[@entry.Source]</span>
+                <span>@entry.Message</span>
+            </div>
+        }
+        @if (_logs.Count == 0)
+        {
+            <div class="text-muted p-1">（无日志）</div>
+        }
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<MemoryLogEntry> _logs = [];
+    private long _count;
+    private System.Timers.Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        _timer = new System.Timers.Timer(1000) { AutoReset = true };
+        _timer.Elapsed += async (_, _) => { try { await InvokeAsync(Refresh); } catch { } };
+        _timer.Start();
+    }
+
+    private void Refresh()
+    {
+        _logs = MemoryLog.Snapshot();
+        _count = MemoryLog.Count;
+        StateHasChanged();
+    }
+
+    private void Clear()
+    {
+        MemoryLog.Clear();
+        Refresh();
+    }
+
+    /// <summary>一键复制全部日志文本到剪贴板（联调时贴给 agent/记录用）。</summary>
+    private async Task CopyAll()
+    {
+        var text = string.Join("\n", MemoryLog.Snapshot()
+            .Select(e => $"[{e.UtcTimestamp:HH:mm:ss.fff}] [{e.Source}] {e.Message}"));
+        try { await Js.InvokeVoidAsync("navigator.clipboard.writeText", text); }
+        catch { /* 剪贴板不可用（权限/非安全上下文）：静默 */ }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+    }
+}

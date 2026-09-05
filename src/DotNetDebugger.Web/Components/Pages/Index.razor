@@ -2,7 +2,33 @@
 
 <PageTitle>DotNet Debugger Web</PageTitle>
 
-<h3>DotNet Debugger Web</h3>
-<p class="text-muted">
-    调试展示面（Blazor Server）。当前为骨架；动态调试页在 <a href="/debugger">/debugger</a>。
-</p>
+<div class="d-flex flex-column" style="max-width:720px;margin:0 auto;padding-top:4vh;">
+    <h3 class="mb-1">DotNet Debugger Web</h3>
+    <p class="text-muted mb-4">agent 调试监视器——agent 经 MCP 反编译/调试时，页面实时显示它在看哪个程序集/类型/方法、断点停在何处。</p>
+
+    <div class="card mb-3" style="cursor:pointer;" @onclick="GoDebugger">
+        <div class="card-body d-flex align-items-center">
+            <div class="me-3" style="font-size:2rem;"><i class="fa-solid fa-bug"></i></div>
+            <div>
+                <h5 class="mb-1">动态调试</h5>
+                <div class="text-muted small">左侧类型浏览树 + 反编译代码视图 + 调用栈/变量/线程面板 + 内存日志。进入调试工作台。</div>
+            </div>
+            <div class="ms-auto text-secondary"><i class="fa-solid fa-chevron-right"></i></div>
+        </div>
+    </div>
+
+    <div class="text-muted small">
+        <div class="mb-1">使用方式：</div>
+        <ol class="mb-0 ps-3">
+            <li>在 opencode 等 MCP 客户端中让 agent 对 .NET 程序集做反编译 / 启动调试</li>
+            <li>本页面实时跟随 agent 动作：反编译了哪个类型、断点命中哪个方法，自动展开并高亮</li>
+            <li>agent 会话结束或页面关闭后，Web 随 server 退出</li>
+        </ol>
+    </div>
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private void GoDebugger() => Nav.NavigateTo("/debugger");
+}
