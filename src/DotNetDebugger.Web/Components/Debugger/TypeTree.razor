@@ -1,48 +1,104 @@
 @using BootstrapBlazor.Components
+@using DotNetDebugger.Web.Services
 
-@* 片 2a：BB TreeView 渲染验证——全量三级树（程序集→命名空间→类型），不依赖懒加载。
-   先确认「全量嵌套 Items」下箭头与展开正常；懒加载接入在后续切片。 *@
+@* 左侧类型浏览树：程序集 → 命名空间 → 类型，全部懒加载（BB OnExpandNodeAsync）。
+   外部（Debugger 页 / agent 上下文驱动）经 @ref 调 LoadAssembly 加程序集根；点类型触发 TypeClicked。
+   v1 只列 class（TypeTreeData 全枚举，含 interface/struct 等见后续切片需求）。 *@
 
 <TreeView TItem="TypeTreeNode"
+          @ref="_tree"
           Items="_items"
-          OnTreeItemClick="OnNodeClickedAsync" />
+          OnTreeItemClick="OnNodeClickedAsync"
+          OnExpandNodeAsync="OnExpandAsync" />
 
 @code {
+    private TreeView<TypeTreeNode>? _tree;
+    private readonly TypeTreeData _data = new();
     private List<TreeViewItem<TypeTreeNode>> _items = [];
 
-    /// <summary>树节点承载模型：程序集/命名空间/类型三级共用，Kind 区分层级。</summary>
+    /// <summary>节点 model：Label 显示文本；Kind=assembly/namespace/type；AssemblyPath 供子级枚举；TypeFullName 供点击反编译。</summary>
     public sealed record TypeTreeNode(string Label, string Kind, string? AssemblyPath = null, string? TypeFullName = null);
 
-    protected override void OnInitialized()
+    /// <summary>类型节点点击回调（参数：类型全名 + 程序集路径）。Debugger 页接此反编译显示。</summary>
+    [Parameter] public Func<string, string, Task>? TypeClicked { get; set; }
+
+    /// <summary>程序集节点点击/加载后调用的可选通知（参数：程序集路径）。agent 上下文驱动/高亮用。</summary>
+    [Parameter] public Func<string, Task>? AssemblyLoaded { get; set; }
+
+    /// <summary>加载一个程序集进树（作为根节点）。已加载则忽略；文件不存在返回 false。</summary>
+    public bool LoadAssembly(string assemblyPath)
     {
-        // 全量数据：两个程序集，各含命名空间与类型（嵌套 Items，非懒加载）
-        var asm1 = new TypeTreeNode("DemoA.dll", "assembly", @"C:\demo\DemoA.dll");
-        var a1 = Item(asm1);
-
-        var nsA = Item(new("DemoA.Samples", "namespace", asm1.AssemblyPath));
-        nsA.Items.Add(Item(new("BigClass", "type", asm1.AssemblyPath, "DemoA.Samples.BigClass")));
-        nsA.Items.Add(Item(new("Small", "type", asm1.AssemblyPath, "DemoA.Samples.Small")));
-
-        var nsB = Item(new("DemoA.Core", "namespace", asm1.AssemblyPath));
-        nsB.Items.Add(Item(new("Service", "type", asm1.AssemblyPath, "DemoA.Core.Service")));
-        a1.Items.Add(nsA);
-        a1.Items.Add(nsB);
-
-        var asm2 = new TypeTreeNode("DemoB.dll", "assembly", @"C:\demo\DemoB.dll");
-        var a2 = Item(asm2);
-        var nsC = Item(new("DemoB", "namespace", asm2.AssemblyPath));
-        nsC.Items.Add(Item(new("Program", "type", asm2.AssemblyPath, "DemoB.Program")));
-        a2.Items.Add(nsC);
-
-        _items = [a1, a2];
+        var full = Path.GetFullPath(assemblyPath);
+        if (_items.Any(i => string.Equals(i.Value.AssemblyPath, full, StringComparison.OrdinalIgnoreCase))) return true;
+        if (_data.GetNamespaces(full) is null) return false; // 非程序集/不存在：不入树
+        _items.Add(new TreeViewItem<TypeTreeNode>(new(Path.GetFileName(full), "assembly", full))
+        { Text = Path.GetFileName(full), HasChildren = true });
+        return true;
     }
 
-    private static TreeViewItem<TypeTreeNode> Item(TypeTreeNode value)
-        => new(value) { Text = value.Label };
-
-    private Task OnNodeClickedAsync(TreeViewItem<TypeTreeNode> item)
+    /// <summary>按类型全名在树中定位节点（供 agent 上下文驱动高亮/选中）。未加载则返回 null。</summary>
+    public TreeViewItem<TypeTreeNode>? FindTypeNode(string assemblyPath, string typeFullName)
     {
-        // 片 2a 仅渲染验证：点击暂不做事（后续接真反编译）
-        return Task.CompletedTask;
+        var full = Path.GetFullPath(assemblyPath);
+        foreach (var item in AllItems())
+        {
+            if (string.Equals(item.Value.AssemblyPath, full, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(item.Value.TypeFullName, typeFullName, StringComparison.Ordinal))
+                return item;
+        }
+        return null;
+    }
+
+    private IEnumerable<TreeViewItem<TypeTreeNode>> AllItems()
+        => _items.SelectMany(Flatten);
+
+    private static IEnumerable<TreeViewItem<TypeTreeNode>> Flatten(TreeViewItem<TypeTreeNode> item)
+    {
+        yield return item;
+        foreach (var child in item.Items.SelectMany(Flatten)) yield return child;
+    }
+
+    /// <summary>节点展开时懒加载子级：程序集 → 命名空间；命名空间 → 类型。BB 只在 HasChildren 且未载时调。</summary>
+    private async Task<IEnumerable<TreeViewItem<TypeTreeNode>>> OnExpandAsync(TreeViewItem<TypeTreeNode> node)
+    {
+        await Task.CompletedTask; // 元数据秒回，无需真实异步；保留签名供 BB 懒加载
+        var list = new List<TreeViewItem<TypeTreeNode>>();
+        var v = node.Value;
+        switch (v.Kind)
+        {
+            case "assembly" when v.AssemblyPath is not null:
+                foreach (var ns in _data.GetNamespaces(v.AssemblyPath) ?? [])
+                {
+                    list.Add(new TreeViewItem<TypeTreeNode>(new(ns, "namespace", v.AssemblyPath))
+                    { Text = ns, HasChildren = _data.GetTypes(v.AssemblyPath, ns).Count > 0 });
+                }
+                break;
+            case "namespace" when v.AssemblyPath is not null:
+                foreach (var type in _data.GetTypes(v.AssemblyPath, v.Label))
+                {
+                    // 叶子类型显示短名（去命名空间前缀），全名存 TypeFullName 供点击反编译
+                    list.Add(new TreeViewItem<TypeTreeNode>(new(ShortName(type), "type", v.AssemblyPath, type))
+                    { Text = ShortName(type) });
+                }
+                break;
+        }
+        return list;
+    }
+
+    private async Task OnNodeClickedAsync(TreeViewItem<TypeTreeNode> item)
+    {
+        var v = item.Value;
+        if (v.Kind == "type" && v.AssemblyPath is not null && v.TypeFullName is not null && TypeClicked is not null)
+        {
+            await TypeClicked(v.AssemblyPath, v.TypeFullName);
+        }
+    }
+
+    private static string ShortName(string fullName)
+    {
+        var plus = fullName.LastIndexOf('+');
+        var dot = fullName.LastIndexOf('.');
+        var start = plus > dot ? plus + 1 : dot + 1;
+        return start > 0 ? fullName[start..] : fullName;
     }
 }
