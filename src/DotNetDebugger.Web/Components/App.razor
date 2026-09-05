@@ -10,6 +10,23 @@
     <!-- 纯 UseStaticFiles 服务：无 MapStaticAssets 指纹化，RCL 资产用 _content/{PackageId}/ 静态路径 -->
     <link rel="stylesheet" href="_content/BootstrapBlazor/css/bootstrap.blazor.bundle.min.css" />
 
+    <!-- Monaco 装饰样式（全局非 scoped：Monaco 动态插入 DOM 不受 .razor.css 作用域约束） -->
+    <style>
+        .dotnetdbg-current-line {
+            background-color: #7abd7a4d;   /* 当前执行行（绿，spec §9.2 色值） */
+        }
+        /* 断点红点：Monaco .cgmr 是满行高 flex 居中容器，勿改其尺寸——
+           用 ::before 画圆点由 flex 天然垂直居中（直接设容器宽高会导致偏移） */
+        .dotnetdbg-breakpoint-glyph::before {
+            content: '';
+            display: block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #e51400;    /* VS Code 断点红 #E51400 */
+        }
+    </style>
+
     <title>DotNet Debugger Web</title>
     <HeadOutlet @rendermode="new InteractiveServerRenderMode(false)" />
 </head>

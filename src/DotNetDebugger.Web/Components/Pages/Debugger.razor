@@ -16,21 +16,22 @@
     private async Task LoadSample()
     {
         if (_viewer is null) return;
+        // 每行加 L{n} 尾注作锚点，消除行号计数歧义
         const string sample = """
-        using System;
-
-        public class Sample
-        {
-            public static int Add(int a, int b)
-            {
-                var sum = a + b;
-                return sum;
-            }
-        }
+        using System;                                   // L1
+                                                        // L2
+        public class Sample                             // L3
+        {                                               // L4
+            public static int Add(int a, int b)         // L5
+            {                                           // L6
+                var sum = a + b;                        // L7
+                return sum;                             // L8
+            }                                           // L9
+        }                                               // L10
         """;
         await _viewer.SetValueAsync(sample);
-        // 演示装饰：断点第 6 行，当前行第 7 行
-        await _viewer.SetDecorationsAsync([6], 7);
+        // 演示装饰：断点在 L5（Add 声明），当前行在 L7（var sum）
+        await _viewer.SetDecorationsAsync([5], 7);
         await _viewer.RevealLineAsync(7);
     }
 }

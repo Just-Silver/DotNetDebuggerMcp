@@ -347,14 +347,15 @@ public class DotNetDebuggerMcpCmd
             return 0;
         }
 
+        Task? webTask = null;
         if (Web)
         {
             // --web 模式：注入共享调试会话管理器并起 Kestrel（Blazor Server 展示面）。
-            // 双模式：默认继续走 MCP 常驻（agent 调试时浏览器看现场）；无 MCP 会话时页面人工 launch/attach。
+            // 双模式：MCP 常驻（agent 调试时浏览器看现场）与纯 Web（无 MCP 会话时页面人工 launch/attach）并存——
+            // Web host 与 MCP host 并联，进程生命周期由二者共同决定（WhenAll：任一侧结束进程等另一侧自然完成）。
             DotNetDebugger.Web.WebHostBootstrap.Configure(DebugSessionService.Manager);
             var webApp = DotNetDebugger.Web.WebHostBootstrap.Build(WebPort, Array.Empty<string>());
-            // Web host 与 MCP host 并联：Task.Run 起 Web，不阻塞下方 MCP RunAsync（共享进程生命周期，退出信号 Task 4 联动处理）
-            _ = webApp.RunAsync();
+            webTask = webApp.RunAsync();
             Console.Error.WriteLine($"[web] DotNet Debugger Web 已启动：http://127.0.0.1:{WebPort}");
         }
 
@@ -384,7 +385,17 @@ public class DotNetDebuggerMcpCmd
         .WithStdioServerTransport().WithToolsFromAssembly();
         // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新 NuGet 磁盘缓存供下一次会话使用，不 await 以免阻塞启动
         _ = AppServices.Updater.RefreshIfStaleAsync();
-        await builder.Build().RunAsync();
+        var mcpTask = builder.Build().RunAsync();
+        if (webTask is not null)
+        {
+            // --web 双 host 并联：任一侧结束，进程等另一侧自然完成（MCP 会话结束或 Web 手动停）。
+            // 各自容错：一侧异常不拖垮另一侧（先完成的异常经 WhenAll 抛，由外层 catch 收口）。
+            await Task.WhenAll(mcpTask, webTask);
+        }
+        else
+        {
+            await mcpTask;
+        }
         return 0;
     }
 }
