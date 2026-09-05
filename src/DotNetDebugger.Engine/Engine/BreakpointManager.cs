@@ -30,6 +30,14 @@ public sealed class BreakpointManager
 
     public IReadOnlyList<DebugBreakpoint> Breakpoints => _breakpoints;
 
+    /// <summary>按模块短名（文件名）或全路径反查模块全路径（CorDebugModule.Name 实际返回全路径）。
+    /// 停点无条件跟随用：由停点模块名定位磁盘文件。未登记返回 null。</summary>
+    public string? GetModulePath(string moduleName)
+    {
+        if (!_modules.TryGetValue(moduleName, out var module)) return null;
+        try { return module.Name; } catch { return null; }
+    }
+
     /// <summary>登记并绑定断点。模块未加载/方法无 IL 抛中文 InvalidOperationException。</summary>
     public DebugBreakpoint Add(string moduleName, int methodToken, int ilOffset)
     {

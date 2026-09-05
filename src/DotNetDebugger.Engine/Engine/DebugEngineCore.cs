@@ -234,6 +234,10 @@ public sealed class DebugEngineCore : IAsyncDisposable
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
         => PostAsyncResult(() => (IReadOnlyList<DebugBreakpoint>)_breakpoints.Breakpoints.ToList(), ct);
 
+    /// <summary>模块短名/全路径 → 模块全路径（磁盘文件定位；未登记返回 null）。</summary>
+    public Task<string?> GetModulePathAsync(string moduleName, CancellationToken ct = default)
+        => PostAsyncResult(() => _breakpoints.GetModulePath(moduleName), ct);
+
     public Task<bool> RemoveBreakpointAsync(int id, CancellationToken ct = default)
         => PostAsyncResult(() => _breakpoints.Remove(id), ct);
 

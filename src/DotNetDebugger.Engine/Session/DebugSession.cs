@@ -54,6 +54,10 @@ public sealed class DebugSession : IAsyncDisposable
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
         => _core.GetBreakpointsAsync(ct);
 
+    /// <summary>模块短名（或全路径）→ 模块全路径（磁盘文件定位，停点无条件跟随用；未登记返回 null）。</summary>
+    public Task<string?> GetModulePathAsync(string moduleName, CancellationToken ct = default)
+        => _core.GetModulePathAsync(moduleName, ct);
+
     public Task<bool> RemoveBreakpointAsync(int id, CancellationToken ct = default)
         => _core.RemoveBreakpointAsync(id, ct);
 

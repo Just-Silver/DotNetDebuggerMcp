@@ -173,15 +173,40 @@ public partial class Debugger
         }
     }
 
-    /// <summary>停点命中时左侧树跟随到命中方法叶子（当前文档即命中类型，方法按停点 token 精确匹配）。</summary>
+    /// <summary>停点跟随（无条件）：命中模块 == 当前文档 → 树内定位；否则经 Engine 模块路径查询反查磁盘文件、
+    /// 由 token 解析类型，整页切到停点类型/方法（树 + 代码视图 + 装饰一并跟随，不再要求 agent 恰好在看命中模块）。</summary>
     private async Task SelectStopTypeAsync()
     {
-        if (_tree is null || _doc is not { IsSuccess: true } || _doc.Error is not null) return;
+        if (_tree is null) return;
         var info = _debug.SessionInfo;
         if (info?.State != DebugSessionState.Stopped || info.LastStop?.TopFrame is not { } frame) return;
-        // 当前文档程序集短名 == 停点模块名才跟随（agent 正在看命中模块的代码才展开树）
-        if (!frame.ModuleName.Equals(Path.GetFileName(_doc.AssemblyPath), StringComparison.OrdinalIgnoreCase)) return;
-        await _tree.SelectTypeAsync(_doc.AssemblyPath, _doc.TypeFullName, frame.MethodToken);
+
+        string assemblyPath, typeFullName;
+        if (_doc is { IsSuccess: true } && frame.ModuleName.Equals(Path.GetFileName(_doc.AssemblyPath), StringComparison.OrdinalIgnoreCase))
+        {
+            assemblyPath = _doc.AssemblyPath;
+            typeFullName = _doc.TypeFullName;
+        }
+        else
+        {
+            var modulePath = await _debug.GetModulePathAsync(frame.ModuleName);
+            if (modulePath is null || !File.Exists(modulePath))
+            {
+                MemoryLog.Write("StopFollow", $"停点模块 {frame.ModuleName} 反查路径失败（模块未登记或文件不在磁盘）");
+                return;
+            }
+            var type = FindTypeByToken(modulePath, frame.MethodToken);
+            if (type is null)
+            {
+                MemoryLog.Write("StopFollow", $"停点 token 0x{frame.MethodToken:x8} 在 {Path.GetFileName(modulePath)} 中未定位到类型");
+                return;
+            }
+            assemblyPath = modulePath;
+            typeFullName = type;
+            MemoryLog.Write("StopFollow", $"无条件跟随 → {Path.GetFileName(modulePath)}::{type} (token 0x{frame.MethodToken:x8})");
+        }
+        await _tree.SelectTypeAsync(assemblyPath, typeFullName, frame.MethodToken);
+        await ShowTypeAsync(assemblyPath, typeFullName);
     }
 
     private async Task LaunchTarget()
@@ -303,6 +328,42 @@ public partial class Debugger
             }
         }
         return 0;
+    }
+
+    /// <summary>按方法 token 反查类型全名（停点无条件跟随用；读模块元数据，无命中返回 null）。</summary>
+    private static string? FindTypeByToken(string dllPath, int methodToken)
+    {
+        if (!File.Exists(dllPath)) return null;
+        using var fs = File.OpenRead(dllPath);
+        using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
+        var mr = pe.GetMetadataReader();
+        foreach (var th in mr.TypeDefinitions)
+        {
+            var td = mr.GetTypeDefinition(th);
+            foreach (var mh in td.GetMethods())
+            {
+                if (System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(mh) == methodToken)
+                    return FullTypeName(mr, th);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>TypeDefinition 全名（命名空间 + 嵌套链，嵌套用 + 连接）。</summary>
+    private static string FullTypeName(System.Reflection.Metadata.MetadataReader mr, TypeDefinitionHandle th)
+    {
+        var td = mr.GetTypeDefinition(th);
+        var names = new List<string> { mr.GetString(td.Name) };
+        var decl = td.GetDeclaringType();
+        while (!decl.IsNil)
+        {
+            var parent = mr.GetTypeDefinition(decl);
+            names.Add(mr.GetString(parent.Name));
+            decl = parent.GetDeclaringType();
+        }
+        names.Reverse();
+        var ns = mr.GetString(td.Namespace);
+        return (ns.Length > 0 ? ns + "." : "") + string.Join("+", names);
     }
 
     public void Dispose()

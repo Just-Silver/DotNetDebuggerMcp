@@ -19,7 +19,7 @@ Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
            DebugValue / DebugVariable / FrameLocation   （纯数据 record）
 ```
 
-- `Session/DebugSession.cs` — **对外门面**（v1 单活动会话，spec §4.1）：静态工厂 `LaunchAsync(commandLine, timeoutMs)` / `AttachAsync(processId)`；`Events` 暴露 `IAsyncEnumerable<DebugEvent>`（无界 Channel，attach 后立刻订阅也能追到缓冲历史）；`SetBreakpointAsync(moduleName, token, ilOffset)` / `ContinueAsync` / `StepInto/Over/OutAsync` / `GetThreads/StackFrames/VariablesAsync` / 异常断点 / `DisconnectAsync`。
+- `Session/DebugSession.cs` — **对外门面**（v1 单活动会话，spec §4.1）：静态工厂 `LaunchAsync(commandLine, timeoutMs)` / `AttachAsync(processId)`；`Events` 暴露 `IAsyncEnumerable<DebugEvent>`（无界 Channel，attach 后立刻订阅也能追到缓冲历史）；`SetBreakpointAsync(moduleName, token, ilOffset)` / `GetBreakpointsAsync` / `GetModulePathAsync(moduleName)`（模块短名→全路径，停点无条件跟随用）/ `ContinueAsync` / `StepInto/Over/OutAsync` / `GetThreads/StackFrames/VariablesAsync` / 异常断点 / `DisconnectAsync`。
 - 注意 `Session/` 目录三个文件声明在**根命名空间** `DotNetDebugger.Engine`（不是 `.Session`），勿按目录臆测。
 
 ## 线程模型（核心纪律，勿破坏）

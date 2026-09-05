@@ -67,7 +67,7 @@ WebHostBootstrap.cs     宿主→Web 装配入口（静态注入 DebugSessionMan
 ## 停点跟随
 
 - 断点命中（轮询 `SessionEventBuffer` 状态跃迁到 Stopped）→ 代码高亮 `ApplyStopHighlightAsync` + 树跟随 `SelectStopTypeAsync`（用 `TopFrame.MethodToken` 匹配方法叶子，选中精确到方法）。
-- 停点模块名 == 当前文档程序集短名才跟随（agent 正看命中模块代码才展开树）。
+- **无条件跟随**：命中模块 == 当前文档 → 树内直接定位；否则经 Engine `GetModulePathAsync`（模块短名→全路径）反查磁盘文件、`FindTypeByToken`（PEReader 元数据）解析类型，整页切到停点类型/方法（树 + 代码 + 装饰一并跟随）。模块未登记/文件不在磁盘则记 MemoryLog 放弃。
 
 ## 动态调试页
 

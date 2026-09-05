@@ -70,6 +70,15 @@ public sealed class DebugViewService
         catch { return []; }
     }
 
+    /// <summary>模块短名（或全路径）→ 模块全路径（停点无条件跟随用；无活动会话/未登记返回 null）。</summary>
+    public async Task<string?> GetModulePathAsync(string moduleName, CancellationToken ct = default)
+    {
+        var active = Active;
+        if (active is null) return null;
+        try { return await active.Session.GetModulePathAsync(moduleName, ct); }
+        catch { return null; }
+    }
+
     /// <summary>继续执行（进程运行至下个断点/退出）。</summary>
     public async Task<string> ContinueAsync(CancellationToken ct = default)
     {

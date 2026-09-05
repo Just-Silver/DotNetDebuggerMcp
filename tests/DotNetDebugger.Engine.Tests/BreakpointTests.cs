@@ -40,6 +40,10 @@ public sealed class BreakpointTests
         var bp = await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0);
         Assert.True(bp.Id > 0);
 
+        // 模块路径反查：断点模块短名 → 全路径（停点无条件跟随数据源）
+        var modulePath = await session.GetModulePathAsync("DebugTarget.dll");
+        Assert.Equal(Path.GetFullPath(Path.ChangeExtension(exe, ".dll")), modulePath);
+
         // attach 后进程停在初始同步点（供设断点）；设完断点后首次 Continue 启动进程
         await session.ContinueAsync();
 
