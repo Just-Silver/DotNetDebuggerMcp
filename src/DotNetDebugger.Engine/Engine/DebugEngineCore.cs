@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using ClrDebug;
 using DotNetDebugger.Engine.Models;
@@ -251,7 +252,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
                 {
                     try
                     {
-                        var moduleName = ilf.Function?.Module?.Name ?? "<unknown>";
+                        var rawModule = ilf.Function?.Module?.Name ?? "<unknown>";
+                        var moduleName = Path.GetFileName(rawModule); // CorDebugModule.Name 返回全路径，归一化为文件名
                         var token = ilf.FunctionToken.Value;
                         var ip = ilf.IP.pnOffset;
                         frames.Add(new DebugStackFrame(new FrameLocation(moduleName, (int)token, ip), idx++)
@@ -266,6 +268,113 @@ public sealed class DebugEngineCore : IAsyncDisposable
             }
             return (IReadOnlyList<DebugStackFrame>)frames;
         }, ct);
+
+    /// <summary>
+    /// 读取指定线程栈顶 IL 帧的局部变量与参数（停顿时调用）。v1：标量/字符串直接渲染；
+    /// 对象降级为摘要；名字为空用 slotN。返回 { "locals": [...], "arguments": [...] }。
+    /// </summary>
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>> GetVariablesAsync(int threadId, CancellationToken ct = default)
+        => PostAsyncResult(() =>
+        {
+            var result = new Dictionary<string, IReadOnlyList<DebugVariable>>
+            {
+                ["locals"] = new List<DebugVariable>(),
+                ["arguments"] = new List<DebugVariable>(),
+            };
+            if (_process is null) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
+
+            CorDebugThread? thread = null;
+            foreach (var t in _process.Threads) { if (t.Id == threadId) { thread = t; break; } }
+            if (thread is null) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
+
+            if (thread.ActiveFrame is not CorDebugILFrame ilf) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
+
+            try
+            {
+                var locals = new List<DebugVariable>();
+                var localValues = ilf.LocalVariables;
+                for (var i = 0; i < localValues.Length; i++)
+                {
+                    try
+                    {
+                        locals.Add(new DebugVariable(null, i, ReadValue(localValues[i]), IsArgument: false));
+                    }
+                    catch { /* 单变量读取失败跳过 */ }
+                }
+                result["locals"] = locals;
+            }
+            catch { /* 局部变量读取失败 */ }
+
+            try
+            {
+                var args = new List<DebugVariable>();
+                var argValues = ilf.Arguments;
+                for (var i = 0; i < argValues.Length; i++)
+                {
+                    try
+                    {
+                        args.Add(new DebugVariable(null, i, ReadValue(argValues[i]), IsArgument: true));
+                    }
+                    catch { /* 单参数读取失败跳过 */ }
+                }
+                result["arguments"] = args;
+            }
+            catch { /* 参数读取失败 */ }
+
+            return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
+        }, ct);
+
+    /// <summary>CorDebugValue → DebugValue（v1：字符串/标量/引用摘要）。进程同步态调用。</summary>
+    private static DebugValue ReadValue(CorDebugValue value)
+    {
+        try
+        {
+            switch (value)
+            {
+                case CorDebugStringValue s:
+                    return DebugValue.Scalar($"\"{s.GetString(s.Length)}\"");
+                case CorDebugGenericValue g:
+                    return DebugValue.Scalar(ReadGeneric(g));
+                case CorDebugReferenceValue r when r.IsNull:
+                    return DebugValue.Scalar("null");
+                case CorDebugReferenceValue r:
+                    return DebugValue.Summary("reference", $"0x{r.Value.Value:x} → <object>");
+                default:
+                    return DebugValue.Summary("value", value.Type.ToString());
+            }
+        }
+        catch (Exception ex)
+        {
+            return DebugValue.Summary("error", $"<读取失败:{ex.Message}>");
+        }
+    }
+
+    private static string ReadGeneric(CorDebugGenericValue g)
+    {
+        var size = g.Size;
+        var buf = Marshal.AllocHGlobal(size);
+        try
+        {
+            g.GetValue(buf);
+            var bytes = new byte[size];
+            Marshal.Copy(buf, bytes, 0, size);
+            return g.Type switch
+            {
+                CorElementType.I1 => ((sbyte)bytes[0]).ToString(),
+                CorElementType.U1 or CorElementType.Boolean => bytes[0].ToString(),
+                CorElementType.I2 => BitConverter.ToInt16(bytes).ToString(),
+                CorElementType.U2 or CorElementType.Char => BitConverter.ToUInt16(bytes).ToString(),
+                CorElementType.I4 => BitConverter.ToInt32(bytes).ToString(),
+                CorElementType.U4 => BitConverter.ToUInt32(bytes).ToString(),
+                CorElementType.I8 => BitConverter.ToInt64(bytes).ToString(),
+                CorElementType.U8 => BitConverter.ToUInt64(bytes).ToString(),
+                CorElementType.R4 => BitConverter.ToSingle(bytes).ToString(),
+                CorElementType.R8 => BitConverter.ToDouble(bytes).ToString(),
+                _ => $"<{size}字节>",
+            };
+        }
+        finally { Marshal.FreeHGlobal(buf); }
+    }
 
     // ---- 事件发布（CallbackHandler 调，回调线程） ----
 
@@ -304,7 +413,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
         try
         {
             if (thread.ActiveFrame is not CorDebugILFrame ilf) return null;
-            var module = ilf.Function?.Module?.Name ?? "<unknown>";
+            var rawModule = ilf.Function?.Module?.Name ?? "<unknown>";
+            var module = Path.GetFileName(rawModule); // 归一化为文件名
             var token = ilf.FunctionToken.Value;
             return new FrameLocation(module, (int)token, ilf.IP.pnOffset);
         }

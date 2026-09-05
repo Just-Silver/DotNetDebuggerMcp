@@ -77,6 +77,10 @@ public sealed class DebugSession : IAsyncDisposable
     public Task<IReadOnlyList<DebugStackFrame>> GetStackFramesAsync(int threadId, CancellationToken ct = default)
         => _core.GetStackFramesAsync(threadId, ct);
 
+    /// <summary>读取指定线程栈顶帧的局部变量与参数（停顿时调用；返回 { "locals", "arguments" } 分组）。</summary>
+    public Task<IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>> GetVariablesAsync(int threadId, CancellationToken ct = default)
+        => _core.GetVariablesAsync(threadId, ct);
+
     // ---- 异常断点 ----
 
     /// <summary>设置 first-chance 异常断点（typeName 空 = 全部异常停下）。</summary>
