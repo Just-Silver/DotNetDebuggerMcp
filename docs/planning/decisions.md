@@ -24,22 +24,36 @@
 - 理由：超大计划降低单文档规模与跨会话上下文压力；每阶段可独立 review/交付。
 - 日期：2026-09-05。
 
+## D8 · 解决方案项目拆分（用户拍板）
+- 决策：**5 项目（一个 exe + 4 库）**，进程永远是一个宿主 exe；拆的是程序集。MCP 与 Web 不拆进程（共享会话）。
+  | # | 程序集 | 类型 | 职责 | 依赖 |
+  |---|---|---|---|---|
+  | 1 | `DotNetDebugger.Decompiler` | 库 | 反编译/静态分析（现 ILSpyMcp 全量迁入） | 无内部依赖 |
+  | 2 | `DotNetDebugger.Engine` | 库 | 调试引擎底层：ClrDebug 封装、断点/步进/栈/值/异常 | ClrDebug、DbgShim |
+  | 3 | `DotNetDebugger.Session` | 库 | 会话服务：命令串行化 + DebugEvent 事件总线 + 状态快照 + agent 轨迹日志 + token/IL→反编译行映射 | Engine + Decompiler |
+  | 4 | `DotNetDebugger.Web` | 库 | WebUI host：Kestrel 内嵌、SSE、REST、前端静态资源 | Session + Decompiler |
+  | 5 | `DotNetDebuggerMcp` | **exe (tool)** | 装配根：CLI + MCP 工具注册 + 握手 + 拉起 Session/Web | 引 1-4 |
+- Session 独立价值：MCP 与 Web 共同依赖的「会话 API」层；Engine 保持纯底层可替换；agent 轨迹日志（Web 回放数据源）不污染引擎。
+- 理由：进程合一避免跨进程事件同步；程序集分层清晰各层独立测试。
+- 日期：2026-09-05。
+
 ## D6 · 命名决策（用户拍板）
 - 决策：主项目/仓库名 **DotNet-Debugger-MCP**。用户明确：「就 DotNet-Debugger-MCP 了」（2026-09-05）。
-- 完整映射（默认方案，子项目名称为建议值可改）：
+- 完整映射（**按 D8 五项目版定稿**）：
   | 对象 | 命名 |
   |---|---|
   | GitHub 仓库 | `DotNet-Debugger-MCP`（原 ILSpyMcp，rename 保留跳转） |
   | 解决方案 | `DotNetDebuggerMcp.slnx` |
-  | 主项目目录/程序集 | `src/DotNetDebuggerMcp/`，命名空间 `DotNetDebuggerMcp` |
-  | 主 NuGet 包 / CLI 命令 | `dotnet-debugger-mcp`（ToolCommandName 同） |
+  | 子项目 1 反编译/静态分析库 | `src/DotNetDebugger.Decompiler/`，命名空间 `DotNetDebugger.Decompiler` |
+  | 子项目 2 调试引擎库 | `src/DotNetDebugger.Engine/`，命名空间 `DotNetDebugger.Engine` |
+  | 子项目 3 会话服务库 | `src/DotNetDebugger.Session/`，命名空间 `DotNetDebugger.Session` |
+  | 子项目 4 WebUI 库 | `src/DotNetDebugger.Web/`，命名空间 `DotNetDebugger.Web` |
+  | 子项目 5 宿主 exe (tool) | `src/DotNetDebuggerMcp/`，命名空间 `DotNetDebuggerMcp` |
+  | 主 NuGet 包 / CLI 命令 | `dotnet-debugger-mcp`（PackAsTool；ToolCommandName 同） |
   | MCP server 注册名 | 建议 `dotnetdebugger`（工具前缀 `dotnetdebugger_*`；待实施确认） |
-  | 子项目 A（反编译/静态分析库） | 建议 `src/DotNetDecompiler/`，命名空间 `DotNetDebugger.Decompiler`（名称待确认） |
-  | 子项目 B（动态调试引擎库） | 建议 `src/DotNetDebugger.Engine/`，命名空间 `DotNetDebugger.Engine`（名称待确认） |
-  | 测试 | `tests/DotNetDebuggerMcp.Tests/`（InternalsVisibleTo 同步） |
-  | Client 端到端 | `src/DotNetDebuggerMcp.Client/` |
-- 命名空间根取向：主项目 `DotNetDebuggerMcp`；库层统一挂 `DotNetDebugger.*` 前缀以同源。
-- 理由：用户拍板；反编译与调试能力经「主项目伞（MCP+Web）+ 两库后缀」表达。
+  | 测试 | `tests/` 各项目对应 `*.Tests`（InternalsVisibleTo 同步） |
+  | Client 端到端 | `src/DotNetDebuggerMcp.Client/`（或并入宿主测试，待实施确认） |
+- 理由：用户拍板；5 项目程序集（D8）+ 统一词干；反编译与调试经 Session 汇集于宿主 exe。
 - 日期：2026-09-05。
 
 ## D5 · v1 动态调试引擎能力范围（用户拍板）
