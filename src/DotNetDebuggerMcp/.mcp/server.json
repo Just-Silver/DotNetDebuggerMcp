@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "description": "内置反编译与调试能力的 .NET MCP 服务器（dotnet-debugger-mcp）。",
+  "name": "io.github.just-silver/dotnet-debugger-mcp",
+  "version": "1.4.0",
+  "packages": [
+    {
+      "registryType": "nuget",
+      "identifier": "dotnet-debugger-mcp",
+      "version": "1.4.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [],
+      "environmentVariables": []
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/Just-Silver/DotNet-Debugger-MCP",
+    "source": "github"
+  }
+}

@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DotNetDebugger.Decompiler/DotNetDebugger.Decompiler.csproj" />
+    <Project Path="src/DotNetDebugger.Engine/DotNetDebugger.Engine.csproj" />
+    <Project Path="src/DotNetDebugger.Session/DotNetDebugger.Session.csproj" />
+    <Project Path="src/DotNetDebugger.Web/DotNetDebugger.Web.csproj" />
+    <Project Path="src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj" />
+  </Folder>
+</Solution>
