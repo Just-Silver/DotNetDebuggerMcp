@@ -11,6 +11,7 @@
     <Project Path="tests/DotNetDebugger.Decompiler.Tests/DotNetDebugger.Decompiler.Tests.csproj" />
     <Project Path="tests/DotNetDebugger.Engine.Tests/DotNetDebugger.Engine.Tests.csproj" />
     <Project Path="tests/DotNetDebugger.Session.Tests/DotNetDebugger.Session.Tests.csproj" />
+    <Project Path="tests/DotNetDebugger.Web.Tests/DotNetDebugger.Web.Tests.csproj" />
     <Project Path="tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj" />
   </Folder>
 </Solution>

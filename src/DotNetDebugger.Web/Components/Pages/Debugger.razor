@@ -1,37 +1,71 @@
 @page "/debugger"
+@using DotNetDebugger.Web.Services
 
 <PageTitle>调试器</PageTitle>
 
 <h3>动态调试</h3>
 
-<div style="height:70vh;border:1px solid #dee2e6;">
+<div class="row mb-2">
+    <div class="col-md-5">
+        <input @bind="_assemblyPath" class="form-control form-control-sm" placeholder="程序集路径（dll/exe）" />
+    </div>
+    <div class="col-md-4">
+        <input @bind="_typeName" class="form-control form-control-sm" placeholder="类型全名，如 ILSpyMcp.Samples.BigClass" />
+    </div>
+    <div class="col-md-3">
+        <button class="btn btn-primary btn-sm" @onclick="LoadType">反编译显示</button>
+        <button class="btn btn-outline-secondary btn-sm ms-1" @onclick="DemoStop">演示停点</button>
+    </div>
+</div>
+@if (_doc is { IsSuccess: true } && _doc.Error is null)
+{
+    <div class="text-muted small mb-1">
+        已加载 @_doc.TypeFullName（@_doc.Lines.Length 行，@_doc.Mapping.Count 条 IL→行映射）
+        @if (_stopInfo is not null)
+        {
+            <span class="ms-2 text-success">停点：方法 token=0x@(_stopInfo.Value.MethodToken.ToString("x8")) offset=@_stopInfo.Value.Offset → 行 @_stopInfo.Value.Line</span>
+        }
+    </div>
+}
+else if (_doc is not null)
+{
+    <div class="text-danger small mb-1">@_doc.Error</div>
+}
+
+<div style="height:65vh;border:1px solid #dee2e6;">
     <CodeViewer @ref="_viewer" />
 </div>
 
-<button class="btn btn-primary mt-2" @onclick="LoadSample">加载示例代码</button>
-
 @code {
     private CodeViewer? _viewer;
+    private readonly DocumentStore _store = new();
+    private SourceDocument? _doc;
+    private (int MethodToken, int Offset, int Line)? _stopInfo;
+    private string _assemblyPath = "";
+    private string _typeName = "ILSpyMcp.Samples.BigClass";
 
-    private async Task LoadSample()
+    private async Task LoadType()
     {
-        if (_viewer is null) return;
-        // 每行加 L{n} 尾注作锚点，消除行号计数歧义
-        const string sample = """
-        using System;                                   // L1
-                                                        // L2
-        public class Sample                             // L3
-        {                                               // L4
-            public static int Add(int a, int b)         // L5
-            {                                           // L6
-                var sum = a + b;                        // L7
-                return sum;                             // L8
-            }                                           // L9
-        }                                               // L10
-        """;
-        await _viewer.SetValueAsync(sample);
-        // 演示装饰：断点在 L5（Add 声明），当前行在 L7（var sum）
-        await _viewer.SetDecorationsAsync([5], 7);
-        await _viewer.RevealLineAsync(7);
+        if (string.IsNullOrWhiteSpace(_assemblyPath) || string.IsNullOrWhiteSpace(_typeName) || _viewer is null) return;
+        _doc = _store.GetOrLoad(_assemblyPath.Trim(), _typeName.Trim());
+        _stopInfo = null;
+        if (_doc.IsSuccess)
+        {
+            await _viewer.SetValueAsync(_doc.Text);
+            await _viewer.SetDecorationsAsync([], null);
+        }
+    }
+
+    /// <summary>演示停点：取当前文档首个方法首个映射的 IL offset，高亮其行（Task 4 接真实 Session 停点）。</summary>
+    private async Task DemoStop()
+    {
+        if (_viewer is null || _doc is null || !_doc.IsSuccess) return;
+        var first = _doc.Mapping.FirstOrDefault();
+        if (first is null) return;
+        var line = DocumentStore.GetStopLine(_doc, first.MethodToken, first.IlOffset);
+        if (line is null) return;
+        _stopInfo = (first.MethodToken, first.IlOffset, line.Value);
+        await _viewer.SetDecorationsAsync([], line);
+        await _viewer.RevealLineAsync(line.Value);
     }
 }
