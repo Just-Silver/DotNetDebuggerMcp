@@ -3,6 +3,8 @@
 > 目标：用 `ClrDebug` 0.4.2（lordmilko，MIT）实现进程内 .NET 调试引擎（启动/附加、token+IL offset 断点、continue、单步、读线程/调用栈/局部变量、first-chance 异常）。
 > 全部签名逐行核对自 NuGet 包 0.4.2 对应的源码 commit `9628778`（nupkg 的 nuspec `<repository commit>` 字段）与官方仓库 Samples/NetCore。**凡标 "核对" 即逐字摘自上述源码，可直接照抄。**
 >
+> **2026-09-05 更新：已用本机源码 `E:\Code\Projects\Externals\DebuggerExternals\ClrDebug`（= lordmilko/ClrDebug，Version 0.4.2，commit `3bd5e3db` = 0.4.2 tag `9628778` + 2 个 Profiler bugfix）二次核对，产出「源码精确版」关键差异见文末附录。**
+>
 > 关键结论先行：
 > - 0.4.2 目标框架 **netstandard2.0 + net8.0**，零依赖。net10.0 项目可直接引用。
 > - 走 **dbgshim** 引导（自动/手动两模式），`DbgShim` 类已在 ClrDebug 中封装，**不需要**自己 P/Invoke dbgshim（仅需 `NativeLibrary.Load` 拿 hModule）。
@@ -577,3 +579,65 @@ e.Thread.CreateStepper().Step(bStepIn: false);   // 然后 e.Controller.Continue
 8. 0.4.2 相对 master 的差异仅限 Profiling 相关；本文 CorDebug/DbgShim API 在 0.4.2 与 master 完全一致（diff 已验证）。
 9. 接口定义默认 `[ComImport]`（非 AOT 构建），net10.0 运行时直接可用；NativeAOT 才需 `GENERATED_MARSHALLING`/`[GeneratedComInterface]` 构建变体。
 10. 你已有 ILSpyMcp 的元数据层（token 反查方法名等）可与这里 `mdMethodDef`/`FunctionToken` 对接：`0x06xxxxxx` 高位即 methoddef。
+
+---
+
+## 附录 A · 源码精确版核对（2026-09-05，E:\Code\Projects\Externals\DebuggerExternals\ClrDebug）
+
+> 用本机 ClrDebug 源码（Version 0.4.2）逐项复核关键 API，作为计划代码骨架的**权威签名源**。与上文文档版的两处差异见 A.3。
+
+### A.1 关键成员精确签名（源码路径核对）
+
+| API | 精确签名 | 源码位置 |
+|---|---|---|
+| `DbgShim` 构造 | `public DbgShim(IntPtr hModule)`（hModule=NativeLibrary.Load(dbgsShimPath)，不负责加载 dll） | `ClrDebug\Extensions\Extensions.DbgShim.cs` |
+| `DbgShim.CreateProcessForLaunch` | `public CreateProcessForLaunchResult CreateProcessForLaunch(string lpCommandLine, bool bSuspendProcess, IntPtr lpEnvironment = default, string lpCurrentDirectory = null)` | 同 L625 |
+| `DbgShim.GetStartupNotificationEvent` | `public IntPtr GetStartupNotificationEvent(int debuggeePID)` | 同 L709 |
+| `DbgShim.EnumerateCLRs` | `public EnumerateCLRsResult EnumerateCLRs(int debuggeePID)`（须配套 CloseCLREnumeration） | 同 L671 |
+| `DbgShim.CreateVersionStringFromModule` | `public string CreateVersionStringFromModule(int pidDebuggee, string szModuleName)` | 同 L409 |
+| `DbgShim.CreateDebuggingInterfaceFromVersionEx` | `public CorDebug CreateDebuggingInterfaceFromVersionEx(CorDebugInterfaceVersion iDebuggerVersion, string szDebuggeeVersion)`（**返回已包装 CorDebug**；推荐入口，版本传 `CorDebugVersion_4_0`） | 同 L493 |
+| `DbgShim.CloseCLREnumeration` | `void CloseCLREnumeration(EnumerateCLRsResult result)`（**不会** signal continue 事件，须先 SetEvent） | 同 L340 |
+| `DbgShim.ResumeProcess/CloseResumeHandle` | `void ResumeProcess(IntPtr hResumeHandle)` / `void CloseResumeHandle(IntPtr hResumeHandle)` | 同 L896/L383 |
+| `DbgShim.RegisterForRuntimeStartup` | 原生版收 `PSTARTUP_CALLBACK(IntPtr pCordb, IntPtr parameter, HRESULT hr)`（pCordb 用 IntPtr！）；**推荐用扩展版** `RuntimeStartupCallback(CorDebug pCordb, IntPtr parameter, HRESULT hr)` | 同 L738 + 扩展 L946-1116 |
+| `CorDebug` 构造 | `public CorDebug(ICorDebug raw)`（经 DbgShim 创建，勿 new 无参——那走桌面 CLR） | `ClrDebug\Managed\Cordb\CorDebug.cs` L25 |
+| `CorDebug.Initialize/SetManagedHandler/DebugActiveProcess` | `void Initialize()` / `void SetManagedHandler(ICorDebugManagedCallback pCallback)`（传 CorDebugManagedCallback 实例）/ `CorDebugProcess DebugActiveProcess(int id, bool win32Attach)` | 同 L39/L95/L258 |
+| `CorDebug.GetProcess` | `public CorDebugProcess GetProcess(int dwProcessId)` | 同 L339 |
+| `EnumerateCLRsResultItem` | `{ IntPtr Handle; string Path; }`（Handle=continue-startup 事件；Path=coreclr.dll 完整路径） | `ClrDebug\Managed\ResultTypes\EnumerateCLRsResult.cs` |
+| `CreateProcessForLaunchResult` | `{ int ProcessId; IntPtr ResumeHandle; }` | `ClrDebug\Managed\ResultTypes\CreateProcessForLaunchResult.cs` |
+
+### A.2 断点/单步/栈/变量链（精确版）
+
+| 步骤 | 精确签名 | 位置 |
+|---|---|---|
+| 模块→函数 | `CorDebugFunction GetFunctionFromToken(mdMethodDef methodDef)`（mdMethodDef 强类型；int 字面量可隐式转） | `CorDebugModule.cs` L435 |
+| 函数→IL | `CorDebugCode ILCode { get; }` | `CorDebugFunction.cs` L131 |
+| IL→断点 | `CorDebugFunctionBreakpoint CreateBreakpoint(int offset)`（创建后仍须 Activate） | `CorDebugCode.cs` L280 |
+| 断点激活 | `void Activate(bool bActive)` / `bool IsActive { get; }`（基类 CorDebugBreakpoint） | `CorDebugBreakpoint.cs` L75/L46 |
+| 断点命中属性 | `CorDebugFunctionBreakpoint.Function`(CorDebugFunction)/`.Offset`(int) | `CorDebugFunctionBreakpoint.cs` L25/L61 |
+| 线程→stepper | `CorDebugStepper CreateStepper()` | `CorDebugThread.cs` L472 |
+| 帧→stepper | `CorDebugStepper CreateStepper()` | `CorDebugFrame.cs` L302 |
+| Stepper 控制 | **`void Step(bool bStepIn)`**（true=into/false=over）/ `void StepRange(...)` / **`void StepOut()`**（原生支持！）/ `void Deactivate()` / `bool IsActive { get; }` / `void SetRangeIL(bool bIL)` | `CorDebugStepper.cs` L175/L212/**L252**/L68/L32/L281 |
+| 线程→栈遍历 | `CorDebugStackWalk CreateStackWalk()` | `CorDebugThread.cs` L862 |
+| StackWalk | `CorDebugFrame Frame { get; }` / `HRESULT TryGetFrame(out CorDebugFrame)` / `void Next()` / `HRESULT TryNext()` | `CorDebugStackWalk.cs` L24/L55/L182/L204 |
+| Frame 公共 | `Function`/`Code`/`FunctionToken`(mdMethodDef)/`Caller`/`Callee`/`CreateStepper()` | `CorDebugFrame.cs` |
+| ILFrame | `GetIPResult IP { get; }`（`{ int pnOffset; CorDebugMappingResult pMappingResult; }`）/ `CorDebugValue[] LocalVariables { get; }` / `CorDebugValue[] Arguments { get; }` / `EnumerateLocalVariables()` / `EnumerateArguments()` / `GetLocalVariable(int)` | `CorDebugILFrame.cs` L34/L145/L237/L156/L248/L199 |
+| Value 分派 | `CorDebugValue.New(ICorDebugValue)` → ArrayValue/BoxValue/StringValue/Context/ObjectValue/HandleValue/ReferenceValue/GenericValue | `Value\CorDebugValue.cs` L17-47 |
+| GenericValue 读值 | `void GetValue(IntPtr pTo)`（读原始字节，自行 Marshal） | `CorDebugGenericValue.cs` L33 |
+| StringValue | `string GetString(int cchString)` / `int Length` | `CorDebugStringValue.cs` L57/L27 |
+| ReferenceValue | `bool IsNull` / `CORDB_ADDRESS Value` / `CorDebugValue Dereference()` | `CorDebugReferenceValue.cs` |
+| Controller（Process/AppDomain 基类） | `bool IsRunning` / `void Continue(bool fIsOutOfBand)` / `CorDebugThread[] Threads { get; }` / `void Detach()` / `void Terminate(int exitCode)` | `CorDebugController.cs` L44/L124/L203/L297/L328 |
+| 回调统一入口 | `event EventHandler<CorDebugManagedCallbackEventArgs> OnAnyEvent`（每个事件后触发）；专用事件 `OnBreakpoint/OnStepComplete/OnException/OnException2/OnCreateProcess/OnExitProcess/OnLoadModule/...` | `CorDebugManagedCallback.cs` |
+
+### A.3 与文档版的两处差异（以源码为准）
+
+1. **`CorDebugStepper` 没有 `Activate` 方法**（那是 `ICorDebugBreakpoint.Activate`）。Stepper 的控制是 `Step/StepRange/StepOut/Deactivate`，Step/StepOut 隐含激活。**step out 用原生 `StepOut()` 即可**（Task 6 计划原写的「无直接 StepOut」是错的，修正）。
+2. **`ICorDebugILFrame.GetIP` 的 out 参数被封装为 `GetIPResult` 结构**（属性名 `pnOffset` 保留原生大小写），不是裸双 out。ClrDebug 统一了「抛异常版 + Try 版」双 API。
+
+### A.4 附加关键事实
+
+- **`mdToken` 家族强类型结构**（`Extensions\Tokens.cs` 生成代码）：`mdMethodDef/mdTypeDef/mdToken...` 均含 `uint Value/int Rid/CorTokenType Type/bool IsNil`；**int/uint ↔ token 双向隐式转换**，`mdMethodDef md = 0x06000005;` 或 `int t = someMdMethodDef;` 均可。具体类型间互转是 explicit（带 Type 校验）。
+- **`PSTARTUP_CALLBACK` 的 pCordb 必须 IntPtr**：直接用 `ICorDebug` 类型在 .NET Core/NativeAOT 下 marshalling 会崩（README 明确）；用扩展版 `RuntimeStartupCallback(CorDebug,...)` 最省事。
+- **`EnumerateCLRsResult.CloseCLREnumeration` 不会 signal continue 事件**——必须先 `NativeMethods.SetEvent(runtime.Handle)` 再 Close（Manual 引导易漏）。
+- 事件 Args 统一继承 `CorDebugManagedCallbackEventArgs`：`Kind`（枚举）/`Controller`（惰性分派）/`Continue`（**仅提示，不自动调用**，仍须手动 `Controller.Continue(false)`）。
+- `OnException2`（Callback2，.NET 2.0+）比旧 `OnException` 信息更全（Frame/Offset/EventType/Flags），现代引擎建议用它判断 first-chance。
+- 样例 `Samples\NetCore\Program.cs` 的 Manual 引导流程（L63-114）是引擎 launch 引导的权威模板：CreateProcessForLaunch(suspend)→GetStartupNotificationEvent→ResumeProcess→WaitForSingleObject→EnumerateCLRs→CreateVersionStringFromModule→CreateDebuggingInterfaceFromVersionEx→Initialize→SetManagedHandler→DebugActiveProcess→**SetEvent(runtime.Handle)**→CloseCLREnumeration。

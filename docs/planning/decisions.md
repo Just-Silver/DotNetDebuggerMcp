@@ -2,6 +2,12 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D11 · P2 测试目标与验证形态、交付边界（用户拍板）
+- 决策：**P2 单测调试目标 = generate-testdata.ps1 追加生成 `DebugTarget.exe`**（含固定方法/断点锚点/按需跑固定逻辑等待断点；沿用脚本生成+git 忽略模式，token 稳定可预测）。
+- 决策：**Engine 验证形态 = 测试进程直接 attach**（xUnit 测试进程作为调试器宿主，启动 DebugTarget 子进程并 attach；符合真实形态：宿主进程调 ClrDebug attach 子进程）。
+- 决策：**P2 交付边界 = Engine 库 + 单测 + CLI 驱动调试命令**（宿主 `-dbg` 子命令供手动验证；MCP 调试工具面留 P3）。
+- 日期：2026-09-05。
+
 ## D10 · P1 测试样本命名空间保留（用户拍板）
 - 决策：tests/TestData 样本命名空间 `ILSpyMcp.Samples`/`ILSpyMcp.SamplesExt` 与 dll 名 `ILSpyMcp.TestSamples(.Ext).dll` **保留不变**（后续再改）。产品代码/配置已全部脱钩新名；测试样本是虚构隔离程序集，不影响脱钩目标。
 - 理由：改动面最小、回归风险低（改名需动 40 文件/312 处断言 + 重新生成 dll）。
