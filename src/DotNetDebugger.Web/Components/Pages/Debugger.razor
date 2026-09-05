@@ -66,8 +66,77 @@ else if (_doc is not null)
     <div class="text-danger small mb-1">@_doc.Error</div>
 }
 
-<div style="height:55vh;border:1px solid #dee2e6;">
-    <CodeViewer @ref="_viewer" />
+<div class="row g-2">
+    <div class="col-8">
+        <div style="height:55vh;border:1px solid #dee2e6;">
+            <CodeViewer @ref="_viewer" />
+        </div>
+    </div>
+    <div class="col-4">
+        <!-- 调用栈 -->
+        <Card HeaderText="@($"调用栈（{_stack.Count}）")" class="mb-2">
+            <BodyTemplate>
+                @if (_stack.Count == 0)
+                {
+                    <div class="text-muted small">进程停时显示</div>
+                }
+                else
+                {
+                    <div style="max-height:22vh;overflow:auto;">
+                        <ListGroup TItem="DebugStackFrame" Items="@_stack.ToList()">
+                            <ItemTemplate>
+                                <div class="@(context.FrameIndex == 0 ? "text-warning fw-bold" : "") small">@context.Location</div>
+                            </ItemTemplate>
+                        </ListGroup>
+                    </div>
+                }
+            </BodyTemplate>
+        </Card>
+        <!-- 局部变量（按作用域分组） -->
+        <Card HeaderText="局部变量/参数" class="mb-2">
+            <BodyTemplate>
+                @if (_variables.Count == 0)
+                {
+                    <div class="text-muted small">进程停时显示</div>
+                }
+                else
+                {
+                    <div style="max-height:22vh;overflow:auto;">
+                        @foreach (var (scope, vars) in _variables)
+                        {
+                            <div class="small text-secondary mt-1">[@scope]</div>
+                            <ListGroup TItem="DebugVariable" Items="@vars.ToList()">
+                                <ItemTemplate>
+                                    <div class="small font-monospace">slot@(context.Slot) = @context.Value.Display</div>
+                                </ItemTemplate>
+                            </ListGroup>
+                        }
+                    </div>
+                }
+            </BodyTemplate>
+        </Card>
+        <!-- 线程 -->
+        <Card HeaderText="@($"线程（{_threads.Count}）")">
+            <BodyTemplate>
+                @if (_threads.Count == 0)
+                {
+                    <div class="text-muted small">进程停时显示</div>
+                }
+                else
+                {
+                    <div style="max-height:15vh;overflow:auto;">
+                        <ListGroup TItem="DebugThreadInfo" Items="@_threads.ToList()">
+                            <ItemTemplate>
+                                <div class="small font-monospace @(context.ThreadId == _debug.Active?.Buffer.StoppedThreadId ? "text-warning fw-bold" : "")">
+                                    thread @context.ThreadId@(context.ThreadId == _debug.Active?.Buffer.StoppedThreadId ? " (停)" : "")
+                                </div>
+                            </ItemTemplate>
+                        </ListGroup>
+                    </div>
+                }
+            </BodyTemplate>
+        </Card>
+    </div>
 </div>
 
 @code {
@@ -82,6 +151,10 @@ else if (_doc is not null)
     private string? _lastStopText;   // 最近停点
     private string? _ctrlMessage;    // 控制操作结果
     private bool _loading;
+    private IReadOnlyList<DebugStackFrame> _stack = [];
+    private IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>> _variables =
+        new Dictionary<string, IReadOnlyList<DebugVariable>>();
+    private IReadOnlyList<DebugThreadInfo> _threads = [];
     private CancellationTokenSource? _pollCts;
     private System.Timers.Timer? _pollTimer;
     /// <summary>演示目标 DebugTarget.exe（从仓库根上溯定位 tests/TestData）。</summary>
@@ -129,6 +202,22 @@ else if (_doc is not null)
         // 停点跃迁检测：状态变为 Stopped 时触发代码视图高亮（断点命中自动定位语句行）
         var transitionedToStopped = newState == "已停止" && _state != "已停止";
         _state = newState;
+        // 面板数据：停时读栈/变量/线程（Engine 同步停态才可读）；非停清空
+        if (newState == "已停止")
+        {
+            try
+            {
+                _stack = await _debug.GetStackAsync();
+                _variables = await _debug.GetVariablesAsync();
+                _threads = await _debug.GetThreadsAsync();
+            }
+            catch { /* 面板读取失败不阻断状态刷新 */ }
+        }
+        else
+        {
+            _stack = [];
+            _variables = new Dictionary<string, IReadOnlyList<DebugVariable>>();
+        }
         StateHasChanged();
         if (transitionedToStopped)
         {

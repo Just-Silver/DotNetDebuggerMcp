@@ -109,4 +109,13 @@ public sealed class DebugViewService
         try { return await active.Session.GetVariablesAsync(tid, ct); }
         catch { return new Dictionary<string, IReadOnlyList<DebugVariable>>(); }
     }
+
+    /// <summary>托管线程列表（任意状态可读）。</summary>
+    public async Task<IReadOnlyList<DebugThreadInfo>> GetThreadsAsync(CancellationToken ct = default)
+    {
+        var active = Active;
+        if (active is null) return [];
+        try { return await active.Session.GetThreadsAsync(ct); }
+        catch { return []; }
+    }
 }
