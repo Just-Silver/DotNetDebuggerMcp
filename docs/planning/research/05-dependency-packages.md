@@ -1,6 +1,24 @@
 # 调研 · 依赖包清单与许可（动态调试引擎 + WebUI）
 
 > 目的：明确「动态调试引擎」技术路线要用的 NuGet 包，逐包给出用途/许可/版本线索。日期：2026-09-05。
+> 概念澄清（用户问答，2026-09-05）：**ICorDebug / ClrDebug / ClrMD** 三者关系见文末附录 A。
+
+## 附录 A · ICorDebug / ClrDebug / ClrMD 概念澄清
+
+| | ICorDebug | ClrDebug | ClrMD（Microsoft.Diagnostics.Runtime） |
+|---|---|---|---|
+| 是什么 | 微软**原生 COM 接口集** | 社区 C# 1:1 封装（lordmilko，MIT，NuGet） | 微软官方 C# 诊断库（MIT，NuGet） |
+| 本质 | 非托管 API（ICorDebugProcess/Thread/Value/Eval/Stepper…） | ICorDebug 的 C# 版（底层仍调 COM） | 独立数据读取层，走 DAC（mscordacwks） |
+| 定位 | 活动调试（控制执行） | = ICorDebug（同一能力） | 只读内省（不控制执行） |
+| 断点/单步/求值/恢复 | ✅ | ✅ | ❌（官方 FAQ：not a debugging api） |
+| 读栈/变量/对象 | ✅ | ✅ | ✅（更高层友好） |
+| 存在形式 | 非 NuGet（系统原生 mscordbi + dbgshim） | NuGet（内部加载原生 dll） | NuGet |
+| 典型使用者 | VS/WinDbg/dnSpy 底层 | C# 写调试器的人（本项目） | dotnet-dump、堆分析 |
+
+- 类比：ICorDebug=手术器械（native 原件）；ClrDebug=同套器械装 C# 手柄（免手写 COM interop；dnSpy 自写 dndbg 95 文件干的就是这件事）；ClrMD=CT/内窥镜（不切开看清内部，不能下刀）。
+- 通道区别：ICorDebug/ClrDebug 走**调试通道**（进程真实暂停/继续，每进程仅一个调试器）；ClrMD 走**数据通道**（DAC，live 需暂停或快照，不与调试器争名额，可与调试会话共存）。
+- 本项目：引擎主通道用 ClrDebug；ClrMD 仅作可选旁路（dump 事后分析，v1 不引）。
+
 > 核心判断（用户问「dnSpyEx 核心库是否自研」）：**dnSpyEx 调试核心 100% 自研**——dndbg 层手写 ICorDebug COM 封装（95 cs）、Impl 自研引擎状态机、Interpreter 自研 IL 解释器、Roslyn.ExpressionCompiler 自研 fork；底层仅依赖微软系统级非托管组件（ICorDebug/mcordbi + DbgShim），第三方托管包只有工具性的 dnlib/Iced/ClrMD1.x/VS.Text。**生态中没有 MIT 的开箱即用调试引擎库**，引擎层绕不开自研。
 
 ## 技术路线定位
