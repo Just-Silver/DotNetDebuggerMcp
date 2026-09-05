@@ -53,6 +53,39 @@ public sealed class DebugSessionManager : IAsyncDisposable
         return Activate(session, $"attach pid={processId}");
     }
 
+    /// <summary>
+    /// v1 启动并附加：内部启动目标进程（等待进入 Main 稳定区让模块加载），再 attach——绕开引擎 launch 路径
+    /// 「进程停初始点但目标模块未加载、断点设不了」的时序（引擎 launch 早期断点/pending 绑定列 v2）。
+    /// 目标需有启动延迟（如 DebugTarget 的 delay 参数）提供 attach 窗口。
+    /// </summary>
+    public async Task<ActiveDebugSession> LaunchAndAttachAsync(string commandLine, CancellationToken ct = default)
+    {
+        var parts = commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var exePath = Path.GetFullPath(parts[0]);
+        var args = parts.Length > 1 ? string.Join(' ', parts[1..]) : "";
+
+        var psi = new System.Diagnostics.ProcessStartInfo(exePath, args)
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        using var process = System.Diagnostics.Process.Start(psi)
+            ?? throw new InvalidOperationException($"无法启动目标进程：{exePath}");
+        // 排空 stdout/stderr 防管道阻塞
+        process.OutputDataReceived += (_, _) => { };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+
+        // 等目标进入 Main 稳定区（CLR 已加载、模块可枚举）——固定等 1s；期间退出则报错
+        await Task.Delay(1000, ct);
+        if (process.HasExited)
+            throw new InvalidOperationException(
+                $"目标进程过早退出（{exePath}）。调试目标需有启动延迟（attach 窗口），如 DebugTarget 可传 delay 参数。");
+
+        return await AttachAsync(process.Id, ct);
+    }
+
     /// <summary>关闭活动会话（断开调试，进程继续独立运行）。</summary>
     public async Task CloseAsync(CancellationToken ct = default)
     {
