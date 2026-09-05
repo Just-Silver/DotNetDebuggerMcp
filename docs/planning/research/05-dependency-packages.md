@@ -57,6 +57,8 @@
 
 ## WebUI 侧包清单（v1 规划）
 
+> **Superseded**（2026-09-05）：WebUI 技术栈已定稿为 Blazor Server + BootstrapBlazor + Monaco（见 decisions D4 与 specs/2026-09-05-p4-webui.md）。本节不再适用。
+
 | 侧 | 包/资产 | 许可 | 备注 |
 |---|---|---|---|
 | 服务端 | ASP.NET Core（`Microsoft.AspNetCore.App` 框架引用）+ `TypedResults.ServerSentEvents`（.NET 10） | MIT | 不额外引 SignalR |

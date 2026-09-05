@@ -12,8 +12,8 @@
 
 | 阶段 | 主题 | 对应实施计划 |
 |---|---|---|
-| P1 | 仓库改名与拆分（5 项目骨架 + 反编译代码迁入） | `plans/2026-09-05-p1-rename-and-split.md`（**已完成** ✅ 2026-09-05） |
-| P2 | 动态调试引擎 v1（Engine） | `plans/2026-09-05-p2-engine-v1.md`（**已完成** ✅ 2026-09-05） |
-| P3 | 会话层 + MCP 调试工具面（Session + McpHost） | `plans/2026-09-05-p3-mcp-tools.md`（**已完成** ✅ 2026-09-05） |
-| P4 | WebUI（Web，细节在 P4 前单独细化） | `plans/...-p4-webui.md`（未写） |
+| P1 | 仓库改名与拆分（5 项目骨架 + 反编译代码迁入） | `archive/plans/2026-09-05-p1-rename-and-split.md`（**已完成** ✅ 2026-09-05，已归档） |
+| P2 | 动态调试引擎 v1（Engine） | `archive/plans/2026-09-05-p2-engine-v1.md`（**已完成** ✅ 2026-09-05，已归档） |
+| P3 | 会话层 + MCP 调试工具面（Session + McpHost） | `archive/plans/2026-09-05-p3-mcp-tools.md`（**已完成** ✅ 2026-09-05，已归档） |
+| P4 | WebUI（Web，细节在 P4 前单独细化） | `archive/plans/2026-09-05-p4-1-documentservice.md`（**已完成** ✅，已归档）+ `plans/2026-09-05-p4-2-webui.md`（**进行中**） |
 | P5 | 打磨与发布 | `plans/...-p5-release.md`（未写） |

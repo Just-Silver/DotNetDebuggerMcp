@@ -37,10 +37,10 @@
 - 理由：防止会话上下文丢失；多文件便于外部引用与分工。
 - 日期：2026-09-05。
 
-## D3 · 动态调试技术主通道（调研结论，待用户最终确认）
+## D3 · 动态调试技术主通道（调研结论，已确认）
 - 决策（建议）：`ClrDebug (MIT)` + `Microsoft.Diagnostics.DbgShim (MIT)` + 自研 ICorDebug 事件循环/断点/栈帧/值树/求值子集。dnSpyEx(GPL)/debug-mcp(AGPL) 只 clean-room 参考不链接不抄码。
 - 理由：活动调试唯一下层通道是 ICorDebug；ClrDebug 是 MIT 全量 COM 封装底座；自研量级被 debug-mcp/sharpdbg 证明可行（1 人维护规模）。
-- 状态：**待用户确认**（open-questions.md #1）。
+- 状态：**已确认**（用户 2026-09-05；原 open-questions.md #1）。
 - 日期：2026-09-05。
 
 ## D7 · 实施节奏与文档拆分（用户拍板）
@@ -108,5 +108,3 @@
 - 已查证（bb-llms，2026-09-05）：BB 无代码编辑器/高亮组件（editor→EditorForm；code/highlight 空；textarea→Textarea）。
 - 遗留：各面板具体用哪些 BB 组件 → P4 细化 spec 时定；事件→Blazor 刷新机制（IAsyncEnumerable/订阅）P4 细化。
 - 日期：2026-09-05。
-
-## D7 · 实施节奏与文档拆分（用户拍板）

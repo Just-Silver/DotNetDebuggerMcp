@@ -1,6 +1,6 @@
 # DotNet-Debugger-MCP 总览设计（Overview Spec）
 
-> **日期**：2026-09-05　**状态**：草稿（待用户 review）　**分支**：plan/dynamic-debugging-and-rename
+> **日期**：2026-09-05　**状态**：已确认（用户 2026-09-05 review OK）　**分支**：plan/dynamic-debugging-and-rename
 > 本 spec 是 P1-P5 各实施计划的**唯一依据**（plan 从 spec 论证）。配套：`docs/planning/` 下 decisions D1-D8、research/01-05、01-vision-and-scope。
 
 ## 0. 一句话

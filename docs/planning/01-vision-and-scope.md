@@ -1,10 +1,10 @@
 # 01 · 愿景与范围（VISION & SCOPE）
 
-> 状态：草稿（随澄清演进）。日期：2026-09-05。
+> 状态：**愿景已落地**（P1-P4 大部分实现，2026-09-05；保留作历史背景）。日期：2026-09-05。
 
 ## 1. 背景与现状
 
-当前仓库 `ILSpyMcp`：一个 .NET MCP 服务器（net10.0、PackAsTool），在**进程内**用 NuGet 包 `ICSharpCode.Decompiler`（MIT）实现反编译，全部走 stdio。功能成熟：
+原仓库（历史名 `ILSpyMcp`，2026-09-05 改名 DotNet-Debugger-MCP）：一个 .NET MCP 服务器（net10.0、PackAsTool），在**进程内**用 NuGet 包 `ICSharpCode.Decompiler`（MIT）实现反编译，全部走 stdio。功能成熟：
 
 - 16 个 MCP 工具（`decompile*`/`list_types`/`signature`/`hierarchy`/`dependencies`/`call_graph`/`search_string`/`field_access`/`interface_usage`/`generic_instantiations`/`call_chain`/`assembly_info`/`cache_stats` 等），CLI 与 MCP 共用执行层。
 - 纯元数据层走 PEReader（不加载程序集、不反编译 IL），反编译走 ICSharpCode.Decompiler。
