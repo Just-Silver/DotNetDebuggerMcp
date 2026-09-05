@@ -13,8 +13,8 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 public static class DebugBreakpointTool
 {
     /// <summary>
-    /// 设置断点：按 模块名 + 方法 token（0x06 开头）+ IL offset 定位。模块需已加载
-    /// （launch 后等模块加载或先 debug_continue 让模块加载）。返回断点 id。
+    /// 设置断点：按 模块名 + 方法 token（0x06 开头）+ IL offset 定位。模块已加载即绑定；
+    /// 未加载登记为 pending（加载后自动绑定）。返回断点 id。
     /// </summary>
     /// <param name="moduleName">模块名（如 DebugTarget.dll）（必填）。</param>
     /// <param name="methodToken">方法 token（0x06000005，从反编译 signature 行尾取）（必填）。</param>
@@ -22,7 +22,7 @@ public static class DebugBreakpointTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示（断点 id）或错误提示。</returns>
     [McpServerTool]
-    [Description("设置断点：按 模块名+方法 token（0x06 开头，从反编译 signature 行尾取）+IL offset 定位。模块需已加载。返回断点 id；设好后 debug_continue 运行至命中。")]
+    [Description("设置断点：按 模块名+方法 token（0x06 开头，从反编译 signature 行尾取）+IL offset 定位。模块已加载即绑定，未加载则登记为待绑定（加载后自动绑定）。返回断点 id；设好后 debug_continue 运行至命中。")]
     public static async Task<string> DebugBreakpointSet(
         [Description("模块名（如 DebugTarget.dll）（必填）。")] string moduleName = "",
         [Description("方法 token（0x06000005，从反编译 signature 行尾或 #MEMBER 取）（必填）。")] string methodToken = "",
@@ -41,12 +41,36 @@ public static class DebugBreakpointTool
         {
             var bp = await active.Session.SetBreakpointAsync(moduleName, token, ilOffset, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{moduleName} {methodToken}+{ilOffset}", $"id={bp.Id}");
-            return $"断点已设: id={bp.Id} 位置={bp}。用 debug_continue 运行至命中。";
+            return bp.IsBound
+                ? $"断点已设: id={bp.Id} 位置={bp}。用 debug_continue 运行至命中。"
+                : $"断点已登记: id={bp.Id} 位置={bp}（模块 {moduleName} 尚未加载，加载后自动绑定）。" +
+                  "模块名需与已加载模块一致；绑定状态用 debug_breakpoint_list 查看。用 debug_continue 运行至命中。";
         }
         catch (Exception ex)
         {
             return $"设置断点失败：{ex.Message}";
         }
+    }
+
+    /// <summary>
+    /// 列出当前会话全部断点（id、位置、绑定状态）。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>断点清单或无断点提示。</returns>
+    [McpServerTool]
+    [Description("列出当前会话的全部断点（id、模块、方法 token、IL offset、绑定状态）。无断点返回提示。")]
+    public static async Task<string> DebugBreakpointList(CancellationToken cancellationToken = default)
+    {
+        var active = DebugSessionService.Manager.Active;
+        if (active is null) return "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。";
+
+        var bps = await active.Session.GetBreakpointsAsync(cancellationToken);
+        DebugSessionService.Manager.Actions.Log("debug_breakpoint_list", "", $"{bps.Count} 个");
+        if (bps.Count == 0)
+            return "当前无断点。用 debug_breakpoint_set 设置。";
+        var lines = bps.Select(b =>
+            $"  id={b.Id} {b.ModuleName}!0x{b.MethodToken:x8}+{b.IlOffset} {(b.IsBound ? "已绑定" : "未绑定（模块未加载，加载后自动绑定）")}");
+        return $"断点列表（{bps.Count} 个）:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
     }
 
     /// <summary>

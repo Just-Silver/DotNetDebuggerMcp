@@ -9,11 +9,11 @@
 - `Tools/`（`DotNetDebuggerMcp.Tools`）— 反编译 4（Decompile/DecompileMember/DecompileToDir/DecompileToProject）+ 元数据 13（ListTypes/Signature/Hierarchy/Dependencies/CallGraph/AssemblyInfo/InterfaceUsage/GenericInstantiation/SearchString/FieldAccess/CallChain/CacheStats/…）+ **`Debugger/`（5 个 debug_* 工具类，见下）**
 - `Tools/Debugger/` — **动态调试 MCP 工具面**（git 状态：整目录 5 文件当时未提交——提交前确认）：
   - `DebugSessionTool`：`debug_launch`/`debug_attach`/`debug_disconnect`/`debug_state`
-  - `DebugBreakpointTool`：`debug_breakpoint_set`(模块名+token+IL offset)/`_remove`/`_clear`
-  - `DebugControlTool`：`debug_continue`/`debug_step`(into/over/out)
+  - `DebugBreakpointTool`：`debug_breakpoint_set`(模块名+token+IL offset；模块未加载=登记待绑定)/`_remove`/`_clear`/`_list`(含绑定状态)
+  - `DebugControlTool`：`debug_continue`/`debug_step`(into/over/out)/`debug_wait`(等停点 1-300s 直接返回停点现场，超时返回当前状态不报错)
   - `DebugInspectTool`：`debug_stack`/`debug_threads`/`debug_variables`
   - `DebugExceptionTool`：`debug_exceptions`(typeName 空=全部，精确过滤 v2)/`_clear`
-  - 全部是 `Services.DebugSessionService.Manager` 的薄包装；**控制工具异步返回（带默认超时），不等停点**；栈/变量读取前置校验 `Buffer.CurrentState == Stopped`（否则提示先 debug_continue 到停点）；缺省 threadId=0 用 `Buffer.StoppedThreadId`。每个工具调用后写 `Manager.Actions.Log(...)` 供 Web 回放。
+  - 全部是 `Services.DebugSessionService.Manager` 的薄包装；**控制工具异步返回（带默认超时），不等停点**（`debug_wait` 例外：其职责就是等停点，同样带超时上限与「超时=放弃等待」约定）；栈/变量读取前置校验 `Buffer.CurrentState == Stopped`（否则提示先 debug_continue 到停点）；缺省 threadId=0 用 `Buffer.StoppedThreadId`。每个工具调用后写 `Manager.Actions.Log(...)` 供 Web 回放。
 - `DebugCli/` — `DebugCliRunner`：`-dbg` 一次性调试（**与 MCP debug 工具完全独立**：绕过 Manager，直连 `DebugSession.AttachAsync` + 轮询事件流），供手动验证引擎。
 - `Services/` — `DebugSessionService`（静态单例包装 Session `DebugSessionManager`）、`AgentViewService`（静态包装 Web `AgentViewContext`，Revision 机制）、`CheckTool`（非 MCP 工具，CLI `-c`）、`AppServices`（Cache/Pipeline/NuGet/Updater/StatusReport 单例）、`ToolExecutor`（`ResolveAssembly`/`RunPipelineAsync`/`RunMergedAsync`/`RunToDisk`/`RunMetadata`/`RunMetadataPe`）。**本层不得反向引用 Tools**。反编译管线执行时经 `AgentViewService.Context.Update` 写「agent 正在看什么」（当前仅 hook 反编译类，调试工具尚未写）。
 - `Pipeline/ToolPipeline.cs` — 共享执行管道：缓存命中 → 进程内反编译回源（同 key 并发单飞）→ lines 分页；`IsErrorResult` 为 true 抛异常不入缓存。

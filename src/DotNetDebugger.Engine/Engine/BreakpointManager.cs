@@ -14,18 +14,37 @@ public sealed class BreakpointManager
     private readonly Dictionary<string, CorDebugModule> _modules = new(StringComparer.OrdinalIgnoreCase);
     private int _nextId = 1;
 
-    /// <summary>模块加载时登记（供按名查找；Name 可能是全路径，归一化为文件名）。</summary>
-    public void TrackModule(CorDebugModule module)
+    /// <summary>
+    /// 模块加载时登记（供按名查找；Name 可能是全路径，归一化为文件名），并重绑该模块下
+    /// 未绑定的 pending 断点。全部调用在引擎 MTA 线程（attach 枚举 / 命令泵 LoadModule），无并发。
+    /// 返回本次重绑成功的断点数。
+    /// </summary>
+    public int TrackModule(CorDebugModule module)
     {
+        string name;
         try
         {
-            var name = SafeName(module);
+            name = SafeName(module);
             // CorDebugModule.Name 实际返回全路径（spike 实测）；归一化为文件名 + 保留全路径双键
-            var fileName = Path.GetFileName(name);
-            _modules[fileName] = module;
+            _modules[Path.GetFileName(name)] = module;
             _modules[name] = module;
         }
-        catch { /* 登记失败忽略 */ }
+        catch { return 0; /* 登记失败无从重绑 */ }
+
+        var rebound = 0;
+        foreach (var bp in _breakpoints.Where(b => !b.IsBound && ModuleMatches(b.ModuleName, name)).ToList())
+        {
+            try
+            {
+                Bind(bp, module);
+                rebound++;
+            }
+            catch
+            {
+                // 重绑失败（token 无效/无 IL）：保持未绑定，agent 经 debug_breakpoint_list 可见，不阻塞进程
+            }
+        }
+        return rebound;
     }
 
     public IReadOnlyList<DebugBreakpoint> Breakpoints => _breakpoints;
@@ -38,32 +57,40 @@ public sealed class BreakpointManager
         try { return module.Name; } catch { return null; }
     }
 
-    /// <summary>登记并绑定断点。模块未加载/方法无 IL 抛中文 InvalidOperationException。</summary>
+    /// <summary>
+    /// 登记断点。模块未加载时登记为 pending（不绑定运行时，LoadModule 时 TrackModule 自动重绑）；
+    /// 模块已加载时同步绑定，方法 token 无效/无 IL 抛中文 InvalidOperationException（agent 立即拿到原因）。
+    /// </summary>
     public DebugBreakpoint Add(string moduleName, int methodToken, int ilOffset)
     {
+        var bp = new DebugBreakpoint(_nextId++, moduleName, methodToken, ilOffset);
         if (!_modules.TryGetValue(moduleName, out var module))
         {
-            throw new InvalidOperationException(
-                $"模块 {moduleName} 尚未加载（断点需模块加载后才能设置；先运行到该模块加载，或用反编译工具确认模块名）");
+            _breakpoints.Add(bp); // pending：等模块加载后重绑
+            return bp;
         }
+        Bind(bp, module);
+        _breakpoints.Add(bp);
+        return bp;
+    }
 
-        var bp = new DebugBreakpoint(_nextId++, moduleName, methodToken, ilOffset);
+    /// <summary>绑定断点到 模块/函数/IL。token 定位失败/无 IL 抛中文 InvalidOperationException。</summary>
+    private static void Bind(DebugBreakpoint bp, CorDebugModule module)
+    {
         CorDebugFunction fn;
         try
         {
-            fn = module.GetFunctionFromToken(new mdMethodDef((uint)methodToken));
+            fn = module.GetFunctionFromToken(new mdMethodDef((uint)bp.MethodToken));
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"方法 {methodToken:x8} 定位失败（{ex.Message}）；token 应为 0x06 开头的 mdMethodDef", ex);
+            throw new InvalidOperationException($"方法 {bp.MethodToken:x8} 定位失败（{ex.Message}）；token 应为 0x06 开头的 mdMethodDef", ex);
         }
         var il = fn.ILCode
-            ?? throw new InvalidOperationException($"方法 {methodToken:x8} 无 IL 代码（可能未 JIT 或非 IL 方法，先运行到该方法再设断点）");
-        var runtimeBp = il.CreateBreakpoint(ilOffset);
+            ?? throw new InvalidOperationException($"方法 {bp.MethodToken:x8} 无 IL 代码（非 IL 方法或取 IL 失败）");
+        var runtimeBp = il.CreateBreakpoint(bp.IlOffset);
         runtimeBp.Activate(true); // 关键：创建后必须 Activate 才生效（research/06 A.2）
         bp.RuntimeBreakpoint = runtimeBp;
-        _breakpoints.Add(bp);
-        return bp;
     }
 
     public bool Remove(int id)
@@ -87,7 +114,7 @@ public sealed class BreakpointManager
     /// <summary>
     /// 回调命中时匹配登记的断点。注意：不能按 RuntimeBreakpoint 引用比较——ClrDebug 的
     /// CorDebugBreakpoint.New 每次事件都新建 wrapper（源码核对），命中事件的 Breakpoint 是新的 wrapper 实例。
-    /// 须按 函数 token + IL offset 内容匹配（sharpdbg 用原生 COM 接口比较可行，wrapper 必须内容比较）。
+    /// 须按 模块 + 函数 token + IL offset 内容匹配（sharpdbg 用原生 COM 接口比较可行，wrapper 必须内容比较）。
     /// </summary>
     public DebugBreakpoint? Match(CorDebugFunctionBreakpoint hit)
     {
@@ -95,11 +122,23 @@ public sealed class BreakpointManager
         if (hitFunction is null) return null;
         var hitToken = hitFunction.Token.Value;
         var hitOffset = hit.Offset;
-        return _breakpoints.FirstOrDefault(b =>
-            b.RuntimeBreakpoint is not null
-            && (uint)b.MethodToken == hitToken
-            && b.IlOffset == hitOffset);
+        string? hitModule = null;
+        try { hitModule = Path.GetFileName(hitFunction.Module?.Name); } catch { /* 取不到模块名退化为不校验 */ }
+        return MatchContent(hitModule, hitToken, hitOffset);
     }
+
+    /// <summary>内容匹配：模块文件名（null=取不到时退化为不校验模块）+ 方法 token + IL offset；未绑定断点永不命中。internal 供测试。</summary>
+    internal DebugBreakpoint? MatchContent(string? moduleFile, uint token, int ilOffset)
+        => _breakpoints.FirstOrDefault(b =>
+            b.RuntimeBreakpoint is not null
+            && (uint)b.MethodToken == token
+            && b.IlOffset == ilOffset
+            && (moduleFile is null || ModuleMatches(b.ModuleName, moduleFile)));
+
+    /// <summary>断点模块名与运行时模块名匹配：文件名或全路径，忽略大小写。internal 供测试。</summary>
+    internal static bool ModuleMatches(string breakpointModule, string moduleFullName)
+        => string.Equals(breakpointModule, moduleFullName, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(breakpointModule, Path.GetFileName(moduleFullName), StringComparison.OrdinalIgnoreCase);
 
     private static string SafeName(CorDebugModule m)
     {

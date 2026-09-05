@@ -68,6 +68,40 @@ public sealed class BreakpointTests
         readerTask.Wait(2000);
     }
 
+    [Fact]
+    public async Task SetBreakpoint_ModuleNotLoaded_RegistersPendingAndDoesNotHit()
+    {
+        var exe = TestPaths.DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        using var target = DebugTargetProcess.Start("1 2");
+        await Task.Delay(800);
+        Assert.False(target.HasExited);
+
+        var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
+
+        var events = new List<DebugEvent>();
+        await using var session = await DebugSession.AttachAsync(target.Id);
+        var readerTask = ConsumeAsync(session.Events, events);
+        await Task.Delay(200);
+
+        // 模块名错误：不再抛错，登记为 pending（加载后自动绑定；该模块永不加载 → 永不命中）
+        var bp = await session.SetBreakpointAsync("NoSuchModule.dll", workToken, ilOffset: 0);
+        Assert.True(bp.Id > 0);
+        Assert.False(bp.IsBound);
+
+        await session.ContinueAsync();
+
+        // 进程正常跑完退出，期间不得有 BreakpointHit
+        var exitDeadline = DateTime.UtcNow.AddSeconds(12);
+        while (DateTime.UtcNow < exitDeadline && !target.HasExited) await Task.Delay(100);
+        Assert.True(target.HasExited, "pending 断点不应影响进程运行退出");
+        lock (events)
+            Assert.DoesNotContain(events, e => e.Kind == DebugEventKind.BreakpointHit);
+
+        readerTask.Wait(2000);
+    }
+
     private static async Task ConsumeAsync(IAsyncEnumerable<DebugEvent> src, List<DebugEvent> into)
     {
         await foreach (var e in src) { lock (into) into.Add(e); }

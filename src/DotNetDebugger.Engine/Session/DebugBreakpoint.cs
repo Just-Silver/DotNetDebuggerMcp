@@ -18,6 +18,9 @@ public sealed class DebugBreakpoint
     public int MethodToken { get; }
     public int IlOffset { get; }
 
+    /// <summary>是否已绑定运行时断点（模块未加载时为 false 的 pending 断点，LoadModule 后自动转 true）。</summary>
+    public bool IsBound => RuntimeBreakpoint is not null;
+
     /// <summary>运行时绑定（内部，仅引擎可写）。</summary>
     internal ClrDebug.CorDebugFunctionBreakpoint? RuntimeBreakpoint { get; set; }
 

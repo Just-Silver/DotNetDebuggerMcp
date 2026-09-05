@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="DotNetDebugger.Engine.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="ClrDebug" Version="0.4.2" />
     <!-- dbgshim.dll 原生资产：引 RID 子包（主包 Microsoft.Diagnostics.DbgShim 是空壳内部元包，
          官方注明 "not meant for direct consumption"，勿直引）。ClrDebug 的 DbgShim 类封装其调用，

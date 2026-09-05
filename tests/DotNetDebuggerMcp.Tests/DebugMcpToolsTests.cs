@@ -36,41 +36,55 @@ public sealed class DebugMcpToolsTests
         Assert.True(launch.IsError != true, launch.Text());
         Assert.Contains("已启动", launch.Text());
 
-        // 2. 设断点：Work 入口
+        // 2. pending 断点：错误模块名不再报错，登记待绑定；list 可见、remove 可删
+        var pending = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "NoSuchModule.dll", ["methodToken"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
+        Assert.True(pending.IsError != true, pending.Text());
+        Assert.Contains("断点已登记", pending.Text());
+        var listPending = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains("未绑定", listPending.Text());
+        var pendingId = ParseBreakpointId(pending.Text());
+        var rmPending = await CallAsync(mcp, "debug_breakpoint_remove",
+            new Dictionary<string, object?> { ["breakpointId"] = pendingId });
+        Assert.True(rmPending.IsError != true, rmPending.Text());
+
+        // 3. 设断点：Work 入口（模块已加载 → 已绑定）
         var bp = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bp.IsError != true, bp.Text());
         Assert.Contains("断点已设", bp.Text());
+        var list = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains("断点列表（1 个）", list.Text());
+        Assert.Contains("已绑定", list.Text());
 
-        // 3. debug_continue：进程运行（delay 结束进 Work 命中）
+        // 4. debug_continue：进程运行（delay 结束进 Work 命中）
         var cont = await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         Assert.True(cont.IsError != true, cont.Text());
         Assert.Contains("已继续", cont.Text());
 
-        // 4. 轮询 debug_state 直到 Stopped（进程 delay 8s 后 Work 命中；兜底 20s）
-        var deadline = DateTime.UtcNow.AddSeconds(25);
-        string stateText = "";
-        while (DateTime.UtcNow < deadline)
-        {
-            var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
-            stateText = st.Text();
-            if (stateText.Contains("已停止") || stateText.Contains("Stopped")) break;
-            await Task.Delay(300);
-        }
-        Assert.Contains("已停止", stateText);
+        // 5. debug_wait：阻塞等停点（进程 delay 8s 后 Work 命中；上限 20s 内应返回已停下）
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("已停下", wait.Text());
+        Assert.Contains("breakpoint", wait.Text());
 
-        // 5. debug_stack：读调用栈（应含 Work 帧）
+        // 6. debug_state 确认 Stopped
+        var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        Assert.Contains("已停止", st.Text());
+
+        // 7. debug_stack：读调用栈（应含 Work 帧）
         var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
         Assert.True(stack.IsError != true, stack.Text());
         Assert.Contains("调用栈", stack.Text());
         Assert.Contains("DebugTarget.dll", stack.Text());
 
-        // 6. debug_variables：读局部变量
+        // 8. debug_variables：读局部变量
         var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
         Assert.True(vars.IsError != true, vars.Text());
         Assert.Contains("局部变量", vars.Text());
 
-        // 7. debug_disconnect 清理
+        // 9. debug_disconnect 清理
         var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
         Assert.True(disc.IsError != true, disc.Text());
     }
@@ -102,6 +116,14 @@ public sealed class DebugMcpToolsTests
 
     private static async Task<CallToolResult> CallAsync(McpClient mcp, string tool, IReadOnlyDictionary<string, object?> args)
         => await mcp.CallToolAsync(tool, args, cancellationToken: TestContext.Current.CancellationToken);
+
+    /// <summary>从断点设置结果文本（"断点已设: id=N ..."）解析断点 id。</summary>
+    private static int ParseBreakpointId(string text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text, @"id=(\d+)");
+        Assert.True(m.Success, $"结果文本中未找到断点 id: {text}");
+        return int.Parse(m.Groups[1].Value);
+    }
 
     private static async Task<McpClient> ConnectAsync()
     {

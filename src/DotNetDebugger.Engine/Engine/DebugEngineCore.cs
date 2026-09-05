@@ -227,7 +227,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
             return Task.CompletedTask;
         }, ct);
 
-    /// <summary>设置断点（模块须已加载）。</summary>
+    /// <summary>设置断点（模块未加载时登记为 pending，LoadModule 自动重绑；方法 token 无效抛错）。</summary>
     public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, CancellationToken ct = default)
         => PostAsyncResult(() =>
         {
@@ -618,8 +618,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.EngineLog,
             new EngineLogPayload(level, message)));
 
-    /// <summary>断点集合变更事件（设/删/清后在命令泵内发布；快照全量，UI 推送替代轮询）。</summary>
-    private void PublishBreakpointsChanged()
+    /// <summary>断点集合变更事件（设/删/清/重绑后发布；快照全量，UI 推送替代轮询）。</summary>
+    internal void PublishBreakpointsChanged()
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.BreakpointsChanged,
             new BreakpointsChangedPayload(_breakpoints.Breakpoints
                 .Select(b => new BreakpointSnapshot(b.Id, b.ModuleName, b.MethodToken, b.IlOffset)).ToList())));

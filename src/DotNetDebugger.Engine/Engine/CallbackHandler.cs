@@ -56,8 +56,10 @@ public sealed class CallbackHandler
                 case LoadModuleCorDebugManagedCallbackEventArgs lm:
                     if (lm.Module is not null)
                     {
-                        _breakpoints.TrackModule(lm.Module);
-                        _core.Log("info", $"LoadModule {SafeModuleName(lm.Module)}");
+                        var rebound = _breakpoints.TrackModule(lm.Module); // pending 断点自动重绑
+                        _core.Log("info", $"LoadModule {SafeModuleName(lm.Module)}"
+                            + (rebound > 0 ? $"（重绑断点 {rebound} 个）" : ""));
+                        if (rebound > 0) _core.PublishBreakpointsChanged();
                     }
                     break;
                 case BreakpointCorDebugManagedCallbackEventArgs bp:

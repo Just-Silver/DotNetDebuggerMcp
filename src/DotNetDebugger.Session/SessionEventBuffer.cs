@@ -50,6 +50,42 @@ public sealed class SessionEventBuffer : IAsyncDisposable
         });
     }
 
+    /// <summary>
+    /// 等待进程到达停点（Stopped）或退出（Exited）。已处终态立即返回当前停点快照；
+    /// 否则订阅 SnapshotChanged 等待，超时/取消按「放弃等待」返回 null（调用方读 CurrentState 给提示）。
+    /// </summary>
+    public async Task<StopContext?> WaitForStopAsync(TimeSpan timeout, CancellationToken ct = default)
+    {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnSnapshot(DebugSessionState state, StopContext? _)
+        {
+            if (state is DebugSessionState.Stopped or DebugSessionState.Exited)
+                tcs.TrySetResult();
+        }
+        SnapshotChanged += OnSnapshot;
+        try
+        {
+            lock (_gate)
+            {
+                if (_state is DebugSessionState.Stopped or DebugSessionState.Exited)
+                    return _lastStop;
+            }
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var winner = await Task.WhenAny(tcs.Task, Task.Delay(timeout, linkedCts.Token)).ConfigureAwait(false);
+            if (winner != tcs.Task) return null; // 超时或外部取消：放弃等待
+            lock (_gate)
+                return _state is DebugSessionState.Stopped or DebugSessionState.Exited ? _lastStop : null;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        finally
+        {
+            SnapshotChanged -= OnSnapshot;
+        }
+    }
+
     private void OnEvent(DebugEvent e)
     {
         DebugSessionState prevState;
