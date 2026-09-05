@@ -1,0 +1,33 @@
+@using DotNetDebugger.Session
+
+@* agent 轨迹时间线（最右列上半）：MCP agent 与 Web 控制的调试动作流水，AgentActionLog 事件推送零轮询。 *@
+
+<div class="d-flex flex-column h-100">
+    <div class="d-flex align-items-center small px-2 py-1 border-bottom" style="flex:0 0 auto;">
+        <span class="text-secondary">agent 轨迹</span>
+        <span class="text-muted ms-auto">@_count</span>
+    </div>
+    <div id="@_scrollId" style="flex:1;min-height:0;overflow:auto;font-size:11px;">
+        @foreach (var a in _actions)
+        {
+            <div class="px-2 py-1 border-bottom">
+                <div>
+                    <span class="text-muted me-1">@a.UtcTimestamp.ToLocalTime().ToString("HH:mm:ss")</span>
+                    <span class="badge text-bg-secondary p-0 px-1">@a.Tool</span>
+                </div>
+                @if (!string.IsNullOrEmpty(a.ArgsSummary))
+                {
+                    <div class="font-monospace text-truncate" title="@a.ArgsSummary">@a.ArgsSummary</div>
+                }
+                @if (!string.IsNullOrEmpty(a.ResultSummary))
+                {
+                    <div class="font-monospace text-secondary text-truncate" title="@a.ResultSummary">@a.ResultSummary</div>
+                }
+            </div>
+        }
+        @if (_actions.Count == 0)
+        {
+            <div class="text-muted p-1">（暂无 agent 动作）</div>
+        }
+    </div>
+</div>

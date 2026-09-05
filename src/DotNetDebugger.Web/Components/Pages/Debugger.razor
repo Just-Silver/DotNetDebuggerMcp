@@ -143,9 +143,14 @@
             </div>
         </div>
     </div>
-    <!-- 最右：内存日志列（联调诊断） -->
+    <!-- 最右：轨迹时间线（上）+ 内存日志（下），各半列（联调诊断） -->
     <div class="d-flex flex-column" style="width:20%;min-width:200px;max-width:320px;border:1px solid #dee2e6;border-radius:4px;">
-        <LogPanel />
+        <div class="d-flex flex-column" style="flex:1 1 50%;min-height:0;">
+            <AgentTimeline />
+        </div>
+        <div class="d-flex flex-column" style="flex:1 1 50%;min-height:0;border-top:1px solid #dee2e6;">
+            <LogPanel />
+        </div>
     </div>
 </div>
 </div>

@@ -17,16 +17,18 @@ public sealed class DebugViewService
     /// <summary>会话状态快照（无活动会话返回 null）。</summary>
     public DebugSessionInfo? SessionInfo => WebHostBootstrap.Manager.GetInfo();
 
-    /// <summary>启动目标并附加（页面人工调试入口；目标需有启动延迟供 attach）。</summary>
+    /// <summary>启动目标并附加（页面人工调试入口；目标需有启动延迟供 attach）。动作入轨迹（web_ 前缀区分 agent）。</summary>
     public async Task<string> LaunchAndAttachAsync(string commandLine, CancellationToken ct = default)
     {
         try
         {
             var active = await WebHostBootstrap.Manager.LaunchAndAttachAsync(commandLine, ct);
+            WebHostBootstrap.Manager.Actions.Log("web_launch", commandLine, $"状态 {active.Buffer.CurrentState}");
             return $"已启动并附加：{commandLine}（状态 {active.Buffer.CurrentState}）";
         }
         catch (Exception ex)
         {
+            WebHostBootstrap.Manager.Actions.Log("web_launch", commandLine, $"失败 {ex.Message}");
             return $"启动调试失败：{ex.Message}";
         }
     }
@@ -37,6 +39,7 @@ public sealed class DebugViewService
         try
         {
             await WebHostBootstrap.Manager.CloseAsync(ct);
+            WebHostBootstrap.Manager.Actions.Log("web_disconnect", "", "ok");
             return "已断开调试会话。";
         }
         catch (Exception ex)
@@ -53,6 +56,7 @@ public sealed class DebugViewService
         try
         {
             var bp = await active.Session.SetBreakpointAsync(moduleName, methodToken, ilOffset, ct);
+            WebHostBootstrap.Manager.Actions.Log("web_breakpoint_set", $"{moduleName} {methodToken}+{ilOffset}", $"id={bp.Id}");
             return $"断点已设: id={bp.Id} 位置={bp}";
         }
         catch (Exception ex)
@@ -68,9 +72,9 @@ public sealed class DebugViewService
         if (active is null) return "无活动调试会话。";
         try
         {
-            return await active.Session.RemoveBreakpointAsync(id, ct)
-                ? $"断点 {id} 已移除。"
-                : $"断点 {id} 不存在。";
+            var removed = await active.Session.RemoveBreakpointAsync(id, ct);
+            WebHostBootstrap.Manager.Actions.Log("web_breakpoint_remove", id.ToString(), removed ? "ok" : "not-found");
+            return removed ? $"断点 {id} 已移除。" : $"断点 {id} 不存在。";
         }
         catch (Exception ex)
         {
@@ -105,7 +109,12 @@ public sealed class DebugViewService
     {
         var active = Active;
         if (active is null) return "无活动调试会话。";
-        try { await active.Session.ContinueAsync(ct); return "已继续执行。"; }
+        try
+        {
+            await active.Session.ContinueAsync(ct);
+            WebHostBootstrap.Manager.Actions.Log("web_continue", "", "ok");
+            return "已继续执行。";
+        }
         catch (Exception ex) { return $"继续执行失败：{ex.Message}"; }
     }
 
@@ -124,6 +133,7 @@ public sealed class DebugViewService
                 case "out": await active.Session.StepOutAsync(ct); break;
                 default: await active.Session.StepOverAsync(ct); break;
             }
+            WebHostBootstrap.Manager.Actions.Log("web_step", stepType, "ok");
             return $"已单步 {stepType}。";
         }
         catch (Exception ex) { return $"单步失败：{ex.Message}"; }

@@ -13,7 +13,8 @@ Components/
   Pages/Debugger.razor   动态调试页（控制条 + 状态 + 左树右代码 + 面板 + AgentView 订阅）
   Debugger/CodeViewer.razor   Monaco 编辑器封装（.razor.js 是互操作桥）
   Debugger/TypeTree.razor     左侧类型树（程序集→命名空间→类型→成员，BB TreeView 数据驱动全量、非虚拟滚动）
-  Debugger/LogPanel.razor     联调诊断面板（最右列，展示 MemoryLog 环形日志）
+  Debugger/AgentTimeline.razor  agent 轨迹时间线（AgentActionLog 事件推送，动作流水自动滚底）
+  Debugger/LogPanel.razor     联调诊断面板（最右列下半，展示 MemoryLog 环形日志）
 Services/
   AgentViewContext.cs   宿主→Web「agent 正在看什么」可观察共享状态（核心链路）
   TypeTreeData.cs       程序集类型/成员枚举数据源（纯元数据秒回，一次枚举缓存）
@@ -34,6 +35,7 @@ Blazor Server 电路是双向通道，server 本身就是服务器渲染——**
 - 会话快照（状态/停点）：`SessionEventBuffer.SnapshotChanged`（经 `DebugSessionManager.ActiveSessionChanged` 重订阅当前会话的 Buffer）
 - 断点集合：`SessionEventBuffer.BreakpointsChanged`（Engine 命令泵设/删/清后发布 `BreakpointsChanged`）
 - agent 上下文：`AgentViewContext.Changed`
+- agent 轨迹：`AgentActionLog.Changed`（MCP debug_* 工具与 Web 控制动作均入轨，Web 动作用 `web_` 前缀）
 - 内存日志：`MemoryLog.Changed`（写入/清空后触发）
 
 **新增后端状态对外可见的变化时，先在源头（Engine/Session/服务）补事件，再在页面订阅**；不为展示加定时器。
