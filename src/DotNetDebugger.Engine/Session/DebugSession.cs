@@ -50,6 +50,10 @@ public sealed class DebugSession : IAsyncDisposable
     public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, CancellationToken ct = default)
         => _core.SetBreakpointAsync(moduleName, methodToken, ilOffset, ct);
 
+    /// <summary>当前登记断点快照（含未绑定模块的；Web 监视器红点渲染用）。</summary>
+    public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
+        => _core.GetBreakpointsAsync(ct);
+
     public Task<bool> RemoveBreakpointAsync(int id, CancellationToken ct = default)
         => _core.RemoveBreakpointAsync(id, ct);
 

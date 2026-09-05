@@ -230,6 +230,10 @@ public sealed class DebugEngineCore : IAsyncDisposable
     public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, CancellationToken ct = default)
         => PostAsyncResult(() => _breakpoints.Add(moduleName, methodToken, ilOffset), ct);
 
+    /// <summary>当前登记断点快照（经命令泵读，与增删互斥；Web 监视器红点渲染数据源）。</summary>
+    public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
+        => PostAsyncResult(() => (IReadOnlyList<DebugBreakpoint>)_breakpoints.Breakpoints.ToList(), ct);
+
     public Task<bool> RemoveBreakpointAsync(int id, CancellationToken ct = default)
         => PostAsyncResult(() => _breakpoints.Remove(id), ct);
 

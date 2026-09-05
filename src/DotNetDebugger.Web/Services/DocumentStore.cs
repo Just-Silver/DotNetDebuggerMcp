@@ -11,6 +11,13 @@ public sealed class DocumentStore
 {
     private readonly object _gate = new();
     private readonly Dictionary<string, SourceDocument> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private ViewRecord? _lastView;
+
+    /// <summary>最近一次成功加载的视图（刷新/重连后恢复代码视图与树定位用；随缓存同为进程级单例状态）。</summary>
+    public sealed record ViewRecord(string AssemblyPath, string TypeFullName);
+
+    /// <summary>最近成功加载的视图；一次都未成功加载过返回 null。</summary>
+    public ViewRecord? LastView { get { lock (_gate) return _lastView; } }
 
     /// <summary>按 程序集+类型 取文档；未缓存则反编译并缓存。失败返回带 Error 的文档（不入缓存）。同步版。</summary>
     public SourceDocument GetOrLoad(string assemblyPath, string typeFullName)
@@ -24,7 +31,7 @@ public sealed class DocumentStore
         var doc = DocumentService.GetTypeDocument(assemblyPath, typeFullName);
         if (doc.IsSuccess)
         {
-            lock (_gate) _cache[key] = doc;
+            lock (_gate) { _cache[key] = doc; _lastView = new ViewRecord(assemblyPath, typeFullName); }
         }
         return doc;
     }
@@ -43,7 +50,7 @@ public sealed class DocumentStore
             var doc = DocumentService.GetTypeDocument(assemblyPath, typeFullName);
             if (doc.IsSuccess)
             {
-                lock (_gate) _cache[key] = doc;
+                lock (_gate) { _cache[key] = doc; _lastView = new ViewRecord(assemblyPath, typeFullName); }
             }
             return doc;
         });

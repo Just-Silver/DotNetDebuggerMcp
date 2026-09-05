@@ -1,7 +1,9 @@
 @page "/debugger"
 @using DotNetDebugger.Engine.Models
+@using DotNetDebugger.Engine.Session
 @using DotNetDebugger.Web.Services
 @using System.Reflection.Metadata
+@inject DocumentStore Store
 @implements IDisposable
 
 <PageTitle>调试器</PageTitle>
@@ -153,9 +155,10 @@
 @code {
     private CodeViewer? _viewer;
     private TypeTree? _tree;
-    private readonly DocumentStore _store = new();
     private readonly DebugViewService _debug = new();
     private SourceDocument? _doc;
+    private IReadOnlyList<DebugBreakpoint> _breakpoints = [];   // 会话断点快照（红点渲染数据源）
+    private string _lastBpSignature = "";                       // 断点集合签名（变化才重推装饰，避免 500ms 轮询空转）
     private string _targetPath = "";
     private string? _state;          // 会话状态文本
     private string? _lastStopText;   // 最近停点
@@ -207,15 +210,28 @@
     {
         try
         {
+            // 恢复源优先级：agent 上下文快照 > 最近查看记录（进程级 DocumentStore.LastView，跨电路存活）
             var snap = WebHostBootstrap.AgentView.Snapshot();
+            string? asm = null, type = null;
             if (snap.Revision > _lastAgentRevision)
             {
                 _lastAgentRevision = snap.Revision;
                 if (snap.AssemblyPath is not null && snap.TypeFullName is not null)
                 {
-                    await _tree!.SelectTypeAsync(snap.AssemblyPath, snap.TypeFullName);
-                    await ShowTypeAsync(snap.AssemblyPath, snap.TypeFullName);
+                    asm = snap.AssemblyPath;
+                    type = snap.TypeFullName;
                 }
+            }
+            if (asm is null && Store.LastView is { } view)
+            {
+                // 刷新/重连恢复：无 agent 上下文（如刷新前是人工浏览/演示流）时按最近查看还原（缓存命中秒回）
+                asm = view.AssemblyPath;
+                type = view.TypeFullName;
+            }
+            if (asm is not null && type is not null)
+            {
+                await _tree!.SelectTypeAsync(asm, type);
+                await ShowTypeAsync(asm, type);
             }
         }
         catch (Exception ex) { MemoryLog.Write("AgentView", $"OnTreeReady 异常: {ex.Message}"); }
@@ -280,10 +296,20 @@
             _stack = [];
             _variables = new Dictionary<string, IReadOnlyList<DebugVariable>>();
         }
+        // 断点快照轮询：agent 随时可能经 MCP 设/清断点，签名变化才重推装饰（避免 500ms 轮询空转 JS interop）
+        try { _breakpoints = await _debug.GetBreakpointsAsync(); }
+        catch { /* 会话刚断开等瞬时失败：沿用旧快照 */ }
+        var bpSignature = string.Join(",", _breakpoints.Select(b => b.Id));
+        var bpChanged = bpSignature != _lastBpSignature;
         StateHasChanged();
+        if (bpChanged)
+        {
+            _lastBpSignature = bpSignature;
+            await ApplyDecorationsAsync();
+        }
         if (transitionedToStopped)
         {
-            await ApplyStopHighlightAsync();
+            await ApplyDecorationsAsync();
             await SelectStopTypeAsync();   // 树跟随停点类型
             StateHasChanged();
         }
@@ -331,12 +357,12 @@
         _ctrlMessage += "；" + await _debug.SetBreakpointAsync(module, token, 0);
         _ctrlMessage += "；" + await _debug.ContinueAsync();
         await RefreshState();
-        await ApplyStopHighlightAsync();   // 进程停时才有效；未停则等待轮询跃迁触发
+        await ApplyDecorationsAsync();   // 进程停时才有效；未停则等待轮询跃迁触发
     }
 
-    private async Task ContinueRun() { _ctrlMessage = await _debug.ContinueAsync(); await RefreshState(); await ApplyStopHighlightAsync(); }
-    private async Task StepOver() { _ctrlMessage = await _debug.StepAsync("over"); await RefreshState(); await ApplyStopHighlightAsync(); }
-    private async Task StepInto() { _ctrlMessage = await _debug.StepAsync("into"); await RefreshState(); await ApplyStopHighlightAsync(); }
+    private async Task ContinueRun() { _ctrlMessage = await _debug.ContinueAsync(); await RefreshState(); await ApplyDecorationsAsync(); }
+    private async Task StepOver() { _ctrlMessage = await _debug.StepAsync("over"); await RefreshState(); await ApplyDecorationsAsync(); }
+    private async Task StepInto() { _ctrlMessage = await _debug.StepAsync("into"); await RefreshState(); await ApplyDecorationsAsync(); }
 
     private async Task Disconnect() { _ctrlMessage = await _debug.DisconnectAsync(); _state = null; _lastStopText = null; }
 
@@ -351,11 +377,11 @@
         await InvokeAsync(StateHasChanged);
         try
         {
-            _doc = await _store.GetOrLoadAsync(assemblyPath.Trim(), typeFullName.Trim());
+            _doc = await Store.GetOrLoadAsync(assemblyPath.Trim(), typeFullName.Trim());
             if (_doc.IsSuccess)
             {
                 await _viewer.SetValueAsync(_doc.Text);
-                await ApplyStopHighlightAsync();
+                await ApplyDecorationsAsync();
             }
         }
         finally { _loading = false; }
@@ -367,18 +393,27 @@
         return Task.CompletedTask;
     }
 
-    /// <summary>停点联动：若当前文档含停点方法 token，映射其 IL offset 高亮语句行。</summary>
-    private async Task ApplyStopHighlightAsync()
+    /// <summary>统一装饰：断点红点（模块匹配当前文档的断点经 IL→行映射）+ 停点当前行高亮，全量重推；
+    /// 停点行存在时滚动定位。文档换页/断点增删/停点跃迁共用。</summary>
+    private async Task ApplyDecorationsAsync()
     {
         if (_viewer is null || _doc is null || !_doc.IsSuccess) return;
+        var assemblyName = Path.GetFileName(_doc.AssemblyPath);
         var info = _debug.SessionInfo;
-        if (info?.State != DebugSessionState.Stopped || info.LastStop?.TopFrame is not { } frame) return;
-        // 模块名匹配（文档程序集短名 = 停点模块名）
-        if (!frame.ModuleName.Equals(Path.GetFileName(_doc.AssemblyPath), StringComparison.OrdinalIgnoreCase)) return;
-        var line = DocumentStore.GetStopLine(_doc, frame.MethodToken, frame.IlOffset);
-        if (line is null) return;
-        await _viewer.SetDecorationsAsync([], line);
-        await _viewer.RevealLineAsync(line.Value);
+        int? currentLine = null;
+        if (info?.State == DebugSessionState.Stopped && info.LastStop?.TopFrame is { } frame
+            && frame.ModuleName.Equals(assemblyName, StringComparison.OrdinalIgnoreCase))
+        {
+            currentLine = DocumentStore.GetStopLine(_doc, frame.MethodToken, frame.IlOffset);
+        }
+        var breakpointLines = new List<int>();
+        foreach (var bp in _breakpoints)
+        {
+            if (!bp.ModuleName.Equals(assemblyName, StringComparison.OrdinalIgnoreCase)) continue;
+            if (DocumentStore.GetStopLine(_doc, bp.MethodToken, bp.IlOffset) is { } line) breakpointLines.Add(line);
+        }
+        await _viewer.SetDecorationsAsync([.. breakpointLines], currentLine);
+        if (currentLine is not null) await _viewer.RevealLineAsync(currentLine.Value);
     }
 
     private static int FindMethodToken(string dll, string methodName)

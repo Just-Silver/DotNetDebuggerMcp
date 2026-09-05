@@ -4,21 +4,15 @@
 window.dotnetDebuggerMonaco = window.dotnetDebuggerMonaco || {};
 window.dotnetDebuggerMonaco.editors = window.dotnetDebuggerMonaco.editors || {};
 window.dotnetDebuggerMonaco._decorations = window.dotnetDebuggerMonaco._decorations || {};
+// setValue 先于编辑器创建到达时的文本暂存（create 完成后回放）
+window.dotnetDebuggerMonaco._pendingValues = window.dotnetDebuggerMonaco._pendingValues || {};
 
-// 建编辑器：options 需 AutomaticLayout:true 让 Monaco 自适配容器尺寸
-window.dotnetDebuggerMonaco.create = function (id, language) {
+// 立即建编辑器（monaco/容器就绪时）；返回是否完成。建好后回放暂存文本。
+function dotnetdbgCreateNow(id, language) {
     var holder = document.getElementById(id);
-    if (!holder) {
-        console.error('CodeViewer: 找不到容器 #' + id);
-        return;
-    }
-    if (typeof monaco === 'undefined') {
-        console.error('CodeViewer: monaco 未加载（检查 loader.js/editor.main.js script 顺序）');
-        return;
-    }
-    if (window.dotnetDebuggerMonaco.editors[id]) {
-        return; // 已建
-    }
+    if (!holder) return false;
+    if (typeof monaco === 'undefined') return false;
+    if (window.dotnetDebuggerMonaco.editors[id]) return true;
     var editor = monaco.editor.create(holder, {
         value: '',
         language: language || 'csharp',
@@ -30,18 +24,46 @@ window.dotnetDebuggerMonaco.create = function (id, language) {
         scrollBeyondLastLine: false
     });
     window.dotnetDebuggerMonaco.editors[id] = editor;
+    var pending = window.dotnetDebuggerMonaco._pendingValues[id];
+    if (typeof pending === 'string') {
+        delete window.dotnetDebuggerMonaco._pendingValues[id];
+        editor.setValue(pending);
+    }
+    return true;
+}
+
+// 建编辑器：monaco 全局由 AMD editor.main.js 异步初始化（晚于 script 标签执行完），
+// 首渲互操作调用可能赶在其前——轮询重试而非静默放弃（否则编辑器永久空白，装饰全失效）。
+window.dotnetDebuggerMonaco.create = function (id, language) {
+    if (window.dotnetDebuggerMonaco.editors[id]) return; // 已建
+    if (dotnetdbgCreateNow(id, language)) return;
+    var tries = 0;
+    (function retry() {
+        if (window.dotnetDebuggerMonaco.editors[id]) return;
+        if (++tries > 150) { console.error('CodeViewer: monaco/容器 15s 未就绪，放弃创建 #' + id); return; }
+        if (dotnetdbgCreateNow(id, language)) return;
+        setTimeout(retry, 100);
+    })();
 };
 
-// 设文本（换文档 = 全量 setValue + 清装饰，v1 单文档够用）
+// 设文本（换文档 = 全量 setValue + 清装饰，v1 单文档够用）。编辑器未建时暂存文本并兜底排程创建。
 window.dotnetDebuggerMonaco.setValue = function (id, text) {
     var editor = window.dotnetDebuggerMonaco.editors[id];
-    if (!editor) return;
+    if (!editor) {
+        window.dotnetDebuggerMonaco.create(id);
+        editor = window.dotnetDebuggerMonaco.editors[id];
+        if (!editor) {
+            window.dotnetDebuggerMonaco._pendingValues[id] = text || '';
+            return;
+        }
+    }
     editor.setValue(text || '');
     // 清旧装饰（换文本后 old 全失效）
     window.dotnetDebuggerMonaco._decorations[id] = editor.deltaDecorations(window.dotnetDebuggerMonaco._decorations[id] || [], []);
 };
 
-// 装饰：断点行（glyph 圆点）+ 当前行（背景）。全量重推（old 由 C# 侧维护传入）
+// 装饰：断点行（glyph 圆点）+ 当前行（背景）。全量重推（old 由 C# 侧维护传入）。
+// 编辑器未建时忽略（C# 侧在 文档换页/断点变化/停点跃迁 时会重推，无需暂存）。
 window.dotnetDebuggerMonaco.deltaDecorations = function (id, oldIds, breakpointLines, currentLine) {
     var editor = window.dotnetDebuggerMonaco.editors[id];
     if (!editor) return [];
@@ -84,6 +106,7 @@ window.dotnetDebuggerMonaco.dispose = function (id) {
         editor.dispose();
         delete window.dotnetDebuggerMonaco.editors[id];
     }
+    delete window.dotnetDebuggerMonaco._pendingValues[id];
 };
 
 // === Monaco 跟随 BB 明暗主题切换 ===

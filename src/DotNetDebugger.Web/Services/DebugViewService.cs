@@ -1,4 +1,5 @@
 using DotNetDebugger.Engine.Models;
+using DotNetDebugger.Engine.Session;
 using DotNetDebugger.Session;
 using DotNetDebugger.Session.Models;
 
@@ -58,6 +59,15 @@ public sealed class DebugViewService
         {
             return $"设置断点失败：{ex.Message}";
         }
+    }
+
+    /// <summary>当前会话已登记断点快照（无活动会话返回空；代码视图红点渲染数据源）。</summary>
+    public async Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
+    {
+        var active = Active;
+        if (active is null) return [];
+        try { return await active.Session.GetBreakpointsAsync(ct); }
+        catch { return []; }
     }
 
     /// <summary>继续执行（进程运行至下个断点/退出）。</summary>

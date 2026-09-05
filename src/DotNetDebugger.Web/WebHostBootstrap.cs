@@ -52,6 +52,8 @@ public static class WebHostBootstrap
 
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
         builder.Services.AddBootstrapBlazor();
+        // 反编译文档缓存单例：跨电路（浏览器刷新/重连）存活，页面初始化据此恢复代码视图
+        builder.Services.AddSingleton<DocumentStore>();
 
         var app = builder.Build();
         app.UseAntiforgery();
