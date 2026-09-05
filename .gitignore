@@ -374,6 +374,3 @@ FodyWeavers.xsd
 # Git worktree scratch directories (isolated feature branches)
 .worktrees/
 
-# Web 组件源码目录 Components/Debug（[Dd]ebug/ 通用规则误伤此源码目录，放行）
-!src/DotNetDebugger.Web/Components/Debug/
-!src/DotNetDebugger.Web/Components/Debug/**
