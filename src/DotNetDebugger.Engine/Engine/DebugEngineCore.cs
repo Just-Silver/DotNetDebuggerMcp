@@ -292,7 +292,12 @@ public sealed class DebugEngineCore : IAsyncDisposable
                 if (range is { } r)
                     stepper.StepRange(stepIn.Value, new[] { new COR_DEBUG_STEP_RANGE { startOffset = r.Start, endOffset = r.End } }, 1);
                 else
-                    stepper.Step(stepIn.Value); // 无 PDB 回退：裸 Step（可能原地完成，效果退化为 continue）
+                {
+                    // 无 PDB 回退：单条 IL 指令区间 [ip, ip+1)（dnSpy 无符号时同款）。
+                    // 坑：裸 Step(bStepIn) 无序列点会在原地完成（实测 +0x0 不推进），必须用 StepRange。
+                    var ip = ilf.IP.pnOffset;
+                    stepper.StepRange(stepIn.Value, new[] { new COR_DEBUG_STEP_RANGE { startOffset = ip, endOffset = ip + 1 } }, 1);
+                }
             }
             SafeContinue(_process);
             PublishState(DebugSessionState.Running, stepIn is null ? "step out" : stepIn.Value ? "step into" : "step over");
