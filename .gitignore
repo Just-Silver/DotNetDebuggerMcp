@@ -6,6 +6,8 @@
 # Test data (verification assemblies) and temp output of the e2e client
 tests/.dotnetdebugger-client-out/
 tests/TestData/*.dll
+tests/TestData/*.exe
+tests/TestData/*.runtimeconfig.json
 
 # superpowers 规划/执行过程产物（计划文档、SDD 工作区），不进版本库
 docs/superpowers/
