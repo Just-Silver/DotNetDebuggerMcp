@@ -21,6 +21,9 @@
     <PackageReference Include="BootstrapBlazor" Version="10.*" />
     <!-- Fluent UI 主题（覆盖默认 Bootstrap 皮肤，微软风；默认暗色经 data-bs-theme="dark"） -->
     <PackageReference Include="BootstrapBlazor.Theme.Fluent" Version="10.*" />
+    <!-- FontAwesome 图标字体：BB 默认 IconTheme 是 fa，TreeView 箭头等图标 class 为 fa-solid fa-*，
+         缺此包则图标字体不加载、箭头/图标渲染空白（官方 demo 亦显式引用） -->
+    <PackageReference Include="BootstrapBlazor.FontAwesome" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>

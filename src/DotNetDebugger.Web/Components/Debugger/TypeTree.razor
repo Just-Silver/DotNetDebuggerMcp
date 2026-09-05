@@ -1,0 +1,48 @@
+@using BootstrapBlazor.Components
+
+@* 片 2a：BB TreeView 渲染验证——全量三级树（程序集→命名空间→类型），不依赖懒加载。
+   先确认「全量嵌套 Items」下箭头与展开正常；懒加载接入在后续切片。 *@
+
+<TreeView TItem="TypeTreeNode"
+          Items="_items"
+          OnTreeItemClick="OnNodeClickedAsync" />
+
+@code {
+    private List<TreeViewItem<TypeTreeNode>> _items = [];
+
+    /// <summary>树节点承载模型：程序集/命名空间/类型三级共用，Kind 区分层级。</summary>
+    public sealed record TypeTreeNode(string Label, string Kind, string? AssemblyPath = null, string? TypeFullName = null);
+
+    protected override void OnInitialized()
+    {
+        // 全量数据：两个程序集，各含命名空间与类型（嵌套 Items，非懒加载）
+        var asm1 = new TypeTreeNode("DemoA.dll", "assembly", @"C:\demo\DemoA.dll");
+        var a1 = Item(asm1);
+
+        var nsA = Item(new("DemoA.Samples", "namespace", asm1.AssemblyPath));
+        nsA.Items.Add(Item(new("BigClass", "type", asm1.AssemblyPath, "DemoA.Samples.BigClass")));
+        nsA.Items.Add(Item(new("Small", "type", asm1.AssemblyPath, "DemoA.Samples.Small")));
+
+        var nsB = Item(new("DemoA.Core", "namespace", asm1.AssemblyPath));
+        nsB.Items.Add(Item(new("Service", "type", asm1.AssemblyPath, "DemoA.Core.Service")));
+        a1.Items.Add(nsA);
+        a1.Items.Add(nsB);
+
+        var asm2 = new TypeTreeNode("DemoB.dll", "assembly", @"C:\demo\DemoB.dll");
+        var a2 = Item(asm2);
+        var nsC = Item(new("DemoB", "namespace", asm2.AssemblyPath));
+        nsC.Items.Add(Item(new("Program", "type", asm2.AssemblyPath, "DemoB.Program")));
+        a2.Items.Add(nsC);
+
+        _items = [a1, a2];
+    }
+
+    private static TreeViewItem<TypeTreeNode> Item(TypeTreeNode value)
+        => new(value) { Text = value.Label };
+
+    private Task OnNodeClickedAsync(TreeViewItem<TypeTreeNode> item)
+    {
+        // 片 2a 仅渲染验证：点击暂不做事（后续接真反编译）
+        return Task.CompletedTask;
+    }
+}
