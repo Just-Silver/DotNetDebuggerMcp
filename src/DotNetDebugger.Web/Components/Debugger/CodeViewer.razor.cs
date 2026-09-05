@@ -14,6 +14,9 @@ public partial class CodeViewer : IAsyncDisposable
 
     [Parameter] public string? Language { get; set; } = "csharp";
 
+    /// <summary>编辑器光标行变化回调（行号，1 起）。父组件接此做 树↔编辑器 双向联动。</summary>
+    [Parameter] public EventCallback<int> CursorLineChanged { get; set; }
+
     /// <summary>电路断开（浏览器刷新/关页）或组件已释放时 JS 互操作必然失败——按官方指引静默吞掉，
     /// 避免轮询/事件回调路径刷 JSDisconnectedException 日志。其它异常照常上抛。</summary>
     private static bool IsCircuitGone(Exception ex) =>
@@ -48,10 +51,20 @@ public partial class CodeViewer : IAsyncDisposable
     {
         if (firstRender)
         {
-            try { await Js.InvokeVoidAsync("dotnetDebuggerMonaco.create", _editorId, Language); }
+            try
+            {
+                await Js.InvokeVoidAsync("dotnetDebuggerMonaco.create", _editorId, Language);
+                // 光标行回调：编辑器可能仍在异步重试创建，桥会暂存引用、创建完成时挂钩
+                _self ??= DotNetObjectReference.Create(this);
+                await Js.InvokeVoidAsync("dotnetDebuggerMonaco.setCursorCallback", _editorId, _self);
+            }
             catch (Exception ex) when (IsCircuitGone(ex)) { }
         }
     }
+
+    /// <summary>JS 桥回推光标行（CodeViewer.razor.js onDidChangeCursorPosition）。</summary>
+    [JSInvokable]
+    public async Task OnCursorLine(int line) => await CursorLineChanged.InvokeAsync(line);
 
     public async ValueTask DisposeAsync()
     {

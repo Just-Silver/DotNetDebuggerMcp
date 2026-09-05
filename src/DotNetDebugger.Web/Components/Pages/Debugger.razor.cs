@@ -28,6 +28,7 @@ public partial class Debugger
     private CancellationTokenSource? _pollCts;
     private System.Timers.Timer? _pollTimer;
     private long _lastAgentRevision = -1;   // 已处理的 agent 上下文版本
+    private int _lastCursorToken;           // 光标联动已选中的方法 token（变化才动树，防扰动）
     /// <summary>演示目标 DebugTarget.exe（从仓库根上溯定位 tests/TestData）。</summary>
     private static string DemoAssembly
     {
@@ -231,6 +232,7 @@ public partial class Debugger
         // 程序集进树（幂等；非程序集/不存在返回 false，不影响反编译尝试）
         if (_tree is not null) _tree.LoadAssembly(assemblyPath);
         _loading = true;
+        _lastCursorToken = 0;   // 换文档：token 空间不同，光标联动基线复位
         await InvokeAsync(StateHasChanged);
         try
         {
@@ -248,6 +250,17 @@ public partial class Debugger
     private Task OnAssemblyLoaded(string assemblyPath)
     {
         return Task.CompletedTask;
+    }
+
+    /// <summary>双向联动（编辑器→树）：光标所在行定位方法叶子。行不在任何方法区间时取其后最近的方法；
+    /// token 未变化则跳过（幂等，防光标扫过扰动）。setValue 后的首个程序性事件由桥侧抑制。</summary>
+    private async Task OnCursorLineChanged(int line)
+    {
+        if (_tree is null || _doc is not { IsSuccess: true } || _doc.Error is not null) return;
+        if (DocumentStore.FindMethodTokenAtLine(_doc, line) is not { } token || token <= 0) return;
+        if (token == _lastCursorToken) return;
+        _lastCursorToken = token;
+        await _tree.SelectTypeAsync(_doc.AssemblyPath, _doc.TypeFullName, token);
     }
 
     /// <summary>统一装饰：断点红点（模块匹配当前文档的断点经 IL→行映射）+ 停点当前行高亮，全量重推；

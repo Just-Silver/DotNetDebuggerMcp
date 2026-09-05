@@ -6,6 +6,25 @@ window.dotnetDebuggerMonaco.editors = window.dotnetDebuggerMonaco.editors || {};
 window.dotnetDebuggerMonaco._decorations = window.dotnetDebuggerMonaco._decorations || {};
 // setValue 先于编辑器创建到达时的文本暂存（create 完成后回放）
 window.dotnetDebuggerMonaco._pendingValues = window.dotnetDebuggerMonaco._pendingValues || {};
+// 光标行回调（.NET → JS 注册 DotNetObjectReference；编辑器就绪即挂钩）
+window.dotnetDebuggerMonaco._cursorRefs = window.dotnetDebuggerMonaco._cursorRefs || {};
+// setValue 程序性移动光标产生的首个事件抑制标记（防联动树误跳）
+window.dotnetDebuggerMonaco._suppressCursor = window.dotnetDebuggerMonaco._suppressCursor || {};
+
+// 挂光标行监听（编辑器创建时若已有回调引用则调用；e.position.lineNumber 推给 .NET）
+function dotnetdbgHookCursor(editor) {
+    if (editor.__cursorHooked) return;
+    editor.__cursorHooked = true;
+    editor.onDidChangeCursorPosition(function (e) {
+        var id = editor.__id;
+        if (window.dotnetDebuggerMonaco._suppressCursor[id]) {
+            window.dotnetDebuggerMonaco._suppressCursor[id] = false;
+            return;
+        }
+        var ref = window.dotnetDebuggerMonaco._cursorRefs[id];
+        if (ref) ref.invokeMethodAsync('OnCursorLine', e.position.lineNumber);
+    });
+}
 
 // 立即建编辑器（monaco/容器就绪时）；返回是否完成。建好后回放暂存文本。
 function dotnetdbgCreateNow(id, language) {
@@ -24,6 +43,8 @@ function dotnetdbgCreateNow(id, language) {
         scrollBeyondLastLine: false
     });
     window.dotnetDebuggerMonaco.editors[id] = editor;
+    editor.__id = id;
+    if (window.dotnetDebuggerMonaco._cursorRefs[id]) dotnetdbgHookCursor(editor);
     var pending = window.dotnetDebuggerMonaco._pendingValues[id];
     if (typeof pending === 'string') {
         delete window.dotnetDebuggerMonaco._pendingValues[id];
@@ -58,8 +79,17 @@ window.dotnetDebuggerMonaco.setValue = function (id, text) {
         }
     }
     editor.setValue(text || '');
+    // setValue 会程序性移动光标到起始行：抑制由此产生的首个光标事件（防联动树误跳）
+    window.dotnetDebuggerMonaco._suppressCursor[id] = true;
     // 清旧装饰（换文本后 old 全失效）
     window.dotnetDebuggerMonaco._decorations[id] = editor.deltaDecorations(window.dotnetDebuggerMonaco._decorations[id] || [], []);
+};
+
+// 注册光标行回调（编辑器已建则立即挂钩；未建则暂存，create 完成时挂钩）
+window.dotnetDebuggerMonaco.setCursorCallback = function (id, dotnetRef) {
+    window.dotnetDebuggerMonaco._cursorRefs[id] = dotnetRef;
+    var editor = window.dotnetDebuggerMonaco.editors[id];
+    if (editor) dotnetdbgHookCursor(editor);
 };
 
 // 装饰：断点行（glyph 圆点）+ 当前行（背景）。全量重推（old 由 C# 侧维护传入）。
@@ -107,6 +137,8 @@ window.dotnetDebuggerMonaco.dispose = function (id) {
         delete window.dotnetDebuggerMonaco.editors[id];
     }
     delete window.dotnetDebuggerMonaco._pendingValues[id];
+    delete window.dotnetDebuggerMonaco._cursorRefs[id];
+    delete window.dotnetDebuggerMonaco._suppressCursor[id];
 };
 
 // === Monaco 跟随 BB 明暗主题切换 ===

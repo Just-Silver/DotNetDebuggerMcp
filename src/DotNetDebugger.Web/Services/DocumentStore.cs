@@ -64,6 +64,28 @@ public sealed class DocumentStore
     public static (int MethodToken, int IlStart)? GetIlStartAtLine(SourceDocument doc, int line)
         => DocumentService.GetIlStartForLine(doc, line);
 
+    /// <summary>光标行 → 所在方法 token（双向联动用）：按各方法映射行的 [min,max] 区间判定；
+    /// 行不在任何方法区间（usings/类声明/大括号行）时取其后最近的方法；文档无映射返回 null。</summary>
+    public static int? FindMethodTokenAtLine(SourceDocument doc, int line)
+    {
+        var ranges = new Dictionary<int, (int Min, int Max)>();
+        foreach (var e in doc.Mapping)
+        {
+            if (e.Line < 1) continue;
+            if (ranges.TryGetValue(e.MethodToken, out var r))
+                ranges[e.MethodToken] = (Math.Min(r.Min, e.Line), Math.Max(r.Max, e.Line));
+            else
+                ranges[e.MethodToken] = (e.Line, e.Line);
+        }
+        (int Token, int Min)? next = null;
+        foreach (var (token, r) in ranges)
+        {
+            if (line >= r.Min && line <= r.Max) return token;
+            if (r.Min > line && (next is null || r.Min < next.Value.Min)) next = (token, r.Min);
+        }
+        return next?.Token;
+    }
+
     /// <summary>清空缓存（换目标程序集/类型浏览时调用，避免缓存膨胀）。</summary>
     public void Clear()
     {
