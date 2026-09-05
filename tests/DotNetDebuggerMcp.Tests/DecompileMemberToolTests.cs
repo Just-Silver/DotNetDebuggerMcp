@@ -1,7 +1,6 @@
 using DotNetDebugger.Decompiler.Metadata;
 using DotNetDebuggerMcp.Services;
-using DotNetDebuggerMcp.Tools;
-
+using DotNetDebuggerMcp.Tools.Decompile;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;

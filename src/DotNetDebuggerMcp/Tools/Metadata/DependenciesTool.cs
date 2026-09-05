@@ -9,7 +9,7 @@ using System.ComponentModel;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 查询 .NET 程序集（dll/exe）中指定类型的成员签名内部类型引用。

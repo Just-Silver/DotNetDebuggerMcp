@@ -1,4 +1,4 @@
-namespace DotNetDebugger.Engine;
+namespace DotNetDebugger.Engine.Session;
 
 /// <summary>first-chance 异常断点：按异常类型名过滤（空 = 全部）。v1 支持单类型或空。</summary>
 public sealed class ExceptionBreakpointFilter

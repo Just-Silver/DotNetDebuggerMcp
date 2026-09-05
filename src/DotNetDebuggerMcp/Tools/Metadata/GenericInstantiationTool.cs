@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Reflection.PortableExecutable;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 查询 .NET 程序集（dll/exe）中指定泛型类型被具体实例化的使用点组合视图。

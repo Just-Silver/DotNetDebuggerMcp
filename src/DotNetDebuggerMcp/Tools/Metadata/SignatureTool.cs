@@ -9,7 +9,7 @@ using System.ComponentModel;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 输出 .NET 程序集（dll/exe）中指定类型的全部成员签名（API 地图），每成员一行。

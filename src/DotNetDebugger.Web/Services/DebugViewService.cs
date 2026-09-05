@@ -1,5 +1,6 @@
 using DotNetDebugger.Engine.Models;
 using DotNetDebugger.Session;
+using DotNetDebugger.Session.Models;
 
 namespace DotNetDebugger.Web.Services;
 

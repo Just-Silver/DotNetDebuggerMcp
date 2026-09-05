@@ -1,5 +1,5 @@
-using DotNetDebugger.Engine;
 using DotNetDebugger.Engine.Models;
+using DotNetDebugger.Engine.Session;
 
 namespace DotNetDebuggerMcp.DebugCli;
 

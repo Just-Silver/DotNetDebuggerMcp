@@ -1,6 +1,6 @@
 using DotNetDebugger.Engine.Models;
 
-namespace DotNetDebugger.Session;
+namespace DotNetDebugger.Session.Models;
 
 /// <summary>停点现场：进程停在何处/为何停（供 debug_state/debug_stack 等查询）。</summary>
 public sealed record StopContext(

@@ -9,7 +9,7 @@ using System.ComponentModel;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 列出 .NET 程序集（dll/exe）中指定类别的实体类型到标准输出。

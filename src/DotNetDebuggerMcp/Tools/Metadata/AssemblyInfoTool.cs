@@ -9,7 +9,7 @@ using System.ComponentModel;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 输出 .NET 程序集（dll/exe）的概览信息：程序集名与版本、目标框架、引用的程序集清单、实体类型计数与入口点。

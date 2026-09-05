@@ -1,5 +1,6 @@
 using ClrDebug;
 using DotNetDebugger.Engine.Models;
+using DotNetDebugger.Engine.Session;
 
 namespace DotNetDebugger.Engine.Engine;
 

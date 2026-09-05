@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using ClrDebug;
 using DotNetDebugger.Engine.Models;
+using DotNetDebugger.Engine.Session;
 using DotNetDebugger.Engine.Stepping;
 
 namespace DotNetDebugger.Engine.Engine;

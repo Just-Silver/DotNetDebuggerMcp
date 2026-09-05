@@ -11,7 +11,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 追踪指定字段在程序集内的读取/写入/取地址位置（字段级反查）：按 fieldToken 或 typeName+fieldName 定位字段后， 反向扫描全部类型方法体的字段访问指令，输出读取/写入/取地址三段来源成员（类型全名::成员签名）。

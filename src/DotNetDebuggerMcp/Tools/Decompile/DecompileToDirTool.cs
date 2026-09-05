@@ -4,7 +4,7 @@ using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Decompile;
 
 /// <summary>
 /// 将 .NET 程序集（dll/exe）反编译写入指定目录（全量或指定类型，typeName 支持逗号分隔多个类型）。结果写入磁盘而非标准输出，不做输出量截断。

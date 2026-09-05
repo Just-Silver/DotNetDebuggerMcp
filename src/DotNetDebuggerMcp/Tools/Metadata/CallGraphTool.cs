@@ -7,7 +7,7 @@ using ModelContextProtocol.Server;
 
 using System.ComponentModel;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 查询 .NET 程序集（dll/exe）中指定类型的方法体调用关系。

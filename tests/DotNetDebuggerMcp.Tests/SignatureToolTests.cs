@@ -1,9 +1,9 @@
 using DotNetDebuggerMcp.Formatting;
 using DotNetDebugger.Decompiler.Metadata;
-using DotNetDebuggerMcp.Tools;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using Xunit;
+using DotNetDebuggerMcp.Tools.Metadata;
 
 namespace DotNetDebuggerMcp.Tests;
 

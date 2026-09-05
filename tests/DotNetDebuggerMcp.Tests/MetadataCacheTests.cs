@@ -1,7 +1,7 @@
 using DotNetDebuggerMcp.Caching;
 using DotNetDebuggerMcp.Formatting;
 using DotNetDebuggerMcp.Services;
-using DotNetDebuggerMcp.Tools;
+using DotNetDebuggerMcp.Tools.Metadata;
 using Xunit;
 
 namespace DotNetDebuggerMcp.Tests;

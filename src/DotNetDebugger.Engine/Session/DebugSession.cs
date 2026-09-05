@@ -1,7 +1,7 @@
 using DotNetDebugger.Engine.Engine;
 using DotNetDebugger.Engine.Models;
 
-namespace DotNetDebugger.Engine;
+namespace DotNetDebugger.Engine.Session;
 
 /// <summary>
 /// 一个被调试目标的会话（v1 单活动会话；spec §4.1）。外部 API：Launch/Attach/Disconnect/Dispose +

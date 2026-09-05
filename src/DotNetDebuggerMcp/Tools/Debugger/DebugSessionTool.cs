@@ -1,4 +1,4 @@
-using DotNetDebugger.Session;
+using DotNetDebugger.Session.Models;
 using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
 

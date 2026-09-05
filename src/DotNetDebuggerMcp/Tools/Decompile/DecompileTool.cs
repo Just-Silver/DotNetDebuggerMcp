@@ -7,7 +7,7 @@ using ModelContextProtocol.Server;
 
 using System.ComponentModel;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Decompile;
 
 /// <summary>
 /// 反编译 .NET 程序集（dll/exe）中指定的单个类型到标准输出。

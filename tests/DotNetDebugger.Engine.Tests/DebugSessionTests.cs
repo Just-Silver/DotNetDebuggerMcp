@@ -1,6 +1,6 @@
 using System.Diagnostics;
-using DotNetDebugger.Engine;
 using DotNetDebugger.Engine.Models;
+using DotNetDebugger.Engine.Session;
 using Xunit;
 
 namespace DotNetDebugger.Engine.Tests;

@@ -12,7 +12,7 @@ using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 方法级正向调用序列 + 反编译组合：按 token 或 typeName+memberName 定位起始方法，扫描其方法体按 IL 序列出调用序列 （内部调用带成员

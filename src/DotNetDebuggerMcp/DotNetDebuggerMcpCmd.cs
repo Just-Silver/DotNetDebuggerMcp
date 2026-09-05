@@ -1,7 +1,8 @@
 using DotNetDebuggerMcp.Configuration;
 using DotNetDebuggerMcp.DebugCli;
 using DotNetDebuggerMcp.Services;
-using DotNetDebuggerMcp.Tools;
+using DotNetDebuggerMcp.Tools.Decompile;
+using DotNetDebuggerMcp.Tools.Metadata;
 using DotNetDebuggerMcp.UpdateCheck;
 using McMaster.Extensions.CommandLineUtils;
 using Microsoft.Extensions.DependencyInjection;

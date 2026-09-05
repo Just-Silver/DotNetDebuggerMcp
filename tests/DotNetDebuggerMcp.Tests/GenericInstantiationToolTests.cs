@@ -1,4 +1,4 @@
-using DotNetDebuggerMcp.Tools;
+using DotNetDebuggerMcp.Tools.Metadata;
 using Xunit;
 
 namespace DotNetDebuggerMcp.Tests;

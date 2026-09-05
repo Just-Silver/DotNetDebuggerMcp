@@ -1,6 +1,6 @@
 using DotNetDebugger.Engine.Models;
 
-namespace DotNetDebugger.Engine;
+namespace DotNetDebugger.Engine.Session;
 
 /// <summary>
 /// 断点：按 ModuleName + MethodToken + IlOffset 定位（spec §4.1）。运行时绑定到 CorDebugFunctionBreakpoint。

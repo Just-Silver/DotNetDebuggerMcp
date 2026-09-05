@@ -12,7 +12,7 @@ using System.Reflection.PortableExecutable;
 // 工具方法名 Hierarchy 与 Metadata.Hierarchy 类同名会遮蔽，此处显式别名
 using MetadataHierarchy = DotNetDebugger.Decompiler.Metadata.Hierarchy;
 
-namespace DotNetDebuggerMcp.Tools;
+namespace DotNetDebuggerMcp.Tools.Metadata;
 
 /// <summary>
 /// 查询 .NET 程序集（dll/exe）中指定类型的继承/接口关系。

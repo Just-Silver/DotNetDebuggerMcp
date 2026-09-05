@@ -2,8 +2,8 @@ using System.Diagnostics;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
-using DotNetDebugger.Engine;
 using DotNetDebugger.Engine.Models;
+using DotNetDebugger.Engine.Session;
 using Xunit;
 
 namespace DotNetDebugger.Engine.Tests;
