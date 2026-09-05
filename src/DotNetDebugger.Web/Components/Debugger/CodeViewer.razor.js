@@ -98,9 +98,9 @@ window.dotnetDebuggerMonaco.setCursorCallback = function (id, dotnetRef) {
     if (editor) dotnetdbgHookCursor(editor);
 };
 
-// 装饰：断点行（glyph 圆点）+ 当前行（背景）。全量重推（old 由 C# 侧维护传入）。
+// 装饰：断点行（glyph 圆点）+ 当前行（背景）+ 选中成员行区间（背景）。全量重推（old 由 C# 侧维护传入）。
 // 编辑器未建时忽略（C# 侧在 文档换页/断点变化/停点跃迁 时会重推，无需暂存）。
-window.dotnetDebuggerMonaco.deltaDecorations = function (id, oldIds, breakpointLines, currentLine) {
+window.dotnetDebuggerMonaco.deltaDecorations = function (id, oldIds, breakpointLines, currentLine, memberStart, memberEnd) {
     var editor = window.dotnetDebuggerMonaco.editors[id];
     if (!editor) return [];
     var newDeco = [];
@@ -120,6 +120,15 @@ window.dotnetDebuggerMonaco.deltaDecorations = function (id, oldIds, breakpointL
             options: {
                 isWholeLine: true,
                 className: 'dotnetdbg-current-line'
+            }
+        });
+    }
+    if (memberStart > 0 && memberEnd >= memberStart) {
+        newDeco.push({
+            range: new monaco.Range(memberStart, 1, memberEnd, 1),
+            options: {
+                isWholeLine: true,
+                className: 'dotnetdbg-selected-member'
             }
         });
     }

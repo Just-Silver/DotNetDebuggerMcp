@@ -29,6 +29,7 @@ public partial class Debugger
     private System.Timers.Timer? _pollTimer;
     private long _lastAgentRevision = -1;   // 已处理的 agent 上下文版本
     private int _lastCursorToken;           // 光标联动已选中的方法 token（变化才动树，防扰动）
+    private int _selectedMemberToken;       // 当前选中成员（树点叶子/光标联动/停点），编辑器行区间高亮用
     /// <summary>演示目标 DebugTarget.exe（从仓库根上溯定位 tests/TestData）。</summary>
     private static string DemoAssembly
     {
@@ -207,6 +208,8 @@ public partial class Debugger
         }
         await _tree.SelectTypeAsync(assemblyPath, typeFullName, frame.MethodToken);
         await ShowTypeAsync(assemblyPath, typeFullName);
+        _selectedMemberToken = frame.MethodToken;   // 停点方法整段高亮
+        await ApplyDecorationsAsync();
     }
 
     private async Task LaunchTarget()
@@ -257,7 +260,8 @@ public partial class Debugger
         // 程序集进树（幂等；非程序集/不存在返回 false，不影响反编译尝试）
         if (_tree is not null) _tree.LoadAssembly(assemblyPath);
         _loading = true;
-        _lastCursorToken = 0;   // 换文档：token 空间不同，光标联动基线复位
+        _lastCursorToken = 0;        // 换文档：token 空间不同，光标联动基线复位
+        _selectedMemberToken = 0;    // 换文档：旧 token 在新文档无意义（跨程序集 token 空间重叠，防误高亮）
         await InvokeAsync(StateHasChanged);
         try
         {
@@ -277,11 +281,14 @@ public partial class Debugger
         return Task.CompletedTask;
     }
 
-    /// <summary>双向联动（树→编辑器）：点成员叶子切到所属类型文档并滚动定位到成员首行。</summary>
+    /// <summary>双向联动（树→编辑器）：点成员叶子切到所属类型文档、滚动定位到成员首行，
+    /// 并以行区间背景高亮整个成员。</summary>
     private async Task ShowMemberAsync(string assemblyPath, string typeFullName, int methodToken)
     {
         await ShowTypeAsync(assemblyPath, typeFullName);
         if (methodToken <= 0 || _doc is not { IsSuccess: true } || _doc.Error is not null) return;
+        _selectedMemberToken = methodToken;
+        await ApplyDecorationsAsync();
         if (DocumentStore.GetMethodFirstLine(_doc, methodToken) is { } line)
         {
             await _viewer!.RevealLineAsync(line);
@@ -296,6 +303,8 @@ public partial class Debugger
         if (DocumentStore.FindMethodTokenAtLine(_doc, line) is not { } token || token <= 0) return;
         if (token == _lastCursorToken) return;
         _lastCursorToken = token;
+        _selectedMemberToken = token;
+        await ApplyDecorationsAsync();   // 选中成员行区间高亮跟随光标
         await _tree.SelectTypeAsync(_doc.AssemblyPath, _doc.TypeFullName, token);
     }
 
@@ -318,7 +327,8 @@ public partial class Debugger
             if (!bp.ModuleName.Equals(assemblyName, StringComparison.OrdinalIgnoreCase)) continue;
             if (DocumentStore.GetStopLine(_doc, bp.MethodToken, bp.IlOffset) is { } line) breakpointLines.Add(line);
         }
-        await _viewer.SetDecorationsAsync([.. breakpointLines], currentLine);
+        await _viewer.SetDecorationsAsync([.. breakpointLines], currentLine,
+            DocumentStore.GetMethodLineRange(_doc, _selectedMemberToken));
         if (currentLine is not null) await _viewer.RevealLineAsync(currentLine.Value);
     }
 

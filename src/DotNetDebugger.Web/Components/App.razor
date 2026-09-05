@@ -18,6 +18,10 @@
         .dotnetdbg-current-line {
             background-color: #7abd7a4d;   /* 当前执行行（绿，spec §9.2 色值） */
         }
+        /* 当前选中成员行区间（树点成员叶子/光标联动/停点方法；蓝，区别于停点行绿） */
+        .dotnetdbg-selected-member {
+            background-color: rgba(0, 120, 212, 0.16);
+        }
         /* 断点红点：Monaco .cgmr 是满行高 flex 居中容器，勿改其尺寸——
            用 ::before 画圆点由 flex 天然垂直居中（直接设容器宽高会导致偏移） */
         .dotnetdbg-breakpoint-glyph::before {

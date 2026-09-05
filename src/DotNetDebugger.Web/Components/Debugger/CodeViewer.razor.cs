@@ -29,13 +29,14 @@ public partial class CodeViewer : IAsyncDisposable
         catch (Exception ex) when (IsCircuitGone(ex)) { }
     }
 
-    /// <summary>更新断点行集合 + 当前执行行（全量重推装饰）。</summary>
-    public async Task SetDecorationsAsync(int[] breakpointLines, int? currentLine)
+    /// <summary>更新断点行 + 当前执行行 + 选中成员行区间（全量重推装饰）。</summary>
+    public async Task SetDecorationsAsync(int[] breakpointLines, int? currentLine, (int Start, int End)? memberRange = null)
     {
         try
         {
             _currentDecorationIds = await Js.InvokeAsync<string[]>(
-                "dotnetDebuggerMonaco.deltaDecorations", _editorId, _currentDecorationIds, breakpointLines, currentLine ?? 0) ?? [];
+                "dotnetDebuggerMonaco.deltaDecorations", _editorId, _currentDecorationIds,
+                breakpointLines, currentLine ?? 0, memberRange?.Start ?? 0, memberRange?.End ?? 0) ?? [];
         }
         catch (Exception ex) when (IsCircuitGone(ex)) { }
     }
