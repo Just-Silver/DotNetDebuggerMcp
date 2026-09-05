@@ -2,17 +2,18 @@
 
 > 最新在上。澄清后把「问题+结论」移入 decisions.md。
 
-## #4 WebUI 技术栈确认（待澄清，勿删）
-- 状态：**待澄清**（2026-09-05 恢复——曾被误标已解决）
-- 问题：WebUI 技术栈是否采纳调研建议组合 A（research/04）：
-  - 服务端：ASP.NET Core / Kestrel 单进程内嵌（静态资源 + REST + SSE 同端口）
-  - 实时推送：SSE（连接拉 `/api/state` 快照，此后增量；EventSource 自动重连）
-  - 前端框架：React + TS + Vite
-  - 代码视图：Monaco Editor（read-only + deltaDecorations 断点/当前行高亮）
-  - 图/时间线：时间线自绘 DOM 列表；时序/调用图 mermaid.js 按需动态加载
-  - IL→反编译行映射：全部在服务端（Session 层）解析后推浏览器
-  - 备选：CodeMirror 6（更轻、无 worker，但 C# 高亮弱）；vanilla TS（仅极简展示）
-- 背景：decisions D4（建议）仍是「建议待确认」状态；实施时机已定（D7：P4 再上 Web）。
+## #6 WebUI 代码视图与推送通道落地（最新，待澄清）
+- 状态：**待澄清**（2026-09-05）
+- 背景：Web 前端定 BootstrapBlazor（Blazor Server，decisions D4 更新）。BB **无代码编辑器/语法高亮组件**（bb-llms 已查证：editor→仅 EditorForm；code/highlight→空；textarea→Textarea 纯文本）。
+- 子问题：
+  1. **代码视图**落地方式：(a) Monaco 作为 Blazor JS 互操作组件（观感最好，带 JS 构建）；(b) BB Textarea/自绘只读高亮（纯 C#，高亮/行装饰弱）；(c) BlazorMonaco 之类现成封装。
+  2. **推送通道**：Blazor Server 的 SignalR 电路能否承载调试事件流？Session 的 Channel 事件如何驱动 Blazor 刷新（`IAsyncEnumerable`/订阅式 vs 轮询快照）。
+  3. **构建链**：接受仅 Blazor Server（无静态 SPA）以完全避开 Node 构建链？
+- 背景：research/04 的 SSE+快照建议在 Blazor 语境可能简化为电路内推送。
+
+## #4 WebUI 技术栈方向（已定）
+- 状态：**方向已定**（2026-09-05，decisions D4 更新）→ **BootstrapBlazor（Blazor Server）**，替代 React+Monaco 组合 A。
+- 残留：代码视图/推送通道/构建链细节见 #6。
 
 ## #5 子项目 A/B 库名与项目拆分（已解决 2026-09-05）
 - 状态：**已解决** → 采纳建议值 + **5 项目拆分**（decisions D6/D8）：Decompiler / Engine / Session / Web / McpHost(exe)；MCP 与 Web 不拆进程（共享会话）。

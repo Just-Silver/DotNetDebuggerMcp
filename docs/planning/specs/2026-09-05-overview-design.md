@@ -73,7 +73,7 @@ McpHost(exe) ──> Web ──> Session ──> Engine ──> ClrDebug/DbgShim
 - `BreakpointHit`（bpId + threadId + 栈顶 frame：module/methodToken/ilOffset）
 - `StepCompleted`（threadId + 栈顶 frame）
 - `ExceptionHit`（firstChance，类型名 + 栈顶 frame + 消息）
-- `ThreadsChanged` / `StateSnapshot`（连接/重连时全量；见 §7 SSE）
+- `ThreadsChanged` / `StateSnapshot`（连接/重连时全量）
 - `AgentAction`（MCP 每步指令的轨迹记录：工具名+参数摘要+结果摘要+关联事件序列）→ Web 回放源
 - `EngineLog`（engine 自身日志/错误）
 
@@ -87,10 +87,10 @@ McpHost(exe) ──> Web ──> Session ──> Engine ──> ClrDebug/DbgShim
 - 命令执行策略：调试命令在调试线程串行排队；**MCP 并发请求**经队列串行化（沿用历史 stdio 防撕帧纪律的同类教训）。
 - 轨迹：`AgentAction` 追加写只读日志（内存环形 v1），Web 时间线 = 日志只读播放器。
 
-### 4.4 Web 层（`DotNetDebugger.Web`）——**提案，技术栈待确认（open-questions #4）**
-> 以下为基于调研（research/04 组合 A）的**提案设计**，在技术栈确认前不视为已定架构；确认或改选后回写本段。
-- Kestrel 内嵌：`/`（静态 SPA）、`GET /api/state`（快照）、`GET /api/docs/{id}`、`POST /api/control/{action}`、`GET /api/events`（SSE）。
-- 事件模型：连接先拉快照（`StateSnapshot`），再 SSE 增量；`EventSource` 自动重连后重拉快照（幂等）。
+### 4.4 Web 层（`DotNetDebugger.Web`）——**方向：Blazor Server + BootstrapBlazor；细节待确认（open-questions #6）**
+> Web 前端方向已定 **BootstrapBlazor（Blazor Server，纯 .NET 全栈）**；以下描述随确认演进（见 decisions D4 / open-questions #6）。
+- Blazor Server 承载于宿主 exe 内嵌 Kestrel；调试事件经 Session 的 Channel 推给 Blazor 组件（SignalR 电路内推送，具体机制 P4 细化）。
+- 面板：调用栈 / 局部变量 / 线程 / 调试事件日志 / agent 决策轨迹时间线（可回放）；代码视图组件（Monaco 互操作 vs BB 原生）待定。
 - 详细面板协议/数据形状 → **P4 前单独细化 spec**（本总览只定边界）。
 
 ### 4.5 MCP 工具面（宿主层，P3）
@@ -107,7 +107,7 @@ McpHost(exe) ──> Web ──> Session ──> Engine ──> ClrDebug/DbgShim
 
 - **调试线程**：Engine 自持专用调试线程（ICorDebug 回调串行化要求；COM STA/消息泵）。所有 ICorDebug 调用只在此线程发生。
 - **命令队列**：外部（MCP/Web/CLI）发命令 → 队列 → 调试线程执行 → 事件回 Channel。
-- **事件分发**：Engine 写有界 Channel → Session 订阅转轨迹/快照 → MCP（轮询/notifications）与 Web（SSE）各自消费。
+- **事件分发**：Engine 写有界 Channel → Session 订阅转轨迹/快照 → MCP（轮询/notifications）与 Web（Blazor Server SignalR 电路）各自消费。
 - **进程停 = 冻结**：ICorDebug 同步停时托管线程全冻结；读栈/变量只在 Stopped 态允许；求值类（v2）必须知悉 GC safe point 限制。
 - **每目标进程仅一个 ICorDebug 调试器**：与 VS/生产调试器互斥，文档明示。
 - **stdout 纪律**：宿主 stdout 只走 MCP 协议；Web/调试日志全走 stderr/文件（P4 不占 stdio）。
@@ -121,8 +121,8 @@ McpHost(exe) ──> Web ──> Session ──> Engine ──> ClrDebug/DbgShim
 | 引擎状态机 | 自研（clean-room 参考 dnSpy dndbg/Impl 协议） | MIT | P2 |
 | 反编译/元数据 | ICSharpCode.Decompiler（现依赖）+ System.Reflection.Metadata | MIT | Decompiler 库已有 |
 | 表达式求值 | v2：官方 Roslyn 语义 + AST 安全子集（暂定） | MIT | v1 不做 |
-| Web 服务端 | ASP.NET Core + TypedResults.ServerSentEvents（.NET 10） | MIT | **P4 细化前待确认**（open-questions #4） |
-| Web 前端 | Monaco + React/TS/Vite + mermaid(按需) | MIT | **P4 细化前待确认**（open-questions #4）；备选 CodeMirror 6 |
+| Web 服务端 | Blazor Server（宿主 exe 内嵌 Kestrel）+ BootstrapBlazor 组件库 | MIT | **已定方向**（decisions D4）；SignalR 电路推送，细节待确认 #6 |
+| Web 前端 | 无独立 JS 框架；BB 组件（.NET 全栈）；代码视图组件待定（Monaco 互操作 vs BB 原生） | MIT | **待确认 #6**；不引 React/Vite/SSE 自研（原 research/04 组合 A 备选弃用） |
 | IL→行映射 | SequencePointBuilder 思路（Decompiler 内，同设置产映射） | MIT | Session 负责（独立于前端选型，已定） |
 
 ## 7. P1-P5 阶段边界（实施计划拆分依据）
@@ -159,7 +159,7 @@ McpHost(exe) ──> Web ──> Session ──> Engine ──> ClrDebug/DbgShim
 | stdio 并发撕帧回归（历史教训） | P3 回归护栏测试延续；调试命令队列串行化 |
 | 许可合规（GPL/AGPL 参考） | 只读不链不抄；代码独立书写 |
 | 反编译改名引发大规模重构错误 | P1 机械搬迁+自动化测试护栏，行为零变化验收 |
-| Web 体积/加载（Monaco） | 本机 localhost 可接受；按需加载 mermaid |
+| Web 代码视图体积/能力 | 取决于 #6 选型（Monaco 互操作则本机 localhost 可接受；BB 原生则无 JS 体积） |
 | IL→行映射缺 sequence point | 服务端降级策略（research/04 §5） |
 
 ## 9. 参考
