@@ -24,6 +24,12 @@
 - 理由：超大计划降低单文档规模与跨会话上下文压力；每阶段可独立 review/交付。
 - 日期：2026-09-05。
 
+## D9 · P1 执行策略（用户拍板）
+- 决策：**同仓重建**——在现有 git 仓库内新建目标 5 项目结构（`src/DotNetDebugger.Decompiler`、`src/DotNetDebugger.Engine`、`src/DotNetDebugger.Session`、`src/DotNetDebugger.Web`、`src/DotNetDebuggerMcp`），源码按归属拷贝进对应新项目并一次性替换命名空间，编译+全量测试+Client 端到端验证绿后删旧 `src/ILSpyMcp/`、`src/ILSpyMcp.Client/`、`tests/ILSpyMcp.Tests/` 结构。
+- 理由：保留 git 历史与既有配置；避开「活结构上做手术」的中间态；从第一天就是干净 5 项目布局，编译错误直指目标文件。
+- 执行顺序：**先重建目标结构并验证，再删旧**（不是边改边拆）。
+- 日期：2026-09-05。
+
 ## D8 · 解决方案项目拆分（用户拍板）
 - 决策：**5 项目（一个 exe + 4 库）**，进程永远是一个宿主 exe；拆的是程序集。MCP 与 Web 不拆进程（共享会话）。
   | # | 程序集 | 类型 | 职责 | 依赖 |
