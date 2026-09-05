@@ -21,8 +21,8 @@
 
 ## 当前状态
 
-- **阶段**：**P1（仓库改名与拆分）已完成** ✅（feature/p1-rename-split 分支，425 测试全绿 + Client 端到端全过）。
-- **已拍板决策**（decisions D1-D10）：
+- **阶段**：**P1（仓库改名与拆分）已完成** ✅（425 测试全绿 + Client 端到端全过）；**P2（动态调试引擎 v1）已完成** ✅（feature/p2-engine-v1 分支：Engine 库 + 6 集成测试 + CLI -dbg，反编译 425 测试零回归 + Client 端到端全过）。
+- **已拍板决策**（decisions D1-D11）：
   1. 现有反编译改名保留 → Decompiler 库；新增动态调试引擎（Engine）；主 MCP+Web 宿主（McpHost）。先引擎/MCP 后 Web。
   2. 5 项目拆分：`DotNetDebugger.Decompiler` / `.Engine` / `.Session` / `.Web` / `DotNetDebuggerMcp`(exe)，进程合一。
   3. 命名 **DotNet-Debugger-MCP**（包 id `dotnet-debugger-mcp`）；MCP 注册名建议 `dotnetdebugger`。
@@ -30,4 +30,4 @@
   5. v1 引擎 = 最小 agent 调试闭环（不含表达式求值）；表达式求值/PDB 行断点列 v2。
   6. Web 栈 = **Blazor Server + BootstrapBlazor + Monaco 互操作**（SignalR 电路推送）。
   7. P1 执行策略 = **同仓重建**（先建 5 项目再迁源码，验证绿后删旧）。
-- **待办**：P1 计划执行（从 master 开实现分支）→ P2-P5 计划依次产出。残留开放项见 `open-questions.md`。
+- **待办**：P3（会话层 + MCP 调试工具面，Session + McpHost）计划与执行；随后 P4（WebUI）/P5（发布）。残留开放项见 `open-questions.md`。

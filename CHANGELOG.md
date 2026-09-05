@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **动态调试引擎 v1（`DotNetDebugger.Engine` 库，能力预览，尚未暴露 MCP 工具）**：进程内 .NET 调试引擎（ICorDebug 通道，ClrDebug + DbgShim），支持启动/附加目标进程、按方法 token+IL offset 下断点、continue、单步（into/over/out）、读线程/调用栈/局部变量（标量）、first-chance 异常断点、统一 `DebugEvent` 事件流；宿主新增 `-dbg` CLI 一次性调试命令供手动验证。**MCP 调试工具面在后续版本接入（P3）**
+- **测试设施**：`tests/TestData` 追加生成可执行调试目标 `DebugTarget.exe`；新增 `tests/DotNetDebugger.Engine.Tests` 集成测试（真实子进程 attach/断点/单步/状态/异常，串行执行避免 ICorDebug 会话干扰）
+
 ### 重构
 
 - **仓库/包改名：ILSpyMcp → DotNet-Debugger-MCP**：NuGet 包 id / CLI 命令 `ilspymcp` → `dotnet-debugger-mcp`；MCP 服务器注册名建议 `dotnetdebugger`（工具前缀 `dotnetdebugger_*`）；解决方案拆为五项目（`DotNetDebugger.Decompiler` 反编译能力库 + `DotNetDebugger.Engine/Session/Web` 预留库 + `DotNetDebuggerMcp` 宿主 exe）。**行为不变**：16 个反编译工具名/参数/输出格式、CLI 参数与握手简介均保持（简介文字已更新产品定位）
