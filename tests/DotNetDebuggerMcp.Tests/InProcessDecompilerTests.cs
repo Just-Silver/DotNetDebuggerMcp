@@ -228,7 +228,7 @@ public class InProcessDecompilerTests
     [Fact]
     public void DecompileToDir_批量写盘提示列出文件路径()
     {
-        var outDir = Path.Combine(Path.GetTempPath(), "ilspymcp-tests-" + Guid.NewGuid().ToString("N"));
+        var outDir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-tests-" + Guid.NewGuid().ToString("N"));
         try
         {
             var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, outDir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
@@ -376,7 +376,7 @@ public class InProcessDecompilerTests
 
     private static string NewTempDir()
     {
-        return Path.Combine(Path.GetTempPath(), "ilspymcp-inproc-" + Guid.NewGuid().ToString("N"));
+        return Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-inproc-" + Guid.NewGuid().ToString("N"));
     }
 
     /// <summary>

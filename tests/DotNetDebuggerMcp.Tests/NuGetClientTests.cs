@@ -16,7 +16,7 @@ public class NuGetClientTests
     {
         var client = new NuGetClient(Handler("{\"versions\":[\"1.0.0\",\"1.1.0\",\"1.2.0-beta\"]}"));
 
-        var latest = await client.GetLatestStableVersionAsync("dotnet-debugger-mcp");
+        var latest = await client.GetLatestStableVersionAsync("DotNetDebuggerMcp");
 
         Assert.Equal("1.1.0", latest);
     }
@@ -26,7 +26,7 @@ public class NuGetClientTests
     {
         var client = new NuGetClient(Handler("{\"versions\":[\"1.0.0\",\"1.1.0\",\"1.2.0\"]}"));
 
-        var latest = await client.GetLatestStableVersionAsync("dotnet-debugger-mcp");
+        var latest = await client.GetLatestStableVersionAsync("DotNetDebuggerMcp");
 
         Assert.Equal("1.2.0", latest);
     }
@@ -37,9 +37,9 @@ public class NuGetClientTests
         var handler = new FakeHandler { Responder = _ => Json("{\"versions\":[]}") };
         var client = new NuGetClient(handler);
 
-        await client.GetLatestStableVersionAsync("dotnet-debugger-mcp");
+        await client.GetLatestStableVersionAsync("DotNetDebuggerMcp");
 
-        Assert.Equal("https://api.nuget.org/v3-flatcontainer/dotnet-debugger-mcp/index.json", handler.LastRequest?.RequestUri?.ToString());
+        Assert.Equal("https://api.nuget.org/v3-flatcontainer/dotnetdebuggermcp/index.json", handler.LastRequest?.RequestUri?.ToString());
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class NuGetClientTests
         var handler = new FakeHandler { Responder = _ => throw new HttpRequestException("network down") };
         var client = new NuGetClient(handler);
 
-        var latest = await client.GetLatestStableVersionAsync("dotnet-debugger-mcp");
+        var latest = await client.GetLatestStableVersionAsync("DotNetDebuggerMcp");
 
         Assert.Null(latest);
     }
@@ -58,7 +58,7 @@ public class NuGetClientTests
     {
         var client = new NuGetClient(Handler("not-json"));
 
-        var latest = await client.GetLatestStableVersionAsync("dotnet-debugger-mcp");
+        var latest = await client.GetLatestStableVersionAsync("DotNetDebuggerMcp");
 
         Assert.Null(latest);
     }
@@ -68,7 +68,7 @@ public class NuGetClientTests
     {
         var client = new NuGetClient(Handler("{\"versions\":[]}"));
 
-        var latest = await client.GetLatestStableVersionAsync("dotnet-debugger-mcp");
+        var latest = await client.GetLatestStableVersionAsync("DotNetDebuggerMcp");
 
         Assert.Null(latest);
     }
@@ -89,3 +89,4 @@ public class NuGetClientTests
         }
     }
 }
+

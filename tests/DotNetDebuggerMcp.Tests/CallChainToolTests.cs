@@ -113,7 +113,7 @@ public class CallChainToolTests
     {
         // 把 Ext dll 复制到临时目录（同目录无 TestSamples.dll，CWD 也无）：resolver 定位失败 → 行尾标注终止提示
         AppServices.ConfigureForTest();
-        var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-callchain-ext-test");
+        var tempDir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-callchain-ext-test");
         Directory.CreateDirectory(tempDir);
         var tempDll = Path.Combine(tempDir, "ILSpyMcp.TestSamplesExt.dll");
         try
@@ -137,7 +137,7 @@ public class CallChainToolTests
         // Callee..ctor 与 Callee.Help 的跨程序集调用均展开中止（2 处）——头部降级提示须并入 expander 计数， 证明展开完成后再合并
         // FormatContext.Degraded（展开前读取恒为 0）。
         AppServices.ConfigureForTest();
-        var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-callchain-abort-test");
+        var tempDir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-callchain-abort-test");
         Directory.CreateDirectory(tempDir);
         try
         {

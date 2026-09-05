@@ -18,8 +18,8 @@ public class DotNetDebuggerMcpCmdTests
     public void Version_返回工具名加三位版本号()
     {
         var cmd = new DotNetDebuggerMcpCmd();
-        Assert.StartsWith("dotnet-debugger-mcp ", cmd.Version);
-        Assert.Matches(@"^dotnet-debugger-mcp \d+\.\d+\.\d+$", cmd.Version);
+        Assert.StartsWith("DotNetDebuggerMcp ", cmd.Version);
+        Assert.Matches(@"^DotNetDebuggerMcp \d+\.\d+\.\d+$", cmd.Version);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class DotNetDebuggerMcpCmdTests
     [Fact]
     public void BuildServerInstructions_含更新报告_简介后接更新报告()
     {
-        const string report = "ilspymcp 已是最新版本";
+        const string report = "DotNetDebuggerMcp 已是最新版本";
         var text = DotNetDebuggerMcpCmd.BuildServerInstructions(report);
 
         Assert.StartsWith("## 服务器简介", text);

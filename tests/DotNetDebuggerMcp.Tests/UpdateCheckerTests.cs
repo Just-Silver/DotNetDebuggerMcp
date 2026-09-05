@@ -201,7 +201,7 @@ public class UpdateCheckerTests
 
             Assert.NotNull(line);
             Assert.Contains("NuGet 最新 99.0.0", line);
-            Assert.Contains("dotnet tool update --global dotnet-debugger-mcp", line);
+            Assert.Contains("dotnet tool update --global DotNetDebuggerMcp", line);
             Assert.Contains(AppConfig.NuGetPackageId, line);
         }
         finally
@@ -292,7 +292,7 @@ public class UpdateCheckerTests
         }
     }
 
-    private static string TempDir() => Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N"));
+    private static string TempDir() => Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-tests", Guid.NewGuid().ToString("N"));
 
     private static string? ReadCacheLatest(string cacheDir)
     {

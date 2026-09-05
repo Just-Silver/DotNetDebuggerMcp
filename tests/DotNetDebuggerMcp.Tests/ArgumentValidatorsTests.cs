@@ -5,7 +5,7 @@ namespace DotNetDebuggerMcp.Tests;
 
 public class ArgumentValidatorsTests : IDisposable
 {
-    private readonly string _tempFile = Path.Combine(Path.GetTempPath(), $"ilspymcp-test-{Guid.NewGuid():N}.dll");
+    private readonly string _tempFile = Path.Combine(Path.GetTempPath(), $"DotNetDebuggerMcp-test-{Guid.NewGuid():N}.dll");
 
     public ArgumentValidatorsTests()
     {
@@ -188,7 +188,7 @@ public class ArgumentValidatorsTests : IDisposable
     [Fact]
     public void ValidateOutputDir_合法目录路径_校验通过()
     {
-        var dir = Path.Combine(Path.GetTempPath(), $"ilspymcp-out-{Guid.NewGuid():N}");
+        var dir = Path.Combine(Path.GetTempPath(), $"DotNetDebuggerMcp-out-{Guid.NewGuid():N}");
         var ok = ArgumentValidators.ValidateOutputDir(dir, out var error);
         Assert.True(ok);
         Assert.Null(error);

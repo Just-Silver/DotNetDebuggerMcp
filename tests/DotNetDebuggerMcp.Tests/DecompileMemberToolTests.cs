@@ -125,7 +125,7 @@ public class DecompileMemberToolTests
         try
         {
             // 构造归一化同名类型对（嵌套 Holder+Item 与顶层 Holder.Item 归一化后均为 Probe.Ambiguity.Holder.Item）
-            var dir = Path.Combine(Path.GetTempPath(), "ilspymcp-ambig-" + Guid.NewGuid().ToString("N"));
+            var dir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-ambig-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             var dll = WriteAmbiguousAssembly(dir);
             try
@@ -154,7 +154,7 @@ public class DecompileMemberToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var dir = Path.Combine(Path.GetTempPath(), "ilspymcp-ambig-" + Guid.NewGuid().ToString("N"));
+            var dir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-ambig-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             var dll = WriteAmbiguousAssembly(dir);
             try

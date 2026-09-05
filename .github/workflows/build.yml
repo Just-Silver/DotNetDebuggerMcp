@@ -59,7 +59,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
-          dotnet pack src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj -c Release --no-build -o artifacts "-p:PackageReleaseNotes=https://github.com/Just-Silver/DotNet-Debugger-MCP/releases/tag/v$tag"
+          dotnet pack src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj -c Release --no-build -o artifacts "-p:PackageReleaseNotes=https://github.com/Just-Silver/DotNetDebuggerMcp/releases/tag/v$tag"
 
       # OIDC 交换出短期 NuGet API 密钥（有效期 1 小时，勿提前获取）
       - name: NuGet login (OIDC -> temp API key)

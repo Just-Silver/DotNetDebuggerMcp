@@ -16,14 +16,14 @@ public sealed class UpdateChecker
     private readonly Func<string, Task<string?>> _queryLatest;
 
     /// <summary>
-    /// 以默认缓存目录（LocalApplicationData/dotnet-debugger-mcp）、系统时钟与 NuGet 查询委托构造。
+    /// 以默认缓存目录（LocalApplicationData/DotNetDebuggerMcp）、系统时钟与 NuGet 查询委托构造。
     /// </summary>
-    /// <param name="cacheDir">缓存目录；缺省为 LocalApplicationData/dotnet-debugger-mcp。</param>
+    /// <param name="cacheDir">缓存目录；缺省为 LocalApplicationData/DotNetDebuggerMcp。</param>
     /// <param name="now">时间源（测试注入固定时钟）；缺省为 <see cref="DateTimeOffset.Now"/>。</param>
     /// <param name="queryLatest">按包 id 查询最新稳定版的委托；缺省为新建 <see cref="NuGetClient"/> 查询。</param>
     public UpdateChecker(string? cacheDir = null, Func<DateTimeOffset>? now = null, Func<string, Task<string?>>? queryLatest = null)
     {
-        _cacheDir = cacheDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "dotnet-debugger-mcp");
+        _cacheDir = cacheDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DotNetDebuggerMcp");
         _now = now ?? (() => DateTimeOffset.Now);
         _queryLatest = queryLatest ?? (id => new NuGetClient().GetLatestStableVersionAsync(id));
     }

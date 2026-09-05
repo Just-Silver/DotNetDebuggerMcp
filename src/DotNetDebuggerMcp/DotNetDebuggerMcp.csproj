@@ -15,16 +15,16 @@
 
     <!-- Set recommended package metadata -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageId>dotnet-debugger-mcp</PackageId>
+    <PackageId>DotNetDebuggerMcp</PackageId>
     <Version>1.4.0</Version>
-    <ToolCommandName>dotnet-debugger-mcp</ToolCommandName>
+    <ToolCommandName>DotNetDebuggerMcp</ToolCommandName>
     <Authors>Just-Silver</Authors>
     <RepositoryType>git</RepositoryType>
-    <RepositoryUrl>https://github.com/Just-Silver/DotNet-Debugger-MCP.git</RepositoryUrl>
-    <PackageProjectUrl>https://github.com/Just-Silver/DotNet-Debugger-MCP</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Just-Silver/DotNetDebuggerMcp.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/Just-Silver/DotNetDebuggerMcp</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>AI; MCP; server; stdio; decompiler; debugger; dotnet</PackageTags>
-    <Description>内置反编译与调试能力的 .NET MCP 服务器（dotnet-debugger-mcp），可反编译 .NET 程序集或驱动动态调试会话。</Description>
+    <Description>内置反编译与调试能力的 .NET MCP 服务器（DotNetDebuggerMcp），可反编译 .NET 程序集或驱动动态调试会话。</Description>
     <!-- PackageReleaseNotes 由 CI（build.yml，打 v* tag 时）注入指向 GitHub Release 页的链接，日志详情看 Release，勿在此硬编码 -->
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
   </PropertyGroup>

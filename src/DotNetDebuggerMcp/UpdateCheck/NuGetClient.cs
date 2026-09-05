@@ -43,7 +43,7 @@ public sealed class NuGetClient
     {
         try
         {
-            var url = $"{AppConfig.NuGetVersionListUrlPrefix}{packageId}/index.json";
+            var url = $"{AppConfig.NuGetVersionListUrlPrefix}{packageId.ToLowerInvariant()}/index.json";
             var json = await _http.GetStringAsync(url);
             using var doc = JsonDocument.Parse(json);
             // flatcontainer 版本清单按发布时间升序，最后一个即最新：从尾部向前取第一个稳定版（排除预发布）

@@ -55,7 +55,7 @@ public class ExternalCallExpanderTests
     {
         // 把 TestSamplesExt 复制到临时目录并放置合成同名 TestSamples.dll（Callee 方法体 IL 截断 → 解码中止）： resolver 经主 dll
         // 同目录定位到合成程序集，展开中止的方法体须累计进 AbortedBodies（供 call_chain 降级提示并入）。
-        var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-expander-abort-test");
+        var tempDir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-expander-abort-test");
         Directory.CreateDirectory(tempDir);
         try
         {
@@ -89,7 +89,7 @@ public class ExternalCallExpanderTests
     {
         // 自引用深链 DeepChain.dll（M0→M1→...→M6）：预修复无深度限制时 7 层全部展开（含 ::M6 调用: 头行）； 修复后深度达到
         // ExternalExpandMaxDepth 的子树不再展开，最深层 M6 的头行不再出现。
-        var tempDir = Path.Combine(Path.GetTempPath(), "ilspymcp-expander-depth-test");
+        var tempDir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-expander-depth-test");
         Directory.CreateDirectory(tempDir);
         try
         {

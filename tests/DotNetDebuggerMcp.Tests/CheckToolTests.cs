@@ -36,9 +36,9 @@ public class CheckToolTests
             cachedLatest: "2.0.0",
             async text =>
             {
-                Assert.Contains("dotnet-debugger-mcp: 当前", text);
+                Assert.Contains("DotNetDebuggerMcp: 当前", text);
                 Assert.Contains("NuGet 最新 2.0.0", text);
-                Assert.Contains("dotnet tool update --global dotnet-debugger-mcp", text);
+                Assert.Contains("dotnet tool update --global DotNetDebuggerMcp", text);
             });
     }
 
@@ -75,20 +75,20 @@ public class CheckToolTests
     [Fact]
     public void 握手注入_有新版本_带主动告知指令()
     {
-        var status = new UpdateChecker.NuGetUpdateStatus(HasNewVersion: true, Line: "dotnet-debugger-mcp: 当前 1.0.0，NuGet 最新 2.0.0。可执行 `dotnet tool update --global dotnet-debugger-mcp` 升级。");
+        var status = new UpdateChecker.NuGetUpdateStatus(HasNewVersion: true, Line: "DotNetDebuggerMcp: 当前 1.0.0，NuGet 最新 2.0.0。可执行 `dotnet tool update --global DotNetDebuggerMcp` 升级。");
 
         var text = EnvironmentChecker.BuildHandshakeText(status);
 
         Assert.StartsWith("## 更新状态", text);
         Assert.Contains("主动告知用户", text);
         Assert.Contains("NuGet 最新 2.0.0", text);
-        Assert.Contains("dotnet tool update --global dotnet-debugger-mcp", text);
+        Assert.Contains("dotnet tool update --global DotNetDebuggerMcp", text);
     }
 
     [Fact]
     public void 握手注入_已是最新_仅状态行不带指令()
     {
-        var status = new UpdateChecker.NuGetUpdateStatus(HasNewVersion: false, Line: "dotnet-debugger-mcp: 当前 2.0.0，已是最新版本。");
+        var status = new UpdateChecker.NuGetUpdateStatus(HasNewVersion: false, Line: "DotNetDebuggerMcp: 当前 2.0.0，已是最新版本。");
 
         var text = EnvironmentChecker.BuildHandshakeText(status);
 
@@ -138,5 +138,6 @@ public class CheckToolTests
             }));
     }
 
-    private static string TempDir() => Path.Combine(Path.GetTempPath(), "ilspymcp-tests", Guid.NewGuid().ToString("N"));
+    private static string TempDir() => Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-tests", Guid.NewGuid().ToString("N"));
 }
+

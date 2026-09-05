@@ -22,7 +22,7 @@ internal static class AppServices
     public static ToolPipeline Pipeline = new(Cache);
 
     /// <summary>
-    /// 共享 NuGet 包版本查询（环境自检用它检查 dotnet-debugger-mcp 是否有新版本）。
+    /// 共享 NuGet 包版本查询（环境自检用它检查 DotNetDebuggerMcp 是否有新版本）。
     /// </summary>
     public static NuGetClient NuGet = new();
 
@@ -50,7 +50,7 @@ internal static class AppServices
         old.Dispose();
         Pipeline = new ToolPipeline(Cache);
         NuGet = new NuGetClient();
-        Updater = new UpdateChecker(Path.Combine(Path.GetTempPath(), "dotnet-debugger-mcp-tests", Guid.NewGuid().ToString("N")),
+        Updater = new UpdateChecker(Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-tests", Guid.NewGuid().ToString("N")),
             queryLatest: id => NuGet.GetLatestStableVersionAsync(id));
         StatusReport = new Lazy<Task<UpdateChecker.NuGetUpdateStatus?>>(() => EnvironmentChecker.BuildStatusAsync(Updater), LazyThreadSafetyMode.ExecutionAndPublication);
     }
