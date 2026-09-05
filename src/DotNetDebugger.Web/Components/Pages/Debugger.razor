@@ -46,7 +46,7 @@
     <div class="d-flex flex-column" style="width:24%;min-width:220px;border:1px solid #dee2e6;border-radius:4px;">
         <div class="small text-secondary px-2 py-1 border-bottom" style="flex:0 0 auto;">类型浏览（agent 反编译过的程序集）</div>
         <div class="flex-grow-1" style="min-height:0;display:flex;flex-direction:column;">
-            <TypeTree @ref="_tree" TypeClicked="ShowTypeAsync" AssemblyLoaded="OnAssemblyLoaded" OnReady="OnTreeReady" />
+            <TypeTree @ref="_tree" TypeClicked="ShowTypeAsync" MemberClicked="ShowMemberAsync" AssemblyLoaded="OnAssemblyLoaded" OnReady="OnTreeReady" />
         </div>
     </div>
     <!-- 右：代码视图 + 面板 -->

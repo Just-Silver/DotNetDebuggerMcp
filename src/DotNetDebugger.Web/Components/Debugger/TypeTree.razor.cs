@@ -75,6 +75,9 @@ public partial class TypeTree
     /// <summary>类型节点点击回调（参数：类型全名 + 程序集路径）。Debugger 页接此反编译显示。</summary>
     [Parameter] public Func<string, string, Task>? TypeClicked { get; set; }
 
+    /// <summary>成员叶子节点点击回调（参数：程序集路径 + 类型全名 + 方法 token）。Debugger 页接此切换文档并定位成员首行。</summary>
+    [Parameter] public Func<string, string, int, Task>? MemberClicked { get; set; }
+
     /// <summary>程序集节点点击/加载后调用的可选通知（参数：程序集路径）。agent 上下文驱动/高亮用。</summary>
     [Parameter] public Func<string, Task>? AssemblyLoaded { get; set; }
 
@@ -189,6 +192,10 @@ public partial class TypeTree
         if (v.Kind == "type" && v.AssemblyPath is not null && v.TypeFullName is not null && TypeClicked is not null)
         {
             await TypeClicked(v.AssemblyPath, v.TypeFullName);
+        }
+        else if (v.Kind == "member" && v.AssemblyPath is not null && v.TypeFullName is not null && MemberClicked is not null)
+        {
+            await MemberClicked(v.AssemblyPath, v.TypeFullName, v.MethodToken);
         }
     }
 

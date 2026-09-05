@@ -86,6 +86,18 @@ public sealed class DocumentStore
         return next?.Token;
     }
 
+    /// <summary>方法 token → 文档中首个映射行（树点成员叶子定位用）。无映射返回 null。</summary>
+    public static int? GetMethodFirstLine(SourceDocument doc, int methodToken)
+    {
+        int? first = null;
+        foreach (var e in doc.Mapping)
+        {
+            if (e.MethodToken != methodToken || e.Line < 1) continue;
+            if (first is null || e.Line < first) first = e.Line;
+        }
+        return first;
+    }
+
     /// <summary>清空缓存（换目标程序集/类型浏览时调用，避免缓存膨胀）。</summary>
     public void Clear()
     {

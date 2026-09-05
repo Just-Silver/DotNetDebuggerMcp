@@ -277,6 +277,17 @@ public partial class Debugger
         return Task.CompletedTask;
     }
 
+    /// <summary>双向联动（树→编辑器）：点成员叶子切到所属类型文档并滚动定位到成员首行。</summary>
+    private async Task ShowMemberAsync(string assemblyPath, string typeFullName, int methodToken)
+    {
+        await ShowTypeAsync(assemblyPath, typeFullName);
+        if (methodToken <= 0 || _doc is not { IsSuccess: true } || _doc.Error is not null) return;
+        if (DocumentStore.GetMethodFirstLine(_doc, methodToken) is { } line)
+        {
+            await _viewer!.RevealLineAsync(line);
+        }
+    }
+
     /// <summary>双向联动（编辑器→树）：光标所在行定位方法叶子。行不在任何方法区间时取其后最近的方法；
     /// token 未变化则跳过（幂等，防光标扫过扰动）。setValue 后的首个程序性事件由桥侧抑制。</summary>
     private async Task OnCursorLineChanged(int line)
