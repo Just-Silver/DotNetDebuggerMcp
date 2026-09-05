@@ -11,7 +11,7 @@
 
 | 阶段 | 主题 | 对应实施计划 |
 |---|---|---|
-| P1 | 仓库改名与拆分（5 项目骨架 + 反编译代码迁入） | `plans/2026-09-05-p1-rename-and-split.md`（**已写，待执行**） |
+| P1 | 仓库改名与拆分（5 项目骨架 + 反编译代码迁入） | `plans/2026-09-05-p1-rename-and-split.md`（**已完成** ✅ 2026-09-05） |
 | P2 | 动态调试引擎 v1（Engine） | `plans/...-p2-engine-v1.md`（未写） |
 | P3 | 会话层 + MCP 调试工具面（Session + McpHost） | `plans/...-p3-mcp-tools.md`（未写） |
 | P4 | WebUI（Web，细节在 P4 前单独细化） | `plans/...-p4-webui.md`（未写） |
