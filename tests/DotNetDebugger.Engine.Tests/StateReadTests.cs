@@ -16,18 +16,13 @@ public sealed class StateReadTests
     [Fact]
     public async Task AfterBreakpoint_ReadStackAndVariables()
     {
-        var exe = TestPaths.DebugTargetExe;
-        Assert.True(File.Exists(exe));
+        Assert.True(File.Exists(TestPaths.DebugTargetExe));
 
-        using var target = Process.Start(new ProcessStartInfo(exe, "5 5")
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-        })!;
+        using var target = DebugTargetProcess.Start("5 5");
         await Task.Delay(800);
         Assert.False(target.HasExited);
 
-        var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
+        var workToken = ReadMethodToken(Path.ChangeExtension(TestPaths.DebugTargetExe, ".dll"), "Work");
         Assert.True(workToken > 0);
 
         var events = new List<DebugEvent>();
@@ -99,3 +94,4 @@ public sealed class StateReadTests
         return 0;
     }
 }
+

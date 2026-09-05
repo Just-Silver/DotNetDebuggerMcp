@@ -20,11 +20,7 @@ public sealed class StepTests
         var exe = TestPaths.DebugTargetExe;
         Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
 
-        using var target = Process.Start(new ProcessStartInfo(exe, "5 5")
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-        })!;
+        using var target = DebugTargetProcess.Start("5 5");
         await Task.Delay(800);
         Assert.False(target.HasExited);
 
@@ -88,3 +84,4 @@ public sealed class StepTests
         return 0;
     }
 }
+

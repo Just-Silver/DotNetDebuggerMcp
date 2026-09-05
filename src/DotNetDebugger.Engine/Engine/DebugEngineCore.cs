@@ -38,6 +38,17 @@ public sealed class DebugEngineCore : IAsyncDisposable
         = Channel.CreateUnbounded<(Func<Task>, TaskCompletionSource)>(
             new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
 
+    // 回调入队 Channel：回调线程只入队，命令泵线程消费处理（单线程模型，避免并发 Continue）
+    private readonly Channel<CorDebugManagedCallbackEventArgs> _eventChannel
+        = Channel.CreateUnbounded<CorDebugManagedCallbackEventArgs>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+
+    /// <summary>回调事件 Channel（CallbackHandler 入队目标）。</summary>
+    public ChannelWriter<CorDebugManagedCallbackEventArgs> EventChannelWriter => _eventChannel.Writer;
+
+    /// <summary>回调事件读端（命令泵线程消费）。</summary>
+    public ChannelReader<CorDebugManagedCallbackEventArgs> EventChannel => _eventChannel.Reader;
+
     private long _seq;
 
     // ---- 启动/附加 ----
@@ -88,9 +99,13 @@ public sealed class DebugEngineCore : IAsyncDisposable
         _handler = new CallbackHandler(this, _callback, _breakpoints);
         var result = bootstrap(_dbgshim);
         _corDebug = result.CorDebug;
-        // 等 CreateProcess 回调设置 _process（attach 后回调异步到达；最多等 3s）
+        // 泵尚未启动：先同步处理已入队事件直到 _process 就绪（CreateProcess 回调）——最多等 3s
         var procDeadline = DateTime.UtcNow.AddSeconds(3);
-        while (_process is null && DateTime.UtcNow < procDeadline) Thread.Sleep(20);
+        while (_process is null && DateTime.UtcNow < procDeadline)
+        {
+            if (_eventChannel.Reader.TryRead(out var evt)) _handler.HandleEvent(evt);
+            else Thread.Sleep(10);
+        }
         // attach 后枚举已加载模块登记（attach 已运行进程不补发 LoadModule——API 参考 §9.5）
         if (_process is not null) SyncLoadedModules();
         PublishState(state, state == DebugSessionState.Launching ? "launched" : "attached");
@@ -119,7 +134,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
         }
     }
 
-    // ---- 命令泵 ----
+    // ---- 命令泵（单线程：事件处理 + 命令执行，避免并发 Continue）----
 
     private void RunCommandPump()
     {
@@ -127,14 +142,21 @@ public sealed class DebugEngineCore : IAsyncDisposable
         {
             while (!_disposed)
             {
-                if (!_commandChannel.Reader.TryRead(out var cmd))
+                var didWork = false;
+                // 1. 先处理已排队事件（停点事件在此停住进程并发布）
+                while (_eventChannel.Reader.TryRead(out var evt))
                 {
-                    // 无命令时等待：用阻塞读（Channel 无阻塞 API，用 Task 轮询 + 短睡；或换 BlockingCollection）
-                    Thread.Sleep(10);
-                    continue;
+                    _handler?.HandleEvent(evt);
+                    didWork = true;
                 }
-                try { cmd.Item1().GetAwaiter().GetResult(); cmd.Item2.TrySetResult(); }
-                catch (Exception ex) { cmd.Item2.TrySetException(ex); }
+                // 2. 执行一个命令（Continue/断点/单步/读状态）
+                if (_commandChannel.Reader.TryRead(out var cmd))
+                {
+                    try { cmd.Item1().GetAwaiter().GetResult(); cmd.Item2.TrySetResult(); }
+                    catch (Exception ex) { cmd.Item2.TrySetException(ex); }
+                    didWork = true;
+                }
+                if (!didWork) Thread.Sleep(5); // 都空闲：短暂等待
             }
         }
         catch { /* dispose 时退出 */ }
@@ -150,13 +172,31 @@ public sealed class DebugEngineCore : IAsyncDisposable
 
     // ---- 公开命令（DebugSession 调） ----
 
-    /// <summary>继续执行（进程停在断点/步/异常后调用）。</summary>
+    /// <summary>
+    /// 继续执行（进程停在断点/步/异常后调用）。
+    /// ICorDebug stop-counter 语义：每次回调派发 +1、每次 Continue -1，且每次 Continue 只派发一个排队回调；
+    /// 因此需循环 Continue 直到进程真正 running（IsRunning=true），否则停在断点旁的排队事件会让进程不恢复
+    /// （官方文档 HasQueuedCallbacks/stop-counter）。上限防异常情况死循环。
+    /// </summary>
     public Task ContinueAsync(CancellationToken ct = default)
         => PostAsync(() =>
         {
-            _handler?.ReleaseHold(); // 清停点挂起，允许 OnAnyEvent 后续 Continue
-            SafeContinue(_process);
+            _handler?.ReleaseInitialHold(); // 清停点挂起，允许 OnAnyEvent 对后续排队事件继续 Continue
             _stoppedThreadId = -1;
+            if (_process is not null)
+            {
+                const int maxContinues = 100;
+                for (var i = 0; i < maxContinues; i++)
+                {
+                    var hr = _process.TryIsRunning(out var running);
+                    if (hr == HRESULT.S_OK && running) break; // 进程已在运行
+                    try { _process.Continue(false); }
+                    catch (Exception ex) when (ex.Message.Contains("SUPERFLOUS_CONTINUE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        break; // 已在运行
+                    }
+                }
+            }
             PublishState(DebugSessionState.Running, "continued");
             return Task.CompletedTask;
         }, ct);
@@ -206,7 +246,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
             var thread = GetStoppedThread()
                 ?? throw new InvalidOperationException("无停住的线程（先让进程停在断点/异常/步完成再单步）");
             // 清停点挂起 + 停住线程标记：步进命令本身要恢复执行
-            _handler?.ReleaseHold();
+            _handler?.ReleaseInitialHold();
             _stoppedThreadId = -1;
             if (stepIn is bool b) { thread.CreateStepper().Step(b); }
             else { thread.CreateStepper().StepOut(); }
@@ -496,3 +536,4 @@ public sealed class DebugEngineCore : IAsyncDisposable
         await Task.CompletedTask;
     }
 }
+

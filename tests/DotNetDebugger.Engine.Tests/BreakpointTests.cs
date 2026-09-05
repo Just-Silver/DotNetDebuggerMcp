@@ -21,11 +21,8 @@ public sealed class BreakpointTests
         Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
 
         // 目标：5 迭代 + 5s 启动延迟（attach 窗口）；断点命中后仍需进程继续跑完
-        using var target = Process.Start(new ProcessStartInfo(exe, "5 5")
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-        })!;
+        // 目标：5 迭代 + 5s 启动延迟（attach 窗口）；断点命中后仍需进程继续跑完
+        using var target = DebugTargetProcess.Start("5 5");
         await Task.Delay(800);
         Assert.False(target.HasExited);
 
@@ -43,12 +40,10 @@ public sealed class BreakpointTests
         var bp = await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0);
         Assert.True(bp.Id > 0);
 
-        // 下断点后进程需停在断点才 Continue；attach 后进程在跑（delay 中）→ 需先让它跑，断点在 Work 进入时命中。
-        // 进程在 delay(5s) 后进入 Work → 断点命中。但 attach 后进程是 running（初始事件已 Continue），
-        // 我们无需额外 Continue——等 Work 被调用即可。不过为覆盖「停后继续」，等 BreakpointHit 后调 Continue。
-        await session.ContinueAsync(); // 若已在跑则 SafeContinue 容忍
+        // attach 后进程停在初始同步点（供设断点）；设完断点后首次 Continue 启动进程
+        await session.ContinueAsync();
 
-        // 等 BreakpointHit（delay 5s 结束、Work 被调时触发；兜底 15s）
+        // 等 BreakpointHit（进程 delay 5s 后进 Work 触发；兜底 15s）
         var deadline = DateTime.UtcNow.AddSeconds(15);
         while (DateTime.UtcNow < deadline &&
                !events.Any(e => e.Kind == DebugEventKind.BreakpointHit))
@@ -93,3 +88,4 @@ public sealed class BreakpointTests
         return 0;
     }
 }
+

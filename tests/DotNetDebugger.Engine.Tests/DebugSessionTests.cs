@@ -16,13 +16,10 @@ public sealed class DebugSessionTests
     {
         var exe = TestPaths.DebugTargetExe;
         Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        _ = exe;
 
         // 目标：3 迭代 + 3s 启动延迟（attach 窗口足够），随后自然退出
-        using var target = Process.Start(new ProcessStartInfo(exe, "3 3")
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-        })!;
+        using var target = DebugTargetProcess.Start("3 3");
         await Task.Delay(800);
         Assert.False(target.HasExited);
 
@@ -58,3 +55,4 @@ public sealed class DebugSessionTests
         await foreach (var e in src) { lock (into) into.Add(e); }
     }
 }
+

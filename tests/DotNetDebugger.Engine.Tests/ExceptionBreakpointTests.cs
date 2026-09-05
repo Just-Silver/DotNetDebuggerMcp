@@ -14,16 +14,10 @@ public sealed class ExceptionBreakpointTests
     [Fact]
     public async Task SetExceptionBreakpoint_CatchesFirstChance()
     {
-        var exe = TestPaths.DebugTargetExe;
-        Assert.True(File.Exists(exe));
+        Assert.True(File.Exists(TestPaths.DebugTargetExe));
 
         // throw 模式 + 5s delay（attach 窗口）
-        using var target = Process.Start(new ProcessStartInfo(exe, "1 throw 5")
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        })!;
+        using var target = DebugTargetProcess.Start("1 throw 5");
         await Task.Delay(800);
         Assert.False(target.HasExited, "DebugTarget(throw) 提前退出");
 
@@ -59,3 +53,4 @@ public sealed class ExceptionBreakpointTests
         await foreach (var e in src) { lock (into) into.Add(e); }
     }
 }
+

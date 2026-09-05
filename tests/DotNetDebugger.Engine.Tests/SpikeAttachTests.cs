@@ -19,12 +19,7 @@ public sealed class SpikeAttachTests
         Assert.True(File.Exists(targetExe), $"DebugTarget.exe 不存在，请先运行 generate-testdata.ps1：{targetExe}");
 
         // 先启动目标进程：3 次迭代 + 5s 启动延迟（提供 attach 窗口，随后自然退出验证 ExitProcess）
-        var psi = new ProcessStartInfo(targetExe, "3 5")
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-        };
-        using var target = Process.Start(psi)!;
+        using var target = DebugTargetProcess.Start("3 5");
         // 等待目标进入 Main 稳定区（避免 attach 太早，CLR 未加载）
         await Task.Delay(800);
         Assert.False(target.HasExited, "DebugTarget 提前退出");
@@ -107,3 +102,4 @@ public sealed class SpikeAttachTests
             $"未找到 dbgshim.dll（搜索 {string.Join(", ", candidates)}）；请确认 Microsoft.Diagnostics.DbgShim.win-x64 包已随测试复制");
     }
 }
+
