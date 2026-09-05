@@ -1,7 +1,7 @@
 namespace DotNetDebugger.Decompiler.Configuration;
 
 /// <summary>
-/// 能力库自用的用户可见文案常量（自原宿主 ILSpyMcp.Configuration.AppText 拆分，仅 Decompiler 层用到的最小集）。
+/// 能力库自用的用户可见文案常量（自原宿主 Configuration.AppText 拆分，仅 Decompiler 层用到的最小集）。
 /// </summary>
 internal static class DecompilerText
 {

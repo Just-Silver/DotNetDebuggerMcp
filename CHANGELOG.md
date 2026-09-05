@@ -17,9 +17,9 @@
 
 ### 重构
 
-- **仓库/包改名：ILSpyMcp → DotNet-Debugger-MCP**：NuGet 包 id / CLI 命令 `ilspymcp` → `dotnet-debugger-mcp`；MCP 服务器注册名建议 `dotnetdebugger`（工具前缀 `dotnetdebugger_*`）；解决方案拆为五项目（`DotNetDebugger.Decompiler` 反编译能力库 + `DotNetDebugger.Engine/Session/Web` 预留库 + `DotNetDebuggerMcp` 宿主 exe）。**行为不变**：16 个反编译工具名/参数/输出格式、CLI 参数与握手简介均保持（简介文字已更新产品定位）
+- **仓库/包改名：ILSpyMcp → DotNetDebuggerMcp**：NuGet 包 id / CLI 命令 `ilspymcp` → `DotNetDebuggerMcp`；MCP 服务器注册名建议 `dotnetdebugger`（工具前缀 `dotnetdebugger_*`）；解决方案拆为五项目（`DotNetDebugger.Decompiler` 反编译能力库 + `DotNetDebugger.Engine/Session/Web` 预留库 + `DotNetDebuggerMcp` 宿主 exe）。**行为不变**：16 个反编译工具名/参数/输出格式、CLI 参数与握手简介均保持（简介文字已更新产品定位）
 - **反编译/静态分析能力抽为 `DotNetDebugger.Decompiler` 库**：`Metadata`（纯元数据组件）+ `InProcessDecompiler` + 自建 `DecompilerConfig`/`DecompilerText` 常量；宿主 exe 引用该库。对外行为零变化
-- **包安装/更新命令变更（破坏性）**：`dotnet tool install --global ilspymcp` → `dotnet tool install --global dotnet-debugger-mcp`；旧 `ilspymcp` 包不再更新（同名新包从 1.5.0 起独立发版）
+- **包安装/更新命令变更（破坏性）**：`dotnet tool install --global ilspymcp` → `dotnet tool install --global DotNetDebuggerMcp`；旧 `ilspymcp` 包不再更新（新包从 1.5.0 起独立发版）
 
 ### 文档
 

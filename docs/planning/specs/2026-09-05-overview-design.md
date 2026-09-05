@@ -1,11 +1,11 @@
-# DotNet-Debugger-MCP 总览设计（Overview Spec）
+# DotNet Debugger MCP 总览设计（Overview Spec）
 
 > **日期**：2026-09-05　**状态**：已确认（用户 2026-09-05 review OK）　**分支**：plan/dynamic-debugging-and-rename
 > 本 spec 是 P1-P5 各实施计划的**唯一依据**（plan 从 spec 论证）。配套：`docs/planning/` 下 decisions D1-D8、research/01-05、01-vision-and-scope。
 
 ## 0. 一句话
 
-把现 `ILSpyMcp`（反编译 MCP，MIT）重构/扩建为 **DotNet-Debugger-MCP**：一个 .NET tool（宿主 exe）按需提供「静态反编译分析」与「dnSpyEx 式动态调试」两类能力，面向 **agent（MCP 控制面）** 与 **Web 可视化（展示面）**，两者共享同一调试会话（进程合一）。
+把原 `ILSpyMcp`（反编译 MCP，MIT）重构/扩建为 **DotNetDebuggerMcp**：一个 .NET tool（宿主 exe）按需提供「静态反编译分析」与「dnSpyEx 式动态调试」两类能力，面向 **agent（MCP 控制面）** 与 **Web 可视化（展示面）**，两者共享同一调试会话（进程合一）。
 
 ## 1. 目标与非目标
 
@@ -29,14 +29,14 @@
 
 | 对象 | 值 |
 |---|---|
-| GitHub 仓库 | `DotNet-Debugger-MCP`（rename，保留跳转） |
+| GitHub 仓库 | `DotNetDebuggerMcp`（原 ILSpyMcp，多次改名保留跳转） |
 | 解决方案 | `DotNetDebuggerMcp.slnx`（根） |
 | 子项目 1 反编译库 | `src/DotNetDebugger.Decompiler/` → `DotNetDebugger.Decompiler` |
 | 子项目 2 调试引擎库 | `src/DotNetDebugger.Engine/` → `DotNetDebugger.Engine` |
 | 子项目 3 会话库 | `src/DotNetDebugger.Session/` → `DotNetDebugger.Session` |
 | 子项目 4 Web 库 | `src/DotNetDebugger.Web/` → `DotNetDebugger.Web` |
 | 子项目 5 宿主 | `src/DotNetDebuggerMcp/` → `DotNetDebuggerMcp`（PackAsTool、net10.0） |
-| NuGet 包 / CLI | `dotnet-debugger-mcp` |
+| NuGet 包 / CLI | `DotNetDebuggerMcp` |
 | MCP server 注册名 | `dotnetdebugger`（工具前缀 `dotnetdebugger_*`）— 实施时定 |
 | 测试 | `tests/DotNetDebugger.Decompiler.Tests/`、`tests/DotNetDebugger.Engine.Tests/`、`tests/DotNetDebugger.Session.Tests/`、`tests/DotNetDebuggerMcp.Tests/`（Web 测试随 P4） |
 
@@ -129,7 +129,7 @@ McpHost(exe) ──> Web ──> Session ──> Engine ──> ClrDebug/DbgShim
 
 ### P1 仓库改名与拆分（不动调试）
 - git：仓库重命名（GitHub rename 保跳转）；分支策略。
-- 解决方案：5 csproj 骨架；现 ILSpyMcp 源码迁入 Decompiler 库；命名空间/PackageId/CLI/注册名/README/CHANGELOG/CI/测试项目全量同步（AGENTS.md 的三处版本同步纪律延续）。
+- 解决方案：5 csproj 骨架；原 ILSpyMcp 源码迁入 Decompiler 库；命名空间/PackageId/CLI/注册名/README/CHANGELOG/CI/测试项目全量同步（AGENTS.md 的三处版本同步纪律延续）。
 - **验收**：改名后仓库构建通过；全部现有反编译测试（含 stdio 并发护栏）通过；行为零变化。
 - 旧 NuGet 包 `ilspymcp` 弃用策略（open-questions 残留）。
 

@@ -1,12 +1,12 @@
-# 大重构规划目录（ILSpyMcp → DotNet-Debugger-MCP 静态/动态分析 MCP 套件）
+# 大重构规划目录（ILSpyMcp → DotNetDebuggerMcp 静态/动态分析 MCP 套件）
 
-> **本目录用途**：持久化「ILSpyMcp → DotNet-Debugger-MCP 大重构」的调研资料、愿景、决策与计划，防止会话上下文丢失。
+> **本目录用途**：持久化「ILSpyMcp → DotNetDebuggerMcp 大重构」的调研资料、愿景、决策与计划，防止会话上下文丢失。
 > 所有文档用简体中文，随进展持续更新并提交 git。规划分支：`plan/dynamic-debugging-and-rename`。
 > 日期基准：2026-09-05 启动。
 
 ## 当前状态
 
-- **P1（仓库改名与拆分）已完成** ✅：仓库改名 DotNet-Debugger-MCP，5 项目骨架（Decompiler/Engine/Session/Web/McpHost exe），反编译代码迁入 Decompiler 库。
+- **P1（仓库改名与拆分）已完成** ✅：仓库改名 DotNetDebuggerMcp，5 项目骨架（Decompiler/Engine/Session/Web/McpHost exe），反编译代码迁入 Decompiler 库。
 - **P2（动态调试引擎 v1，Engine）已完成** ✅：ClrDebug + DbgShim 会话管理/token+IL 断点/单步/栈/变量/异常 + 统一 DebugEvent 流。
 - **P3（会话层 + MCP 调试工具面）已完成** ✅：Session 库 + 宿主 `debug_*` 工具 + 触发条件导向握手简介。
 - **P4-1（DocumentService）已完成** ✅：无 PDB 语句级反编译行映射服务。

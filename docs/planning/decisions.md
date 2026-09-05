@@ -109,3 +109,9 @@
 - 已查证（bb-llms，2026-09-05）：BB 无代码编辑器/高亮组件（editor→EditorForm；code/highlight 空；textarea→Textarea）。
 - 遗留：各面板具体用哪些 BB 组件 → P4 细化 spec 时定；事件→Blazor 刷新机制（IAsyncEnumerable/订阅）P4 细化。
 - 日期：2026-09-05。
+
+## D14 · 二次改名去连字符统一为 DotNetDebuggerMcp（用户拍板）
+- 决策：仓库 / NuGet 包 id / CLI 命令 / MCP 注册名去连字符，统一为 **`DotNetDebuggerMcp`**（人类可读产品名 `DotNet Debugger MCP`）。GitHub 仓库 URL 中大写段随之改（如 `github.com/Just-Silver/DotNetDebuggerMcp`）。
+- 决策：测试数据 `ILSpyMcp.Samples`/`ILSpyMcp.SamplesExt`/`ILSpyMcp.TestSamples(.Ext).dll` → **`DotNetDebuggerMcp.Samples`/`SamplesExt`/`TestSamples(.Ext)`** 并重生成 dll；标识符常量化（generate-testdata.ps1 顶部变量 + 各 TestDataPaths.cs/TestDataHelper.cs 共享常量 + TestAssemblyWriter 引用），后续改名只动常量一处（D10 撤销项同步落地）。
+- 理由：代码标识符去连字符消除工具命令/NuGet 包名与大小写拼写不一致带来的歧义；测试样本命名空间与产品代码统一词干（D10 原本「保留」的暂缓项到期）。
+- 日期：2026-09-06。

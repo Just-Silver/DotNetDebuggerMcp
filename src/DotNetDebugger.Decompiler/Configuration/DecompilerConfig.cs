@@ -1,7 +1,7 @@
 namespace DotNetDebugger.Decompiler.Configuration;
 
 /// <summary>
-/// 能力库自用的内部常量（自原宿主 ILSpyMcp.Configuration.AppConfig 拆分，仅 Decompiler/Metadata 层用到的最小集）：
+/// 能力库自用的内部常量（自原宿主 Configuration.AppConfig 拆分，仅 Decompiler/Metadata 层用到的最小集）：
 /// 避免能力库反向依赖宿主程序集。
 /// </summary>
 internal static class DecompilerConfig

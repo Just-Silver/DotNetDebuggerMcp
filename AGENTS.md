@@ -1,6 +1,6 @@
 # AGENTS.md
 
-基于 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy) + [ClrDebug/ICorDebug](https://github.com/tylerjensen/ClrDebug) 的 **.NET MCP 服务器**（NuGet 包 id / CLI 命令 `dotnet-debugger-mcp`）：对 .NET 程序集（dll/exe）做反编译、类型/成员/调用关系静态分析，并对 .NET 进程做**动态调试**（launch/attach、断点、单步、读栈/变量）；`--web` 可并联 Blazor 展示面实时观看 agent 调试。反编译与调试引擎均内置，随 NuGet 包分发。
+基于 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy) + [ClrDebug/ICorDebug](https://github.com/tylerjensen/ClrDebug) 的 **.NET MCP 服务器**（NuGet 包 id / CLI 命令 `DotNetDebuggerMcp`）：对 .NET 程序集（dll/exe）做反编译、类型/成员/调用关系静态分析，并对 .NET 进程做**动态调试**（launch/attach、断点、单步、读栈/变量）；`--web` 可并联 Blazor 展示面实时观看 agent 调试。反编译与调试引擎均内置，随 NuGet 包分发。
 
 ## 项目地图（指令文件按项目拆分，先进对的门）
 

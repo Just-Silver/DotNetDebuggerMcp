@@ -1,4 +1,4 @@
-# DotNet-Debugger-MCP（dotnet-debugger-mcp）
+# DotNet Debugger MCP（DotNetDebuggerMcp）
 
 内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量），开箱即用。另提供 **`--web` 网页调试展示面**（Blazor Server：反编译代码视图 + 调用栈/变量/线程面板，与 MCP agent 共享调试会话，可实时观看 agent 调试）。
 
@@ -21,12 +21,12 @@
 ## 安装
 
 ```bash
-dotnet tool install --global dotnet-debugger-mcp   # 安装
-dotnet tool update --global dotnet-debugger-mcp    # 升级
-dotnet tool uninstall --global dotnet-debugger-mcp # 卸载
+dotnet tool install --global DotNetDebuggerMcp   # 安装
+dotnet tool update --global DotNetDebuggerMcp    # 升级
+dotnet tool uninstall --global DotNetDebuggerMcp # 卸载
 ```
 
-查看版本 / 帮助：`dotnet-debugger-mcp -v` / `dotnet-debugger-mcp -h`
+查看版本 / 帮助：`DotNetDebuggerMcp -v` / `DotNetDebuggerMcp -h`
 
 ## 接入 opencode
 
@@ -41,7 +41,7 @@ dotnet tool uninstall --global dotnet-debugger-mcp # 卸载
     "servers": {
       "dotnetdebugger": {
         "type": "local",
-        "command": ["dotnet-debugger-mcp"]
+        "command": ["DotNetDebuggerMcp"]
       }
     }
   }
@@ -58,7 +58,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
   "mcp": {
     "dotnetdebugger": {
       "type": "local",
-      "command": ["dotnet-debugger-mcp"]
+      "command": ["DotNetDebuggerMcp"]
     }
   }
 }
@@ -124,15 +124,15 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 ## 命令行调试
 
-MCP 模式外，`dotnet-debugger-mcp` 可直接以命令行执行同等功能，便于本地调试。参数与 MCP 工具一一对应。
+MCP 模式外，`DotNetDebuggerMcp` 可直接以命令行执行同等功能，便于本地调试。参数与 MCP 工具一一对应。
 
 ### Web 调试展示面（--web）
 
 宿主可同时启动一个网页调试展示面（Blazor Server，内嵌 Kestrel），把反编译与调试可视化：
 
 ```bash
-dotnet-debugger-mcp --web                                  # 自动选空闲端口并拉起默认浏览器
-dotnet-debugger-mcp --web --web-port 8090                  # 指定端口（不自动拉起需手动开 http://127.0.0.1:8090）
+DotNetDebuggerMcp --web                                  # 自动选空闲端口并拉起默认浏览器
+DotNetDebuggerMcp --web --web-port 8090                  # 指定端口（不自动拉起需手动开 http://127.0.0.1:8090）
 ```
 
 - **页面功能**：反编译代码视图（Monaco 编辑器，断点/当前执行行装饰）+ 动态调试面板（调用栈/局部变量/线程）+ 最小控制（启动并附加/断点/继续/单步/断开）。
@@ -142,33 +142,33 @@ dotnet-debugger-mcp --web --web-port 8090                  # 指定端口（不�
 ### 反编译
 
 ```bash
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program                          # dotnetdebugger_decompile
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Main                  # dotnetdebugger_decompile_member 按名
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -mn Main                                   # 跨程序集按名（省略 -t）
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -tt 0x02000004 -mn Main                    # 按类型 token 消歧后搜成员
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -o src                                     # dotnetdebugger_decompile_to_dir 全量
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -o src -t "MyApp.IWorker,MyApp.Worker"     # 批量写盘多类型
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -o src -p --nested-directories             # dotnetdebugger_decompile_to_project
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program                          # dotnetdebugger_decompile
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Main                  # dotnetdebugger_decompile_member 按名
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -mn Main                                   # 跨程序集按名（省略 -t）
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -tt 0x02000004 -mn Main                    # 按类型 token 消歧后搜成员
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -o src                                     # dotnetdebugger_decompile_to_dir 全量
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -o src -t "MyApp.IWorker,MyApp.Worker"     # 批量写盘多类型
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -o src -p --nested-directories             # dotnetdebugger_decompile_to_project
 ```
 
 ### 结构探测
 
 ```bash
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -ai                                        # dotnetdebugger_assembly_info
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -l csi                                     # dotnetdebugger_list_types
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -l c -nc Box -ns MyApp.Core                 # 名称/命名空间过滤
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -s                        # dotnetdebugger_signature
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc [-i]                  # dotnetdebugger_hierarchy (-i 含间接后代)
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -d [-x]                   # dotnetdebugger_dependencies (-x 含外部)
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg [-x]                  # dotnetdebugger_call_graph
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -cg -tk 0x06000005                         # 按方法 token 反向定位调用者
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.IWorker -iu [-i]                  # dotnetdebugger_interface_usage
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.GenericBox -gi                    # dotnetdebugger_generic_instantiations
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -ss "配置Key" [-t MyApp.Program]           # dotnetdebugger_search_string
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -fa -t MyApp.Program -fn _count            # dotnetdebugger_field_access 按名
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -fa -tk 0x04000005                         # 按字段 token
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc [-x]        # dotnetdebugger_call_chain
-dotnet-debugger-mcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按方法 token 定位起始方法
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -ai                                        # dotnetdebugger_assembly_info
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -l csi                                     # dotnetdebugger_list_types
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -l c -nc Box -ns MyApp.Core                 # 名称/命名空间过滤
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -s                        # dotnetdebugger_signature
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc [-i]                  # dotnetdebugger_hierarchy (-i 含间接后代)
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -d [-x]                   # dotnetdebugger_dependencies (-x 含外部)
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg [-x]                  # dotnetdebugger_call_graph
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cg -tk 0x06000005                         # 按方法 token 反向定位调用者
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.IWorker -iu [-i]                  # dotnetdebugger_interface_usage
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.GenericBox -gi                    # dotnetdebugger_generic_instantiations
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -ss "配置Key" [-t MyApp.Program]           # dotnetdebugger_search_string
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -fa -t MyApp.Program -fn _count            # dotnetdebugger_field_access 按名
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -fa -tk 0x04000005                         # 按字段 token
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc [-x]        # dotnetdebugger_call_chain
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按方法 token 定位起始方法
 ```
 
 ### 通用参数
@@ -201,7 +201,7 @@ dotnet-debugger-mcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                   
 | `-x` | `--external` | 同时输出/展开跨程序集外部类型（配合 `-d`/`-cg`/`-cc`） |
 | `-ln` | `--lines` | 行号分页 `start-end` |
 | | `--timeout` | 超时秒数（默认 30） |
-| `-c` | `--check` | 检查 dotnet-debugger-mcp 新版本（无需 `-a`） |
+| `-c` | `--check` | 检查 DotNetDebuggerMcp 新版本（无需 `-a`） |
 | | `--web` | 同时启动网页调试展示面（Blazor Server；无 MCP 会话时页面可人工调试） |
 | | `--web-port <port>` | Web 端口（配合 `--web`；缺省 0 = 自动选空闲端口并拉起默认浏览器） |
 | `-v` | `--version` | 版本号 |

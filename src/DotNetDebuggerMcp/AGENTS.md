@@ -1,6 +1,6 @@
 # DotNetDebuggerMcp 宿主开发指南
 
-宿主 exe（`DotNetDebuggerMcp`，CLI 命令/NuGet 包 id `dotnet-debugger-mcp`）：**唯一的 MCP 服务器 + CLI 入口 + Web 承载进程**。无业务参数启动 MCP 服务器（stdio）；传 `-a`/`-c` 等进入命令行模式（复用与 MCP 工具相同的校验与执行逻辑）；`--web` 时并联 Blazor Web host。全部 MCP 工具与执行管线在此层，反编译/元数据能力来自 Decompiler 库、调试能力来自 Engine/Session 库、Web 来自 Web 库。
+宿主 exe（`DotNetDebuggerMcp`，CLI 命令/NuGet 包 id 同名）：**唯一的 MCP 服务器 + CLI 入口 + Web 承载进程**。无业务参数启动 MCP 服务器（stdio）；传 `-a`/`-c` 等进入命令行模式（复用与 MCP 工具相同的校验与执行逻辑）；`--web` 时并联 Blazor Web host。全部 MCP 工具与执行管线在此层，反编译/元数据能力来自 Decompiler 库、调试能力来自 Engine/Session 库、Web 来自 Web 库。
 
 > 本文件 + 各子项目 AGENTS.md（`src/*/AGENTS.md`）按项目拆分；根 `AGENTS.md` 是仓库级总览与共享纪律（开发铁律/输出约定/版本发布）。
 
@@ -21,7 +21,7 @@
 - `Formatting/OutputFormatter.cs` + `SectionBuilder.cs` — 头部信息块、`#MEMBER` 行、`（无）` 占位、行号分页。
 - `Configuration/` — `AppConfig`（宿主专属常量）、`AppText`（转发 Decompiler 库 `DecompilerText` + `HandshakeFeatureIntro`）、`CacheSignatures`（缓存键前缀 + `\u001F` 分隔符，**改动必须同步 `CacheStatsTool.ToolNames`**）、`ToolParameterText`（MCP 参数级 `[Description]` 模板常量，Description 要求编译期常量故全 const）。**调试工具文案目前各工具内联、未集中**——新增共享调试提示时考虑收拢。
 - `Validation/ArgumentValidators.cs` — 共享校验（assembly/必填/memberName/token/list/outputDir/timeoutSeconds）。**debug 工具校验目前内联**（`TryParseToken`/`RequireStopped` 等），未走共享校验器。
-- `UpdateCheck/` — NuGet 更新检查（`%LOCALAPPDATA%\dotnet-debugger-mcp\update-check.json` 磁盘缓存，成功 TTL 24h/失败 1h）。
+- `UpdateCheck/` — NuGet 更新检查（`%LOCALAPPDATA%\DotNetDebuggerMcp\update-check.json` 磁盘缓存，成功 TTL 24h/失败 1h）。
 
 ## 入口（DotNetDebuggerMcpCmd.cs）
 
