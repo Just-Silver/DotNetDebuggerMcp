@@ -1,15 +1,17 @@
 @using BootstrapBlazor.Components
 
 @* 左侧类型浏览树（对标 dnSpyEx）：程序集 → 命名空间 → 类型 → 成员（方法/属性/事件/字段）。
-   数据驱动：TypeTreeData 一次枚举全量，BuildAssemblyTree 组装完整嵌套节点（默认收缩），虚拟滚动渲染；
+   数据驱动：TypeTreeData 一次枚举全量，BuildAssemblyTree 组装完整嵌套节点（默认收缩）；
    不做懒加载（OnExpandNodeAsync）——数据全在内存，展开只是 UI 显示，避免懒加载时序坑。
+   不用 IsVirtualize：虚拟滚动下 <Virtualize> 异步渲染可视区行，BB SetActiveItem 的 scroll js
+   （querySelector ".tree-content.active"）在行进 DOM 前执行找不到目标，编程式选中滚不过去
+   （open-questions #7 ①②）；非虚拟同步渲染全部展开行，scroll 必中——DOM 量按展开链可控（默认全收缩）。
    外部（Debugger 页 / agent 上下文驱动）经 @ref 调 LoadAssembly 加程序集、SelectTypeAsync 展开路径并选中。 *@
 
 <TreeView TItem="TypeTreeNode"
           @ref="_tree"
           Items="_items"
           IsAutoScrollIntoView="true"
-          IsVirtualize="true"
           ScrollIntoViewOptions="@_scrollOptions"
           style="height:100%;"
           OnTreeItemClick="OnNodeClickedAsync" />

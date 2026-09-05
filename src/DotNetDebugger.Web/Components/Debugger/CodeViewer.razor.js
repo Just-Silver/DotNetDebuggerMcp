@@ -11,12 +11,18 @@ window.dotnetDebuggerMonaco._cursorRefs = window.dotnetDebuggerMonaco._cursorRef
 // setValue 程序性移动光标产生的首个事件抑制标记（防联动树误跳）
 window.dotnetDebuggerMonaco._suppressCursor = window.dotnetDebuggerMonaco._suppressCursor || {};
 
-// 挂光标行监听（编辑器创建时若已有回调引用则调用；e.position.lineNumber 推给 .NET）
+// 挂光标行监听（编辑器创建时若已有回调引用则调用；e.position.lineNumber 推给 .NET）。
+// 只派发用户交互（点击/按键）后的光标事件——setPosition/setValue 等程序性移动一律过滤，
+// 防止行→方法映射（行 1 → 其后最近方法）覆盖停点跟随/agent 联动的树选中。
+// 不用 hasTextFocus 门禁：点击时光标事件先于焦点建立会被误滤（实测）。
 function dotnetdbgHookCursor(editor) {
     if (editor.__cursorHooked) return;
     editor.__cursorHooked = true;
+    editor.onMouseDown(function () { editor.__userInteract = true; });
+    editor.onKeyDown(function () { editor.__userInteract = true; });
     editor.onDidChangeCursorPosition(function (e) {
         var id = editor.__id;
+        if (!editor.__userInteract) return;
         if (window.dotnetDebuggerMonaco._suppressCursor[id]) {
             window.dotnetDebuggerMonaco._suppressCursor[id] = false;
             return;

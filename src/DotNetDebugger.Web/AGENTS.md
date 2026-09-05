@@ -12,7 +12,7 @@ Components/
   Pages/Index.razor       首页
   Pages/Debugger.razor   动态调试页（控制条 + 状态 + 左树右代码 + 面板 + AgentView 订阅）
   Debugger/CodeViewer.razor   Monaco 编辑器封装（.razor.js 是互操作桥）
-  Debugger/TypeTree.razor     左侧类型树（程序集→命名空间→类型→成员，BB TreeView 懒加载）
+  Debugger/TypeTree.razor     左侧类型树（程序集→命名空间→类型→成员，BB TreeView 数据驱动全量、非虚拟滚动）
   Debugger/LogPanel.razor     联调诊断面板（最右列，展示 MemoryLog 环形日志）
 Services/
   AgentViewContext.cs   宿主→Web「agent 正在看什么」可观察共享状态（核心链路）
