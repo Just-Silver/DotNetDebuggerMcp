@@ -351,13 +351,13 @@ public class DotNetDebuggerMcpCmd
         Task? webTask = null;
         if (Web)
         {
-            // --web 模式：注入共享调试会话管理器并起 Kestrel（Blazor Server 展示面）。
+            // --web 模式：注入共享调试会话管理器并起 Kestrel（Blazor 展示面）。
             // 双模式：MCP 常驻（agent 调试时浏览器看现场）与纯 Web（无 MCP 会话时页面人工 launch/attach）并存——
             // Web host 与 MCP host 并联，进程生命周期由二者共同决定（WhenAll：任一侧结束进程等另一侧自然完成）。
             DotNetDebugger.Web.WebHostBootstrap.Configure(DebugSessionService.Manager, AgentViewService.Context);
-            var webApp = DotNetDebugger.Web.WebHostBootstrap.Build(WebPort, Array.Empty<string>());
-            // 起 Web（自动端口）→ 拉浏览器 → stderr 提示实际 URL → 等停；Web host 与 MCP host 并联（WhenAll）
-            webTask = RunWebAsync(webApp);
+            if (WebPort > 0) DotNetDebugger.Web.WebHostBootstrap.PreferredPort = WebPort;
+            // 幂等启动（与 web_open 工具同一入口，混用不双启）→ 拉浏览器 → stderr 提示实际 URL → 等停
+            webTask = RunWebAsync();
         }
 
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
@@ -399,12 +399,13 @@ public class DotNetDebuggerMcpCmd
         }
         return 0;
 
-        // --web：起 Web host → 拉浏览器 → stderr 提示实际 URL → 等停（供 webTask 并联）
-        async Task RunWebAsync(WebApplication webApp)
+        // --web：幂等启动 Web host → 拉浏览器 → stderr 提示实际 URL → 等停（供 webTask 并联）
+        async Task RunWebAsync()
         {
-            var url = await DotNetDebugger.Web.WebHostBootstrap.RunWithBrowserAsync(webApp);
+            var url = await DotNetDebugger.Web.WebHostBootstrap.EnsureStartedAsync();
             Console.Error.WriteLine($"[web] DotNet Debugger Web 已启动：{url}");
-            await webApp.WaitForShutdownAsync();
+            var webApp = DotNetDebugger.Web.WebHostBootstrap.CurrentApp;
+            if (webApp is not null) await webApp.WaitForShutdownAsync();
         }
     }
 }

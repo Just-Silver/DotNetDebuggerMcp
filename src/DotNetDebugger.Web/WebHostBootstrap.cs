@@ -18,6 +18,24 @@ public static class WebHostBootstrap
     private static DotNetDebugger.Session.DebugSessionManager? _manager;
     private static AgentViewContext? _agentView;
 
+    // 幂等启动状态（进程生命周期对齐：进程退出 Web host 随之消亡，无失效逻辑）。
+    // _url 先于 _app 写入：快路径读到 _app 非 null 时 _url 必已就绪。
+    private static readonly System.Threading.SemaphoreSlim _startGate = new(1, 1);
+    private static WebApplication? _app;
+    private static string? _url;
+
+    /// <summary>首选端口（宿主解析 --web-port 显式指定时写入；0 = 自动选空闲端口，默认值）。</summary>
+    public static int PreferredPort { get; set; }
+
+    /// <summary>Web host 是否已启动（幂等启动的单例状态标记）。</summary>
+    public static bool IsStarted => _app is not null;
+
+    /// <summary>已启动的 WebApplication（未启动为 null；宿主 --web 分支据此等待停机）。</summary>
+    public static WebApplication? CurrentApp => _app;
+
+    /// <summary>实际监听地址（未启动为 null；port=0 自动选端口时以 StartAsync 后实测为准）。</summary>
+    public static string? CurrentUrl => _url;
+
     /// <summary>宿主注入的共享调试会话管理器（Configure 未调用前访问抛异常）。</summary>
     public static DotNetDebugger.Session.DebugSessionManager Manager => _manager
         ?? throw new InvalidOperationException("WebHostBootstrap.Configure 未调用（宿主需先注入 DebugSessionManager）");
@@ -73,16 +91,33 @@ public static class WebHostBootstrap
     }
 
     /// <summary>
-    /// 启动 Web host，监听成功后返回实际地址（port=0 自动选时读 IServerAddressesFeature）并拉起默认浏览器
-    /// （用户拍板：只要 --web 就拉，失败静默不打扰）。默认直达 /debugger 工作台（首页保留作入口/说明）。
-    /// 随后 WaitForShutdownAsync 等停止。
+    /// 幂等启动 Web host：只 Build/Start 一次并拉起默认浏览器（直达 /debugger），重复调用直接返回已有地址（不再起第二个
+    /// Kestrel、不重复开浏览器）——<c>--web</c> 与 web_open 工具经此收敛为同一启动入口。单例状态与进程生命周期对齐。
+    /// 并发安全：SemaphoreSlim 守卫 + 双重检查，多路并发同时调用仅首个真正启动，其余等待后取得同一地址。
+    /// port=0（默认）取 <see cref="PreferredPort"/>（默认亦 0）→ Kestrel 自动选空闲端口。启动失败不写状态（下次可重试），
+    /// 异常由调用方转中文提示。调用前须已 <see cref="Configure"/>（未调用抛异常）。
     /// </summary>
-    public static async Task<string> RunWithBrowserAsync(WebApplication app)
+    public static async Task<string> EnsureStartedAsync(int port = 0)
     {
-        await app.StartAsync();
-        var url = GetActualAddress(app);
-        TryOpenBrowser($"{url}/debugger");
-        return url;
+        if (_app is not null) return _url!;
+        await _startGate.WaitAsync();
+        try
+        {
+            if (_app is not null) return _url!;
+            if (_manager is null || _agentView is null)
+                throw new InvalidOperationException("WebHostBootstrap.Configure 未调用（启动 Web 前宿主/工具需先注入共享状态）");
+            var app = Build(port > 0 ? port : PreferredPort, Array.Empty<string>());
+            await app.StartAsync();
+            var url = GetActualAddress(app);
+            TryOpenBrowser($"{url}/debugger");
+            _url = url;
+            _app = app;
+            return url;
+        }
+        finally
+        {
+            _startGate.Release();
+        }
     }
 
     /// <summary>读 Kestrel 实际监听地址（StartAsync 后有效；port=0 自动选时 Addresses 已含真实端口）。</summary>
