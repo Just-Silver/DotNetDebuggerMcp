@@ -15,6 +15,9 @@ public static class MemoryLog
     private static readonly Queue<MemoryLogEntry> _entries = new();
     private static long _seq;
 
+    /// <summary>日志变化事件（写入/清空后触发；订阅方自行切线程）。LogPanel 推送通道——Web 零轮询铁律，禁止定时器拉取。</summary>
+    public static event Action? Changed;
+
     /// <summary>写一条日志（时间戳自动取当前 UTC）。</summary>
     public static void Write(string source, string message)
     {
@@ -24,6 +27,7 @@ public static class MemoryLog
             while (_entries.Count > MaxEntries) _entries.Dequeue();
             _seq++;
         }
+        Changed?.Invoke();
     }
 
     /// <summary>当前日志快照（新的在后）。线程安全。</summary>
@@ -36,6 +40,7 @@ public static class MemoryLog
     public static void Clear()
     {
         lock (_gate) _entries.Clear();
+        Changed?.Invoke();
     }
 
     public static long Count { get { lock (_gate) return _seq; } }

@@ -27,6 +27,17 @@ WebHostBootstrap.cs     宿主→Web 装配入口（静态注入 DebugSessionMan
 - Web 库只引 `DotNetDebugger.Session` + `DotNetDebugger.Decompiler`，**不反引宿主**。宿主共享状态经 `WebHostBootstrap.Configure(manager, agentView)` 静态注入（组件经 `WebHostBootstrap.Manager` / `.AgentView` 访问）。
 - 纯服务端逻辑（TypeTreeData/DocumentStore/AgentViewContext）可单测，放 `tests/DotNetDebugger.Web.Tests`。razor/JS 浏览器行为人工验收。
 
+## 铁律：零轮询（事件推送 only）
+
+Blazor Server 电路是双向通道，server 本身就是服务器渲染——**严禁任何形式的轮询**（Timer / Task.Delay 循环读后端状态一律不允许，包括"轻量"定时器）。一切数据经事件推送：订阅后自行 `InvokeAsync` 切电路线程，`Dispose` 退订，订阅建立时立即同步一次快照（页面晚开不丢状态）。现有事件源：
+
+- 会话快照（状态/停点）：`SessionEventBuffer.SnapshotChanged`（经 `DebugSessionManager.ActiveSessionChanged` 重订阅当前会话的 Buffer）
+- 断点集合：`SessionEventBuffer.BreakpointsChanged`（Engine 命令泵设/删/清后发布 `BreakpointsChanged`）
+- agent 上下文：`AgentViewContext.Changed`
+- 内存日志：`MemoryLog.Changed`（写入/清空后触发）
+
+**新增后端状态对外可见的变化时，先在源头（Engine/Session/服务）补事件，再在页面订阅**；不为展示加定时器。
+
 ## 布局纪律（踩坑：代码区无滚动条 / 页面整体滚动）
 
 **严禁硬编码像素高度**（`height: calc(100vh - 190px)` 之类）——不能假设屏幕分辨率/视口大小。高度链必须用 **flex 撑满 + min-height:0**：

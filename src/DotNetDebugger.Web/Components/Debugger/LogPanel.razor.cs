@@ -11,14 +11,15 @@ public partial class LogPanel : IDisposable
 
     private IReadOnlyList<MemoryLogEntry> _logs = [];
     private long _count;
-    private System.Timers.Timer? _timer;
 
     protected override void OnInitialized()
     {
-        _timer = new System.Timers.Timer(1000) { AutoReset = true };
-        _timer.Elapsed += async (_, _) => { try { await InvokeAsync(Refresh); } catch { } };
-        _timer.Start();
+        // 零轮询铁律：订阅 MemoryLog 变化事件推送（写入/清空即刷），仅初始同步一次快照
+        MemoryLog.Changed += OnLogChanged;
+        Refresh();
     }
+
+    private void OnLogChanged() => _ = InvokeAsync(Refresh);
 
     private void Refresh()
     {
@@ -44,6 +45,6 @@ public partial class LogPanel : IDisposable
 
     public void Dispose()
     {
-        _timer?.Dispose();
+        MemoryLog.Changed -= OnLogChanged;
     }
 }
