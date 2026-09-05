@@ -7,4 +7,12 @@
     <RootNamespace>DotNetDebugger.Engine</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ClrDebug" Version="0.4.2" />
+    <!-- dbgshim.dll 原生资产：引 RID 子包（主包 Microsoft.Diagnostics.DbgShim 是空壳内部元包，
+         官方注明 "not meant for direct consumption"，勿直引）。ClrDebug 的 DbgShim 类封装其调用，
+         本包只负责把 runtimes/win-x64/native/dbgshim.dll 带到输出目录。 -->
+    <PackageReference Include="Microsoft.Diagnostics.DbgShim.win-x64" Version="10.0.731102" />
+  </ItemGroup>
+
 </Project>
