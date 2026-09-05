@@ -1,9 +1,9 @@
 # 开放问题（OPEN QUESTIONS）
 
 > 最新在上。澄清后把「问题+结论」移入 decisions.md。
-> 已解决条目已折叠为摘要（见 decisions.md 对应 D#）；**#7（P4-2 WebUI 待办）为当前活跃区**。
+> 已解决条目已折叠为摘要（见 decisions.md 对应 D#）；当前无活跃开放问题。
 
-## #7 P4-2 Web 监视器树/联动待办（2026-09-05，agent 联调中暴露）
+## #7 P4-2 Web 监视器树/联动待办（已解决 2026-09-06）
 - **TypeTree 树组件**：
   - 已改数据驱动全量 Items（无懒加载时序坑）；`style="height:100%"` 官方写法（EnableKeyboard 示例范式）。
   - ~~① ② 虚拟滚动下编程式选中深层节点滚动不到位~~（**已解决 2026-09-06**）：BB 源码实锤根因——`SetActiveItem` 的 scroll js 在 `OnAfterRenderAsync` 跑一次 `querySelector(".tree-content.active")`，而 `<Virtualize>` **异步**渲染可视区行，active 行尚未进 DOM 必然找空。按预案放弃 `IsVirtualize`（非虚拟同步渲染全部展开行，scroll 必中；DOM 量按 IsExpand 链可控，默认全收缩极小）。停点跟随与刷新恢复两条路径浏览器实测均滚动到位。
@@ -17,8 +17,7 @@
   - ~~停点跟随要求 agent 恰在看命中模块~~：Engine 新增 `GetModulePathAsync`（模块短名→全路径），Web 停点无条件跟随（跨模块时 `FindTypeByToken` 由 token 解析类型整页切换）。
   - ~~类型树与 Monaco 单向联动~~：双向联动落地——编辑器光标行经 `DocumentStore.FindMethodTokenAtLine`（方法行区间映射）联动树选中；仅派发**用户交互后**的光标事件（`onMouseDown/onKeyDown` 置粘性标记；`hasTextFocus` 门禁实测误伤点击已弃），setValue 程序性光标移动由桥侧抑制一次。
 - **agent 动作事件时序**：Blazor Server 页面未开/电路未建立时 AgentView.Changed 无订阅者事件丢失；页面晚开靠 OnReady 补同步 AgentView.Snapshot。冷启动空树（产品：无 agent 动作不预加载）。
-- **待办**：MCP server 不应默认 --web（产品方向：agent 调幂等 `web_open` 工具按需开，未实现——opencode.json 现仍带 --web 仅为联调；见 `src/DotNetDebuggerMcp/TODO.md`）。
-- **规划流程待办**：本计划完成后 `plans/2026-09-05-p4-2-webui.md` 归档 `archive/plans/` + 勾选 checkbox + 更新 `README.md` 状态行；`feature/p4-monitor` 分支本地不存在（实际工作在 `master`），规划文档与实际分支不符需澄清。
+- **已解决（2026-09-06）**：`web_open` 幂等工具落地（`WebHostBootstrap.EnsureStartedAsync` 单例启动，`--web` 与 web_open 收敛同一入口），MCP server 默认去 `--web`；P4-2 计划归档 `archive/plans/`、规划 README 状态行更新。分支澄清：实际工作全在 `master`，规划所写 `feature/p4-monitor` 系笔误（已在归档注记说明）。收尾计划见 `plans/2026-09-06-p4-closeout-web-open.md`。
 
 ## #6 WebUI 代码视图与推送通道（已解决 2026-09-05）
 - 已解决，见 decisions D4：Monaco 作 Blazor 互操作组件、推送走 Blazor Server SignalR 电路、无 React/Vite/SSE。残留（面板 BB 组件分工、事件→Blazor 刷新机制）已并入 P4 spec，不再单列。

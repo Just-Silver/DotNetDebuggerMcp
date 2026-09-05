@@ -18,7 +18,7 @@
 
 **依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）与 `Engine`（只依赖 ClrDebug + DbgShim.win-x64）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部四库。各库**均不得反向引用宿主**。
 
-**文档导航**：`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-1 已完成、P4-2 Web 进行中、specs/research 导航）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办（含未实现的 `web_open` 幂等工具）；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `E:\Code\Projects\Externals\DebuggerExternals\`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
+**文档导航**：`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-2 已完成、P5 发布进行中、specs/research 导航）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `E:\Code\Projects\Externals\DebuggerExternals\`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
 
 ## 开发铁律
 
