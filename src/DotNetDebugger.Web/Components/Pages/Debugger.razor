@@ -73,7 +73,7 @@
         <div class="d-flex flex-grow-1" style="min-height:0;min-width:0;gap:8px;">
             <!-- 代码视图：Monaco 容器必须有确定高度（flex 链落像素）才内部滚动 -->
             <div class="flex-grow-1 d-flex" style="min-width:0;border:1px solid #dee2e6;">
-                <CodeViewer @ref="_viewer" CursorLineChanged="OnCursorLineChanged" />
+                <CodeViewer @ref="_viewer" CursorLineChanged="OnCursorLineChanged" GlyphClicked="ToggleBreakpointAtLineAsync" />
             </div>
             <!-- 面板列 -->
             <div class="d-flex flex-column" style="width:30%;min-width:220px;overflow:auto;">

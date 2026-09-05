@@ -86,6 +86,21 @@ public sealed class DocumentStore
         return next?.Token;
     }
 
+    /// <summary>编辑器行 → 断点落点（glyph 点击设断点用）：优先该行语句的序列点 (token, ilStart)；
+    /// 行无序列点（大括号/签名/空行）时落到所在方法的首条语句（Mapping 按 token+offset 有序）。
+    /// 无法定位返回 null。</summary>
+    public static (int MethodToken, int IlOffset)? GetBreakpointTargetAtLine(SourceDocument doc, int line)
+    {
+        if (DocumentService.GetIlStartForLine(doc, line) is { } exact) return (exact.MethodToken, exact.IlStart);
+        if (FindMethodTokenAtLine(doc, line) is not { } token) return null;
+        foreach (var e in doc.Mapping)
+        {
+            if (e.MethodToken != token || e.Line < 1) continue;
+            return (token, e.IlOffset);
+        }
+        return null;
+    }
+
     /// <summary>方法 token → 文档中首个映射行（树点成员叶子定位用）。无映射返回 null。</summary>
     public static int? GetMethodFirstLine(SourceDocument doc, int methodToken)
     {

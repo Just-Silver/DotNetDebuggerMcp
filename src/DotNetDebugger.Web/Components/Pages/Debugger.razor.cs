@@ -358,6 +358,28 @@ public partial class Debugger
         await _tree.SelectTypeAsync(_doc.AssemblyPath, _doc.TypeFullName, token);
     }
 
+    /// <summary>glyph 区（断点红点槽）点击切换断点：该行已是断点则移除，否则在语句落点设置。
+    /// 红点由断点事件推送自动刷新，无需手动重推。</summary>
+    private async Task ToggleBreakpointAtLineAsync(int line)
+    {
+        if (_debug.Active is null)
+        {
+            _ctrlMessage = "无活动调试会话，先启动/附加目标再设断点。";
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+        if (_doc is not { IsSuccess: true } || _doc.Error is not null) return;
+        if (DocumentStore.GetBreakpointTargetAtLine(_doc, line) is not { } target) return;
+        var module = Path.GetFileName(_doc.AssemblyPath);
+        var existing = _breakpoints.FirstOrDefault(b =>
+            b.ModuleName.Equals(module, StringComparison.OrdinalIgnoreCase)
+            && b.MethodToken == target.MethodToken && b.IlOffset == target.IlOffset);
+        _ctrlMessage = existing is not null
+            ? await _debug.RemoveBreakpointAsync(existing.Id)
+            : await _debug.SetBreakpointAsync(module, target.MethodToken, target.IlOffset);
+        await InvokeAsync(StateHasChanged);
+    }
+
     /// <summary>统一装饰：断点红点（模块匹配当前文档的断点经 IL→行映射）+ 停点当前行高亮，全量重推；
     /// 停点行存在时滚动定位。文档换页/断点增删/停点跃迁共用。</summary>
     private async Task ApplyDecorationsAsync()

@@ -17,6 +17,9 @@ public partial class CodeViewer : IAsyncDisposable
     /// <summary>编辑器光标行变化回调（行号，1 起）。父组件接此做 树↔编辑器 双向联动。</summary>
     [Parameter] public EventCallback<int> CursorLineChanged { get; set; }
 
+    /// <summary>glyph 区（断点红点槽）点击回调（行号，1 起）。父组件接此设/删断点。</summary>
+    [Parameter] public EventCallback<int> GlyphClicked { get; set; }
+
     /// <summary>电路断开（浏览器刷新/关页）或组件已释放时 JS 互操作必然失败——按官方指引静默吞掉，
     /// 避免轮询/事件回调路径刷 JSDisconnectedException 日志。其它异常照常上抛。</summary>
     private static bool IsCircuitGone(Exception ex) =>
@@ -66,6 +69,10 @@ public partial class CodeViewer : IAsyncDisposable
     /// <summary>JS 桥回推光标行（CodeViewer.razor.js onDidChangeCursorPosition）。</summary>
     [JSInvokable]
     public async Task OnCursorLine(int line) => await CursorLineChanged.InvokeAsync(line);
+
+    /// <summary>JS 桥回推 glyph 区点击（CodeViewer.razor.js onMouseDown GUTTER_GLYPH_MARGIN）。</summary>
+    [JSInvokable]
+    public async Task OnGlyphClick(int line) => await GlyphClicked.InvokeAsync(line);
 
     public async ValueTask DisposeAsync()
     {

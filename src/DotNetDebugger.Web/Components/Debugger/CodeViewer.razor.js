@@ -15,11 +15,25 @@ window.dotnetDebuggerMonaco._suppressCursor = window.dotnetDebuggerMonaco._suppr
 // 只派发用户交互（点击/按键）后的光标事件——setPosition/setValue 等程序性移动一律过滤，
 // 防止行→方法映射（行 1 → 其后最近方法）覆盖停点跟随/agent 联动的树选中。
 // 不用 hasTextFocus 门禁：点击时光标事件先于焦点建立会被误滤（实测）。
+// 同一引用顺带挂 glyph 区点击（OnGlyphClick，行号）——断点红点区点击设/删断点。
 function dotnetdbgHookCursor(editor) {
     if (editor.__cursorHooked) return;
     editor.__cursorHooked = true;
     editor.onMouseDown(function () { editor.__userInteract = true; });
     editor.onKeyDown(function () { editor.__userInteract = true; });
+    // glyph 区（断点红点槽）点击 → OnGlyphClick（行号）。
+    // 不用 monaco.MouseTargetType：该全局枚举在 AMD min 构建未导出（实测 undefined），glyph 点击 target.type 也报 TEXT_WITHIN——
+    // 改坐标判定：点击 x 落在 glyphMarginWidth 内即视为 glyph 区。
+    editor.onMouseDown(function (e) {
+        var id = editor.__id;
+        if (!e.target || !e.target.position) return;
+        var layout = editor.getLayoutInfo();
+        var rect = editor.getDomNode().getBoundingClientRect();
+        var x = (e.event && typeof e.event.posx === 'number') ? e.event.posx - (rect.left + window.scrollX) : -1;
+        if (x < 0 || x >= (layout.glyphMarginWidth || 0)) return;
+        var ref = window.dotnetDebuggerMonaco._cursorRefs[id];
+        if (ref) ref.invokeMethodAsync('OnGlyphClick', e.target.position.lineNumber);
+    });
     editor.onDidChangeCursorPosition(function (e) {
         var id = editor.__id;
         if (!editor.__userInteract) return;

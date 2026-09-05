@@ -61,6 +61,23 @@ public sealed class DebugViewService
         }
     }
 
+    /// <summary>移除断点（glyph 点击切换用）。</summary>
+    public async Task<string> RemoveBreakpointAsync(int id, CancellationToken ct = default)
+    {
+        var active = Active;
+        if (active is null) return "无活动调试会话。";
+        try
+        {
+            return await active.Session.RemoveBreakpointAsync(id, ct)
+                ? $"断点 {id} 已移除。"
+                : $"断点 {id} 不存在。";
+        }
+        catch (Exception ex)
+        {
+            return $"移除断点失败：{ex.Message}";
+        }
+    }
+
     /// <summary>当前会话断点快照（无活动会话返回空；红点渲染数据源）。常态经 BreakpointsChanged 事件推送，此为兜底查询。</summary>
     public async Task<IReadOnlyList<BreakpointSnapshot>> GetBreakpointsAsync(CancellationToken ct = default)
     {

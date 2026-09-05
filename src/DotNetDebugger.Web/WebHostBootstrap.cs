@@ -60,7 +60,11 @@ public static class WebHostBootstrap
         // Monaco 资产经 StaticWebAssetEndpointExclusionPattern 排除出 MapStaticAssets（免二次指纹冲突），
         // 由 UseStaticFiles 服务原文件（dev 走 UseStaticWebAssets 虚拟 / publish 走物理 wwwroot）。
         // MapStaticAssets 服务框架脚本(blazor.web.js)/BB/其余资产——不可省（.NET 10 框架脚本依赖它）。
-        app.UseStaticFiles();
+        // no-cache：本地工具场景，静态文件改后浏览器必须重验证（防同端口重启后用到旧桥 JS——实测反复踩坑）
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache"
+        });
         app.MapStaticAssets();
         // App 组件在 Web 库程序集（MapRazorComponents 已隐式包含该程序集）——勿 AddAdditionalAssemblies 重复加同程序集（Assembly already defined）
         app.MapRazorComponents<Components.App>()
