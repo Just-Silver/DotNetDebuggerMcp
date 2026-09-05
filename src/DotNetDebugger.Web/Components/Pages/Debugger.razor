@@ -114,10 +114,10 @@ else if (_doc is not null)
         try { await InvokeAsync(RefreshState); } catch { }
     }
 
-    private void RefreshState()
+    private async Task RefreshState()
     {
         var info = _debug.SessionInfo;
-        _state = info?.State switch
+        var newState = info?.State switch
         {
             DebugSessionState.Stopped => "已停止",
             DebugSessionState.Running => "运行中",
@@ -126,14 +126,22 @@ else if (_doc is not null)
             _ => null,
         };
         _lastStopText = info?.LastStop is { } stop ? $"{stop.Kind} @ {stop.TopFrame} (thread {stop.ThreadId})" : null;
+        // 停点跃迁检测：状态变为 Stopped 时触发代码视图高亮（断点命中自动定位语句行）
+        var transitionedToStopped = newState == "已停止" && _state != "已停止";
+        _state = newState;
         StateHasChanged();
+        if (transitionedToStopped)
+        {
+            await ApplyStopHighlightAsync();
+            StateHasChanged();
+        }
     }
 
     private async Task LaunchTarget()
     {
         if (string.IsNullOrWhiteSpace(_targetPath)) _targetPath = DemoAssembly + " 3 8";
         _ctrlMessage = await _debug.LaunchAndAttachAsync(_targetPath.Trim());
-        RefreshState();
+        await RefreshState();
     }
 
     /// <summary>演示闭环：启动 DebugTarget + Work 断点 + continue（Work token 从目标 dll 元数据解析）。</summary>
@@ -147,19 +155,32 @@ else if (_doc is not null)
             return;
         }
         _ctrlMessage = await _debug.LaunchAndAttachAsync(_targetPath.Trim());
-        // 解析 Work token（目标 dll 与 exe 同目录）
+        // 目标 dll（与 exe 同目录，托管代码所在）；自动反编译 Program 到编辑器——停点命中后可高亮 Work 内行
         var dll = Path.ChangeExtension(parts[0], ".dll");
+        if (File.Exists(dll))
+        {
+            _assemblyPath = dll;
+            _typeName = "DebugTarget.Program";
+            var doc = await _store.GetOrLoadAsync(dll, "DebugTarget.Program");
+            if (doc.IsSuccess && _viewer is not null)
+            {
+                _doc = doc;
+                await _viewer.SetValueAsync(doc.Text);
+            }
+        }
+        // 解析 Work token 并设断点、继续
         var token = FindMethodToken(dll, "Work");
         if (token <= 0) { _ctrlMessage += "；未找到 Work 方法 token"; return; }
         var module = Path.GetFileName(dll);
         _ctrlMessage += "；" + await _debug.SetBreakpointAsync(module, token, 0);
         _ctrlMessage += "；" + await _debug.ContinueAsync();
-        RefreshState();
+        await RefreshState();
+        await ApplyStopHighlightAsync();   // 进程停时才有效；未停则等待轮询跃迁触发
     }
 
-    private async Task ContinueRun() { _ctrlMessage = await _debug.ContinueAsync(); RefreshState(); await ApplyStopHighlightAsync(); }
-    private async Task StepOver() { _ctrlMessage = await _debug.StepAsync("over"); RefreshState(); await ApplyStopHighlightAsync(); }
-    private async Task StepInto() { _ctrlMessage = await _debug.StepAsync("into"); RefreshState(); await ApplyStopHighlightAsync(); }
+    private async Task ContinueRun() { _ctrlMessage = await _debug.ContinueAsync(); await RefreshState(); await ApplyStopHighlightAsync(); }
+    private async Task StepOver() { _ctrlMessage = await _debug.StepAsync("over"); await RefreshState(); await ApplyStopHighlightAsync(); }
+    private async Task StepInto() { _ctrlMessage = await _debug.StepAsync("into"); await RefreshState(); await ApplyStopHighlightAsync(); }
 
     private async Task Disconnect() { _ctrlMessage = await _debug.DisconnectAsync(); _state = null; _lastStopText = null; }
 
