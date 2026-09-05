@@ -641,3 +641,17 @@ e.Thread.CreateStepper().Step(bStepIn: false);   // 然后 e.Controller.Continue
 - 事件 Args 统一继承 `CorDebugManagedCallbackEventArgs`：`Kind`（枚举）/`Controller`（惰性分派）/`Continue`（**仅提示，不自动调用**，仍须手动 `Controller.Continue(false)`）。
 - `OnException2`（Callback2，.NET 2.0+）比旧 `OnException` 信息更全（Frame/Offset/EventType/Flags），现代引擎建议用它判断 first-chance。
 - 样例 `Samples\NetCore\Program.cs` 的 Manual 引导流程（L63-114）是引擎 launch 引导的权威模板：CreateProcessForLaunch(suspend)→GetStartupNotificationEvent→ResumeProcess→WaitForSingleObject→EnumerateCLRs→CreateVersionStringFromModule→CreateDebuggingInterfaceFromVersionEx→Initialize→SetManagedHandler→DebugActiveProcess→**SetEvent(runtime.Handle)**→CloseCLREnumeration。
+
+### A.5 本机参考源码位置（2026-09-05，E:\Code\Projects\Externals\DebuggerExternals）
+
+P2 实现期的权威参考（写代码前先查这些，避免臆造 API）：
+
+| 源码 | 路径 | 用途 |
+|---|---|---|
+| ClrDebug（0.4.2+） | `...\DebuggerExternals\ClrDebug` | **实际依赖源码**：所有 API 精确签名核对源 |
+| dnSpy（v6.6.0，GPL 只读） | `...\DebuggerExternals\dnSpy` | ICorDebug 状态机/断点/求值协议思路；`Extensions\dnSpy.Debugger\dnSpy.Debugger.DotNet.CorDebug\dndbg\` 是手写 COM 层参考 |
+| sharpdbg（MIT） | `...\DebuggerExternals\sharpdbg` | **最贴近参考**：ClrDebug + DbgShim + 自研引擎的完整实现（事件泵/断点/locals 树），可对照读实现细节 |
+| dotnet/diagnostics（v11） | `...\DebuggerExternals\diagnostics` | DbgShim C 源码（`src\shim\`）、DebugServices 抽象；排错 dbgshim 行为时查 |
+| clrmd | `...\DebuggerExternals\clrmd` | v2 dump 分析旁路参考（P2 不引） |
+| ILSpy（v11.0） | `...\DebuggerExternals\ILSpy` | SequencePointBuilder（P4 行映射）、反编译引擎参考 |
+| BlazorMonaco（v3.5.0） | `...\DebuggerExternals\BlazorMonaco` | P4 Monaco Blazor 封装参考 |
