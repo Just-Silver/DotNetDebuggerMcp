@@ -1,4 +1,5 @@
 using DotNetDebuggerMcp.Configuration;
+using DotNetDebuggerMcp.DebugCli;
 using DotNetDebuggerMcp.Services;
 using DotNetDebuggerMcp.Tools;
 using DotNetDebuggerMcp.UpdateCheck;
@@ -181,6 +182,24 @@ public class DotNetDebuggerMcpCmd
     public bool Check { get; }
 
     /// <summary>
+    /// 一次性调试场景：启动并附加目标可执行程序（配合 -dbg-bp/-dbg-offset）。
+    /// </summary>
+    [Option("-dbg <exe>", "一次性调试场景：启动并附加目标可执行程序（配合 -dbg-bp/-dbg-offset，供手动验证动态调试引擎）。", CommandOptionType.SingleValue)]
+    public string DebugTarget { get; } = null!;
+
+    /// <summary>
+    /// 断点方法 token（0x06000005，配合 -dbg）。
+    /// </summary>
+    [Option("-dbg-bp <token>", "断点方法 token（0x06000005，配合 -dbg）。", CommandOptionType.SingleValue)]
+    public string DebugBreakpointToken { get; } = null!;
+
+    /// <summary>
+    /// 断点 IL offset（配合 -dbg/-dbg-bp，默认 0）。
+    /// </summary>
+    [Option("-dbg-offset <n>", "断点 IL offset（配合 -dbg/-dbg-bp，默认 0）。", CommandOptionType.SingleValue)]
+    public int DebugBreakpointOffset { get; } = 0;
+
+    /// <summary>
     /// 版本号文本（由 -v/--version 触发输出），与 NuGet 包版本保持一致。
     /// </summary>
     public string Version => AppConfig.NuGetPackageId + " " + (AppConfig.CurrentVersion?.ToString(3) ?? "unknown");
@@ -291,6 +310,20 @@ public class DotNetDebuggerMcpCmd
     /// </summary>
     private async Task<int> OnExecuteAsync(CommandLineApplication app)
     {
+        if (!string.IsNullOrEmpty(DebugTarget))
+        {
+            // -dbg 一次性调试场景：供手动验证动态调试引擎（D11 P2 CLI 驱动）
+            if (string.IsNullOrEmpty(DebugBreakpointToken))
+            {
+                Console.Error.WriteLine("请指定 -dbg-bp 断点方法 token（如 -dbg-bp 0x06000003）。");
+                return 1;
+            }
+            var tokenText = DebugBreakpointToken.Replace("0x", "", StringComparison.OrdinalIgnoreCase);
+            var token = int.Parse(tokenText, System.Globalization.NumberStyles.HexNumber);
+            return await DebugCliRunner.RunAsync(DebugTarget, token, DebugBreakpointOffset,
+                Path.GetDirectoryName(Path.GetFullPath(DebugTarget)), TimeoutSeconds, CancellationToken.None);
+        }
+
         if (!string.IsNullOrEmpty(Assembly) || Check)
         {
             Console.WriteLine(await DispatchCliAsync(

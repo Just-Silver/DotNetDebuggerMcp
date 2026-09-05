@@ -40,6 +40,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
+    <ProjectReference Include="..\DotNetDebugger.Engine\DotNetDebugger.Engine.csproj" />
   </ItemGroup>
 
   <!-- 宿主测试项目访问宿主 internals（如 ILSpyMcpCmd 内部方法） -->
