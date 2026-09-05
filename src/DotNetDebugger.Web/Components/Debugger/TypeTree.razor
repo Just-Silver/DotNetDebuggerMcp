@@ -1,9 +1,9 @@
 @using BootstrapBlazor.Components
 @using DotNetDebugger.Web.Services
 
-@* 左侧类型浏览树：程序集 → 命名空间 → 类型，全部懒加载（BB OnExpandNodeAsync）。
-   外部（Debugger 页 / agent 上下文驱动）经 @ref 调 LoadAssembly 加程序集根；点类型触发 TypeClicked。
-   v1 只列 class（TypeTreeData 全枚举，含 interface/struct 等见后续切片需求）。 *@
+@* 左侧类型浏览树（对标 dnSpyEx）：程序集 → 命名空间 → 类型 → 成员（方法/属性/事件/字段），逐级懒加载（BB OnExpandNodeAsync）。
+   外部（Debugger 页 / agent 上下文驱动）经 @ref 调 LoadAssembly 加程序集根、SelectTypeAsync 定位到方法；点类型/方法触发回调。
+   v1 嵌套类型折叠为类型节点子项（递归同类型结构），见 TypeTreeData.NestedType。 *@
 
 <TreeView TItem="TypeTreeNode"
           @ref="_tree"
@@ -16,8 +16,9 @@
     private readonly TypeTreeData _data = new();
     private List<TreeViewItem<TypeTreeNode>> _items = [];
 
-    /// <summary>节点 model：Label 显示文本；Kind=assembly/namespace/type；AssemblyPath 供子级枚举；TypeFullName 供点击反编译。</summary>
-    public sealed record TypeTreeNode(string Label, string Kind, string? AssemblyPath = null, string? TypeFullName = null);
+    /// <summary>节点 model：Kind=assembly/namespace/type/member；Label 显示文本；AssemblyPath 供子级枚举；TypeFullName 供反编译；MethodToken 供方法停点匹配。</summary>
+    public sealed record TypeTreeNode(string Label, string Kind, string? AssemblyPath = null,
+        string? TypeFullName = null, int MethodToken = 0, TypeMemberKind? MemberKind = null);
 
     /// <summary>类型节点点击回调（参数：类型全名 + 程序集路径）。Debugger 页接此反编译显示。</summary>
     [Parameter] public Func<string, string, Task>? TypeClicked { get; set; }
@@ -33,7 +34,70 @@
         if (_data.GetNamespaces(full) is null) return false; // 非程序集/不存在：不入树
         _items.Add(new TreeViewItem<TypeTreeNode>(new(Path.GetFileName(full), "assembly", full))
         { Text = Path.GetFileName(full), HasChildren = true });
+        // BB TreeView 按 Items 引用变化刷新：经 SetItems 换新引用并 StateHasChanged
+        if (_tree is not null) _tree.SetItems(_items);
+        else StateHasChanged();
         return true;
+    }
+
+    /// <summary>级联展开树到指定类型（可带方法 token 下钻到方法叶子）并选中（停点命中/agent 跟随用）。
+    /// 懒加载展开是交互异步的，此处手动调 OnExpandAsync 建子节点再设 IsExpand，逐级下钻。</summary>
+    public async Task SelectTypeAsync(string assemblyPath, string typeFullName, int methodToken = 0)
+    {
+        var full = Path.GetFullPath(assemblyPath);
+        var root = _items.FirstOrDefault(i => string.Equals(i.Value.AssemblyPath, full, StringComparison.OrdinalIgnoreCase));
+        if (root is null)
+        {
+            if (!LoadAssembly(full)) return;
+            root = _items.FirstOrDefault(i => string.Equals(i.Value.AssemblyPath, full, StringComparison.OrdinalIgnoreCase));
+            if (root is null) return;
+        }
+        // 级联展开：程序集 → 类型所在命名空间 → 类型 → （可选）方法
+        root.IsExpand = true;
+        var nsName = NamespaceOf(typeFullName);
+        var nsChildren = await EnsureChildrenAsync(root);
+        var nsNode = nsChildren.FirstOrDefault(n => string.Equals(n.Value.Label, nsName, StringComparison.Ordinal));
+        if (nsNode is null) return;
+        nsNode.IsExpand = true;
+        var typeChildren = await EnsureChildrenAsync(nsNode);
+        var typeNode = typeChildren.FirstOrDefault(t => string.Equals(t.Value.TypeFullName, typeFullName, StringComparison.Ordinal));
+        if (typeNode is null) return;
+        typeNode.IsExpand = true;
+        TreeViewItem<TypeTreeNode>? target = typeNode;
+        if (methodToken > 0)
+        {
+            var memberChildren = await EnsureChildrenAsync(typeNode);
+            // 方法叶子按 token 匹配（属性/事件访问器不进方法列表，token 是方法 token）；未命中仍选中类型
+            target = memberChildren.FirstOrDefault(m => m.Value.Kind == "member"
+                && m.Value.MemberKind == TypeMemberKind.Method && m.Value.MethodToken == methodToken) ?? typeNode;
+        }
+        if (target is not null)
+        {
+            _tree?.SetActiveItem(target);   // SetActiveItem 内部展开祖先 + 滚动到可视 + StateHasChanged
+        }
+    }
+
+    /// <summary>若节点子项未加载则调 OnExpandAsync 拉取并挂载，返回子项列表。</summary>
+    private async Task<List<TreeViewItem<TypeTreeNode>>> EnsureChildrenAsync(TreeViewItem<TypeTreeNode> node)
+    {
+        if (node.Items.Count == 0)
+        {
+            var children = (await OnExpandAsync(node)).ToList();
+            node.Items.AddRange(children);
+            // 引用已变：SetItems 通知 BB 刷新当前展开层级
+            if (_tree is not null) _tree.SetItems(_items);
+        }
+        return node.Items;
+    }
+
+    /// <summary>类型全名 → 所属命名空间（与 TypeTreeData.GetNamespace 同规则：末段 . 之前为命名空间；(全局) 无 . 时）。</summary>
+    private static string NamespaceOf(string typeFullName)
+    {
+        var plus = typeFullName.LastIndexOf('+');      // 嵌套类型归最外层命名空间：取首个 . 之前
+        var firstDot = typeFullName.IndexOf('.');
+        if (firstDot <= 0) return "(全局)";
+        var nsEnd = plus > 0 && plus < firstDot ? plus : firstDot;
+        return typeFullName[..nsEnd];
     }
 
     /// <summary>按类型全名在树中定位节点（供 agent 上下文驱动高亮/选中）。未加载则返回 null。</summary>
@@ -58,7 +122,7 @@
         foreach (var child in item.Items.SelectMany(Flatten)) yield return child;
     }
 
-    /// <summary>节点展开时懒加载子级：程序集 → 命名空间；命名空间 → 类型。BB 只在 HasChildren 且未载时调。</summary>
+    /// <summary>节点展开时懒加载子级：程序集→命名空间；命名空间→类型；类型→成员。BB 只在 HasChildren 且未载时调。</summary>
     private async Task<IEnumerable<TreeViewItem<TypeTreeNode>>> OnExpandAsync(TreeViewItem<TypeTreeNode> node)
     {
         await Task.CompletedTask; // 元数据秒回，无需真实异步；保留签名供 BB 懒加载
@@ -76,13 +140,37 @@
             case "namespace" when v.AssemblyPath is not null:
                 foreach (var type in _data.GetTypes(v.AssemblyPath, v.Label))
                 {
-                    // 叶子类型显示短名（去命名空间前缀），全名存 TypeFullName 供点击反编译
+                    // 类型节点：有成员则可展开到成员层
+                    var hasMembers = _data.GetMembers(v.AssemblyPath, type).Count > 0;
                     list.Add(new TreeViewItem<TypeTreeNode>(new(ShortName(type), "type", v.AssemblyPath, type))
-                    { Text = ShortName(type) });
+                    { Text = ShortName(type), HasChildren = hasMembers });
+                }
+                break;
+            case "type" when v.AssemblyPath is not null && v.TypeFullName is not null:
+                foreach (var m in _data.GetMembers(v.AssemblyPath, v.TypeFullName))
+                {
+                    list.Add(MemberItem(v, m));
                 }
                 break;
         }
         return list;
+    }
+
+    /// <summary>成员叶子节点：显示名带种类前缀（dnSpyEx 风格），方法/属性/事件/字段。方法叶子带 MethodToken 供停点匹配。</summary>
+    private static TreeViewItem<TypeTreeNode> MemberItem(TypeTreeNode parent, TypeMember m)
+    {
+        var kindTag = m.Kind switch
+        {
+            TypeMemberKind.Method => "M ",
+            TypeMemberKind.Property => "P ",
+            TypeMemberKind.Event => "E ",
+            TypeMemberKind.Field => "F ",
+            _ => "",
+        };
+        // 方法显示带 () 示意可调用（无参签名 v1；完整签名需反编译签名，后置）
+        var text = m.Kind == TypeMemberKind.Method ? $"{kindTag}{m.Name}()" : $"{kindTag}{m.Name}";
+        return new TreeViewItem<TypeTreeNode>(new(text, "member", parent.AssemblyPath,
+            parent.TypeFullName, m.Token, m.Kind)) { Text = text };
     }
 
     private async Task OnNodeClickedAsync(TreeViewItem<TypeTreeNode> item)

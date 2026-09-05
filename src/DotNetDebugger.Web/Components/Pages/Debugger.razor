@@ -39,113 +39,117 @@
     </div>
 }
 
-<!-- 反编译浏览 -->
-<div class="row g-2 mb-2">
-    <div class="col-md-5">
-        <input @bind="_assemblyPath" class="form-control form-control-sm" placeholder="程序集路径（dll/exe）" />
-    </div>
-    <div class="col-md-4">
-        <input @bind="_typeName" class="form-control form-control-sm" placeholder="类型全名，如 ILSpyMcp.Samples.BigClass" />
-    </div>
-    <div class="col-md-3">
-        <Button IsAsync="true" Color="Color.Primary" Size="Size.Small" OnClick="LoadType">反编译显示</Button>
-    </div>
-</div>
-@if (_loading)
-{
-    <div class="text-muted small mb-1"><i class="fa-solid fa-spin fa-spinner me-1"></i>反编译中，请稍候…</div>
-}
-else if (_doc is { IsSuccess: true } && _doc.Error is null)
-{
-    <div class="text-muted small mb-1">
-        已加载 @_doc.TypeFullName（@_doc.Lines.Length 行，@_doc.Mapping.Count 条映射）
-    </div>
-}
-else if (_doc is not null)
-{
-    <div class="text-danger small mb-1">@_doc.Error</div>
-}
-
-<div class="row g-2">
-    <div class="col-8">
-        <div style="height:55vh;border:1px solid #dee2e6;">
-            <CodeViewer @ref="_viewer" />
+<!-- 主布局：左类型树 + 右代码/面板 -->
+<div class="row g-2" style="height:calc(100vh - 190px);">
+    <!-- 左：类型浏览树（agent 上下文自动加载程序集，点类型反编译右侧显示） -->
+    <div class="col-3 d-flex flex-column" style="border:1px solid #dee2e6;border-radius:4px;overflow:auto;">
+        <div class="small text-secondary px-2 py-1 border-bottom">类型浏览（agent 反编译过的程序集）</div>
+        <div class="flex-grow-1" style="min-height:0;">
+            <TypeTree @ref="_tree" TypeClicked="ShowTypeAsync" AssemblyLoaded="OnAssemblyLoaded" />
         </div>
     </div>
-    <div class="col-4">
-        <!-- 调用栈 -->
-        <Card HeaderText="@($"调用栈（{_stack.Count}）")" class="mb-2">
-            <BodyTemplate>
-                @if (_stack.Count == 0)
-                {
-                    <div class="text-muted small">进程停时显示</div>
-                }
-                else
-                {
-                    <div style="max-height:22vh;overflow:auto;">
-                        <ListGroup TItem="DebugStackFrame" Items="@_stack.ToList()">
-                            <ItemTemplate>
-                                <div class="@(context.FrameIndex == 0 ? "text-warning fw-bold" : "") small">@context.Location</div>
-                            </ItemTemplate>
-                        </ListGroup>
-                    </div>
-                }
-            </BodyTemplate>
-        </Card>
-        <!-- 局部变量（按作用域分组） -->
-        <Card HeaderText="局部变量/参数" class="mb-2">
-            <BodyTemplate>
-                @if (_variables.Count == 0)
-                {
-                    <div class="text-muted small">进程停时显示</div>
-                }
-                else
-                {
-                    <div style="max-height:22vh;overflow:auto;">
-                        @foreach (var (scope, vars) in _variables)
+    <!-- 右：代码视图 + 面板 -->
+    <div class="col-9 d-flex flex-column">
+        <div class="d-flex align-items-center mb-1 small">
+            @if (_loading)
+            {
+                <span class="text-muted"><i class="fa-solid fa-spin fa-spinner me-1"></i>反编译中，请稍候…</span>
+            }
+            else if (_doc is { IsSuccess: true } && _doc.Error is null)
+            {
+                <span class="text-muted">@_doc.AssemblyPath<span class="mx-1 text-secondary">→</span>@_doc.TypeFullName
+                    （@_doc.Lines.Length 行，@_doc.Mapping.Count 条映射）</span>
+            }
+            else if (_doc is not null)
+            {
+                <span class="text-danger">@_doc.Error</span>
+            }
+            else
+            {
+                <span class="text-muted">在左侧树选择类型，或等 agent 反编译时自动跟随</span>
+            }
+        </div>
+        <div class="row g-2 flex-grow-1" style="min-height:0;">
+            <div class="col-8 d-flex flex-column" style="min-height:0;">
+                <div class="flex-grow-1" style="border:1px solid #dee2e6;">
+                    <CodeViewer @ref="_viewer" />
+                </div>
+            </div>
+            <div class="col-4" style="overflow:auto;">
+                <!-- 调用栈 -->
+                <Card HeaderText="@($"调用栈（{_stack.Count}）")" class="mb-2">
+                    <BodyTemplate>
+                        @if (_stack.Count == 0)
                         {
-                            <div class="small text-secondary mt-1">[@scope]</div>
-                            <ListGroup TItem="DebugVariable" Items="@vars.ToList()">
-                                <ItemTemplate>
-                                    <div class="small font-monospace">slot@(context.Slot) = @context.Value.Display</div>
-                                </ItemTemplate>
-                            </ListGroup>
+                            <div class="text-muted small">进程停时显示</div>
                         }
-                    </div>
-                }
-            </BodyTemplate>
-        </Card>
-        <!-- 线程 -->
-        <Card HeaderText="@($"线程（{_threads.Count}）")">
-            <BodyTemplate>
-                @if (_threads.Count == 0)
-                {
-                    <div class="text-muted small">进程停时显示</div>
-                }
-                else
-                {
-                    <div style="max-height:15vh;overflow:auto;">
-                        <ListGroup TItem="DebugThreadInfo" Items="@_threads.ToList()">
-                            <ItemTemplate>
-                                <div class="small font-monospace @(context.ThreadId == _debug.Active?.Buffer.StoppedThreadId ? "text-warning fw-bold" : "")">
-                                    thread @context.ThreadId@(context.ThreadId == _debug.Active?.Buffer.StoppedThreadId ? " (停)" : "")
-                                </div>
-                            </ItemTemplate>
-                        </ListGroup>
-                    </div>
-                }
-            </BodyTemplate>
-        </Card>
+                        else
+                        {
+                            <div style="max-height:22vh;overflow:auto;">
+                                <ListGroup TItem="DebugStackFrame" Items="@_stack.ToList()">
+                                    <ItemTemplate>
+                                        <div class="@(context.FrameIndex == 0 ? "text-warning fw-bold" : "") small">@context.Location</div>
+                                    </ItemTemplate>
+                                </ListGroup>
+                            </div>
+                        }
+                    </BodyTemplate>
+                </Card>
+                <!-- 局部变量（按作用域分组） -->
+                <Card HeaderText="局部变量/参数" class="mb-2">
+                    <BodyTemplate>
+                        @if (_variables.Count == 0)
+                        {
+                            <div class="text-muted small">进程停时显示</div>
+                        }
+                        else
+                        {
+                            <div style="max-height:22vh;overflow:auto;">
+                                @foreach (var (scope, vars) in _variables)
+                                {
+                                    <div class="small text-secondary mt-1">[@scope]</div>
+                                    <ListGroup TItem="DebugVariable" Items="@vars.ToList()">
+                                        <ItemTemplate>
+                                            <div class="small font-monospace">slot@(context.Slot) = @context.Value.Display</div>
+                                        </ItemTemplate>
+                                    </ListGroup>
+                                }
+                            </div>
+                        }
+                    </BodyTemplate>
+                </Card>
+                <!-- 线程 -->
+                <Card HeaderText="@($"线程（{_threads.Count}）")">
+                    <BodyTemplate>
+                        @if (_threads.Count == 0)
+                        {
+                            <div class="text-muted small">进程停时显示</div>
+                        }
+                        else
+                        {
+                            <div style="max-height:15vh;overflow:auto;">
+                                <ListGroup TItem="DebugThreadInfo" Items="@_threads.ToList()">
+                                    <ItemTemplate>
+                                        <div class="small font-monospace @(context.ThreadId == _debug.Active?.Buffer.StoppedThreadId ? "text-warning fw-bold" : "")">
+                                            thread @context.ThreadId@(context.ThreadId == _debug.Active?.Buffer.StoppedThreadId ? " (停)" : "")
+                                        </div>
+                                    </ItemTemplate>
+                                </ListGroup>
+                            </div>
+                        }
+                    </BodyTemplate>
+                </Card>
+            </div>
+        </div>
     </div>
 </div>
 
 @code {
     private CodeViewer? _viewer;
+    private TypeTree? _tree;
     private readonly DocumentStore _store = new();
     private readonly DebugViewService _debug = new();
     private SourceDocument? _doc;
-    private string _assemblyPath = "";
-    private string _typeName = "ILSpyMcp.Samples.BigClass";
     private string _targetPath = "";
     private string? _state;          // 会话状态文本
     private string? _lastStopText;   // 最近停点
@@ -157,6 +161,7 @@ else if (_doc is not null)
     private IReadOnlyList<DebugThreadInfo> _threads = [];
     private CancellationTokenSource? _pollCts;
     private System.Timers.Timer? _pollTimer;
+    private long _lastAgentRevision = -1;   // 已处理的 agent 上下文版本
     /// <summary>演示目标 DebugTarget.exe（从仓库根上溯定位 tests/TestData）。</summary>
     private static string DemoAssembly
     {
@@ -180,6 +185,28 @@ else if (_doc is not null)
         _pollTimer = new System.Timers.Timer(500) { AutoReset = true };
         _pollTimer.Elapsed += async (_, _) => await PollStateAsync();
         _pollTimer.Start();
+
+        // 订阅 agent 视图上下文：agent 反编译/浏览类型时自动联动（树加载程序集 + 右侧显示代码）
+        // 宿主 --web 启动已 Configure 注入 AgentView；非 --web 页面不可达，防御性 try
+        try
+        {
+            WebHostBootstrap.AgentView.Changed += OnAgentViewChanged;
+        }
+        catch { /* 未注入 AgentView（非 --web 场景）：跳过订阅 */ }
+    }
+
+    private void OnAgentViewChanged(DotNetDebugger.Web.Services.AgentViewSnapshot snap)
+    {
+        // 宿主工具线程触发 → 转到 UI 线程处理，避免跨线程渲染
+        _ = InvokeAsync(async () =>
+        {
+            if (snap.AssemblyPath is null || snap.TypeFullName is null) return;
+            if (snap.Revision <= _lastAgentRevision) return;
+            _lastAgentRevision = snap.Revision;
+            // 1) 树加载程序集（已加载则忽略）；2) 右侧显示该类型
+            if (_tree is not null) _tree.LoadAssembly(snap.AssemblyPath);
+            await ShowTypeAsync(snap.AssemblyPath, snap.TypeFullName);
+        });
     }
 
     private async Task PollStateAsync()
@@ -222,8 +249,20 @@ else if (_doc is not null)
         if (transitionedToStopped)
         {
             await ApplyStopHighlightAsync();
+            await SelectStopTypeAsync();   // 树跟随停点类型
             StateHasChanged();
         }
+    }
+
+    /// <summary>停点命中时左侧树跟随到命中方法叶子（当前文档即命中类型，方法按停点 token 精确匹配）。</summary>
+    private async Task SelectStopTypeAsync()
+    {
+        if (_tree is null || _doc is not { IsSuccess: true } || _doc.Error is not null) return;
+        var info = _debug.SessionInfo;
+        if (info?.State != DebugSessionState.Stopped || info.LastStop?.TopFrame is not { } frame) return;
+        // 当前文档程序集短名 == 停点模块名才跟随（agent 正在看命中模块的代码才展开树）
+        if (!frame.ModuleName.Equals(Path.GetFileName(_doc.AssemblyPath), StringComparison.OrdinalIgnoreCase)) return;
+        await _tree.SelectTypeAsync(_doc.AssemblyPath, _doc.TypeFullName, frame.MethodToken);
     }
 
     private async Task LaunchTarget()
@@ -248,14 +287,7 @@ else if (_doc is not null)
         var dll = Path.ChangeExtension(parts[0], ".dll");
         if (File.Exists(dll))
         {
-            _assemblyPath = dll;
-            _typeName = "DebugTarget.Program";
-            var doc = await _store.GetOrLoadAsync(dll, "DebugTarget.Program");
-            if (doc.IsSuccess && _viewer is not null)
-            {
-                _doc = doc;
-                await _viewer.SetValueAsync(doc.Text);
-            }
+            await ShowTypeAsync(dll, "DebugTarget.Program");
         }
         // 解析 Work token 并设断点、继续
         var token = FindMethodToken(dll, "Work");
@@ -273,14 +305,18 @@ else if (_doc is not null)
 
     private async Task Disconnect() { _ctrlMessage = await _debug.DisconnectAsync(); _state = null; _lastStopText = null; }
 
-    private async Task LoadType()
+    /// <summary>反编译并显示指定类型到代码视图（树点击 / agent 上下文 / 演示闭环共用入口）。
+    /// 统一入口：先确保程序集已进左侧树（LoadAssembly 幂等），再反编译显示。</summary>
+    private async Task ShowTypeAsync(string assemblyPath, string typeFullName)
     {
-        if (string.IsNullOrWhiteSpace(_assemblyPath) || string.IsNullOrWhiteSpace(_typeName) || _viewer is null) return;
+        if (_viewer is null) return;
+        // 程序集进树（幂等；非程序集/不存在返回 false，不影响反编译尝试）
+        if (_tree is not null) _tree.LoadAssembly(assemblyPath);
         _loading = true;
         await InvokeAsync(StateHasChanged);
         try
         {
-            _doc = await _store.GetOrLoadAsync(_assemblyPath.Trim(), _typeName.Trim());
+            _doc = await _store.GetOrLoadAsync(assemblyPath.Trim(), typeFullName.Trim());
             if (_doc.IsSuccess)
             {
                 await _viewer.SetValueAsync(_doc.Text);
@@ -288,6 +324,12 @@ else if (_doc is not null)
             }
         }
         finally { _loading = false; }
+    }
+
+    /// <summary>树加载了某程序集根：同步到树（当前仅触发 UI 刷新；后续 agent 上下文联动可在此高亮）。</summary>
+    private Task OnAssemblyLoaded(string assemblyPath)
+    {
+        return Task.CompletedTask;
     }
 
     /// <summary>停点联动：若当前文档含停点方法 token，映射其 IL offset 高亮语句行。</summary>
@@ -327,5 +369,6 @@ else if (_doc is not null)
     {
         _pollCts?.Cancel();
         _pollTimer?.Dispose();
+        try { WebHostBootstrap.AgentView.Changed -= OnAgentViewChanged; } catch { }
     }
 }
