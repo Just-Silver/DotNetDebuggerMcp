@@ -18,6 +18,18 @@
 - 状态：**待用户确认**（open-questions.md #1）。
 - 日期：2026-09-05。
 
+## D5 · v1 动态调试引擎能力范围（用户拍板）
+- 决策：**v1 = 最小但完整的 agent 调试闭环**：
+  1. 会话管理：启动进程 / 附加已运行进程 / 断开
+  2. 断点：按方法 token + IL offset（复用现有元数据层定位）+ continue + 命中事件
+  3. 单步：step into / over / out
+  4. 状态读取：线程列表 → 调用栈（每帧：方法 + IL offset → 反编译行映射）→ 局部变量/参数（标量 + 简单对象首层字段）
+  5. first-chance 异常断点（类型过滤）
+  6. 统一 DebugEvent 事件流（Channel），同一事件源喂 MCP 与 Web
+- **v2 再上**：表达式求值（安全子集）、PDB 行断点、模块延迟绑定。
+- 理由：1–6 覆盖 agent 自主调试一个 bug 的全部动作；求值/行断点是最大工作量（+1–1.5 人月），后置让闭环先转起来。
+- 日期：2026-09-05。
+
 ## D4 · WebUI 技术栈（调研结论，待用户最终确认）
 - 决策（建议）：Kestrel 单进程内嵌 + **SSE**（快照+增量）+ **Monaco Editor**（read-only + deltaDecorations 断点/当前行）+ **React+TS+Vite** + 时间线自绘 / mermaid 按需。IL→反编译行映射**全部服务端**（SequencePointBuilder 思路）。
 - 状态：**待用户确认**（open-questions.md #3）。
