@@ -26,9 +26,3 @@
         </ol>
     </div>
 </div>
-
-@code {
-    [Inject] private NavigationManager Nav { get; set; } = default!;
-
-    private void GoDebugger() => Nav.NavigateTo("/debugger");
-}
