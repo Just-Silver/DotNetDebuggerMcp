@@ -2,6 +2,13 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D13 · P4 Web 定位澄清 + #2/#3 高层编排参考 PTC（用户 2026-09-05）
+- **产品定位澄清（用户）**：反编译与动态调试都是给 **agent** 用的，人类经对话与 agent 交互；**WebUI 主要目的是可视化 agent 在干什么**（监视器，非人工操作台）。因此 #2「Web 页内反编译+调试联动」应重新理解为 **agent 动作实时可视化**（agent 反编译了什么/断点设哪/停在哪，Web 同步画出），而非人工在 Web 上点按钮。
+- **#3 高层编排工具参考（用户点名，防忘）**：DeepSeek Harness 的 **PTC 模式**（Programmatic Tool Calling，即 Code Mode）与 Anthropic Advanced Tool Use / OpenAI Responses API 同款能力——**模型写一段程序（TS/Python）批量编排工具调用**（循环/分支/汇总/过滤），工具表折叠成一个 `run_code`，其余工具作为生成的 SDK。效果：N 次往返 → 1 次代码执行，token 降 17-37%（模型只返回自己 curate 的结果）。
+- **重要边界**：PTC 是**宿主（opencode/DeepSeek Harness 侧）的呈现模式**，非 MCP server 职责——我们的 server 提供工具，宿主决定怎么呈现。若我们自己做「高层编排」，应参考 PTC 思路提供**批量/组合型工具**（如一次反编译+签名+断点定位汇总），但需实践评估是否正优化（生成代码 token > 多轮调用即负优化，腾讯云拆解文章实证）。
+- 待办：#2（agent 动作可视化）与 #3（高层编排，参考 PTC）均未实现，P4.2 或后续；事件日志/agent 轨迹时间线同列为可选待办。
+- 日期：2026-09-05。
+
 ## D12 · P3 调试工具面与握手简介（用户拍板）
 - 决策：调试 MCP 工具用 `debug_*` 前缀（debug_launch/attach/disconnect/state/breakpoint_*/continue/step/stack/threads/variables/exceptions）。
 - 决策：控制工具（launch/continue/step）**异步返回 + 默认 timeoutSeconds 参数**；停点信息经查询工具（debug_state/debug_stack/debug_variables）获取，控制工具不等停。
