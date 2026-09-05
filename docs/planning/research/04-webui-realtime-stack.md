@@ -72,3 +72,8 @@
 - Augur / debug-graph / Sharppad / monaco-node-debug-sample / Shiki 性能指南
 
 > 补充架构建议（采纳）：Agent 控制面（MCP，stdio）与 Web 展示面（HTTP/SSE）做成**同一调试服务的两个投影**：调试引擎统一发规范化事件（MethodHit/StepCompleted/LocalsChanged/AgentDecision…），MCP 译成引擎调用、SSE 译成可视化消息 → agent 每步决策自然落成回放日志，时间线就是这份日志的只读播放器，两侧不各写一套状态。
+
+---
+
+> **2026-09-05 Superseded（部分）**：本文前端技术选型（React+SSE+Monaco/Vite 组合 A/B）已被用户决策**取代**——Web 前端改用 **Blazor Server + BootstrapBlazor**（decisions D4）：推送走 SignalR 电路而非自研 SSE；前端无 React/Vite/Node 构建链。**仍有效的部分**：①「控制面 MCP 与展示面 Web 同一会话两个投影」架构建议（采纳）；②「IL→反编译行映射全部在服务端、SequencePointBuilder 思路、同 DecompilerSettings 产出」结论（采纳）；③ **代码视图选 Monaco**（以 Blazor JS 互操作组件形式落地，不引前端框架）；④ Monaco deltaDecorations 断点/当前行装饰、VS Code/Theia 主题色参考（照抄到互操作组件 JS 侧）。SSE/快照-增量/EventSource 重连等内容对 Blazor 不再适用。
+

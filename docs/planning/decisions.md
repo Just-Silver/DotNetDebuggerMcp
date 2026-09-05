@@ -31,7 +31,7 @@
   | 1 | `DotNetDebugger.Decompiler` | 库 | 反编译/静态分析（现 ILSpyMcp 全量迁入） | 无内部依赖 |
   | 2 | `DotNetDebugger.Engine` | 库 | 调试引擎底层：ClrDebug 封装、断点/步进/栈/值/异常 | ClrDebug、DbgShim |
   | 3 | `DotNetDebugger.Session` | 库 | 会话服务：命令串行化 + DebugEvent 事件总线 + 状态快照 + agent 轨迹日志 + token/IL→反编译行映射 | Engine + Decompiler |
-  | 4 | `DotNetDebugger.Web` | 库 | WebUI host：Kestrel 内嵌、SSE、REST、前端静态资源 | Session + Decompiler |
+  | 4 | `DotNetDebugger.Web` | 库 | WebUI host：Blazor Server + BootstrapBlazor + Monaco 互操作（宿主 exe 内嵌 Kestrel） | Session + Decompiler |
   | 5 | `DotNetDebuggerMcp` | **exe (tool)** | 装配根：CLI + MCP 工具注册 + 握手 + 拉起 Session/Web | 引 1-4 |
 - Session 独立价值：MCP 与 Web 共同依赖的「会话 API」层；Engine 保持纯底层可替换；agent 轨迹日志（Web 回放数据源）不污染引擎。
 - 理由：进程合一避免跨进程事件同步；程序集分层清晰各层独立测试。
@@ -68,10 +68,14 @@
 - 理由：1–6 覆盖 agent 自主调试一个 bug 的全部动作；求值/行断点是最大工作量（+1–1.5 人月），后置让闭环先转起来。
 - 日期：2026-09-05。
 
-## D4 · WebUI 技术栈（方向更新：BootstrapBlazor；细则待定）
-- 状态：**方向已更新（2026-09-05）：用户选择 BootstrapBlazor（纯 .NET 生态），替代调研建议的 React+Monaco 组合 A。** 细则待确认（open-questions #6）。
-- 背景：用户「BootstrapBlazor，刚好也是 .NET 生态，我也有相关 skills」。
-- 影响：Web 前端形态从「React SPA + Node 构建链」转向 **Blazor Server（.NET 全栈 + BB 组件库）**；推送通道可能从「自研 SSE + 快照协议」转为 **SignalR 电路（Blazor Server 内建）**；代码视图需解决 **BB 无代码编辑器/语法高亮组件** 问题。
-- 已查证事实（bb-llms CLI，2026-09-05）：`search editor`→仅 EditorForm（表单非代码编辑）；`search code/highlight`→空；`search textarea`→Textarea（纯文本域无高亮）。**BB 无 Monaco/CodeMirror 类代码查看组件。**
-- 开放决策点（open-questions #6）：代码视图组件落地方式、推送通道、是否需要引入 Monaco 作 Blazor 互操作组件。
+## D4 · WebUI 技术栈（定稿：Blazor Server + BootstrapBlazor + Monaco 互操作）
+- 状态：**已定稿**（2026-09-05）。
+- 决策：
+  1. **Web 前端 = Blazor Server + BootstrapBlazor 组件库**（纯 .NET 全栈，替代 React/SSE 组合 A；用户选择，理由：.NET 生态、有 BB skills）。
+  2. **代码视图 = Monaco 作 Blazor JS 互操作组件**（用户拍板）：C# 侧封装，JS 只作 Monaco 宿主；read-only + deltaDecorations 断点/当前行/滚动定位；可参考现成封装（BlazorMonaco）；不引 React/Vite，JS 资产预编译静态托管。
+  3. **推送 = Blazor Server SignalR 电路**承载调试事件（Session Channel → 组件刷新），省去自研 SSE+快照协议。
+- 已查证（bb-llms，2026-09-05）：BB 无代码编辑器/高亮组件（editor→EditorForm；code/highlight 空；textarea→Textarea）。
+- 遗留：各面板具体用哪些 BB 组件 → P4 细化 spec 时定；事件→Blazor 刷新机制（IAsyncEnumerable/订阅）P4 细化。
 - 日期：2026-09-05。
+
+## D7 · 实施节奏与文档拆分（用户拍板）

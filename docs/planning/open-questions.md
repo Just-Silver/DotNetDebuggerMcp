@@ -2,18 +2,12 @@
 
 > 最新在上。澄清后把「问题+结论」移入 decisions.md。
 
-## #6 WebUI 代码视图与推送通道落地（最新，待澄清）
-- 状态：**待澄清**（2026-09-05）
-- 背景：Web 前端定 BootstrapBlazor（Blazor Server，decisions D4 更新）。BB **无代码编辑器/语法高亮组件**（bb-llms 已查证：editor→仅 EditorForm；code/highlight→空；textarea→Textarea 纯文本）。
-- 子问题：
-  1. **代码视图**落地方式：(a) Monaco 作为 Blazor JS 互操作组件（观感最好，带 JS 构建）；(b) BB Textarea/自绘只读高亮（纯 C#，高亮/行装饰弱）；(c) BlazorMonaco 之类现成封装。
-  2. **推送通道**：Blazor Server 的 SignalR 电路能否承载调试事件流？Session 的 Channel 事件如何驱动 Blazor 刷新（`IAsyncEnumerable`/订阅式 vs 轮询快照）。
-  3. **构建链**：接受仅 Blazor Server（无静态 SPA）以完全避开 Node 构建链？
-- 背景：research/04 的 SSE+快照建议在 Blazor 语境可能简化为电路内推送。
+## #6 WebUI 代码视图与推送通道（已解决 2026-09-05）
+- 状态：**已解决** → 见 decisions D4 定稿：Monaco 作 Blazor 互操作组件；推送走 Blazor Server SignalR 电路；无 React/Vite/SSE。
+- 残留：面板具体 BB 组件分工与事件→Blazor 刷新机制 → P4 细化 spec 时定。
 
 ## #4 WebUI 技术栈方向（已定）
-- 状态：**方向已定**（2026-09-05，decisions D4 更新）→ **BootstrapBlazor（Blazor Server）**，替代 React+Monaco 组合 A。
-- 残留：代码视图/推送通道/构建链细节见 #6。
+- 状态：**已定稿**（2026-09-05，decisions D4）→ **Blazor Server + BootstrapBlazor + Monaco 互操作**。
 
 ## #5 子项目 A/B 库名与项目拆分（已解决 2026-09-05）
 - 状态：**已解决** → 采纳建议值 + **5 项目拆分**（decisions D6/D8）：Decompiler / Engine / Session / Web / McpHost(exe)；MCP 与 Web 不拆进程（共享会话）。

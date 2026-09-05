@@ -25,11 +25,11 @@
                 │ 引                              │ 引
      ┌──────────▼───────────────┐   ┌─────────────▼──────────────────────┐
      │ #3 DotNetDebugger.Session │   │ #4 DotNetDebugger.Web（库）         │
-     │ 会话服务：命令串行化        │   │ · Kestrel 内嵌（静态+REST+SSE）     │
-     │ · DebugEvent 事件总线      │   │ · 快照/增量 → Monaco/时间线渲染     │
-     │ · 状态快照 + agent 轨迹日志 │   │ · 展示面（MCP 是控制面）            │
-     │ · token/IL→反编译行映射     │   └───────────────────────────────────┘
-     └──────┬──────────────┬─────┘
+     │ 会话服务：命令串行化        │   │ · Blazor Server + BootstrapBlazor  │
+     │ · DebugEvent 事件总线      │   │ · SignalR 电路推送事件 → 面板刷新    │
+     │ · 状态快照 + agent 轨迹日志 │   │ · Monaco 互操作代码视图            │
+     │ · token/IL→反编译行映射     │   │ · 展示面（MCP 是控制面）            │
+     └──────┬──────────────┬─────┘   └───────────────────────────────────┘
             │ 引          │ 引
   ┌─────────▼────────┐  ┌─▼──────────────────────────┐
   │ #2 Engine（库）   │  │ #1 Decompiler（库）          │
@@ -61,10 +61,10 @@
 - 表达式求值 v1：**安全子集**（AST 静态分析禁止副作用），函数求值经 ICorDebugEval2（可选，失败降级提示）。
 - 调试事件统一为 `DebugEvent` 流（Channel），同一引擎同时喂 MCP 与 Web。
 
-### 4.2 先做（WebUI v1）——技术栈待确认（open-questions #4）
-> 面板/职责为需求侧描述（不依赖具体前端选型）；**SSE/Monaco/React 等技术栈是提案**，确认后回写。
-- 服务端：主项目内嵌 Kestrel，静态资源 + REST（快照/文档）+ SSE（增量）。
-- 代码视图：反编译文档（方法/类型级）+ 当前行高亮 + 断点 gutter。
+### 4.2 先做（WebUI v1）——已定栈 Blazor Server + BB + Monaco 互操作（decisions D4）
+> 面板/职责为需求侧描述；具体 BB 组件分工与事件→刷新机制在 P4 细化 spec 中定。
+- 服务端：宿主 exe 内嵌 Kestrel 承载 Blazor Server + 静态资源。
+- 代码视图：Monaco（Blazor 互操作）只读展示 + 当前行高亮 + 断点 gutter。
 - 面板：调用栈 / 局部变量 / 线程 / 调试事件日志 / agent 决策轨迹时间线（可回放）。
 - 控制：主要由 agent 经 MCP 驱动；Web 提供最小人工控制（continue/step/pause）与「跟随 agent」开关。
 
@@ -81,9 +81,9 @@
 | 动态调试底座 | **ClrDebug（MIT，ICorDebug COM 全量托管封装）+ Microsoft.Diagnostics.DbgShim（MIT）** + 自研事件循环/断点/栈帧/值树（**已确认**，D3） |
 | 不直接引用 | dnSpyEx 调试栈（GPL-3.0、无 NuGet、耦合 Roslyn fork）→ 只当参考；debug-mcp（AGPL-3.0）→ 只借鉴工具面行为 |
 | 辅助 | Microsoft.Diagnostics.NETCore.Client / ClrMD（MIT）做只读监控与 dump 事后分析（v1 可后置） |
-| Web 推送 | **SSE**（`EventSource`，快照+增量模型）；控制指令走普通 REST POST —— **待确认**（open-questions #4） |
-| Web 代码视图 | **Monaco Editor**（read-only + `deltaDecorations` 断点/当前行）—— **待确认**（备选 CodeMirror 6） |
-| 前端框架 | **React + TypeScript + Vite**；时间线自绘列表；mermaid 按需 —— **待确认**（open-questions #4） |
+| Web 推送 | **Blazor Server SignalR 电路**承载调试事件（Session Channel → 组件刷新）—— **已定**（D4） |
+| Web 代码视图 | **Monaco 作 Blazor 互操作组件**（read-only + deltaDecorations 断点/当前行）—— **已定**（D4） |
+| 前端框架 | **Blazor Server + BootstrapBlazor 组件库**（纯 .NET 全栈，无 React/Node）—— **已定**（D4） |
 | IL→反编译行 | 服务端用 SequencePointBuilder 思路（Decompiler 内，同设置产出映射表），事件到行号**服务端解析后**再推浏览器（**独立于前端选型，已定**） |
 
 ## 6. 里程碑（已按 D7 定稿）
@@ -92,10 +92,10 @@
 
 | 阶段 | 内容 | 交付物 |
 |---|---|---|
-| **P1 仓库改名与拆分** | 仓库 → DotNet-Debugger-MCP；解决方案拆 3 项目骨架；现有反编译/静态分析代码无损迁入子项目 A；命名空间/PackageId/CLI/注册名/README/CHANGELOG/CI 全量同步 | 可构建、全测试通过的改名后仓库 |
-| **P2 动态调试引擎 v1** | 子项目 B：会话管理(启动/附加/断开) + token/IL 断点 + continue + step into/over/out + 线程/栈/局部变量 + 异常断点 + 统一 DebugEvent 流 | 引擎库 + CLI 驱动验证 + 引擎单测 |
-| **P3 MCP 调试工具面** | 调试会话服务/事件总线接入主项目；新增 debug_* 工具（session/breakpoint/continue/step/stack/variables/threads/exceptions…）经 stdio 可用；并发串行化护栏 | MCP 工具集 + 端到端验证 + 文档 |
-| **P4 WebUI** | Kestrel 内嵌 + SSE + Monaco 渲染调试过程 + agent 轨迹时间线（回放）；控制面 MCP 与展示面 Web 解耦 | WebUI + 端到端验证 |
+| **P1 仓库改名与拆分** | 仓库 → DotNet-Debugger-MCP；解决方案拆 **5 项目骨架**；现有反编译/静态分析代码无损迁入 Decompiler 库；命名空间/PackageId/CLI/注册名/README/CHANGELOG/CI 全量同步 | 可构建、全测试通过的改名后仓库 |
+| **P2 动态调试引擎 v1** | Engine 库：会话管理(启动/附加/断开) + token/IL 断点 + continue + step into/over/out + 线程/栈/局部变量 + 异常断点 + 统一 DebugEvent 流（前置 spike） | 引擎库 + CLI 驱动验证 + 引擎单测 |
+| **P3 会话 + MCP 调试工具面** | Session 库 + 宿主 MCP：debug_* 工具经 stdio 可用；并发串行化护栏 | MCP 工具集 + 端到端验证 + 文档 |
+| **P4 WebUI** | Web 库（Blazor Server + BootstrapBlazor + Monaco 互操作）渲染调试过程 + agent 轨迹时间线（回放）；控制面 MCP 与展示面 Web 解耦 | WebUI + 端到端验证 |
 | **P5 打磨发布** | README/示例/打包/CI/版本 1.5.0 发布 | 发布版 |
 
 > v2 候选（不阻塞）：表达式求值安全子集、PDB 行断点、模块延迟绑定、EventPipe/ClrMD 旁路、多会话。
