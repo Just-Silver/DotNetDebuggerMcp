@@ -17,7 +17,7 @@ public class IlScanHelperTests
         using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
         using var pe = new PEReader(fs);
         var reader = pe.GetMetadataReader();
-        var type = GetType(reader, "ILSpyMcp.Samples.Caller");
+        var type = GetType(reader, $"{TestDataPaths.SamplesNamespace}.Caller");
         var run = type.GetMethods().First(m => reader.GetString(reader.GetMethodDefinition(m).Name) == "Run");
         var body = pe.GetMethodBody(reader.GetMethodDefinition(run).RelativeVirtualAddress);
         Assert.NotNull(body);

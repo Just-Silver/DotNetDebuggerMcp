@@ -9,7 +9,7 @@
   **新增工具时新建对应 Cases 文件**（或并入既有文件），各工具全参数补一条用例。
 - `ToolCallCase.cs` — 场景记录：`Tool`/`Label`/`Args`/`ExpectedContains`（结果必含子串，null 不查）/`MustNotContain`/`ExpectSuccess`。预期「返回中文错误提示」的场景设 `ExpectSuccess=false`（此时结果仍带 `IsError` 标记也算 FAIL——错误提示是工具的返回文本而非协议错误）。
 - `ClientRunner.cs` — 执行器：`ConnectAsync` 以 `dotnet run --project src/DotNetDebuggerMcp/... -c Release` **自启动 server**（不依赖预先构建）；`ListToolsAsync` 断言工具数 ≥13 且含关键名；`CallAsync` 提取文本块跑断言、打印前 200 字符与 PASS/FAIL，累计 `Failures`。
-- `TestDataHelper.cs` — 共享测试标识：上溯找 `DotNetDebuggerMcp.slnx` 定 `RepoRoot`；**显式指 `ILSpyMcp.TestSamples.dll`（`Dll`）——不能按「第一个 dll」取，字母序会选错 TestSamplesExt**；类型/成员标识集中在常量（BigClass/Class0001/…）。改测试数据时同步维护。
+- `TestDataHelper.cs` — 共享测试标识：上溯找 `DotNetDebuggerMcp.slnx` 定 `RepoRoot`；**显式指 `DotNetDebuggerMcp.TestSamples.dll`（`Dll`）——不能按「第一个 dll」取，字母序会选错 TestSamplesExt**；类型/成员标识集中在常量（BigClass/Class0001/…）。改测试数据时同步维护。
 - `Program.cs` — 入口：组路径 → 跑 `ListToolsAsync` + 全部 Cases → 断言写盘产物（`tests/.dotnetdebugger-client-out/` 下 `.cs` 文件数 >0）→ `finally` 清理该目录；失败数 >0 时 `Environment.ExitCode = 1`。
 
 ## 运行与纪律

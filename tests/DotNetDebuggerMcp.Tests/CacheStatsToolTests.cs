@@ -38,7 +38,7 @@ public class CacheStatsToolTests
         try
         {
             var cache = AppServices.Cache;
-            var big = cache.BuildKey(@"C:\data\ILSpyMcp.TestSamples.dll", "type\u001FILSpyMcp.Samples.BigClass");
+            var big = cache.BuildKey(@"C:\data\" + TestDataPaths.TestSamplesAssemblyName + ".dll", "type\u001F" + TestDataPaths.SamplesNamespace + ".BigClass");
             var small = cache.BuildKey(@"C:\data\Other.dll", "assembly-info");
             cache.Put(big, new List<string> { "line1", "line2" });
             cache.Put(small, new List<string> { "x" });
@@ -50,9 +50,9 @@ public class CacheStatsToolTests
 
             Assert.Contains("条目数: 2", result);
             Assert.Contains("命中 2 次，未命中 1 次（66.7%）", result);
-            Assert.Contains("decompile: ILSpyMcp.Samples.BigClass", result); // 签名渲染为工具名 + 参数
+            Assert.Contains("decompile: " + TestDataPaths.SamplesNamespace + ".BigClass", result); // 签名渲染为工具名 + 参数
             Assert.Contains("assembly_info", result);
-            Assert.Contains("ilspymcp.testsamples.dll", result);
+            Assert.Contains(TestDataPaths.TestSamplesAssemblyName.ToLowerInvariant() + ".dll", result); // BuildKey 对路径统一小写
             // 明细按占用降序：big（2 行）在 small（1 行）之前
             Assert.True(result.IndexOf("BigClass", StringComparison.Ordinal) < result.IndexOf("other.dll", StringComparison.Ordinal));
         }

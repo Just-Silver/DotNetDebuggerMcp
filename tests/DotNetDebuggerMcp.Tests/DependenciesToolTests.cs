@@ -11,7 +11,7 @@ public class DependenciesToolTests
     [Fact]
     public async Task Dependencies_Members_含内部段标题()
     {
-        var result = await DependenciesTool.Dependencies(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await DependenciesTool.Dependencies(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("成员签名引用的内部类型:", result);
         Assert.Contains("程序集内引用此类型的类型:", result);
@@ -21,7 +21,7 @@ public class DependenciesToolTests
     public async Task Dependencies_includeExternal_输出外部段()
     {
         // Members.Changed 为 event EventHandler?（跨程序集）：includeExternal 应追加外部段并带程序集归属
-        var result = await DependenciesTool.Dependencies(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", includeExternal: true, cancellationToken: TestContext.Current.CancellationToken);
+        var result = await DependenciesTool.Dependencies(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", includeExternal: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("成员签名引用的内部类型:", result);
         Assert.Contains("成员签名引用的外部类型:", result);
@@ -31,7 +31,7 @@ public class DependenciesToolTests
     [Fact]
     public async Task Dependencies_缺省includeExternal_无外部段()
     {
-        var result = await DependenciesTool.Dependencies(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await DependenciesTool.Dependencies(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain("成员签名引用的外部类型:", result);
     }
@@ -40,7 +40,7 @@ public class DependenciesToolTests
     public async Task Dependencies_includeExternal_无外部引用_输出无占位()
     {
         // Uses 成员签名仅引用内部类型（DerivedClass/Dog），外部段应为（无）占位而非报错
-        var result = await DependenciesTool.Dependencies(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Uses", includeExternal: true, cancellationToken: TestContext.Current.CancellationToken);
+        var result = await DependenciesTool.Dependencies(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Uses", includeExternal: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("成员签名引用的外部类型:", result);
         Assert.Contains("（无）", result);

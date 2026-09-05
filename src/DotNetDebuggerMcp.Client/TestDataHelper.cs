@@ -7,49 +7,64 @@ namespace DotNetDebuggerMcp.Client;
 public static class TestDataHelper
 {
     /// <summary>
+    /// 测试程序集标识常量（与 generate-testdata.ps1 顶部变量及各测试项目 TestDataPaths.cs 保持一致；改名只动这里，
+    /// 以下类型名/路径均由此拼接）。
+    /// </summary>
+    public const string SamplesNamespace = "DotNetDebuggerMcp.Samples";
+
+    /// <summary>Ext 程序集命名空间。</summary>
+    public const string SamplesExtNamespace = "DotNetDebuggerMcp.SamplesExt";
+
+    /// <summary>主样本程序集名（dll 文件名 = 该值 + ".dll"）。</summary>
+    public const string TestSamplesAssemblyName = "DotNetDebuggerMcp.TestSamples";
+
+    /// <summary>Ext 程序集名。</summary>
+    public const string TestSamplesExtAssemblyName = "DotNetDebuggerMcp.TestSamplesExt";
+
+    /// <summary>
     /// 超大类型（反编译 600+ 行），可触发截断/分页/越界验证。
     /// </summary>
-    public const string TypeName = "ILSpyMcp.Samples.BigClass";
+    public const string TypeName = SamplesNamespace + ".BigClass";
 
     /// <summary>
     /// list_types 默认只返回前约 8 KB，此处用一个排在最前、必然可见的 class 类型名。
     /// </summary>
-    public const string ListedClassName = "ILSpyMcp.Samples.Class0001";
+    public const string ListedClassName = SamplesNamespace + ".Class0001";
 
     /// <summary>
     /// 继承链派生类（hierarchy 基类链正向/BaseClass 反向验证）。
     /// </summary>
-    public const string DerivedTypeName = "ILSpyMcp.Samples.DerivedClass";
+    public const string DerivedTypeName = SamplesNamespace + ".DerivedClass";
 
     /// <summary>
     /// 接口类型（hierarchy 反向实现者验证）。
     /// </summary>
-    public const string InterfaceTypeName = "ILSpyMcp.Samples.IAnimal";
+    public const string InterfaceTypeName = SamplesNamespace + ".IAnimal";
 
     /// <summary>
     /// 属性/字段/事件/方法齐全的类型（signature 访问器合并与 decompile_member 访问器排除验证）。
     /// </summary>
-    public const string MembersTypeName = "ILSpyMcp.Samples.Members";
+    public const string MembersTypeName = SamplesNamespace + ".Members";
 
     /// <summary>
     /// 泛型类型（signature 泛型参数与泛型方法验证）。
     /// </summary>
-    public const string GenericTypeName = "ILSpyMcp.Samples.GenericBox`1";
+    public const string GenericTypeName = SamplesNamespace + ".GenericBox`1";
 
     /// <summary>
     /// 成员签名引用内部类型（dependencies 正向引用验证）。
     /// </summary>
-    public const string UsesTypeName = "ILSpyMcp.Samples.Uses";
+    public const string UsesTypeName = SamplesNamespace + ".Uses";
 
     /// <summary>
     /// 方法体调用内部方法（call_graph 正向调用验证）。
     /// </summary>
-    public const string CallerTypeName = "ILSpyMcp.Samples.Caller";
+    public const string CallerTypeName = SamplesNamespace + ".Caller";
 
     /// <summary>
     /// 被调用方（call_graph token 方法级调用点验证：Callee 方法被 Caller 调用）。
     /// </summary>
-    public const string CalleeTypeName = "ILSpyMcp.Samples.Callee";
+    public const string CalleeTypeName = SamplesNamespace + ".Callee";
 
     /// <summary>
     /// 仓库根目录（含 DotNetDebuggerMcp.slnx），随仓库整体移动自动适配。
@@ -57,15 +72,15 @@ public static class TestDataHelper
     public static string RepoRoot { get; } = FindRepoRoot();
 
     /// <summary>
-    /// 测试程序集路径：明确指向主样本 ILSpyMcp.TestSamples.dll（tests/TestData 下可能还有 Ext/DebugTarget 等，
+    /// 测试程序集路径：明确指向主样本 DotNetDebuggerMcp.TestSamples.dll（tests/TestData 下可能还有 Ext/DebugTarget 等，
     /// 不能按「第一个 dll」取——字母序会选错）。
     /// </summary>
-    public static string Dll { get; } = Path.Combine(RepoRoot, "tests", "TestData", "ILSpyMcp.TestSamples.dll");
+    public static string Dll { get; } = Path.Combine(RepoRoot, "tests", "TestData", TestSamplesAssemblyName + ".dll");
 
     /// <summary>
     /// 跨程序集测试程序集（引用 TestSamples.dll 的 Callee），供 call_chain includeExternal 跨程序集展开用例。
     /// </summary>
-    public static string ExtDll { get; } = Path.Combine(RepoRoot, "tests", "TestData", "ILSpyMcp.TestSamplesExt.dll");
+    public static string ExtDll { get; } = Path.Combine(RepoRoot, "tests", "TestData", TestSamplesExtAssemblyName + ".dll");
 
     private static string FindRepoRoot()
     {

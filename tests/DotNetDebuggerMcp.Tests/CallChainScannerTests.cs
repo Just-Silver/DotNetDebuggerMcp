@@ -18,7 +18,7 @@ public class CallChainScannerTests
         // ChainMid..ctor、callvirt ChainMid.Mid、call ChainMid.StaticMid ×2
         using var scope = new MetadataScope();
         var scanner = new CallChainScanner(scope.Pe);
-        var calls = scanner.ScanMethod(GetMethod(scope.Reader, "ILSpyMcp.Samples.ChainTop", "Run"));
+        var calls = scanner.ScanMethod(GetMethod(scope.Reader, $"{TestDataPaths.SamplesNamespace}.ChainTop", "Run"));
 
         Assert.Equal(new[] { ".ctor", "Mid", "StaticMid", "StaticMid" }, calls.Select(c => c.MemberName).ToArray());
     }
@@ -28,7 +28,7 @@ public class CallChainScannerTests
     {
         using var scope = new MetadataScope();
         var scanner = new CallChainScanner(scope.Pe);
-        var calls = scanner.ScanMethod(GetMethod(scope.Reader, "ILSpyMcp.Samples.ChainTop", "Run"));
+        var calls = scanner.ScanMethod(GetMethod(scope.Reader, $"{TestDataPaths.SamplesNamespace}.ChainTop", "Run"));
 
         var internalCalls = calls.Where(c => !c.IsExternal).ToList();
         Assert.Equal(4, internalCalls.Count);
@@ -47,7 +47,7 @@ public class CallChainScannerTests
         // Mid { System.Console.WriteLine("mid"); }：唯一调用为跨程序集 MemberRef System.Console::WriteLine(string)
         using var scope = new MetadataScope();
         var scanner = new CallChainScanner(scope.Pe);
-        var calls = scanner.ScanMethod(GetMethod(scope.Reader, "ILSpyMcp.Samples.ChainMid", "Mid"));
+        var calls = scanner.ScanMethod(GetMethod(scope.Reader, $"{TestDataPaths.SamplesNamespace}.ChainMid", "Mid"));
 
         var external = Assert.Single(calls);
         Assert.True(external.IsExternal);

@@ -16,11 +16,11 @@ public class InterfaceUsageScannerTests
     public void IAnimal_调用点_含AnimalCaller_Run到Speak()
     {
         using var scope = new MetadataScope();
-        var iface = TypeHandle(scope.Reader, "ILSpyMcp.Samples.IAnimal");
+        var iface = TypeHandle(scope.Reader, $"{TestDataPaths.SamplesNamespace}.IAnimal");
 
-        var callSites = new InterfaceUsageScanner(scope.Pe).FindCallSites(iface, "ILSpyMcp.Samples.IAnimal");
+        var callSites = new InterfaceUsageScanner(scope.Pe).FindCallSites(iface, $"{TestDataPaths.SamplesNamespace}.IAnimal");
 
-        Assert.Contains("ILSpyMcp.Samples.AnimalCaller::Run → Speak", callSites);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.AnimalCaller::Run → Speak", callSites);
     }
 
     [Fact]
@@ -28,9 +28,9 @@ public class InterfaceUsageScannerTests
     {
         // WorkerBase/WorkerDerived 只实现 Work 不调用；程序集内无调用 IWorker 成员的方法体
         using var scope = new MetadataScope();
-        var iface = TypeHandle(scope.Reader, "ILSpyMcp.Samples.IWorker");
+        var iface = TypeHandle(scope.Reader, $"{TestDataPaths.SamplesNamespace}.IWorker");
 
-        var callSites = new InterfaceUsageScanner(scope.Pe).FindCallSites(iface, "ILSpyMcp.Samples.IWorker");
+        var callSites = new InterfaceUsageScanner(scope.Pe).FindCallSites(iface, $"{TestDataPaths.SamplesNamespace}.IWorker");
 
         Assert.Empty(callSites);
     }
@@ -39,10 +39,10 @@ public class InterfaceUsageScannerTests
     public void 正常方法体_Aborted计数为零()
     {
         using var scope = new MetadataScope();
-        var iface = TypeHandle(scope.Reader, "ILSpyMcp.Samples.IAnimal");
+        var iface = TypeHandle(scope.Reader, $"{TestDataPaths.SamplesNamespace}.IAnimal");
 
         var scanner = new InterfaceUsageScanner(scope.Pe);
-        scanner.FindCallSites(iface, "ILSpyMcp.Samples.IAnimal");
+        scanner.FindCallSites(iface, $"{TestDataPaths.SamplesNamespace}.IAnimal");
 
         Assert.Equal(0, scanner.AbortedBodies);
     }

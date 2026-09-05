@@ -32,11 +32,11 @@ public sealed class DocumentServiceEdgeTests
     [Fact]
     public void GetTypeDocument_Props_属性访问器有映射()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.Props");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.Props");
         Assert.True(doc.IsSuccess, doc.Error);
 
         // 属性访问器（get_/set_，方法 token 0x06）应出现在映射中——反编译的自动属性 get/set 是表达式体
-        var accessorTokens = FindAccessorTokens(Dll, "ILSpyMcp.Samples.Props");
+        var accessorTokens = FindAccessorTokens(Dll, $"{TestDataPaths.SamplesNamespace}.Props");
         Assert.NotEmpty(accessorTokens);
 
         foreach (var token in accessorTokens)
@@ -53,7 +53,7 @@ public sealed class DocumentServiceEdgeTests
     [Fact]
     public void GetTypeDocument_映射行号全部落在文本范围内()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         Assert.True(doc.IsSuccess, doc.Error);
         Assert.NotEmpty(doc.Mapping);
         foreach (var e in doc.Mapping)

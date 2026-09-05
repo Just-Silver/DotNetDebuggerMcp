@@ -19,7 +19,7 @@ public class SearchStringToolTests
         {
             var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "不支持高性能计数器", cancellationToken: TestContext.Current.CancellationToken);
 
-            Assert.Contains("ILSpyMcp.Samples.StringHolder::", result);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.StringHolder::", result);
             Assert.Contains("\"不支持高性能计数器\"", result);
             Assert.Contains(" 0x06", result); // 方法 token 行尾
             Assert.DoesNotContain("at System", result);
@@ -70,9 +70,9 @@ public class SearchStringToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "Order", "ILSpyMcp.Samples.StringHolder", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "Order", $"{TestDataPaths.SamplesNamespace}.StringHolder", cancellationToken: TestContext.Current.CancellationToken);
 
-            Assert.Contains("ILSpyMcp.Samples.StringHolder::", result);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.StringHolder::", result);
             Assert.DoesNotContain("No.Such", result);
         }
         finally

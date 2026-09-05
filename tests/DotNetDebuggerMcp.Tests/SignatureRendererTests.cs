@@ -117,8 +117,8 @@ public class SignatureRendererTests
         using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
         using var pe = new PEReader(fs);
         var reader = pe.GetMetadataReader();
-        var handle = MetadataNaming.FindType(reader, "ILSpyMcp.Samples.Members");
-        Assert.True(handle.HasValue, "测试程序集中未找到类型 ILSpyMcp.Samples.Members");
+        var handle = MetadataNaming.FindType(reader, $"{TestDataPaths.SamplesNamespace}.Members");
+        Assert.True(handle.HasValue, $"测试程序集中未找到类型 {TestDataPaths.SamplesNamespace}.Members");
         var type = reader.GetTypeDefinition(handle!.Value);
 
         var fieldHandle = type.GetFields().Single(h => reader.GetString(reader.GetFieldDefinition(h).Name) == "Name");

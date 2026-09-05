@@ -11,10 +11,10 @@ public sealed class DocumentServiceReverseTests
     [Fact]
     public void GetIlStartForLine_BigMethod某行_返回对应token与ilStart()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         Assert.True(doc.IsSuccess, doc.Error);
 
-        var bigMethodToken = DocumentServiceTests.FindMethodToken(Dll, "ILSpyMcp.Samples.BigClass", "BigMethod");
+        var bigMethodToken = DocumentServiceTests.FindMethodToken(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass", "BigMethod");
         Assert.True(bigMethodToken > 0);
 
         // 取 BigMethod 一个映射条目的行做反向查询
@@ -30,7 +30,7 @@ public sealed class DocumentServiceReverseTests
     [Fact]
     public void GetIlStartForLine_无映射行_返回null()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         Assert.True(doc.IsSuccess, doc.Error);
 
         // 找一个不在任何映射里的行（映射行集合之外的空行/注释行）
@@ -44,7 +44,7 @@ public sealed class DocumentServiceReverseTests
     [Fact]
     public void GetLineForIlOffset_未命中_返回null()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         Assert.True(doc.IsSuccess, doc.Error);
 
         // 超大 offset 不应命中
@@ -54,10 +54,10 @@ public sealed class DocumentServiceReverseTests
     [Fact]
     public void GetLineForIlOffset_区间外偏移_返回null()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         Assert.True(doc.IsSuccess, doc.Error);
 
-        var bigMethodToken = DocumentServiceTests.FindMethodToken(Dll, "ILSpyMcp.Samples.BigClass", "BigMethod");
+        var bigMethodToken = DocumentServiceTests.FindMethodToken(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass", "BigMethod");
         var entries = doc.Mapping.Where(e => e.MethodToken == bigMethodToken).OrderBy(e => e.IlOffset).ToList();
         Assert.NotEmpty(entries);
 

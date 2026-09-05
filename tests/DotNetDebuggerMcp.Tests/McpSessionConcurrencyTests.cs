@@ -8,7 +8,7 @@ namespace DotNetDebuggerMcp.Tests;
 /// <summary>
 /// MCP 会话级并发回归测试：以真实子进程启动 server（stdio 传输，与 agent 客户端同一路径）， 在同一会话上并发打入多个 tools/call，验证全部按时返回（不挂死）。
 /// 背景：agent 客户端内 12 路并发曾稳定挂死而内部单测全绿——缓存/管道内部 并发已有覆盖，本文件补齐「传输层 + 会话分发」这一盲区。 目标程序集默认用
-/// TestSamples.dll，可经环境变量 ILSPYMCP_CONCURRENCY_DLL 指向更大程序集提高复现保真度。
+/// TestSamples.dll，可经环境变量 DOTNETDEBUGGERMCP_CONCURRENCY_DLL 指向更大程序集提高复现保真度。
 /// </summary>
 public sealed class McpSessionConcurrencyTests
 {
@@ -98,7 +98,7 @@ public sealed class McpSessionConcurrencyTests
                         new Dictionary<string, object?>
                         {
                             ["assembly"] = dll,
-                            ["typeName"] = $"ILSpyMcp.Samples.Class{i + 1:0000}",
+                            ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Class{i + 1:0000}",
                         },
                         cancellationToken: TestContext.Current.CancellationToken));
             }).ToArray();
@@ -120,16 +120,16 @@ public sealed class McpSessionConcurrencyTests
         {
             ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c" }),
             ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "csi", ["nameContains"] = "Class" }),
-            ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.BigClass" }),
-            ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.DerivedClass" }),
-            ("dependencies", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Uses" }),
-            ("call_graph", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Caller" }),
+            ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.BigClass" }),
+            ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.DerivedClass" }),
+            ("dependencies", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Uses" }),
+            ("call_graph", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Caller" }),
             ("assembly_info", new Dictionary<string, object?> { ["assembly"] = dll }),
             ("search_string", new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "big" }),
-            ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Circle" }),
-            ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.IAnimal", ["includeIndirect"] = true }),
+            ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Circle" }),
+            ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.IAnimal", ["includeIndirect"] = true }),
             ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "ide" }),
-            ("call_graph", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.GenericCaller" }),
+            ("call_graph", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.GenericCaller" }),
         };
 
         var sw = Stopwatch.StartNew();
@@ -147,11 +147,11 @@ public sealed class McpSessionConcurrencyTests
     }
 
     /// <summary>
-    /// 解析目标程序集：环境变量 ILSPYMCP_CONCURRENCY_DLL 优先（指向大程序集提高复现保真度），缺省 TestSamples.dll。
+    /// 解析目标程序集：环境变量 DOTNETDEBUGGERMCP_CONCURRENCY_DLL 优先（指向大程序集提高复现保真度），缺省 TestSamples.dll。
     /// </summary>
     private static string ResolveTargetDll()
     {
-        var env = Environment.GetEnvironmentVariable("ILSPYMCP_CONCURRENCY_DLL");
+        var env = Environment.GetEnvironmentVariable("DOTNETDEBUGGERMCP_CONCURRENCY_DLL");
         return !string.IsNullOrWhiteSpace(env) && File.Exists(env) ? env : TestDataPaths.TestSamplesDll;
     }
 

@@ -34,13 +34,13 @@ public class StringLiteralScannerTests
     public void typeName限定范围()
     {
         using var scope = new MetadataScope();
-        var handle = MetadataNaming.FindType(scope.Reader, "ILSpyMcp.Samples.StringHolder");
+        var handle = MetadataNaming.FindType(scope.Reader, $"{TestDataPaths.SamplesNamespace}.StringHolder");
         Assert.True(handle.HasValue, "测试程序集中未找到 StringHolder");
 
         var hits = new StringLiteralScanner(scope.Pe).Scan("Order", handle);
 
         Assert.NotEmpty(hits);
-        Assert.All(hits, h => Assert.Equal("ILSpyMcp.Samples.StringHolder", h.TypeFullName));
+        Assert.All(hits, h => Assert.Equal($"{TestDataPaths.SamplesNamespace}.StringHolder", h.TypeFullName));
     }
 
     /// <summary>

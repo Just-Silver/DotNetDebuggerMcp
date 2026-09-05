@@ -15,9 +15,9 @@ namespace DotNetDebuggerMcp.Tests;
 [Collection("AppServices")]
 public class ToolPipelineTests
 {
-    private const string TypeMembers = "ILSpyMcp.Samples.Members";
-    private const string TypeProps = "ILSpyMcp.Samples.Props";
-    private const string TypeBigClass = "ILSpyMcp.Samples.BigClass";
+    private const string TypeMembers = TestDataPaths.SamplesNamespace + ".Members";
+    private const string TypeProps = TestDataPaths.SamplesNamespace + ".Props";
+    private const string TypeBigClass = TestDataPaths.SamplesNamespace + ".BigClass";
     private const string TypeNoSuch = "No.Such.Type";
 
     private static readonly string SamplesDll = TestDataPaths.TestSamplesDll;

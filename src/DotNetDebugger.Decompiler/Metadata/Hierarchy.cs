@@ -283,7 +283,7 @@ public static class Hierarchy
 
         public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments)
         {
-            // genericType 形如 ILSpyMcp.Samples.GenericBase`1，去掉尾部 arity 后接 <参数列表>
+            // genericType 形如 DotNetDebuggerMcp.Samples.GenericBase`1，去掉尾部 arity 后接 <参数列表>
             var backtick = genericType.IndexOf('`');
             var baseName = backtick >= 0 ? genericType[..backtick] : genericType;
             return $"{baseName}<{string.Join(", ", typeArguments)}>";

@@ -26,9 +26,9 @@ public sealed class McpWebCoexistTests
         Assert.Contains("无活动调试会话", st.Text());
 
         // 2. MCP 反编译工具可用（同进程共存验证）
-        var dll = Path.Combine(Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, "ILSpyMcp.TestSamples.dll");
+        var dll = Path.Combine(Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, TestDataPaths.TestSamplesAssemblyName + ".dll");
         var dc = await CallAsync(mcp, "decompile_member",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.BigClass", ["memberName"] = "BigMethod" });
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.BigClass", ["memberName"] = "BigMethod" });
         Assert.True(dc.IsError != true, dc.Text());
         Assert.Contains("BigMethod", dc.Text());
 

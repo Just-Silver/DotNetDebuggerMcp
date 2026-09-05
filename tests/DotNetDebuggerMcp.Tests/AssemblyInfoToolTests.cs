@@ -17,7 +17,7 @@ public class AssemblyInfoToolTests
     {
         var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Contains("程序集: ILSpyMcp.TestSamples", result);
+        Assert.Contains($"程序集: {TestDataPaths.TestSamplesAssemblyName}", result);
         Assert.Contains("版本: ", result);
         Assert.Contains("目标框架: ", result);
         Assert.Contains("类型总数: ", result);
@@ -78,7 +78,7 @@ public class AssemblyInfoToolTests
 
         // 头部信息块前置，body 首行为 "1\t程序集: ..."
         Assert.Contains("程序集信息", result); // 头部目标行
-        Assert.Contains("1\t程序集: ILSpyMcp.TestSamples", result);
+        Assert.Contains($"1\t程序集: {TestDataPaths.TestSamplesAssemblyName}", result);
         Assert.DoesNotContain("已截断", result);
     }
 

@@ -63,7 +63,7 @@ public class MemberResolverTests
     {
         // 真实测试程序集：验证工具链路使用的目标（BigMethod 子串匹配 BigMethod/BigHelper/BigHelper2 三个）
         var (typeFound, matches, _) = MemberResolver.FindMembers(
-            TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "Big");
+            TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", "Big");
 
         Assert.True(typeFound);
         Assert.Equal(3, matches.Count);
@@ -75,11 +75,11 @@ public class MemberResolverTests
     public void FindMembers_按名匹配字段与属性()
     {
         // Members 类型：int Count { get; set; }（属性）、string Name（字段）、event Changed（事件）
-        var fields = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Name");
+        var fields = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", "Name");
         Assert.Contains(fields.Matches, m => m.Token.StartsWith("0x04")); // 字段 Name
-        var props = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Count");
+        var props = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", "Count");
         Assert.Contains(props.Matches, m => m.Token.StartsWith("0x17")); // 属性 Count
-        var events = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Changed");
+        var events = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", "Changed");
         Assert.Contains(events.Matches, m => m.Token.StartsWith("0x14")); // 事件 Changed
         Assert.DoesNotContain(events.Matches, m => m.Token.StartsWith("0x04")); // 字段式事件同名字段 backing field 不应计入
         Assert.Single(events.Matches); // 只应返回事件一项（默认排除 add_/remove_ 访问器）
@@ -91,7 +91,7 @@ public class MemberResolverTests
         // 编译器生成类型（闭包 <>c__DisplayClass0_0）应被全局过滤：within-type 搜索返回 TypeFound=false， 避免对 <...> 类型按名搜出
         // >20 匹配时仅返回空签名清单（与跨程序集搜索的过滤不变量一致）
         var (typeFound, matches, similar) = MemberResolver.FindMembers(
-            TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.WithClosure+<>c__DisplayClass0_0", "");
+            TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.WithClosure+<>c__DisplayClass0_0", "");
 
         Assert.False(typeFound);
         Assert.Empty(matches);
@@ -157,21 +157,21 @@ public class MemberResolverTests
     {
         var result = MemberResolver.FindMembersAcrossAssembly(TestDataPaths.TestSamplesDll, "BigMethod");
         Assert.True(result.TypeFound);
-        Assert.Contains(result.Matches, m => m.Name == "BigMethod" && m.TypeName == "ILSpyMcp.Samples.BigClass");
+        Assert.Contains(result.Matches, m => m.Name == "BigMethod" && m.TypeName == $"{TestDataPaths.SamplesNamespace}.BigClass");
     }
 
     [Fact]
     public void FindMembers_ThingImpl_显式接口属性访问器被排除()
     {
-        // 显式接口属性访问器元数据名为 ILSpyMcp.Samples.IThing.get_Value（含 '.'），默认必须排除； 搜索 "Value"
+        // 显式接口属性访问器元数据名为 DotNetDebuggerMcp.Samples.IThing.get_Value（含 '.'），默认必须排除； 搜索 "Value"
         // 不应命中访问器方法（仅剩显式接口普通方法 Foo 不含 value 子串，故应无匹配）
-        var (typeFound, matches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.ThingImpl", "Value");
+        var (typeFound, matches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.ThingImpl", "Value");
 
         Assert.True(typeFound);
         Assert.DoesNotContain(matches, m => m.Name.Contains("get_Value"));
 
         // 搜索 "Foo" 应命中显式接口普通方法本身（非访问器，不排除）
-        var (_, fooMatches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.ThingImpl", "Foo");
-        Assert.Contains(fooMatches, m => m.Name == "ILSpyMcp.Samples.IThing.Foo");
+        var (_, fooMatches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.ThingImpl", "Foo");
+        Assert.Contains(fooMatches, m => m.Name == $"{TestDataPaths.SamplesNamespace}.IThing.Foo");
     }
 }

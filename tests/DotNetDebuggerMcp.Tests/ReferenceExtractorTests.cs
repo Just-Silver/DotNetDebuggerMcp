@@ -64,7 +64,7 @@ public class ReferenceExtractorTests
     {
         // Members.Changed 为 event EventHandler?（跨程序集 TypeReference）：缺省 API 事件外部类型整体漏掉，WithExternal 应收集
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var (_, external) = ExtractWithExternal(scope.Reader, "ILSpyMcp.Samples.Members");
+        var (_, external) = ExtractWithExternal(scope.Reader, $"{TestDataPaths.SamplesNamespace}.Members");
 
         Assert.Contains("System.EventHandler [System.Runtime]", external);
     }

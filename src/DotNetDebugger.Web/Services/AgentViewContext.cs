@@ -4,7 +4,7 @@ namespace DotNetDebugger.Web.Services;
 /// agent 当前查看/操作上下文的不可变快照（供 Web 监视器展示与联动）。
 /// </summary>
 /// <param name="AssemblyPath">agent 当前反编译/浏览的程序集绝对路径；无则 null。</param>
-/// <param name="TypeFullName">agent 当前查看的类型全名（如 ILSpyMcp.Samples.BigClass）；无则 null。</param>
+/// <param name="TypeFullName">agent 当前查看的类型全名（如 DotNetDebuggerMcp.Samples.BigClass）；无则 null。</param>
 /// <param name="MemberName">agent 当前查看的成员名（decompile_member 时）；无则 null。</param>
 /// <param name="Revision">写入序号，每次 Update 自增；订阅者据此检测变化。</param>
 public sealed record AgentViewSnapshot(

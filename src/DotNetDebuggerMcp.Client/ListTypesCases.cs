@@ -31,15 +31,15 @@ public static class ListTypesCases
         // nameContains 按类型名子串过滤（忽略大小写）："Generic" 应命中 GenericBox`1
         new ToolCallCase("list_types", "nameContains 按名过滤（命中 GenericBox）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["nameContains"] = "Generic" },
-            ExpectedContains: "ILSpyMcp.Samples.GenericBox`1", MustNotContain: "at System"),
+            ExpectedContains: TestDataHelper.GenericTypeName, MustNotContain: "at System"),
         // nameContains 无匹配：过滤后应无结果行，但头部信息块仍在（匹配实体: 0 个）
         new ToolCallCase("list_types", "nameContains 无匹配（返回空列表）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["nameContains"] = "不存在的类型名XYZ" },
             ExpectedContains: "匹配实体: 0 个", MustNotContain: "at System"),
-        // namespaceContains 按命名空间子串过滤（忽略大小写）：应命中测试程序集的 ILSpyMcp.Samples 命名空间
-        new ToolCallCase("list_types", "namespaceContains 按命名空间过滤（命中 ILSpyMcp.Samples）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["namespaceContains"] = "ILSpyMcp.Samples" },
-            ExpectedContains: "ILSpyMcp.Samples.Class0001", MustNotContain: "at System"),
+        // namespaceContains 按命名空间子串过滤（忽略大小写）：应命中测试程序集的 DotNetDebuggerMcp.Samples 命名空间
+        new ToolCallCase("list_types", "namespaceContains 按命名空间过滤（命中 DotNetDebuggerMcp.Samples）",
+            new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["namespaceContains"] = TestDataHelper.SamplesNamespace },
+            ExpectedContains: TestDataHelper.ListedClassName, MustNotContain: "at System"),
         // namespaceContains 无匹配：过滤后应无结果行，但头部信息块仍在（匹配实体: 0 个）
         new ToolCallCase("list_types", "namespaceContains 无匹配（返回空列表）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c", ["namespaceContains"] = "不存在.Ns" },

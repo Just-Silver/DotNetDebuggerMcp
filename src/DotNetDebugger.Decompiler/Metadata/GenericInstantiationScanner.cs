@@ -353,7 +353,7 @@ public sealed class GenericInstantiationScanner
     }
 
     /// <summary>
-    /// 解码 TypeSpec 为渲染字符串（如 ILSpyMcp.Samples.GenericBox&lt;int&gt;），供判定其基类型是否为目标泛型类型。
+    /// 解码 TypeSpec 为渲染字符串（如 DotNetDebuggerMcp.Samples.GenericBox&lt;int&gt;），供判定其基类型是否为目标泛型类型。
     /// </summary>
     private string? ResolveTypeSpecName(EntityHandle handle)
     {

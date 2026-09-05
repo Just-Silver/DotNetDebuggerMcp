@@ -14,7 +14,7 @@ public sealed class DocumentServiceTests
     [Fact]
     public void GetTypeDocument_BigClass_文本含类型且行数正确()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
 
         Assert.True(doc.IsSuccess, doc.Error);
         Assert.Contains("class BigClass", doc.Text);
@@ -26,10 +26,10 @@ public sealed class DocumentServiceTests
     [Fact]
     public void GetTypeDocument_BigClass_映射含BigMethod且offset0有行()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         Assert.True(doc.IsSuccess, doc.Error);
 
-        var bigMethodToken = FindMethodToken(Dll, "ILSpyMcp.Samples.BigClass", "BigMethod");
+        var bigMethodToken = FindMethodToken(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass", "BigMethod");
         Assert.True(bigMethodToken > 0, "未找到 BigMethod token");
 
         var tokenEntries = doc.Mapping.Where(e => e.MethodToken == bigMethodToken).ToList();
@@ -44,8 +44,8 @@ public sealed class DocumentServiceTests
     [Fact]
     public void GetLineForIlOffset_BigMethod首条sp_返回对应行()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
-        var token = FindMethodToken(Dll, "ILSpyMcp.Samples.BigClass", "BigMethod");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
+        var token = FindMethodToken(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass", "BigMethod");
         var first = doc.Mapping.First(e => e.MethodToken == token);
 
         var line = DocumentService.GetLineForIlOffset(doc, token, first.IlOffset);
@@ -55,8 +55,8 @@ public sealed class DocumentServiceTests
     [Fact]
     public void GetTypeDocument_BigMethod_映射为语句级密度高()
     {
-        var doc = DocumentService.GetTypeDocument(Dll, "ILSpyMcp.Samples.BigClass");
-        var token = FindMethodToken(Dll, "ILSpyMcp.Samples.BigClass", "BigMethod");
+        var doc = DocumentService.GetTypeDocument(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass");
+        var token = FindMethodToken(Dll, $"{TestDataPaths.SamplesNamespace}.BigClass", "BigMethod");
 
         // 探针实测 BigMethod 603 个可见 sequence point——语句级而非方法级（方法级只有 1 条）
         var count = doc.Mapping.Count(e => e.MethodToken == token);

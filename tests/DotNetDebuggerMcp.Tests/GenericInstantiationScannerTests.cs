@@ -17,9 +17,9 @@ public class GenericInstantiationScannerTests
     {
         using var scope = new MetadataScope();
 
-        var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericBox");
+        var result = new GenericInstantiationScanner(scope.Pe).Find($"{TestDataPaths.SamplesNamespace}.GenericBox");
 
-        Assert.Contains(result.SignatureHits, l => l.Contains("ILSpyMcp.Samples.GenericUser::"));
+        Assert.Contains(result.SignatureHits, l => l.Contains($"{TestDataPaths.SamplesNamespace}.GenericUser::"));
         Assert.Contains(result.SignatureHits, l => l.Contains("GenericBox<int>"));
         Assert.Contains(result.SignatureHits, l => l.Contains("GenericBox<string>"));
     }
@@ -29,10 +29,10 @@ public class GenericInstantiationScannerTests
     {
         using var scope = new MetadataScope();
 
-        var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericHelper");
+        var result = new GenericInstantiationScanner(scope.Pe).Find($"{TestDataPaths.SamplesNamespace}.GenericHelper");
 
         Assert.NotEmpty(result.CallHits);
-        Assert.Contains(result.CallHits, l => l.Contains("ILSpyMcp.Samples.GenericCaller::"));
+        Assert.Contains(result.CallHits, l => l.Contains($"{TestDataPaths.SamplesNamespace}.GenericCaller::"));
         Assert.Contains(result.CallHits, l => l.Contains("Echo<int>"));
     }
 
@@ -43,7 +43,7 @@ public class GenericInstantiationScannerTests
 
         var result = new GenericInstantiationScanner(scope.Pe).Find("GenericBox");
 
-        Assert.Contains(result.SignatureHits, l => l.Contains("ILSpyMcp.Samples.GenericUser::"));
+        Assert.Contains(result.SignatureHits, l => l.Contains($"{TestDataPaths.SamplesNamespace}.GenericUser::"));
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class GenericInstantiationScannerTests
         // List<T> 等含类型参数的实例化均非「具体化」实例化，不应出现在命中行
         using var scope = new MetadataScope();
 
-        var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericBox`1");
+        var result = new GenericInstantiationScanner(scope.Pe).Find($"{TestDataPaths.SamplesNamespace}.GenericBox`1");
 
         Assert.DoesNotContain(result.SignatureHits, l => l.Contains("GenericBox`1::"));
         Assert.DoesNotContain(result.SignatureHits, l => l.Contains("GenericBox<T0>"));
@@ -68,7 +68,7 @@ public class GenericInstantiationScannerTests
         // CaptureMethodInstantiation 无条件加 Echo<T0>（空上下文解码类型参数为 T0）产出虚假具体化命中； 修复后按「任一实参含类型参数」门控，方法级捕获跳过
         using var scope = new MetadataScope();
 
-        var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericHelper");
+        var result = new GenericInstantiationScanner(scope.Pe).Find($"{TestDataPaths.SamplesNamespace}.GenericHelper");
 
         Assert.DoesNotContain(result.CallHits, l => l.Contains("GenericSelfEcho::"));
         Assert.DoesNotContain(result.CallHits, l => l.Contains("Echo<T0>"));
@@ -81,7 +81,7 @@ public class GenericInstantiationScannerTests
         // 预修复时内层实例化的 last-element 标志重置使外层 GenericBox 被误判为具体化命中；修复后按任一实参跟踪不再捕获
         using var scope = new MetadataScope();
 
-        var result = new GenericInstantiationScanner(scope.Pe).Find("ILSpyMcp.Samples.GenericBox");
+        var result = new GenericInstantiationScanner(scope.Pe).Find($"{TestDataPaths.SamplesNamespace}.GenericBox");
 
         Assert.DoesNotContain(result.SignatureHits, l => l.Contains("NestedGenericUser::"));
     }
@@ -92,7 +92,7 @@ public class GenericInstantiationScannerTests
         using var scope = new MetadataScope();
         var scanner = new GenericInstantiationScanner(scope.Pe);
 
-        scanner.Find("ILSpyMcp.Samples.GenericBox");
+        scanner.Find($"{TestDataPaths.SamplesNamespace}.GenericBox");
 
         Assert.Equal(0, scanner.AbortedBodies);
     }

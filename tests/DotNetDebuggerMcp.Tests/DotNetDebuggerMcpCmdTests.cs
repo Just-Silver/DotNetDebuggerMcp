@@ -36,7 +36,7 @@ public class DotNetDebuggerMcpCmdTests
             token: token, typeToken: "", lines: "", timeoutSeconds: 30, check: false,
             cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Contains("ILSpyMcp.Samples.Caller::", result);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Caller::", result);
     }
 
     [Fact]
@@ -62,7 +62,7 @@ public class DotNetDebuggerMcpCmdTests
     {
         // -iu 分发走 interface_usage（纯元数据，经共享缓存），IAnimal 应含实现者 Dog 与调用点 AnimalCaller::Run → Speak
         var result = await DotNetDebuggerMcpCmd.DispatchCliAsync(
-            assembly: TestDataPaths.TestSamplesDll, typeName: "ILSpyMcp.Samples.IAnimal", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
+            assembly: TestDataPaths.TestSamplesDll, typeName: $"{TestDataPaths.SamplesNamespace}.IAnimal", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
             searchString: "", fieldName: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: false, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
@@ -71,8 +71,8 @@ public class DotNetDebuggerMcpCmdTests
             cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("实现该接口的类型:", result);
-        Assert.Contains("ILSpyMcp.Samples.Dog", result);
-        Assert.Contains("ILSpyMcp.Samples.AnimalCaller::Run → Speak", result);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Dog", result);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.AnimalCaller::Run → Speak", result);
     }
 
     [Fact]
@@ -80,7 +80,7 @@ public class DotNetDebuggerMcpCmdTests
     {
         // -gi 分发走 generic_instantiations（纯元数据，经共享缓存），GenericBox 应含成员签名段与 GenericUser 命中
         var result = await DotNetDebuggerMcpCmd.DispatchCliAsync(
-            assembly: TestDataPaths.TestSamplesDll, typeName: "ILSpyMcp.Samples.GenericBox", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
+            assembly: TestDataPaths.TestSamplesDll, typeName: $"{TestDataPaths.SamplesNamespace}.GenericBox", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
             searchString: "", fieldName: "",
             outputDir: "", project: false, nestedDirectories: false, signatures: false, hierarchy: false,
             dependencies: false, callGraph: false, callChain: false, fieldAccess: false, external: false, indirect: false, assemblyInfo: false,
@@ -89,7 +89,7 @@ public class DotNetDebuggerMcpCmdTests
             cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("成员签名中的泛型实例化:", result);
-        Assert.Contains("ILSpyMcp.Samples.GenericUser::", result);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericUser::", result);
         Assert.Contains("GenericBox<int>", result);
     }
 

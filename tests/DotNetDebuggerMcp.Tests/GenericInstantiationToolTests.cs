@@ -14,7 +14,7 @@ public class GenericInstantiationToolTests
         var result = await GenericInstantiationTool.GenericInstantiations(TestDataPaths.TestSamplesDll, "GenericBox", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("成员签名中的泛型实例化:", result);
-        Assert.Contains("ILSpyMcp.Samples.GenericUser::", result);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericUser::", result);
         Assert.Contains("GenericBox<int>", result);
         Assert.Contains("GenericBox<string>", result);
     }
@@ -22,7 +22,7 @@ public class GenericInstantiationToolTests
     [Fact]
     public async Task GenericInstantiations_GenericBox带arity全名_同样命中()
     {
-        var result = await GenericInstantiationTool.GenericInstantiations(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.GenericBox`1", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await GenericInstantiationTool.GenericInstantiations(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.GenericBox`1", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("GenericBox<int>", result);
     }
@@ -30,7 +30,7 @@ public class GenericInstantiationToolTests
     [Fact]
     public async Task GenericInstantiations_GenericHelper_输出方法体调用段()
     {
-        var result = await GenericInstantiationTool.GenericInstantiations(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.GenericHelper", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await GenericInstantiationTool.GenericInstantiations(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.GenericHelper", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("方法体调用中的泛型实例化:", result);
         Assert.Contains("Echo<int>", result);
@@ -39,7 +39,7 @@ public class GenericInstantiationToolTests
     [Fact]
     public async Task GenericInstantiations_无实例化类型_两段输出无占位()
     {
-        var result = await GenericInstantiationTool.GenericInstantiations(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Caller", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await GenericInstantiationTool.GenericInstantiations(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Caller", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("（无）", result);
         Assert.DoesNotContain("at System", result);

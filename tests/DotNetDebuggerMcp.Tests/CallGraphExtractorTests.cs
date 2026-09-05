@@ -18,8 +18,8 @@ public class CallGraphExtractorTests
     {
         // Run 含 newobj Callee..ctor + callvirt Callee.Help，RunStatic 含 call Callee.StaticHelp
         using var scope = new MetadataScope();
-        var result = Extract(scope, "ILSpyMcp.Samples.Caller");
-        Assert.Contains("ILSpyMcp.Samples.Callee", result);
+        var result = Extract(scope, $"{TestDataPaths.SamplesNamespace}.Caller");
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Callee", result);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class CallGraphExtractorTests
     {
         // External 调 System.Console.WriteLine，属跨程序集 TypeRef/MemberRef，不应收集
         using var scope = new MetadataScope();
-        var result = Extract(scope, "ILSpyMcp.Samples.Caller");
+        var result = Extract(scope, $"{TestDataPaths.SamplesNamespace}.Caller");
         Assert.DoesNotContain("System.Console", result);
         Assert.DoesNotContain("System.String", result);
     }
@@ -38,9 +38,9 @@ public class CallGraphExtractorTests
         // External 调 System.Console.WriteLine：WithExternal 收集 System.Console [System.Console]； 默认
         // ctor 调基类 Object..ctor 亦为 MemberRef 外部引用（System.Object）。内部集合与缺省 API 一致
         using var scope = new MetadataScope();
-        var (internalSet, external) = ExtractWithExternal(scope, "ILSpyMcp.Samples.Caller");
+        var (internalSet, external) = ExtractWithExternal(scope, $"{TestDataPaths.SamplesNamespace}.Caller");
 
-        Assert.Equal(Extract(scope, "ILSpyMcp.Samples.Caller"), internalSet);
+        Assert.Equal(Extract(scope, $"{TestDataPaths.SamplesNamespace}.Caller"), internalSet);
         Assert.Contains("System.Console [System.Console]", external);
         Assert.Contains("System.Object [System.Runtime]", external);
         Assert.DoesNotContain("System.Console", internalSet);
@@ -51,7 +51,7 @@ public class CallGraphExtractorTests
     {
         // Make 返回 () => x + 1：闭包类型（编译器生成）过滤后内部为空，构造 System.Func<> 走外部收集
         using var scope = new MetadataScope();
-        var (internalSet, external) = ExtractWithExternal(scope, "ILSpyMcp.Samples.WithClosure");
+        var (internalSet, external) = ExtractWithExternal(scope, $"{TestDataPaths.SamplesNamespace}.WithClosure");
 
         Assert.Empty(internalSet);
         Assert.Contains("System.Func`1 [System.Runtime]", external);
@@ -62,8 +62,8 @@ public class CallGraphExtractorTests
     {
         // 字段 S = new Shared()：方法体含 newobj Shared..ctor，属方法调用边
         using var scope = new MetadataScope();
-        var result = Extract(scope, "ILSpyMcp.Samples.UsesShared1");
-        Assert.Contains("ILSpyMcp.Samples.Shared", result);
+        var result = Extract(scope, $"{TestDataPaths.SamplesNamespace}.UsesShared1");
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Shared", result);
     }
 
     [Fact]
@@ -71,8 +71,8 @@ public class CallGraphExtractorTests
     {
         // Echo(1) 编译为 MethodSpec(MethodDef GenericHelper.Echo, int32)，应归约到 GenericHelper
         using var scope = new MetadataScope();
-        var result = Extract(scope, "ILSpyMcp.Samples.GenericCaller");
-        Assert.Contains("ILSpyMcp.Samples.GenericHelper", result);
+        var result = Extract(scope, $"{TestDataPaths.SamplesNamespace}.GenericCaller");
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericHelper", result);
     }
 
     [Fact]
@@ -80,8 +80,8 @@ public class CallGraphExtractorTests
     {
         // p.Value 编译为 callvirt PropHolder.get_Value，访问器调用计入调用边
         using var scope = new MetadataScope();
-        var result = Extract(scope, "ILSpyMcp.Samples.PropReader");
-        Assert.Contains("ILSpyMcp.Samples.PropHolder", result);
+        var result = Extract(scope, $"{TestDataPaths.SamplesNamespace}.PropReader");
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.PropHolder", result);
     }
 
     [Fact]
@@ -89,8 +89,8 @@ public class CallGraphExtractorTests
     {
         // h.Data 编译为 ldfld FieldHolder::Data，字段访问不是方法调用边，不应收集
         using var scope = new MetadataScope();
-        var result = Extract(scope, "ILSpyMcp.Samples.FieldUser");
-        Assert.DoesNotContain("ILSpyMcp.Samples.FieldHolder", result);
+        var result = Extract(scope, $"{TestDataPaths.SamplesNamespace}.FieldUser");
+        Assert.DoesNotContain($"{TestDataPaths.SamplesNamespace}.FieldHolder", result);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class CallGraphExtractorTests
     {
         // Make 只调用闭包 <>c__DisplayClass0_0（编译器生成类型）与 System.Func（外部），均被过滤
         using var scope = new MetadataScope();
-        var result = Extract(scope, "ILSpyMcp.Samples.WithClosure");
+        var result = Extract(scope, $"{TestDataPaths.SamplesNamespace}.WithClosure");
         Assert.Empty(result);
     }
 
@@ -106,18 +106,18 @@ public class CallGraphExtractorTests
     public void Callee_反向扫描_含Caller()
     {
         using var scope = new MetadataScope();
-        var type = GetType(scope.Reader, "ILSpyMcp.Samples.Callee");
-        var callers = CallGraphExtractor.FindCallers(scope.Pe, type, "ILSpyMcp.Samples.Callee");
-        Assert.Contains("ILSpyMcp.Samples.Caller", callers);
+        var type = GetType(scope.Reader, $"{TestDataPaths.SamplesNamespace}.Callee");
+        var callers = CallGraphExtractor.FindCallers(scope.Pe, type, $"{TestDataPaths.SamplesNamespace}.Callee");
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Caller", callers);
     }
 
     [Fact]
     public void GenericHelper_反向扫描_含GenericCaller()
     {
         using var scope = new MetadataScope();
-        var type = GetType(scope.Reader, "ILSpyMcp.Samples.GenericHelper");
-        var callers = CallGraphExtractor.FindCallers(scope.Pe, type, "ILSpyMcp.Samples.GenericHelper");
-        Assert.Contains("ILSpyMcp.Samples.GenericCaller", callers);
+        var type = GetType(scope.Reader, $"{TestDataPaths.SamplesNamespace}.GenericHelper");
+        var callers = CallGraphExtractor.FindCallers(scope.Pe, type, $"{TestDataPaths.SamplesNamespace}.GenericHelper");
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericCaller", callers);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class CallGraphExtractorTests
         // 取 Callee 首个方法（Help，被 Caller.Run 的 c.Help() 调用）token（与 CallGraphToolTests/DotNetDebuggerMcpCmdTests 共用辅助）
         var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var callers = CallGraphExtractor.FindMethodCallers(pe, token);
-        Assert.Contains(callers, c => c.StartsWith("ILSpyMcp.Samples.Caller::"));
+        Assert.Contains(callers, c => c.StartsWith($"{TestDataPaths.SamplesNamespace}.Caller::"));
     }
 
     [Fact]
@@ -138,11 +138,11 @@ public class CallGraphExtractorTests
         using var pe = new PEReader(fs);
         var reader = pe.GetMetadataReader();
         // GenericCaller.Run 调 GenericHelper.Echo(1) 编译为 MethodSpec，应解包归约到 Echo
-        var helper = GetType(reader, "ILSpyMcp.Samples.GenericHelper");
+        var helper = GetType(reader, $"{TestDataPaths.SamplesNamespace}.GenericHelper");
         var echo = helper.GetMethods().First(h => reader.GetString(reader.GetMethodDefinition(h).Name) == "Echo");
         var token = $"0x{MetadataTokens.GetToken(echo):x8}";
         var callers = CallGraphExtractor.FindMethodCallers(pe, token);
-        Assert.Contains(callers, c => c.StartsWith("ILSpyMcp.Samples.GenericCaller::"));
+        Assert.Contains(callers, c => c.StartsWith($"{TestDataPaths.SamplesNamespace}.GenericCaller::"));
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public class CallGraphExtractorTests
     {
         // 正常方法体解码不应触发降级计数
         using var scope = new MetadataScope();
-        var detailed = CallGraphExtractor.ExtractMethodBodyCallTypesDetailed(scope.Pe, GetType(scope.Reader, "ILSpyMcp.Samples.Caller"));
+        var detailed = CallGraphExtractor.ExtractMethodBodyCallTypesDetailed(scope.Pe, GetType(scope.Reader, $"{TestDataPaths.SamplesNamespace}.Caller"));
         Assert.Equal(0, detailed.Aborted);
     }
 

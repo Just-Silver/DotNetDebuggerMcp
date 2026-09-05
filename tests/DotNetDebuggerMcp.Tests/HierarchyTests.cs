@@ -18,8 +18,8 @@ public class HierarchyTests
     {
         // Dog : IAnimal，接口为同程序集 TypeDefinition
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.Dog");
-        Assert.Contains("ILSpyMcp.Samples.IAnimal", Hierarchy.GetInterfaces(scope.Reader, type));
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.Dog");
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.IAnimal", Hierarchy.GetInterfaces(scope.Reader, type));
     }
 
     [Fact]
@@ -27,9 +27,9 @@ public class HierarchyTests
     {
         // 反向：程序集内实现 IAnimal 接口的类型（直接接口相等）
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.IAnimal");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.IAnimal");
         var fullName = MetadataNaming.FullName(scope.Reader, type);
-        Assert.Contains("ILSpyMcp.Samples.Dog", Hierarchy.GetDescendants(scope.Reader, type, fullName));
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Dog", Hierarchy.GetDescendants(scope.Reader, type, fullName));
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class HierarchyTests
     {
         // 接口的 BaseType 为 nil，基类链只含接口自身
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.IAnimal");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.IAnimal");
         var fullName = MetadataNaming.FullName(scope.Reader, type);
         Assert.Equal(new[] { fullName }, Hierarchy.GetBaseChain(scope.Reader, type));
     }
@@ -59,11 +59,11 @@ public class HierarchyTests
     {
         // DerivedClass -> BaseClass -> System.Object：三层链，中间基类在程序集内（TypeDef）不能重复出现
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.DerivedClass");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.DerivedClass");
         var chain = Hierarchy.GetBaseChain(scope.Reader, type);
 
         Assert.Equal(
-            new[] { "ILSpyMcp.Samples.DerivedClass", "ILSpyMcp.Samples.BaseClass", "System.Object" },
+            new[] { $"{TestDataPaths.SamplesNamespace}.DerivedClass", $"{TestDataPaths.SamplesNamespace}.BaseClass", "System.Object" },
             chain);
         Assert.Equal(chain.Count, chain.Distinct().Count());
     }
@@ -73,15 +73,15 @@ public class HierarchyTests
     {
         // Level4 -> Level3 -> Level2 -> Level1 -> System.Object
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.Level4");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.Level4");
 
         Assert.Equal(
             new[]
             {
-                "ILSpyMcp.Samples.Level4",
-                "ILSpyMcp.Samples.Level3",
-                "ILSpyMcp.Samples.Level2",
-                "ILSpyMcp.Samples.Level1",
+                $"{TestDataPaths.SamplesNamespace}.Level4",
+                $"{TestDataPaths.SamplesNamespace}.Level3",
+                $"{TestDataPaths.SamplesNamespace}.Level2",
+                $"{TestDataPaths.SamplesNamespace}.Level1",
                 "System.Object",
             },
             Hierarchy.GetBaseChain(scope.Reader, type));
@@ -92,9 +92,9 @@ public class HierarchyTests
     {
         // IntComparer : IMyComparer<int>——接口是 TypeSpecification 泛型实例化，必须能被解析而非丢弃
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.IntComparer");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.IntComparer");
 
-        Assert.Contains("ILSpyMcp.Samples.IMyComparer<int>", Hierarchy.GetInterfaces(scope.Reader, type));
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.IMyComparer<int>", Hierarchy.GetInterfaces(scope.Reader, type));
     }
 
     [Fact]
@@ -102,17 +102,17 @@ public class HierarchyTests
     {
         // 后代语义为「直接继承」：AbstractShape 的直接子类是 Circle；SealedCircle : Circle 不在其列
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.AbstractShape");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.AbstractShape");
         var fullName = MetadataNaming.FullName(scope.Reader, type);
         var descendants = Hierarchy.GetDescendants(scope.Reader, type, fullName);
 
-        Assert.Contains("ILSpyMcp.Samples.Circle", descendants);
-        Assert.DoesNotContain("ILSpyMcp.Samples.SealedCircle", descendants);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Circle", descendants);
+        Assert.DoesNotContain($"{TestDataPaths.SamplesNamespace}.SealedCircle", descendants);
 
         // Circle 的直接子类才是 SealedCircle
-        var circle = Resolve(scope.Reader, "ILSpyMcp.Samples.Circle");
+        var circle = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.Circle");
         var circleFullName = MetadataNaming.FullName(scope.Reader, circle);
-        Assert.Contains("ILSpyMcp.Samples.SealedCircle", Hierarchy.GetDescendants(scope.Reader, circle, circleFullName));
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.SealedCircle", Hierarchy.GetDescendants(scope.Reader, circle, circleFullName));
     }
 
     [Fact]
@@ -120,13 +120,13 @@ public class HierarchyTests
     {
         // Level1 → Level2 → Level3 → Level4：间接后代应收集 Level2/Level3/Level4 整条链
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.Level1");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.Level1");
         var fullName = MetadataNaming.FullName(scope.Reader, type);
         var descendants = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, type, fullName);
 
-        Assert.Contains("ILSpyMcp.Samples.Level2", descendants);
-        Assert.Contains("ILSpyMcp.Samples.Level3", descendants);
-        Assert.Contains("ILSpyMcp.Samples.Level4", descendants);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Level2", descendants);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Level3", descendants);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.Level4", descendants);
     }
 
     [Fact]
@@ -134,17 +134,17 @@ public class HierarchyTests
     {
         // IWorker 被 WorkerBase 直接实现，WorkerDerived : WorkerBase 间接实现；间接实现者应含两者
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.IWorker");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.IWorker");
         var fullName = MetadataNaming.FullName(scope.Reader, type);
         var descendants = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, type, fullName);
 
-        Assert.Contains("ILSpyMcp.Samples.WorkerBase", descendants);
-        Assert.Contains("ILSpyMcp.Samples.WorkerDerived", descendants);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.WorkerBase", descendants);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.WorkerDerived", descendants);
 
         // 直接实现者仅 WorkerBase
         var direct = Hierarchy.GetDescendants(scope.Reader, type, fullName);
-        Assert.Contains("ILSpyMcp.Samples.WorkerBase", direct);
-        Assert.DoesNotContain("ILSpyMcp.Samples.WorkerDerived", direct);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.WorkerBase", direct);
+        Assert.DoesNotContain($"{TestDataPaths.SamplesNamespace}.WorkerDerived", direct);
     }
 
     [Fact]
@@ -153,17 +153,17 @@ public class HierarchyTests
         // GenericRoot<T> 被 GenericMid : GenericRoot<int> 直接继承，GenericLeaf : GenericMid 间接继承；
         // 泛型实例化比较走底层定义全名（与 GetDescendants 一致），间接后代应含两者
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var type = Resolve(scope.Reader, "ILSpyMcp.Samples.GenericRoot`1");
+        var type = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.GenericRoot`1");
         var fullName = MetadataNaming.FullName(scope.Reader, type);
         var descendants = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, type, fullName);
 
-        Assert.Contains("ILSpyMcp.Samples.GenericMid", descendants);
-        Assert.Contains("ILSpyMcp.Samples.GenericLeaf", descendants);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericMid", descendants);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericLeaf", descendants);
 
         // 直接后代仅 GenericMid
         var direct = Hierarchy.GetDescendants(scope.Reader, type, fullName);
-        Assert.Contains("ILSpyMcp.Samples.GenericMid", direct);
-        Assert.DoesNotContain("ILSpyMcp.Samples.GenericLeaf", direct);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericMid", direct);
+        Assert.DoesNotContain($"{TestDataPaths.SamplesNamespace}.GenericLeaf", direct);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class HierarchyTests
         // Empty 为 public class Empty { }（仅默认构造）：无接口实现、无程序集内后代/继承者，但基类链非空（[自身, System.Object]）。
         // 防回归：hierarchy 空段应与同族工具（dependencies/call_graph/interface_usage）一致输出「（无）」占位， 不得整段省略——否则
         // agent 无法区分「确实没有」与「输出不完整」。
-        var result = await HierarchyTool.Hierarchy(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Empty", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await HierarchyTool.Hierarchy(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Empty", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("基类链:", result);
         Assert.Contains("接口:", result);
@@ -186,12 +186,12 @@ public class HierarchyTests
         // AbstractShape → Circle → SealedCircle：AbstractShape 的间接后代含 SealedCircle（间接）， 与
         // GetDescendants（直接）不一致；而 Circle 无更深的链，间接=直接
         using var scope = new MetadataScope(TestDataPaths.TestSamplesDll);
-        var shape = Resolve(scope.Reader, "ILSpyMcp.Samples.AbstractShape");
+        var shape = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.AbstractShape");
         var shapeFullName = MetadataNaming.FullName(scope.Reader, shape);
-        Assert.Contains("ILSpyMcp.Samples.SealedCircle",
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.SealedCircle",
             Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, shape, shapeFullName));
 
-        var circle = Resolve(scope.Reader, "ILSpyMcp.Samples.Circle");
+        var circle = Resolve(scope.Reader, $"{TestDataPaths.SamplesNamespace}.Circle");
         var circleFullName = MetadataNaming.FullName(scope.Reader, circle);
         var indirectCircle = Hierarchy.GetDescendantsIncludingIndirect(scope.Reader, circle, circleFullName);
         var directCircle = Hierarchy.GetDescendants(scope.Reader, circle, circleFullName);

@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "DotNetDebuggerMcp": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:4136;http://localhost:4137"
+    }
+  }
+}

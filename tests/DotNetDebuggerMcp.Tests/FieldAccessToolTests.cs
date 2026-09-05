@@ -21,13 +21,13 @@ public class FieldAccessToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "Data", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.FieldHolder", "Data", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("读取该字段的成员:", result);
             Assert.Contains("写入该字段的成员:", result);
             Assert.Contains("取地址的成员:", result);
-            Assert.Contains("ILSpyMcp.Samples.FieldUser::", result);
-            Assert.Contains("ILSpyMcp.Samples.FieldWriter::", result);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.FieldUser::", result);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.FieldWriter::", result);
             Assert.DoesNotContain("at System", result);
         }
         finally
@@ -45,8 +45,8 @@ public class FieldAccessToolTests
             var token = FieldTokenOf();
             var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, fieldToken: token, cancellationToken: TestContext.Current.CancellationToken);
 
-            Assert.Contains("ILSpyMcp.Samples.FieldWriter::", result);
-            Assert.Contains("ILSpyMcp.Samples.FieldUser::", result);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.FieldWriter::", result);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.FieldUser::", result);
         }
         finally
         {
@@ -65,7 +65,7 @@ public class FieldAccessToolTests
 
             Assert.Contains("#MEMBER", result);
             Assert.Contains("fieldToken", result);
-            Assert.Contains("ILSpyMcp.Samples.FieldHolder", result);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.FieldHolder", result);
         }
         finally
         {
@@ -79,7 +79,7 @@ public class FieldAccessToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "Data", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.FieldHolder", "Data", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("取地址的成员:", result);
             Assert.Contains("（无）", result);
@@ -125,7 +125,7 @@ public class FieldAccessToolTests
     [Fact]
     public async Task FieldAccess_fieldName未匹配_返回未找到字段提示()
     {
-        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.FieldHolder", "NoSuchField", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await FieldAccessTool.FieldAccess(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.FieldHolder", "NoSuchField", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("未找到字段名包含", result);
     }
@@ -138,7 +138,7 @@ public class FieldAccessToolTests
         using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
         using var pe = new PEReader(fs);
         var reader = pe.GetMetadataReader();
-        var typeHandle = MetadataNaming.FindType(reader, "ILSpyMcp.Samples.FieldHolder");
+        var typeHandle = MetadataNaming.FindType(reader, $"{TestDataPaths.SamplesNamespace}.FieldHolder");
         Assert.True(typeHandle.HasValue, "测试程序集中未找到 FieldHolder");
         foreach (var fieldHandle in reader.GetTypeDefinition(typeHandle.Value).GetFields())
         {

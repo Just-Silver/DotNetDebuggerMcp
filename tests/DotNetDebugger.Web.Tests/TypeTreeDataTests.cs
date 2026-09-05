@@ -13,7 +13,7 @@ public sealed class TypeTreeDataTests
         var nss = data.GetNamespaces(TestDataPaths.TestSamplesDll);
 
         Assert.NotNull(nss);
-        Assert.Contains("ILSpyMcp.Samples", nss!);
+        Assert.Contains(TestDataPaths.SamplesNamespace, nss!);
         // 同 dll 再查命中缓存（同一 AssemblyTree 实例）
         var nss2 = data.GetNamespaces(TestDataPaths.TestSamplesDll);
         Assert.Same(nss, nss2);
@@ -23,9 +23,9 @@ public sealed class TypeTreeDataTests
     public void GetTypes_Samples命名空间_含BigClass且含生成类型过滤()
     {
         var data = new TypeTreeData();
-        var types = data.GetTypes(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples");
+        var types = data.GetTypes(TestDataPaths.TestSamplesDll, TestDataPaths.SamplesNamespace);
 
-        Assert.Contains("ILSpyMcp.Samples.BigClass", types);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.BigClass", types);
         // 编译器生成类型（含 < > 的匿名/闭包类）不应出现
         Assert.DoesNotContain(types, t => t.Contains('<'));
     }
@@ -48,7 +48,7 @@ public sealed class TypeTreeDataTests
     public void GetMembers_BigClass_含BigMethod且过滤访问器()
     {
         var data = new TypeTreeData();
-        var members = data.GetMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass");
+        var members = data.GetMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass");
 
         Assert.NotEmpty(members);
         // BigMethod 在（方法，带 token）
@@ -64,7 +64,7 @@ public sealed class TypeTreeDataTests
     public void GetMembers_Props类型_属性与索引器在且字段backing被滤()
     {
         var data = new TypeTreeData();
-        var members = data.GetMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Props");
+        var members = data.GetMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Props");
 
         // 属性节点在（含静态属性/索引器），访问器方法不单列
         Assert.Contains(members, m => m.Kind == TypeMemberKind.Property);

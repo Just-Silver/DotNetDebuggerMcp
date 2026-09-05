@@ -24,7 +24,7 @@ public class DecompileMemberToolTests
         try
         {
             // 经 MemberResolver 拿 BigClass.BigMethod 的真实 token（与超限清单 token 同源）
-            var matches = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "BigMethod").Matches;
+            var matches = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", "BigMethod").Matches;
             Assert.NotEmpty(matches);
             var token = matches[0].Token;
             Assert.StartsWith("0x", token);
@@ -67,7 +67,7 @@ public class DecompileMemberToolTests
             using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
             using var pe = new PEReader(fs);
             var reader = pe.GetMetadataReader();
-            var handles = MetadataNaming.FindTypes(reader, "ILSpyMcp.Samples.BigClass");
+            var handles = MetadataNaming.FindTypes(reader, $"{TestDataPaths.SamplesNamespace}.BigClass");
             var handle = Assert.Single(handles);
             var typeToken = $"0x{MetadataTokens.GetToken(handle):x8}";
 
@@ -105,7 +105,7 @@ public class DecompileMemberToolTests
         try
         {
             // 方法 token（0x06 开头）当作 typeToken：Kind 非 TypeDefinition，应返回「不是类型定义」提示而非定位到类型
-            var methodToken = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "BigMethod").Matches[0].Token;
+            var methodToken = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", "BigMethod").Matches[0].Token;
 
             var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "BigMethod", "", methodToken, cancellationToken: TestContext.Current.CancellationToken);
 
@@ -189,7 +189,7 @@ public class DecompileMemberToolTests
 
             Assert.Contains("跨程序集", result);
             Assert.Contains("#MEMBER", result);
-            Assert.Contains("ILSpyMcp.Samples.BigClass", result);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.BigClass", result);
         }
         finally
         {
@@ -204,7 +204,7 @@ public class DecompileMemberToolTests
         try
         {
             // Members 类型中按名搜 Name 命中字段（0x04），取其 token 走 token 参数反编译
-            var matches = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", "Name").Matches;
+            var matches = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", "Name").Matches;
             var field = Assert.Single(matches, m => m.Token.StartsWith("0x04"));
 
             var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "", "", field.Token, cancellationToken: TestContext.Current.CancellationToken);
@@ -245,7 +245,7 @@ public class DecompileMemberToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "", "", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await DecompileMemberTool.DecompileMember(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", "", "", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("请指定 memberName", result);
         }

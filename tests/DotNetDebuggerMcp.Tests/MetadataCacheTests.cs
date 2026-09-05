@@ -121,8 +121,8 @@ public class MetadataCacheTests
         Init();
         try
         {
-            var first = await SignatureTool.Signature(SamplesDll, "ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
-            var second = await SignatureTool.Signature(SamplesDll, "ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
+            var first = await SignatureTool.Signature(SamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", cancellationToken: TestContext.Current.CancellationToken);
+            var second = await SignatureTool.Signature(SamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain("缓存:   命中", first);
             Assert.Contains("缓存:   命中", second);
@@ -139,8 +139,8 @@ public class MetadataCacheTests
         Init();
         try
         {
-            var first = await SignatureTool.Signature(SamplesDll, "ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
-            var different = await SignatureTool.Signature(SamplesDll, "ILSpyMcp.Samples.Props", cancellationToken: TestContext.Current.CancellationToken);
+            var first = await SignatureTool.Signature(SamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", cancellationToken: TestContext.Current.CancellationToken);
+            var different = await SignatureTool.Signature(SamplesDll, $"{TestDataPaths.SamplesNamespace}.Props", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain("缓存:   命中", different); // 不同 typeName → 不同签名 → 未命中
             Assert.Contains("public static string StaticProp", different);
@@ -157,8 +157,8 @@ public class MetadataCacheTests
         Init();
         try
         {
-            var first = await HierarchyTool.Hierarchy(SamplesDll, "ILSpyMcp.Samples.Dog", cancellationToken: TestContext.Current.CancellationToken);
-            var second = await HierarchyTool.Hierarchy(SamplesDll, "ILSpyMcp.Samples.Dog", cancellationToken: TestContext.Current.CancellationToken);
+            var first = await HierarchyTool.Hierarchy(SamplesDll, $"{TestDataPaths.SamplesNamespace}.Dog", cancellationToken: TestContext.Current.CancellationToken);
+            var second = await HierarchyTool.Hierarchy(SamplesDll, $"{TestDataPaths.SamplesNamespace}.Dog", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain("缓存:   命中", first);
             Assert.Contains("缓存:   命中", second);
@@ -175,8 +175,8 @@ public class MetadataCacheTests
         Init();
         try
         {
-            var first = await DependenciesTool.Dependencies(SamplesDll, "ILSpyMcp.Samples.Shared", cancellationToken: TestContext.Current.CancellationToken);
-            var second = await DependenciesTool.Dependencies(SamplesDll, "ILSpyMcp.Samples.Shared", cancellationToken: TestContext.Current.CancellationToken);
+            var first = await DependenciesTool.Dependencies(SamplesDll, $"{TestDataPaths.SamplesNamespace}.Shared", cancellationToken: TestContext.Current.CancellationToken);
+            var second = await DependenciesTool.Dependencies(SamplesDll, $"{TestDataPaths.SamplesNamespace}.Shared", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain("缓存:   命中", first);
             Assert.Contains("缓存:   命中", second);
@@ -193,8 +193,8 @@ public class MetadataCacheTests
         Init();
         try
         {
-            var first = await CallGraphTool.CallGraph(SamplesDll, typeName: "ILSpyMcp.Samples.Caller", cancellationToken: TestContext.Current.CancellationToken);
-            var second = await CallGraphTool.CallGraph(SamplesDll, typeName: "ILSpyMcp.Samples.Caller", cancellationToken: TestContext.Current.CancellationToken);
+            var first = await CallGraphTool.CallGraph(SamplesDll, typeName: $"{TestDataPaths.SamplesNamespace}.Caller", cancellationToken: TestContext.Current.CancellationToken);
+            var second = await CallGraphTool.CallGraph(SamplesDll, typeName: $"{TestDataPaths.SamplesNamespace}.Caller", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain("缓存:   命中", first);
             Assert.Contains("缓存:   命中", second);

@@ -10,14 +10,28 @@ namespace DotNetDebuggerMcp.Tests;
 internal static class TestDataPaths
 {
     /// <summary>
-    /// 生成的测试程序集 ILSpyMcp.TestSamples.dll（601 class + BigClass）。
+    /// 测试程序集标识常量（与 generate-testdata.ps1 顶部变量保持一致；改名只动这里，以下路径/断言均由此拼接）。
     /// </summary>
-    public static readonly string TestSamplesDll = Locate("tests", "TestData", "ILSpyMcp.TestSamples.dll");
+    public const string SamplesNamespace = "DotNetDebuggerMcp.Samples";
+
+    /// <summary>Ext 程序集命名空间（generate-testdata.ps1 的 $SamplesExtNamespace）。</summary>
+    public const string SamplesExtNamespace = "DotNetDebuggerMcp.SamplesExt";
+
+    /// <summary>主样本程序集名（dll 文件名 = 该值 + ".dll"，generate-testdata.ps1 的 $TestSamplesAssemblyName）。</summary>
+    public const string TestSamplesAssemblyName = "DotNetDebuggerMcp.TestSamples";
+
+    /// <summary>Ext 程序集名（generate-testdata.ps1 的 $TestSamplesExtAssemblyName）。</summary>
+    public const string TestSamplesExtAssemblyName = "DotNetDebuggerMcp.TestSamplesExt";
 
     /// <summary>
-    /// 生成的跨程序集测试程序集 ILSpyMcp.TestSamplesExt.dll（引用 TestSamples.dll 的 Callee）。
+    /// 生成的测试程序集 DotNetDebuggerMcp.TestSamples.dll（601 class + BigClass）。
     /// </summary>
-    public static readonly string TestSamplesExtDll = Locate("tests", "TestData", "ILSpyMcp.TestSamplesExt.dll");
+    public static readonly string TestSamplesDll = Locate("tests", "TestData", TestSamplesAssemblyName + ".dll");
+
+    /// <summary>
+    /// 生成的跨程序集测试程序集 DotNetDebuggerMcp.TestSamplesExt.dll（引用 TestSamples.dll 的 Callee）。
+    /// </summary>
+    public static readonly string TestSamplesExtDll = Locate("tests", "TestData", TestSamplesExtAssemblyName + ".dll");
 
     /// <summary>
     /// 取指定程序集中 Callee 类型首个方法（Help，被 Caller.Run 的 c.Help() 调用）的元数据 token， 供 call_graph 的 token

@@ -10,7 +10,7 @@ public sealed class DocumentStoreTests
     public void GetOrLoad_BigClass_成功且含映射()
     {
         var store = new DocumentStore();
-        var doc = store.GetOrLoad(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass");
+        var doc = store.GetOrLoad(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass");
 
         Assert.True(doc.IsSuccess, doc.Error);
         Assert.Contains("class BigClass", doc.Text);
@@ -21,8 +21,8 @@ public sealed class DocumentStoreTests
     public void GetOrLoad_同类型两次_命中缓存()
     {
         var store = new DocumentStore();
-        var doc1 = store.GetOrLoad(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass");
-        var doc2 = store.GetOrLoad(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass");
+        var doc1 = store.GetOrLoad(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass");
+        var doc2 = store.GetOrLoad(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass");
 
         Assert.True(doc1.IsSuccess);
         Assert.Same(doc1, doc2);   // 同一实例 = 缓存命中
@@ -44,7 +44,7 @@ public sealed class DocumentStoreTests
     public void GetStopLine_首映射offset_返回行号()
     {
         var store = new DocumentStore();
-        var doc = store.GetOrLoad(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass");
+        var doc = store.GetOrLoad(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         var first = doc.Mapping.First();
 
         var line = DocumentStore.GetStopLine(doc, first.MethodToken, first.IlOffset);
@@ -55,7 +55,7 @@ public sealed class DocumentStoreTests
     public void GetIlStartAtLine_反向映射_返回token()
     {
         var store = new DocumentStore();
-        var doc = store.GetOrLoad(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass");
+        var doc = store.GetOrLoad(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         var entry = doc.Mapping.First();
 
         var result = DocumentStore.GetIlStartAtLine(doc, entry.Line);
@@ -67,7 +67,7 @@ public sealed class DocumentStoreTests
     public void Clear_清空缓存()
     {
         var store = new DocumentStore();
-        store.GetOrLoad(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass");
+        store.GetOrLoad(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass");
         Assert.Equal(1, store.Count);
 
         store.Clear();

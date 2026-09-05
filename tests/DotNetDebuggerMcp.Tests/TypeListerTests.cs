@@ -24,8 +24,8 @@ public class TypeListerTests
         {
             var names = TypeLister.ListTypes(reader, "c").Select(e => e.FullName).ToList();
 
-            Assert.Contains("ILSpyMcp.Samples.Class0001", names);
-            Assert.Contains("ILSpyMcp.Samples.BigClass", names);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.Class0001", names);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.BigClass", names);
             Assert.DoesNotContain("<Module>", names); // 编译器生成类型被过滤
             Assert.True(names.Count > 500, $"应为 601 个 class，实际 {names.Count}");
         });
@@ -48,8 +48,8 @@ public class TypeListerTests
         {
             var entries = TypeLister.ListTypes(reader, "ci").ToDictionary(e => e.FullName, e => e.Category);
 
-            Assert.Equal('i', entries["ILSpyMcp.Samples.IAnimal"]);
-            Assert.Equal('c', entries["ILSpyMcp.Samples.BigClass"]);
+            Assert.Equal('i', entries[$"{TestDataPaths.SamplesNamespace}.IAnimal"]);
+            Assert.Equal('c', entries[$"{TestDataPaths.SamplesNamespace}.BigClass"]);
         });
     }
 
@@ -92,10 +92,10 @@ public class TypeListerTests
     {
         WithReader(TestSamplesPath, reader =>
         {
-            // "genericbox" 小写应忽略大小写命中 ILSpyMcp.Samples.GenericBox`1
+            // "genericbox" 小写应忽略大小写命中 DotNetDebuggerMcp.Samples.GenericBox`1
             var names = TypeLister.ListTypes(reader, "c", "genericbox").Select(e => e.FullName).ToList();
 
-            Assert.Contains("ILSpyMcp.Samples.GenericBox`1", names);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericBox`1", names);
         });
     }
 
@@ -107,9 +107,9 @@ public class TypeListerTests
             // 子串 "Generic" 应命中多个含该片段的类型（部分匹配即可）
             var names = TypeLister.ListTypes(reader, "c", "Generic").Select(e => e.FullName).ToList();
 
-            Assert.Contains("ILSpyMcp.Samples.GenericBox`1", names);
-            Assert.Contains("ILSpyMcp.Samples.GenericCaller", names);
-            Assert.Contains("ILSpyMcp.Samples.GenericHelper", names);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericBox`1", names);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericCaller", names);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.GenericHelper", names);
         });
     }
 
@@ -141,10 +141,10 @@ public class TypeListerTests
     {
         WithReader(TestSamplesPath, reader =>
         {
-            // "ILSpyMcp.Samples" 命名空间下应包含 BigClass 等样本类型
-            var names = TypeLister.ListTypes(reader, "c", namespaceContains: "ILSpyMcp.Samples").Select(e => e.FullName).ToList();
+            // "DotNetDebuggerMcp.Samples" 命名空间下应包含 BigClass 等样本类型
+            var names = TypeLister.ListTypes(reader, "c", namespaceContains: TestDataPaths.SamplesNamespace).Select(e => e.FullName).ToList();
 
-            Assert.Contains("ILSpyMcp.Samples.BigClass", names);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.BigClass", names);
         });
     }
 
@@ -153,10 +153,10 @@ public class TypeListerTests
     {
         WithReader(TestSamplesPath, reader =>
         {
-            // 嵌套类型 Namespace 为空，取最外层声明类型命名空间（ILSpyMcp.Samples）；"Container" 是类型名而非命名空间，不应命中
+            // 嵌套类型 Namespace 为空，取最外层声明类型命名空间（DotNetDebuggerMcp.Samples）；"Container" 是类型名而非命名空间，不应命中
             var names = TypeLister.ListTypes(reader, "c", namespaceContains: "Container").Select(e => e.FullName).ToList();
 
-            Assert.DoesNotContain("ILSpyMcp.Samples.Container+Inner", names);
+            Assert.DoesNotContain($"{TestDataPaths.SamplesNamespace}.Container+Inner", names);
         });
     }
 
@@ -174,9 +174,9 @@ public class TypeListerTests
     {
         WithReader(TestSamplesPath, reader =>
         {
-            var names = TypeLister.ListTypes(reader, "c", namespaceContains: "ilspymcp.samples").Select(e => e.FullName).ToList();
+            var names = TypeLister.ListTypes(reader, "c", namespaceContains: "dotnetdebuggermcp.samples").Select(e => e.FullName).ToList();
 
-            Assert.Contains("ILSpyMcp.Samples.BigClass", names);
+            Assert.Contains($"{TestDataPaths.SamplesNamespace}.BigClass", names);
         });
     }
 

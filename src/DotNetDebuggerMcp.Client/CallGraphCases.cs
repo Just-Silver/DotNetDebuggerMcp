@@ -14,14 +14,14 @@ public static class CallGraphCases
         // Caller.Run/RunStatic 方法体调用 Callee（构造 + 方法），正向段应含 Callee
         new ToolCallCase("call_graph", "Caller 正向方法体调用含 Callee",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.CallerTypeName },
-            ExpectedContains: "ILSpyMcp.Samples.Callee", MustNotContain: "at System"),
+            ExpectedContains: TestDataHelper.CalleeTypeName, MustNotContain: "at System"),
         // Callee 的反向段应含 Caller（程序集内方法体调用了它的类型）
         new ToolCallCase("call_graph", "Callee 反向含 Caller",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Callee" },
-            ExpectedContains: "ILSpyMcp.Samples.Caller", MustNotContain: "at System"),
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.CalleeTypeName },
+            ExpectedContains: TestDataHelper.CallerTypeName, MustNotContain: "at System"),
         // Uses 方法体为空（仅默认 ctor 调 Object..ctor，跨程序集），两段均应输出（无）占位而非报错
         new ToolCallCase("call_graph", "Uses 方法体无内部调用（输出（无）占位）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Uses" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.UsesTypeName },
             ExpectedContains: "（无）", MustNotContain: "at System"),
         // 类型不存在应返回中文提示而非异常堆栈
         new ToolCallCase("call_graph", "类型不存在（应返回提示）",
@@ -35,11 +35,11 @@ public static class CallGraphCases
         // token 方法级调用点：Callee 首个方法 Help（被 Caller.Run 的 c.Help() 调用）→ 应含 Caller:: 调用点行
         new ToolCallCase("call_graph", "token 方法级调用点含 Caller",
             new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.CalleeTypeName, ["token"] = FirstCalleeMethodToken(dll) },
-            ExpectedContains: "ILSpyMcp.Samples.Caller::", MustNotContain: "at System"),
+            ExpectedContains: $"{TestDataHelper.CallerTypeName}::", MustNotContain: "at System"),
         // token 分支缺省 typeName：头部应体现方法级调用点
         new ToolCallCase("call_graph", "token 分支缺省 typeName 仍输出调用点",
             new Dictionary<string, object?> { ["assembly"] = dll, ["token"] = FirstCalleeMethodToken(dll) },
-            ExpectedContains: "ILSpyMcp.Samples.Caller::", MustNotContain: "at System"),
+            ExpectedContains: $"{TestDataHelper.CallerTypeName}::", MustNotContain: "at System"),
         // 非法 token 应返回中文提示
         new ToolCallCase("call_graph", "token 非法（应返回提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["token"] = "0xZZZZ" },

@@ -17,15 +17,15 @@ internal static class TestAssemblyWriter
     private const int ChainLength = 7;
 
     /// <summary>
-    /// 构造名为 ILSpyMcp.TestSamples.dll 的最小程序集（与 TestSamplesExt.dll 的 AssemblyRef 同名、可被 resolver 定位）：
-    /// 类型 ILSpyMcp.Samples.Callee 含 .ctor 与 Help 两方法，方法体为 call 指向越界 MemberRef 行——扫描解码时抛
+    /// 构造名为 <see cref="TestDataPaths.TestSamplesAssemblyName"/>.dll 的最小程序集（与 TestSamplesExt.dll 的 AssemblyRef 同名、可被 resolver 定位）：
+    /// 类型 <see cref="TestDataPaths.SamplesNamespace"/>.Callee 含 .ctor 与 Help 两方法，方法体为 call 指向越界 MemberRef 行——扫描解码时抛
     /// BadImageFormatException，触发 ExternalCallExpander.AbortedBodies 累计（供「降级计数并入」用例）。
     /// </summary>
     public static string WriteCorruptTestSamples(string dir)
     {
         var mb = new MetadataBuilder();
-        mb.AddAssembly(mb.GetOrAddString("ILSpyMcp.TestSamples"), new Version(1, 0, 0, 0), default, default, (AssemblyFlags)0, AssemblyHashAlgorithm.Sha1);
-        mb.AddModule(0, mb.GetOrAddString("ILSpyMcp.TestSamples.dll"), mb.GetOrAddGuid(Guid.NewGuid()), default, default);
+        mb.AddAssembly(mb.GetOrAddString(TestDataPaths.TestSamplesAssemblyName), new Version(1, 0, 0, 0), default, default, (AssemblyFlags)0, AssemblyHashAlgorithm.Sha1);
+        mb.AddModule(0, mb.GetOrAddString(TestDataPaths.TestSamplesAssemblyName + ".dll"), mb.GetOrAddGuid(Guid.NewGuid()), default, default);
 
         var corlibRef = mb.AddAssemblyReference(mb.GetOrAddString("System.Runtime"), new Version(10, 0, 0, 0), default, default, (AssemblyFlags)0, default);
         var objRef = mb.AddTypeReference(corlibRef, default, mb.GetOrAddString("Object"));
@@ -45,14 +45,14 @@ internal static class TestAssemblyWriter
             MethodImplAttributes.IL | MethodImplAttributes.Managed,
             mb.GetOrAddString("Help"), sigHandle, helpBody, MetadataTokens.ParameterHandle(1));
 
-        mb.AddTypeDefinition(TypeAttributes.Public | TypeAttributes.Class, mb.GetOrAddString("ILSpyMcp.Samples"),
+        mb.AddTypeDefinition(TypeAttributes.Public | TypeAttributes.Class, mb.GetOrAddString(TestDataPaths.SamplesNamespace),
             mb.GetOrAddString("Callee"), objRef, MetadataTokens.FieldDefinitionHandle(1), ctor);
 
         var root = new MetadataRootBuilder(mb);
         var peBuilder = new ManagedPEBuilder(PEHeaderBuilder.CreateLibraryHeader(), root, mbs.Builder);
         var blob = new BlobBuilder();
         peBuilder.Serialize(blob);
-        var path = Path.Combine(dir, "ILSpyMcp.TestSamples.dll");
+        var path = Path.Combine(dir, TestDataPaths.TestSamplesAssemblyName + ".dll");
         using (var fs = File.Create(path))
         {
             blob.WriteContentTo(fs);
@@ -61,14 +61,14 @@ internal static class TestAssemblyWriter
     }
 
     /// <summary>
-    /// 构造名为 DeepChain.dll 的自引用深链程序集：类型 ILSpyMcp.Deep.Chain 含 M0..M6 七个方法，每个方法经 MemberRef （parent
+    /// 构造名为 DeepChain.dll 的自引用深链程序集：类型 DotNetDebuggerMcp.Deep.Chain 含 M0..M6 七个方法，每个方法经 MemberRef （parent
     /// 为指向自身程序集 AssemblyRef 的 TypeRef，被 CallChainScanner 判为外部调用）调用下一个方法，构成 M0→M1→...→M6 的外部调用链。主
     /// dll 同目录可解析自身（AssemblyRef 与自身同名），供展开深度超限用例 （预修复展开全部 7 层，修复后最深层 M6 不再展开）。
     /// </summary>
     public static string WriteDeepChain(string dir)
     {
         const string asmName = "DeepChain";
-        const string typeNs = "ILSpyMcp.Deep";
+        const string typeNs = "DotNetDebuggerMcp.Deep";
         const string typeName = "Chain";
         var mb = new MetadataBuilder();
         mb.AddAssembly(mb.GetOrAddString(asmName), new Version(1, 0, 0, 0), default, default, (AssemblyFlags)0, AssemblyHashAlgorithm.Sha1);

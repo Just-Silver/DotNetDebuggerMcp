@@ -25,7 +25,7 @@ public static class DependenciesCases
         // includeExternal=true：Members.Changed 为 event EventHandler?（跨程序集），外部段应含
         // System.EventHandler 带程序集归属
         new ToolCallCase("dependencies", "Members includeExternal 外部段含 System.EventHandler",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Members", ["includeExternal"] = true },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = TestDataHelper.MembersTypeName, ["includeExternal"] = true },
             ExpectedContains: "System.EventHandler [System.Runtime]", MustNotContain: "at System"),
         // includeExternal=true 但签名无外部引用（Uses 仅引用内部类型）：外部段应输出（无）占位而非报错
         new ToolCallCase("dependencies", "Uses includeExternal 无外部引用（外部段输出（无）占位）",

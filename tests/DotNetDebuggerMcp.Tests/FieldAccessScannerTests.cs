@@ -15,12 +15,12 @@ public class FieldAccessScannerTests
     public void FieldHolder_Data_读取写入定位且无取地址()
     {
         using var scope = new MetadataScope();
-        var target = FieldHandle(scope.Reader, "ILSpyMcp.Samples.FieldHolder", "Data");
+        var target = FieldHandle(scope.Reader, $"{TestDataPaths.SamplesNamespace}.FieldHolder", "Data");
 
         var result = new FieldAccessScanner(scope.Pe).Scan(target);
 
-        Assert.Contains(result.Reads, r => r.StartsWith("ILSpyMcp.Samples.FieldUser::"));
-        Assert.Contains(result.Writes, w => w.StartsWith("ILSpyMcp.Samples.FieldWriter::"));
+        Assert.Contains(result.Reads, r => r.StartsWith($"{TestDataPaths.SamplesNamespace}.FieldUser::"));
+        Assert.Contains(result.Writes, w => w.StartsWith($"{TestDataPaths.SamplesNamespace}.FieldWriter::"));
         Assert.Empty(result.Addresses);
     }
 
@@ -28,7 +28,7 @@ public class FieldAccessScannerTests
     public void FieldHolder_Data_读取段行含成员签名()
     {
         using var scope = new MetadataScope();
-        var target = FieldHandle(scope.Reader, "ILSpyMcp.Samples.FieldHolder", "Data");
+        var target = FieldHandle(scope.Reader, $"{TestDataPaths.SamplesNamespace}.FieldHolder", "Data");
 
         var result = new FieldAccessScanner(scope.Pe).Scan(target);
 
@@ -40,7 +40,7 @@ public class FieldAccessScannerTests
     public void FieldHolder_Data_泛型实例化同名字段访问不误归因()
     {
         using var scope = new MetadataScope();
-        var target = FieldHandle(scope.Reader, "ILSpyMcp.Samples.FieldHolder", "Data");
+        var target = FieldHandle(scope.Reader, $"{TestDataPaths.SamplesNamespace}.FieldHolder", "Data");
 
         var result = new FieldAccessScanner(scope.Pe).Scan(target);
 
@@ -53,7 +53,7 @@ public class FieldAccessScannerTests
     public void GenericFieldBox_Data_泛型实例化字段访问归因到容器自身字段()
     {
         using var scope = new MetadataScope();
-        var target = FieldHandle(scope.Reader, "ILSpyMcp.Samples.GenericFieldBox`1", "Data");
+        var target = FieldHandle(scope.Reader, $"{TestDataPaths.SamplesNamespace}.GenericFieldBox`1", "Data");
 
         var result = new FieldAccessScanner(scope.Pe).Scan(target);
 

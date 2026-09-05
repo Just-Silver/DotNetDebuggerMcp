@@ -16,7 +16,7 @@ public class SignatureToolTests
     public async Task Signature_BigClass_含方法签名且不含访问器()
     {
         // BigClass 只含方法（BigMethod/BigHelper/BigHelper2 + 隐式构造函数），无字段/属性/事件，故无 get_ 访问器
-        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("BigMethod(", result);
         Assert.Contains("static", result);
@@ -37,7 +37,7 @@ public class SignatureToolTests
     public async Task Signature_Members_每行行尾附方法属性token()
     {
         // Members 含方法（Raise/隐式 ctor，token 0x06）、属性（Count，token 0x17），行尾应附 token 供 agent 直接反编译
-        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Members", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("  0x06", result);
         Assert.Contains("  0x17", result);
@@ -58,7 +58,7 @@ public class SignatureToolTests
 
         Assert.Contains("未找到类型", result);
         Assert.Contains("相近类型", result);
-        Assert.Contains("ILSpyMcp.Samples.BigClass", result);
+        Assert.Contains($"{TestDataPaths.SamplesNamespace}.BigClass", result);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class SignatureToolTests
     public async Task Signature_Dog_接口实现方法不渲染sealed()
     {
         // C# 编译器把隐式接口实现标为 sealed virtual newslot，但源码是普通方法，渲染时不得出现 sealed
-        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Dog", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Dog", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("public void Speak();", result);
         Assert.DoesNotContain("sealed", result);
@@ -101,7 +101,7 @@ public class SignatureToolTests
     [Fact]
     public async Task Signature_Props_静态属性带static且索引器渲染this()
     {
-        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.Props", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.Props", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("public static string StaticProp { get; set; }", result);
         Assert.Contains("public int this[int] { get; set; }", result);
@@ -111,7 +111,7 @@ public class SignatureToolTests
     [Fact]
     public async Task Signature_GenericBox_泛型构造函数名不含arity()
     {
-        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.GenericBox`1", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.GenericBox`1", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("public GenericBox<T>();", result);
         Assert.DoesNotContain("GenericBox`1<T>", result);
@@ -121,11 +121,11 @@ public class SignatureToolTests
     public async Task Signature_ThingImpl_显式接口访问器不重复渲染()
     {
         // 显式接口属性访问器（Ns.IThing.get_Value）既不能被当方法行重复输出，也不能丢失属性行
-        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.ThingImpl", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.ThingImpl", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain("get_Value", result);
         Assert.DoesNotContain("get_", result);
-        Assert.Contains("private int ILSpyMcp.Samples.IThing.Value { get; }", result);
+        Assert.Contains($"private int {TestDataPaths.SamplesNamespace}.IThing.Value {{ get; }}", result);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class SignatureToolTests
     {
         // BigClass 含 BigMethod/BigHelper/BigHelper2 等多个成员签名，lines="1-2" 应返回带行号的前两行且不提示截断
         // 头部信息块前置，body 首行为 "1\t..."
-        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", lines: "1-2", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", lines: "1-2", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("\n1\t", result);
         Assert.DoesNotContain("已截断", result);
@@ -142,7 +142,7 @@ public class SignatureToolTests
     [Fact]
     public async Task Signature_lines非法格式_返回格式提示()
     {
-        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", lines: "abc", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SignatureTool.Signature(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", lines: "abc", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("lines 参数格式应为", result);
     }

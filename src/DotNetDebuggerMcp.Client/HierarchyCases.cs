@@ -20,15 +20,15 @@ public static class HierarchyCases
             ExpectedContains: "Dog", MustNotContain: "at System"),
         // Dog 接口段：应列出其实现的 IAnimal
         new ToolCallCase("hierarchy", "Dog 接口段（含 IAnimal）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Dog" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataHelper.SamplesNamespace}.Dog" },
             ExpectedContains: "IAnimal", MustNotContain: "at System"),
         // includeIndirect=true：接口 IWorker 的全部（间接）实现者应含 WorkerDerived（经 WorkerBase 间接实现）
         new ToolCallCase("hierarchy", "IWorker includeIndirect=true 含间接实现者 WorkerDerived",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.IWorker", ["includeIndirect"] = true },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataHelper.SamplesNamespace}.IWorker", ["includeIndirect"] = true },
             ExpectedContains: "WorkerDerived", MustNotContain: "at System"),
         // includeIndirect 缺省（false）：Level1 只列直接后代 Level2，不应出现 Level3/Level4
         new ToolCallCase("hierarchy", "Level1 默认 includeIndirect=false 仅直接后代",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = "ILSpyMcp.Samples.Level1" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataHelper.SamplesNamespace}.Level1" },
             ExpectedContains: "Level2", MustNotContain: "Level3"),
         // 类型不存在应返回中文提示而非异常堆栈
         new ToolCallCase("hierarchy", "类型不存在（应返回提示）",

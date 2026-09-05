@@ -14,7 +14,7 @@
 
 ## 共享纪律
 
-- **`tests/TestData/*.dll`/`*.exe`/`*.runtimeconfig.json` 全部 git 忽略**（`.gitignore`），唯一受跟踪文件是 `generate-testdata.ps1`——脚本产出 `ILSpyMcp.TestSamples.dll`（反编译/元数据用例）+ `ILSpyMcp.TestSamplesExt.dll`（跨程序集用例）+ `DebugTarget.exe/dll/runtimeconfig`（调试用例）。**新克隆/CI 必须先生成**：`powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1`。
+- **`tests/TestData/*.dll`/`*.exe`/`*.runtimeconfig.json` 全部 git 忽略**（`.gitignore`），唯一受跟踪文件是 `generate-testdata.ps1`——脚本产出 `DotNetDebuggerMcp.TestSamples.dll`（反编译/元数据用例）+ `DotNetDebuggerMcp.TestSamplesExt.dll`（跨程序集用例）+ `DebugTarget.exe/dll/runtimeconfig`（调试用例）。**新克隆/CI 必须先生成**：`powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1`。
 - 改 TestSamples/DebugTarget 源码后需重跑脚本；**token 随源码变化，断点/成员定位类断言会漂移**——不 rename/remove 既有类型保 token 稳定。
 - 各测试项目的 `TestDataPaths.cs`/`TestPaths.cs` 都从测试进程 CWD 上溯找 `DotNetDebuggerMcp.slnx` 再拼 dll 路径——路径解析基准是测试进程 CWD（`bin/Debug/net10.0`）。
 - 宿主测试里串行化使用 `AppServices` 静态状态的测试类（`CheckToolTests`/`ToolPipelineTests`/`CacheStatsToolTests`/各 ToolTests 等）标注 `[Collection("AppServices")]`——新增改静态单例注入的测试时加入同集合，避免并行竞态。

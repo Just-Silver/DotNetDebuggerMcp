@@ -13,7 +13,7 @@ public class InProcessDecompilerTests
     [Fact]
     public void DecompileType_命中BigClass_包含类声明与方法()
     {
-        var result = InProcessDecompiler.DecompileType(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", cancellationToken: TestContext.Current.CancellationToken);
+        var result = InProcessDecompiler.DecompileType(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("class BigClass", result);
         Assert.Contains("BigMethod", result);
@@ -68,7 +68,7 @@ public class InProcessDecompilerTests
     public void DecompileMember_合法token_返回成员反编译文本()
     {
         // 经元数据层解析 BigClass.BigMethod 的真实 token（0x06000005 形式），验证 DecompileMember 命中
-        var (typeFound, matches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, "ILSpyMcp.Samples.BigClass", "BigMethod");
+        var (typeFound, matches, _) = MemberResolver.FindMembers(TestDataPaths.TestSamplesDll, $"{TestDataPaths.SamplesNamespace}.BigClass", "BigMethod");
         Assert.True(typeFound);
         var token = Assert.Single(matches, m => m.Name == "BigMethod").Token;
 
@@ -110,12 +110,12 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass", cancellationToken: TestContext.Current.CancellationToken);
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, $"{TestDataPaths.SamplesNamespace}.BigClass", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             Assert.Contains("1 个文件", result);
             Assert.Contains("来源", result);
-            var file = Path.Combine(dir, "ILSpyMcp.Samples.BigClass.decompiled.cs");
+            var file = Path.Combine(dir, TestDataPaths.SamplesNamespace + ".BigClass.decompiled.cs");
             Assert.True(File.Exists(file));
             Assert.Single(Directory.GetFiles(dir));
             Assert.Contains("class BigClass", File.ReadAllText(file));
@@ -136,7 +136,7 @@ public class InProcessDecompilerTests
 
             Assert.Contains("已写入", result);
             Assert.Contains("1 个文件", result);
-            var file = Path.Combine(dir, "ILSpyMcp.TestSamples.decompiled.cs");
+            var file = Path.Combine(dir, TestDataPaths.TestSamplesAssemblyName + ".decompiled.cs");
             Assert.True(File.Exists(file));
             Assert.Single(Directory.GetFiles(dir));
             Assert.Contains("class BigClass", File.ReadAllText(file));
@@ -170,16 +170,16 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Circle", cancellationToken: TestContext.Current.CancellationToken);
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, $"{TestDataPaths.SamplesNamespace}.BigClass,{TestDataPaths.SamplesNamespace}.Circle", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             Assert.Contains("2 个文件", result);
             Assert.Contains("来源", result);
             Assert.DoesNotContain("未找到", result);
-            Assert.True(File.Exists(Path.Combine(dir, "ILSpyMcp.Samples.BigClass.decompiled.cs")));
-            Assert.True(File.Exists(Path.Combine(dir, "ILSpyMcp.Samples.Circle.decompiled.cs")));
-            Assert.Contains("class BigClass", File.ReadAllText(Path.Combine(dir, "ILSpyMcp.Samples.BigClass.decompiled.cs")));
-            Assert.Contains("class Circle", File.ReadAllText(Path.Combine(dir, "ILSpyMcp.Samples.Circle.decompiled.cs")));
+            Assert.True(File.Exists(Path.Combine(dir, TestDataPaths.SamplesNamespace + ".BigClass.decompiled.cs")));
+            Assert.True(File.Exists(Path.Combine(dir, TestDataPaths.SamplesNamespace + ".Circle.decompiled.cs")));
+            Assert.Contains("class BigClass", File.ReadAllText(Path.Combine(dir, TestDataPaths.SamplesNamespace + ".BigClass.decompiled.cs")));
+            Assert.Contains("class Circle", File.ReadAllText(Path.Combine(dir, TestDataPaths.SamplesNamespace + ".Circle.decompiled.cs")));
         }
         finally
         {
@@ -193,12 +193,12 @@ public class InProcessDecompilerTests
         var dir = NewTempDir();
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, "ILSpyMcp.Samples.BigClass,No.Such.Type", cancellationToken: TestContext.Current.CancellationToken);
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, dir, $"{TestDataPaths.SamplesNamespace}.BigClass,No.Such.Type", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("已写入", result);
             Assert.Contains("1 个文件", result);
             Assert.Contains("未找到：No.Such.Type", result);
-            Assert.True(File.Exists(Path.Combine(dir, "ILSpyMcp.Samples.BigClass.decompiled.cs")));
+            Assert.True(File.Exists(Path.Combine(dir, TestDataPaths.SamplesNamespace + ".BigClass.decompiled.cs")));
             Assert.Single(Directory.GetFiles(dir));
         }
         finally
@@ -231,9 +231,9 @@ public class InProcessDecompilerTests
         var outDir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-tests-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, outDir, "ILSpyMcp.Samples.BigClass,ILSpyMcp.Samples.Members", cancellationToken: TestContext.Current.CancellationToken);
-            Assert.Contains("ILSpyMcp.Samples.BigClass.decompiled.cs", result);
-            Assert.Contains("ILSpyMcp.Samples.Members.decompiled.cs", result);
+            var result = InProcessDecompiler.DecompileToDir(TestDataPaths.TestSamplesDll, outDir, $"{TestDataPaths.SamplesNamespace}.BigClass,{TestDataPaths.SamplesNamespace}.Members", cancellationToken: TestContext.Current.CancellationToken);
+            Assert.Contains(TestDataPaths.SamplesNamespace + ".BigClass.decompiled.cs", result);
+            Assert.Contains(TestDataPaths.SamplesNamespace + ".Members.decompiled.cs", result);
         }
         finally { if (Directory.Exists(outDir)) Directory.Delete(outDir, recursive: true); }
     }
@@ -248,7 +248,7 @@ public class InProcessDecompilerTests
 
             Assert.Contains("已写入", result);
             Assert.Contains("来源", result);
-            Assert.True(File.Exists(Path.Combine(dir, "ILSpyMcp.TestSamples.csproj")));
+            Assert.True(File.Exists(Path.Combine(dir, TestDataPaths.TestSamplesAssemblyName + ".csproj")));
             var files = Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories);
             Assert.NotEmpty(files);
         }
@@ -267,7 +267,7 @@ public class InProcessDecompilerTests
         try
         {
             InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false, cancellationToken: TestContext.Current.CancellationToken);
-            var csproj = Path.Combine(dir, "ILSpyMcp.TestSamples.csproj");
+            var csproj = Path.Combine(dir, TestDataPaths.TestSamplesAssemblyName + ".csproj");
             File.WriteAllText(csproj, new string(' ', 200000) + "GARBAGE_TRAILING_MARKER");
 
             var result = InProcessDecompiler.DecompileToProject(TestDataPaths.TestSamplesDll, dir, nestedDirectories: false, cancellationToken: TestContext.Current.CancellationToken);

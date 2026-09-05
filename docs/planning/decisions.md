@@ -26,6 +26,7 @@
 - 理由：改动面最小、回归风险低（改名需动 40 文件/312 处断言 + 重新生成 dll）。
 - 后续改时联动：generate-testdata.ps1、Client Cases、Tests 全部 `ILSpyMcp.Samples*` 字符串、TestDataPaths/TestDataHelper/TestAssemblyWriter、`.gitignore` 无关。
 - 日期：2026-09-05。
+- **已撤销（2026-09-06）**：测试样本统一改名 `DotNetDebuggerMcp.Samples`/`SamplesExt`/`TestSamples(.Ext)`，dll 重生成；标识符常量化（generate-testdata.ps1 顶部变量 + 各 TestDataPaths.cs/TestDataHelper.cs 共享常量 + TestAssemblyWriter 引用），后续改名只动常量一处。
 
 ## D1 · 三项目模块化拆分（用户拍板）
 - 决策：现 ilspy（反编译/静态分析）**改名保留为子项目 A**；**新增子项目 B 动态调试引擎**（dnSpyEx 式，先实现）；**主项目作为对外 MCP 服务 + 拉起 WebUI** 渲染 agent 主导的调试过程；主项目引用两个子项目，模块化开发。先实现动态调试，再做主项目整合。

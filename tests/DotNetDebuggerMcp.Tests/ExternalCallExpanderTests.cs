@@ -9,7 +9,7 @@ namespace DotNetDebuggerMcp.Tests;
 /// <summary>
 /// ExternalCallExpander 跨程序集调用链展开用例：ExtCaller.Run 对 TestSamples.Callee 的跨程序集调用可经
 /// UniversalAssemblyResolver 定位 TestSamples.dll 并展开其方法体子序列；框架类调用（System.Console）解析失败
-/// 或不抛异常（找不到返回空）。素材：tests/TestData 的 ILSpyMcp.TestSamplesExt.dll（引用 TestSamples.dll）。
+/// 或不抛异常（找不到返回空）。素材：tests/TestData 的 DotNetDebuggerMcp.TestSamplesExt.dll（引用 TestSamples.dll）。
 /// </summary>
 public class ExternalCallExpanderTests
 {
@@ -21,7 +21,7 @@ public class ExternalCallExpanderTests
         using var scope = new MainScope();
         var external = Assert.Single(ScanExtCallerRun(scope.Reader, scope.Pe), c =>
             c.IsExternal && c.MemberName == ".ctor");
-        Assert.StartsWith("ILSpyMcp.TestSamples", external.AssemblyFullName);
+        Assert.StartsWith(TestDataPaths.TestSamplesAssemblyName, external.AssemblyFullName);
 
         using var expander = new ExternalCallExpander(TestDataPaths.TestSamplesExtDll);
         var expanded = expander.Expand(external, new[] { Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, Environment.CurrentDirectory });
@@ -60,16 +60,16 @@ public class ExternalCallExpanderTests
         try
         {
             TestAssemblyWriter.WriteCorruptTestSamples(tempDir);
-            var tempMain = Path.Combine(tempDir, "ILSpyMcp.TestSamplesExt.dll");
+            var tempMain = Path.Combine(tempDir, TestDataPaths.TestSamplesExtAssemblyName + ".dll");
             File.Copy(TestDataPaths.TestSamplesExtDll, tempMain, overwrite: true);
 
             var callSite = new CallSite(
                 IsExternal: true,
-                TypeFullName: "ILSpyMcp.Samples.Callee",
+                TypeFullName: $"{TestDataPaths.SamplesNamespace}.Callee",
                 MemberName: ".ctor",
                 Signature: "",
                 MemberToken: null,
-                AssemblyFullName: "ILSpyMcp.TestSamples, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+                AssemblyFullName: $"{TestDataPaths.TestSamplesAssemblyName}, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
                 ParamCount: 0);
 
             using var expander = new ExternalCallExpander(tempMain);
@@ -96,7 +96,7 @@ public class ExternalCallExpanderTests
             var mainPath = TestAssemblyWriter.WriteDeepChain(tempDir);
             var callSite = new CallSite(
                 IsExternal: true,
-                TypeFullName: "ILSpyMcp.Deep.Chain",
+                TypeFullName: "DotNetDebuggerMcp.Deep.Chain",
                 MemberName: "M0",
                 Signature: "",
                 MemberToken: null,
@@ -125,7 +125,7 @@ public class ExternalCallExpanderTests
 
     private static IReadOnlyList<CallSite> ScanExtCallerRun(MetadataReader reader, PEReader pe)
     {
-        var handle = MetadataNaming.FindType(reader, "ILSpyMcp.SamplesExt.ExtCaller");
+        var handle = MetadataNaming.FindType(reader, $"{TestDataPaths.SamplesExtNamespace}.ExtCaller");
         Assert.True(handle.HasValue, "测试程序集中未找到 ExtCaller");
         var type = reader.GetTypeDefinition(handle!.Value);
         foreach (var methodHandle in type.GetMethods())
