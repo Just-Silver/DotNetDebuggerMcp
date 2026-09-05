@@ -1,6 +1,6 @@
 # DotNet-Debugger-MCP（dotnet-debugger-mcp）
 
-内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测与源码写盘，开箱即用。**动态调试能力规划中（P2+）**。
+内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量），开箱即用。
 
 ## 目录
 
@@ -107,7 +107,20 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | ---- | ---- |
 | `dotnetdebugger_cache_stats` | 共享缓存状态：占用/上限、条目数、命中率与逐条明细 |
 
+### 动态调试（需可启动/附加的 .NET 进程）
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时） |
+| `dotnetdebugger_debug_breakpoint_set` / `_remove` / `_clear` | 按 模块+方法 token（signature 行尾取）+IL offset 下/删/清断点 |
+| `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` | 继续执行 / 单步（into/over/out，进程需停在断点） |
+| `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处） |
+| `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时） |
+| `dotnetdebugger_debug_exceptions` / `_clear` | first-chance 异常断点（异常时停下 / 清除） |
+| `dotnetdebugger_debug_disconnect` | 断开调试会话 |
+
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
+> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 用 `signature`/`decompile_member` 反编译定位方法并取 token → `debug_breakpoint_set` 下断点 → `debug_continue` 运行；进程停（`debug_state` 显示 Stopped）后 `debug_stack`/`debug_variables` 观察、`debug_step` 单步、`debug_disconnect` 结束。控制工具异步返回，停点信息用查询工具获取。
 
 ## 命令行调试
 

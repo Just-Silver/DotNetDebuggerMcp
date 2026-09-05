@@ -100,7 +100,7 @@ public class DotNetDebuggerMcpCmdTests
         var text = DotNetDebuggerMcpCmd.BuildServerInstructions(report);
 
         Assert.StartsWith("## 服务器简介", text);
-        Assert.Contains("## 工具一览", text);
+        Assert.Contains("## 何时使用", text);
         Assert.Contains("## 使用约定", text);
         Assert.Contains(AppText.HandshakeFeatureIntro, text);
         Assert.EndsWith(report, text);
@@ -114,24 +114,15 @@ public class DotNetDebuggerMcpCmdTests
     }
 
     [Fact]
-    public void BuildServerInstructions_工具一览_包含全部16个工具()
+    public void HandshakeFeatureIntro_含反编译与调试触发条件()
     {
         var text = AppText.HandshakeFeatureIntro;
-        foreach (var tool in AllHandshakeTools)
-        {
-            Assert.Contains($"**`{tool}`**", text);
-        }
+        // 触发条件导向：含两类能力的「何时使用」，不逐条列工具
+        Assert.Contains("反编译", text);
+        Assert.Contains("动态调试", text);
+        Assert.Contains("## 何时使用", text);
+        Assert.DoesNotContain("## 工具一览", text);
     }
-
-    /// <summary>
-    /// 握手功能简介「工具一览」应覆盖的全部 MCP 工具（与 Tools 目录工具类一一对应；新增工具需同步 <see cref="AppText.HandshakeFeatureIntro"/>）。
-    /// </summary>
-    private static readonly string[] AllHandshakeTools =
-    [
-        "decompile", "decompile_member", "decompile_to_dir", "decompile_to_project",
-        "list_types", "signature", "hierarchy", "dependencies", "call_graph", "assembly_info",
-        "search_string", "field_access", "interface_usage", "generic_instantiations", "call_chain", "cache_stats",
-    ];
 
     /// <summary>
     /// 取测试程序集 ChainTop.Run 的元数据 token，供 -cc 分发用例。

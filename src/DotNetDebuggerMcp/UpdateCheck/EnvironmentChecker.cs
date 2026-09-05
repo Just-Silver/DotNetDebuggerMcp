@@ -8,7 +8,7 @@ namespace DotNetDebuggerMcp.UpdateCheck;
 internal static class EnvironmentChecker
 {
     /// <summary>
-    /// 握手注入「## 更新状态」段的标题（ServerInstructions 全量 Markdown 分节，与功能简介的「## 服务器简介/工具一览/使用约定」同构；
+    /// 握手注入「## 更新状态」段的标题（ServerInstructions 全量 Markdown 分节，与功能简介的「## 服务器简介/何时使用/使用约定」同构；
     /// 仅更新报告段使用，CLI -c 走 <see cref="UpdateChecker.GetCachedNuGetLine"/> 不含此标题）。
     /// </summary>
     private const string UpdateStatusHeading = "## 更新状态";

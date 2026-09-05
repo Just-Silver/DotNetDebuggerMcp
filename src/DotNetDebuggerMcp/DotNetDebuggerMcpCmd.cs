@@ -288,7 +288,7 @@ public class DotNetDebuggerMcpCmd
 
     /// <summary>
     /// 组装握手期注入 <c>ServerInstructions</c> 的上下文文本：Markdown 功能简介（<see cref="AppText.HandshakeFeatureIntro"/>，服务器简介/
-    /// 工具一览/使用约定三块标题分节，面向 agent 的触发条件与全量工具索引）；更新报告非空时空行分隔追加（「## 更新状态」段自带标题）。
+    /// 何时使用/使用约定三块标题分节，触发条件导向——不逐条列工具）；更新报告非空时空行分隔追加（「## 更新状态」段自带标题）。
     /// 工作目录不再注入——客户端环境已在系统上下文中提供，简介的使用约定段仅提示相对路径基于当前工作目录。
     /// </summary>
     /// <param name="updateReport">

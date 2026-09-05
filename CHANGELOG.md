@@ -10,8 +10,9 @@
 
 ### Added
 
-- **动态调试引擎 v1（`DotNetDebugger.Engine` 库，能力预览，尚未暴露 MCP 工具）**：进程内 .NET 调试引擎（ICorDebug 通道，ClrDebug + DbgShim），支持启动/附加目标进程、按方法 token+IL offset 下断点、continue、单步（into/over/out）、读线程/调用栈/局部变量（标量）、first-chance 异常断点、统一 `DebugEvent` 事件流；宿主新增 `-dbg` CLI 一次性调试命令供手动验证。**MCP 调试工具面在后续版本接入（P3）**
-- **测试设施**：`tests/TestData` 追加生成可执行调试目标 `DebugTarget.exe`；新增 `tests/DotNetDebugger.Engine.Tests` 集成测试（真实子进程 attach/断点/单步/状态/异常，串行执行避免 ICorDebug 会话干扰）
+- **动态调试 MCP 工具面（P3）**：新增 `dotnetdebugger_debug_*` 系列工具——会话（`debug_launch`/`debug_attach`/`debug_disconnect`/`debug_state`）、控制（`debug_continue`/`debug_step` into/over/out）、断点（`debug_breakpoint_set`/`_remove`/`_clear`，按 模块+方法 token+IL offset）、观察（`debug_stack`/`debug_threads`/`debug_variables`）、异常断点（`debug_exceptions`/`_clear`）。控制工具**异步返回（带默认超时）**，停点信息经查询工具获取。新增 `DotNetDebugger.Session` 库（会话管理 + 停点事件缓冲 + agent 轨迹日志）
+- **动态调试引擎 v1（`DotNetDebugger.Engine` 库）**：进程内 .NET 调试引擎（ICorDebug 通道，ClrDebug + DbgShim），支持启动/附加目标进程、按方法 token+IL offset 下断点、continue、单步、读线程/调用栈/局部变量（标量）、first-chance 异常断点、统一 `DebugEvent` 事件流；宿主另有 `-dbg` CLI 一次性调试命令
+- **测试设施**：`tests/TestData` 追加可执行调试目标 `DebugTarget.exe`；新增 `DotNetDebugger.Engine.Tests`（真实子进程 attach/断点/单步/状态/异常）与 `DotNetDebugger.Session.Tests`（会话管理/轨迹）集成测试，串行执行避免 ICorDebug 会话干扰
 
 ### 重构
 
