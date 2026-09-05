@@ -1,0 +1,41 @@
+@inject IJSRuntime Js
+@implements IAsyncDisposable
+
+<div id="@_editorId" style="width:100%;height:100%;min-height:400px;"></div>
+
+@code {
+    private string _editorId = "codeviewer_" + Guid.NewGuid().ToString("N");
+    private DotNetObjectReference<CodeViewer>? _self;
+    private string[] _currentDecorationIds = [];   // Monaco 装饰 id 是 string（deltaDecorations 返回 string[]）
+
+    [Parameter] public string? Language { get; set; } = "csharp";
+
+    /// <summary>设编辑器文本（换文档；内部清装饰）。</summary>
+    public async Task SetValueAsync(string text) =>
+        await Js.InvokeVoidAsync("dotnetDebuggerMonaco.setValue", _editorId, text);
+
+    /// <summary>更新断点行集合 + 当前执行行（全量重推装饰）。</summary>
+    public async Task SetDecorationsAsync(int[] breakpointLines, int? currentLine)
+    {
+        _currentDecorationIds = await Js.InvokeAsync<string[]>(
+            "dotnetDebuggerMonaco.deltaDecorations", _editorId, _currentDecorationIds, breakpointLines, currentLine ?? 0) ?? [];
+    }
+
+    /// <summary>滚动定位到行。</summary>
+    public async Task RevealLineAsync(int line) =>
+        await Js.InvokeVoidAsync("dotnetDebuggerMonaco.revealLineInCenter", _editorId, line);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Js.InvokeVoidAsync("dotnetDebuggerMonaco.create", _editorId, Language);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await Js.InvokeVoidAsync("dotnetDebuggerMonaco.dispose", _editorId); } catch { }
+        _self?.Dispose();
+    }
+}

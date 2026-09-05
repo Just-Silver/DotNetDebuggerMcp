@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <PackageReference Include="BootstrapBlazor" Version="10.*" />
+    <!-- Fluent UI 主题（覆盖默认 Bootstrap 皮肤，微软风；默认暗色经 data-bs-theme="dark"） -->
+    <PackageReference Include="BootstrapBlazor.Theme.Fluent" Version="10.*" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-bs-theme='light'>
+<html lang="zh-CN" data-bs-theme='dark'>
 
 <head>
     <meta charset="utf-8" />
@@ -9,6 +9,8 @@
 
     <!-- 纯 UseStaticFiles 服务：无 MapStaticAssets 指纹化，RCL 资产用 _content/{PackageId}/ 静态路径 -->
     <link rel="stylesheet" href="_content/BootstrapBlazor/css/bootstrap.blazor.bundle.min.css" />
+    <!-- Fluent UI 主题（微软风，覆盖默认 Bootstrap 皮肤） -->
+    <link rel="stylesheet" href="_content/BootstrapBlazor.Theme.Fluent/fluent.css" />
 
     <!-- Monaco 装饰样式（全局非 scoped：Monaco 动态插入 DOM 不受 .razor.css 作用域约束） -->
     <style>

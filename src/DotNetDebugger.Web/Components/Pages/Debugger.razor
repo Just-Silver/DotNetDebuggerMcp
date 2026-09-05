@@ -13,11 +13,15 @@
         <input @bind="_typeName" class="form-control form-control-sm" placeholder="类型全名，如 ILSpyMcp.Samples.BigClass" />
     </div>
     <div class="col-md-3">
-        <button class="btn btn-primary btn-sm" @onclick="LoadType">反编译显示</button>
-        <button class="btn btn-outline-secondary btn-sm ms-1" @onclick="DemoStop">演示停点</button>
+        <Button IsAsync="true" Color="Color.Primary" Size="Size.Small" OnClick="LoadType">反编译显示</Button>
+        <Button IsAsync="true" Color="Color.Secondary" Size="Size.Small" class="ms-1" OnClick="DemoStop">演示停点</Button>
     </div>
 </div>
-@if (_doc is { IsSuccess: true } && _doc.Error is null)
+@if (_loading)
+{
+    <div class="text-muted small mb-1"><i class="fa-solid fa-spin fa-spinner me-1"></i>反编译中，请稍候…</div>
+}
+else if (_doc is { IsSuccess: true } && _doc.Error is null)
 {
     <div class="text-muted small mb-1">
         已加载 @_doc.TypeFullName（@_doc.Lines.Length 行，@_doc.Mapping.Count 条 IL→行映射）
@@ -43,16 +47,26 @@ else if (_doc is not null)
     private (int MethodToken, int Offset, int Line)? _stopInfo;
     private string _assemblyPath = "";
     private string _typeName = "ILSpyMcp.Samples.BigClass";
+    private bool _loading;
 
     private async Task LoadType()
     {
         if (string.IsNullOrWhiteSpace(_assemblyPath) || string.IsNullOrWhiteSpace(_typeName) || _viewer is null) return;
-        _doc = _store.GetOrLoad(_assemblyPath.Trim(), _typeName.Trim());
+        _loading = true;
         _stopInfo = null;
-        if (_doc.IsSuccess)
+        await InvokeAsync(StateHasChanged);   // 先渲染加载指示，再执行反编译
+        try
         {
-            await _viewer.SetValueAsync(_doc.Text);
-            await _viewer.SetDecorationsAsync([], null);
+            _doc = await _store.GetOrLoadAsync(_assemblyPath.Trim(), _typeName.Trim());
+            if (_doc.IsSuccess)
+            {
+                await _viewer.SetValueAsync(_doc.Text);
+                await _viewer.SetDecorationsAsync([], null);
+            }
+        }
+        finally
+        {
+            _loading = false;
         }
     }
 

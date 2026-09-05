@@ -12,7 +12,7 @@ public sealed class DocumentStore
     private readonly object _gate = new();
     private readonly Dictionary<string, SourceDocument> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>按 程序集+类型 取文档；未缓存则反编译并缓存。失败返回带 Error 的文档（不入缓存）。</summary>
+    /// <summary>按 程序集+类型 取文档；未缓存则反编译并缓存。失败返回带 Error 的文档（不入缓存）。同步版。</summary>
     public SourceDocument GetOrLoad(string assemblyPath, string typeFullName)
     {
         var key = CacheKey(assemblyPath, typeFullName);
@@ -27,6 +27,26 @@ public sealed class DocumentStore
             lock (_gate) _cache[key] = doc;
         }
         return doc;
+    }
+
+    /// <summary>异步版：反编译在后台线程执行（反编译成本高，避免阻塞 UI 线程——Blazor 组件加载指示依赖先刷新）。</summary>
+    public Task<SourceDocument> GetOrLoadAsync(string assemblyPath, string typeFullName)
+    {
+        var key = CacheKey(assemblyPath, typeFullName);
+        lock (_gate)
+        {
+            if (_cache.TryGetValue(key, out var cached)) return Task.FromResult(cached);
+        }
+
+        return Task.Run(() =>
+        {
+            var doc = DocumentService.GetTypeDocument(assemblyPath, typeFullName);
+            if (doc.IsSuccess)
+            {
+                lock (_gate) _cache[key] = doc;
+            }
+            return doc;
+        });
     }
 
     /// <summary>停点 IL offset → 反编译文本行号（语句级映射，DocumentService）。无活动文档返回 null。</summary>
