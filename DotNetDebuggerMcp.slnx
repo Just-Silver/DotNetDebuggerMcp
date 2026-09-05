@@ -8,6 +8,7 @@
     <Project Path="src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.Client.csproj" Id="f3860b2b-4192-4565-a126-d506da738ec3" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/DotNetDebugger.Engine.Tests/DotNetDebugger.Engine.Tests.csproj" />
     <Project Path="tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj" />
   </Folder>
 </Solution>
