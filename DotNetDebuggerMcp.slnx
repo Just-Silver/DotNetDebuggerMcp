@@ -5,5 +5,9 @@
     <Project Path="src/DotNetDebugger.Session/DotNetDebugger.Session.csproj" />
     <Project Path="src/DotNetDebugger.Web/DotNetDebugger.Web.csproj" />
     <Project Path="src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj" />
+    <Project Path="src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.Client.csproj" Id="f3860b2b-4192-4565-a126-d506da738ec3" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj" />
   </Folder>
 </Solution>

@@ -11,9 +11,10 @@
     <PackageReference Include="ICSharpCode.Decompiler" Version="11.0.0.9375" />
   </ItemGroup>
 
-  <!-- 宿主（与将来的宿主测试）需访问库 internal（如 InProcessDecompiler.IsErrorResult）——库对宿主可见 internals，避免过早 public 化内部 API -->
+  <!-- 宿主（与宿主测试）需访问库 internal（如 InProcessDecompiler.IsErrorResult）——库对宿主可见 internals，避免过早 public 化内部 API -->
   <ItemGroup>
     <InternalsVisibleTo Include="DotNetDebuggerMcp" />
+    <InternalsVisibleTo Include="DotNetDebuggerMcp.Tests" />
   </ItemGroup>
 
 </Project>

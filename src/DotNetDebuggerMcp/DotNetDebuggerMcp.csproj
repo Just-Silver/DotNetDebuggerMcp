@@ -42,4 +42,9 @@
     <ProjectReference Include="..\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
   </ItemGroup>
 
+  <!-- 宿主测试项目访问宿主 internals（如 ILSpyMcpCmd 内部方法） -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="DotNetDebuggerMcp.Tests" />
+  </ItemGroup>
+
 </Project>
