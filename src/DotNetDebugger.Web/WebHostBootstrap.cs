@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -32,16 +33,20 @@ public static class WebHostBootstrap
         builder.Logging.ClearProviders();
         builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
         builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+        // 从 build output（dotnet build 产物，非 publish）运行时服务 RCL/框架静态资产：
+        // 官方文档要求 UseStaticWebAssets 把 SWA 虚拟文件系统挂到 webroot（否则 RCL _content 资产 dev 不可用）
+        builder.WebHost.UseStaticWebAssets();
 
         builder.Services.AddRazorComponents().AddInteractiveServerComponents();
         builder.Services.AddBootstrapBlazor();
 
         var app = builder.Build();
         app.UseAntiforgery();
-        // 宿主（Microsoft.NET.Sdk tool）不生成自身静态资产清单，但 RCL（Web 库）的清单随构建复制到 bin——
-        // MapStaticAssets 默认找 {启动程序集}.staticwebassets.endpoints.json 会失败，显式指到 Web 库清单。
-        var manifestPath = Path.Combine(AppContext.BaseDirectory, "DotNetDebugger.Web.staticwebassets.endpoints.json");
-        app.MapStaticAssets(File.Exists(manifestPath) ? manifestPath : null);
+        // Monaco 资产经 StaticWebAssetEndpointExclusionPattern 排除出 MapStaticAssets（免二次指纹冲突），
+        // 由 UseStaticFiles 服务原文件（dev 走 UseStaticWebAssets 虚拟 / publish 走物理 wwwroot）。
+        // MapStaticAssets 服务框架脚本(blazor.web.js)/BB/其余资产——不可省（.NET 10 框架脚本依赖它）。
+        app.UseStaticFiles();
+        app.MapStaticAssets();
         // App 组件在 Web 库程序集（MapRazorComponents 已隐式包含该程序集）——勿 AddAdditionalAssemblies 重复加同程序集（Assembly already defined）
         app.MapRazorComponents<Components.App>()
             .AddInteractiveServerRenderMode();

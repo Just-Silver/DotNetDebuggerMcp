@@ -3,4 +3,34 @@
 <PageTitle>调试器</PageTitle>
 
 <h3>动态调试</h3>
-<p class="text-muted">调试面板将在后续任务接入（代码视图 / 栈 / 变量 / 控制）。</p>
+
+<div style="height:70vh;border:1px solid #dee2e6;">
+    <CodeViewer @ref="_viewer" />
+</div>
+
+<button class="btn btn-primary mt-2" @onclick="LoadSample">加载示例代码</button>
+
+@code {
+    private CodeViewer? _viewer;
+
+    private async Task LoadSample()
+    {
+        if (_viewer is null) return;
+        const string sample = """
+        using System;
+
+        public class Sample
+        {
+            public static int Add(int a, int b)
+            {
+                var sum = a + b;
+                return sum;
+            }
+        }
+        """;
+        await _viewer.SetValueAsync(sample);
+        // 演示装饰：断点第 6 行，当前行第 7 行
+        await _viewer.SetDecorationsAsync([6], 7);
+        await _viewer.RevealLineAsync(7);
+    }
+}

@@ -1,13 +1,21 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>DotNetDebugger.Web</RootNamespace>
-    <!-- RCL 类库（被宿主承载）：抑制 Web SDK 默认生成 Main 入口 -->
-    <OutputType>Library</OutputType>
+    <!-- RCL 类库（被宿主承载）：Razor SDK 以 Default 模式参与静态资产管线，
+         资产暴露为 _content/DotNetDebugger.Web/ 前缀（Web SDK 会误判 Root 模式丢失前缀） -->
+    <AddRazorSupportForMvc>true</AddRazorSupportForMvc>
+    <!-- Monaco 资产自带内容哈希名，排除出 MapStaticAssets 清单（避免二次指纹化致 AMD 按原哈希名
+         请求返回 200 空 body，aspnetcore #66833），由宿主 UseStaticFiles 服务原文件 -->
+    <StaticWebAssetEndpointExclusionPattern>$(StaticWebAssetEndpointExclusionPattern);lib/monaco-editor/**</StaticWebAssetEndpointExclusionPattern>
   </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BootstrapBlazor" Version="10.*" />

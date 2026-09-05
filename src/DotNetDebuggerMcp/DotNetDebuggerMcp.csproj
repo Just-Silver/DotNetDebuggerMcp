@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,6 +9,9 @@
     <!-- Set up the NuGet package to be an MCP server -->
     <PackAsTool>true</PackAsTool>
     <PackageType>McpServer</PackageType>
+    <!-- 宿主承载 RCL 的 Blazor 组件：.NET 10 框架脚本(blazor.web.js)仅在含 .razor 的 app 引入，
+         此处显式要求引入框架静态资产（aspnetcore #58721/#64381：RCL-only host 需此属性） -->
+    <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
 
     <!-- Set recommended package metadata -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -45,12 +48,7 @@
     <ProjectReference Include="..\DotNetDebugger.Web\DotNetDebugger.Web.csproj" />
   </ItemGroup>
 
-  <!-- P4 内嵌 Web：宿主 exe 起 Kestrel/Blazor 需 AspNetCore.App 框架引用（框架引用，不随 PackAsTool 携带版本） -->
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  </ItemGroup>
-
-  <!-- 宿主测试项目访问宿主 internals（如 ILSpyMcpCmd 内部方法） -->
+  <!-- Web SDK 自带 AspNetCore.App 框架引用与 SWA Root 管线（合并 RCL 静态资产到 _content 路由） -->
   <ItemGroup>
     <InternalsVisibleTo Include="DotNetDebuggerMcp.Tests" />
   </ItemGroup>

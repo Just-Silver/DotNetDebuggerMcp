@@ -7,8 +7,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
 
-    <link rel="stylesheet" href="@Assets["_content/BootstrapBlazor/css/bootstrap.blazor.bundle.min.css"]" />
-    <link rel="stylesheet" href="@Assets["DotNetDebugger.Web.styles.css"]" />
+    <!-- 纯 UseStaticFiles 服务：无 MapStaticAssets 指纹化，RCL 资产用 _content/{PackageId}/ 静态路径 -->
+    <link rel="stylesheet" href="_content/BootstrapBlazor/css/bootstrap.blazor.bundle.min.css" />
 
     <title>DotNet Debugger Web</title>
     <HeadOutlet @rendermode="new InteractiveServerRenderMode(false)" />
@@ -19,7 +19,14 @@
 
     <ReconnectorOutlet ReconnectInterval="5000" @rendermode="new InteractiveServerRenderMode(false)" />
 
-    <script src="@Assets["_content/BootstrapBlazor/js/bootstrap.blazor.bundle.min.js"]"></script>
+    <script src="_content/BootstrapBlazor/js/bootstrap.blazor.bundle.min.js"></script>
+    <script>
+        // Monaco AMD 加载器路径配置（须在 loader.js 之前）
+        var require = { paths: { vs: document.baseURI + '_content/DotNetDebugger.Web/lib/monaco-editor/min/vs' } };
+    </script>
+    <script src="_content/DotNetDebugger.Web/lib/monaco-editor/min/vs/loader.js"></script>
+    <script src="_content/DotNetDebugger.Web/lib/monaco-editor/min/vs/editor/editor.main.js"></script>
+    <script src="_content/DotNetDebugger.Web/Components/Debug/CodeViewer.razor.js"></script>
     <script src="_framework/blazor.web.js"></script>
 </body>
 
