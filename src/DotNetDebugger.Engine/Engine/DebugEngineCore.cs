@@ -353,6 +353,20 @@ public sealed class DebugEngineCore : IAsyncDisposable
 
             if (thread.ActiveFrame is not CorDebugILFrame ilf) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
 
+            // 符号名解析：参数名取 DLL 元数据 Param 表，局部名取模块旁 PDB（缺失则保持 slot 展示）
+            string?[] argNames = [], localNames = [];
+            var top = ReadTopFrame(thread);
+            if (top is not null)
+            {
+                var modulePath = _breakpoints.GetModulePath(top.ModuleName);
+                if (modulePath is not null)
+                {
+                    var names = SymbolNameResolver.Resolve(modulePath, top.MethodToken);
+                    argNames = names.ArgNames;
+                    localNames = names.LocalNames;
+                }
+            }
+
             try
             {
                 var locals = new List<DebugVariable>();
@@ -361,7 +375,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
                 {
                     try
                     {
-                        locals.Add(new DebugVariable(null, i, ReadValue(localValues[i]), IsArgument: false));
+                        var name = i < localNames.Length ? localNames[i] : null;
+                        locals.Add(new DebugVariable(name, i, ReadValue(localValues[i]), IsArgument: false));
                     }
                     catch { /* 单变量读取失败跳过 */ }
                 }
@@ -377,7 +392,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
                 {
                     try
                     {
-                        args.Add(new DebugVariable(null, i, ReadValue(argValues[i]), IsArgument: true));
+                        var name = i < argNames.Length ? argNames[i] : null;
+                        args.Add(new DebugVariable(name, i, ReadValue(argValues[i]), IsArgument: true));
                     }
                     catch { /* 单参数读取失败跳过 */ }
                 }

@@ -55,13 +55,18 @@ public sealed class StateReadTests
         Assert.Equal("DebugTarget.dll", topFrame.Location.ModuleName);
         Assert.Equal(workToken, topFrame.Location.MethodToken);
 
-        // 读局部变量（Work 有 for 的 i / acc；v1 名字空，槽位有值）
+        // 读局部变量（Work 有 for 的 i / acc；参数名取 DLL Param 表，局部名取模块旁 PDB）
         var vars = await session.GetVariablesAsync(threadId);
         Assert.True(vars.ContainsKey("locals"), "应返回 locals 分组");
         Assert.True(vars.ContainsKey("arguments"), "应返回 arguments 分组");
         // Work 有参数 iterations + 至少 1 个局部变量
         Assert.NotEmpty(vars["arguments"]);
         Assert.NotEmpty(vars["locals"]);
+        // 参数名（元数据）：Work(int iterations) → slot0 名为 iterations
+        Assert.Equal("iterations", vars["arguments"][0].Name);
+        // 局部名（PDB）：需 generate-testdata.ps1 拷出 DebugTarget.pdb；至少一个变量有名
+        Assert.True(vars["locals"].Any(v => v.Name is not null),
+            "局部变量应从 PDB 解析出名字（检查 tests/TestData/DebugTarget.pdb 是否已生成）");
 
         // 恢复并退出
         await session.ContinueAsync();

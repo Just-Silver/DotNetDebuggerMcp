@@ -96,7 +96,7 @@ public static class DebugInspectTool
             {
                 lines.Add($"[{scope}]");
                 foreach (var v in list)
-                    lines.Add($"  slot{v.Slot} = {v.Value.Display}");
+                    lines.Add($"  {v.Name ?? $"slot{v.Slot}"} = {v.Value.Display}");
             }
             DebugSessionService.Manager.Actions.Log("debug_variables", $"thread={tid}", "ok");
             return $"局部变量/参数（thread={tid}）:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";

@@ -111,7 +111,7 @@
                                     <div class="small text-secondary mt-1">[@scope]</div>
                                     <ListGroup TItem="DebugVariable" Items="@vars.ToList()">
                                         <ItemTemplate>
-                                            <div class="small font-monospace">slot@(context.Slot) = @context.Value.Display</div>
+                                            <div class="small font-monospace">@(context.Name ?? $"slot{context.Slot}") = @context.Value.Display</div>
                                         </ItemTemplate>
                                     </ListGroup>
                                 }

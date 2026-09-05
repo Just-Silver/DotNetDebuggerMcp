@@ -12,11 +12,12 @@
 
 ```
 Engine/    DebugEngineCore / CorDebugBootstrap / DbgShimLoader /
-           CallbackHandler / DebugCommandQueue / BreakpointManager
+           CallbackHandler / DebugCommandQueue / BreakpointManager /
+           SymbolNameResolver
 Session/   DebugSession(根命名空间 DotNetDebugger.Engine!) / DebugBreakpoint / ExceptionBreakpointFilter
 Stepping/  StepperManager
 Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
-           DebugValue / DebugVariable / FrameLocation   （纯数据 record）
+           DebugValue / DebugVariable / FrameLocation / BreakpointSnapshot   （纯数据 record）
 ```
 
 - `Session/DebugSession.cs` — **对外门面**（v1 单活动会话，spec §4.1）：静态工厂 `LaunchAsync(commandLine, timeoutMs)` / `AttachAsync(processId)`；`Events` 暴露 `IAsyncEnumerable<DebugEvent>`（无界 Channel，attach 后立刻订阅也能追到缓冲历史）；`SetBreakpointAsync(moduleName, token, ilOffset)` / `GetBreakpointsAsync` / `GetModulePathAsync(moduleName)`（模块短名→全路径，停点无条件跟随用）/ `ContinueAsync` / `StepInto/Over/OutAsync` / `GetThreads/StackFrames/VariablesAsync` / 异常断点 / `DisconnectAsync`。
@@ -35,6 +36,7 @@ Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
 - **Continue 语义**：ICorDebug stop-counter 每次回调 +1、每次 Continue -1、且每次 Continue 只派发一个排队回调，故必须**循环 Continue 直到 `IsRunning=true`**（上限 100 防死循环）；容忍 `CORDBG_E_SUPERFLOUS_CONTINUE`（微软拼写少一 U）。
 - **断点匹配不能按 RuntimeBreakpoint 引用比较**：ClrDebug 每次事件都新建 wrapper 实例，命中事件是新 wrapper，须按「函数 token + IL offset」内容匹配（`BreakpointManager.Match`）。
 - 断点要求模块已加载（模块名按「文件名 + 全路径」双键登记，CorDebugModule.Name 实际返回全路径）；`CreateBreakpoint` 后**必须 `Activate(true)` 才生效**。
+- **停点变量名解析（`SymbolNameResolver`）**：参数名来自 DLL 元数据 Param 表（无需 PDB），局部名来自**模块旁 portable PDB** 的 LocalScopes（`mr.GetLocalScopes(MethodDefinitionHandle)`——注意 API 在 Reader 上而非 MethodDebugInformation 上，槽位属性名是 `Index` 不是 Slot）。测试目标需 `generate-testdata.ps1` 拷出 `DebugTarget.pdb` 才有名；按 (模块路径, token) 缓存，解析失败静默回退 slot 展示。
 - **launch 时序**：Engine launch 停在初始同步点但目标模块未必加载、断点设不了（早期断点/pending 绑定列 v2）——所以 Session 库的 `LaunchAndAttachAsync` 与宿主 `-dbg`/`debug_launch` 实际都走「先起进程等稳定区再 Attach」路径，不直接用 Engine `LaunchAsync`。新代码留意这个分工。
 - `StepperManager`（Stepping/）目前是**静态薄封装**，真正命令路径在 DebugEngineCore 直接 `thread.CreateStepper()`，未走它——改单步逻辑先确认实际执行路径。
 - 异常断点 v1 = 设了过滤器即停全部 first-chance；`ExceptionBreakpointFilter.Matches` 类型精确过滤列 v2（当前实际未用）。
