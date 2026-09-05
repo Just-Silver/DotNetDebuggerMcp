@@ -13,6 +13,7 @@
 - 需要引入新依赖或改写既有逻辑，但理解不充分。
 
 **正确做法**：
+0. **外部参考统一查本地克隆**（`E:\Code\Projects\Externals\DebuggerExternals\`，含 dnSpy / ILSpy / sharpdbg / ClrDebug / BlazorMonaco / clrmd / diagnostics 最新源码克隆）：凡涉及上述项目机制/API/实现的查证，**优先直接读本地克隆源码**（比 websearch 快且准），方法统一从该目录找资料，不散落各处。
 1. **优先查阅官方文档**（含 `--help`、`man`、在线 API 参考）；
 2. **利用内置工具 `gh`** 查询相关 issue、PR 或官方示例；
 3. **使用网页搜索** 获取可靠上下文；
