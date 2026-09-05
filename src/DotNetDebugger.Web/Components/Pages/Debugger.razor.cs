@@ -30,6 +30,7 @@ public partial class Debugger
     private long _lastAgentRevision = -1;   // 已处理的 agent 上下文版本
     private int _lastCursorToken;           // 光标联动已选中的方法 token（变化才动树，防扰动）
     private int _selectedMemberToken;       // 当前选中成员（树点叶子/光标联动/停点），编辑器行区间高亮用
+    private long _lastStopKey;              // 最近停点身份（UtcTimestamp.Ticks；单步后状态不变，靠它感知新停点）
     /// <summary>演示目标 DebugTarget.exe（从仓库根上溯定位 tests/TestData）。</summary>
     private static string DemoAssembly
     {
@@ -135,9 +136,12 @@ public partial class Debugger
             DebugSessionState.Detached => "已断开",
             _ => null,
         };
-        _lastStopText = info?.LastStop is { } stop ? $"{stop.Kind} @ {stop.TopFrame} (thread {stop.ThreadId})" : null;
-        // 停点跃迁检测：状态变为 Stopped 时触发代码视图高亮（断点命中自动定位语句行）
-        var transitionedToStopped = newState == "已停止" && _state != "已停止";
+        _lastStopText = info?.LastStop is { } stopCtx ? $"{stopCtx.Kind} @ {stopCtx.TopFrame} (thread {stopCtx.ThreadId})" : null;
+        // 停点变化检测：单步/步入后状态保持「已停止」，状态跃迁检测会丢步进的新停点——
+        // 改按停点身份（LastStop 时间戳）判断：状态为停且停点身份变化即触发跟随渲染
+        var stopKey = info?.LastStop is { } s ? s.UtcTimestamp.Ticks : 0;
+        var stopChanged = newState == "已停止" && stopKey != _lastStopKey;
+        _lastStopKey = stopKey;
         _state = newState;
         // 面板数据：停时读栈/变量/线程（Engine 同步停态才可读）；非停清空
         if (newState == "已停止")
@@ -166,10 +170,10 @@ public partial class Debugger
             _lastBpSignature = bpSignature;
             await ApplyDecorationsAsync();
         }
-        if (transitionedToStopped)
+        if (stopChanged)
         {
-            await ApplyDecorationsAsync();
-            await SelectStopTypeAsync();   // 树跟随停点类型
+            await ApplyDecorationsAsync();   // 新停点：高亮 + 滚动定位（含单步/步入/异常）
+            await SelectStopTypeAsync();     // 树跟随停点类型
             StateHasChanged();
         }
     }
