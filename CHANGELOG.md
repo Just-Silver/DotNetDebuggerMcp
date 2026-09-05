@@ -10,6 +10,7 @@
 
 ### Added
 
+- **Web 调试展示面（`--web`，P4）**：宿主新增 `--web` 启动 Blazor Server 网页（内嵌 Kestrel，`--web-port` 指定端口，缺省自动选空闲端口并拉起默认浏览器）。页面提供反编译代码视图（Monaco 编辑器，语法高亮 + 断点/当前执行行装饰 + 随明暗主题切换）+ 动态调试面板（调用栈/局部变量/线程，BB 组件）+ 最小控制（启动并附加/断点/继续/单步/断开），与 MCP agent 共享同一调试会话（agent 经 `debug_*` 工具调试时浏览器可实时观看）；默认暗色 Fluent 主题。反编译 IL→行映射基于 ICSharpCode.Decompiler 序列点（无 PDB 亦可语句级定位）
 - **动态调试 MCP 工具面（P3）**：新增 `dotnetdebugger_debug_*` 系列工具——会话（`debug_launch`/`debug_attach`/`debug_disconnect`/`debug_state`）、控制（`debug_continue`/`debug_step` into/over/out）、断点（`debug_breakpoint_set`/`_remove`/`_clear`，按 模块+方法 token+IL offset）、观察（`debug_stack`/`debug_threads`/`debug_variables`）、异常断点（`debug_exceptions`/`_clear`）。控制工具**异步返回（带默认超时）**，停点信息经查询工具获取。新增 `DotNetDebugger.Session` 库（会话管理 + 停点事件缓冲 + agent 轨迹日志）
 - **动态调试引擎 v1（`DotNetDebugger.Engine` 库）**：进程内 .NET 调试引擎（ICorDebug 通道，ClrDebug + DbgShim），支持启动/附加目标进程、按方法 token+IL offset 下断点、continue、单步、读线程/调用栈/局部变量（标量）、first-chance 异常断点、统一 `DebugEvent` 事件流；宿主另有 `-dbg` CLI 一次性调试命令
 - **测试设施**：`tests/TestData` 追加可执行调试目标 `DebugTarget.exe`；新增 `DotNetDebugger.Engine.Tests`（真实子进程 attach/断点/单步/状态/异常）与 `DotNetDebugger.Session.Tests`（会话管理/轨迹）集成测试，串行执行避免 ICorDebug 会话干扰

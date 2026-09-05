@@ -1,6 +1,6 @@
 # DotNet-Debugger-MCP（dotnet-debugger-mcp）
 
-内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量），开箱即用。
+内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量），开箱即用。另提供 **`--web` 网页调试展示面**（Blazor Server：反编译代码视图 + 调用栈/变量/线程面板，与 MCP agent 共享调试会话，可实时观看 agent 调试）。
 
 ## 目录
 
@@ -126,6 +126,19 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 MCP 模式外，`dotnet-debugger-mcp` 可直接以命令行执行同等功能，便于本地调试。参数与 MCP 工具一一对应。
 
+### Web 调试展示面（--web）
+
+宿主可同时启动一个网页调试展示面（Blazor Server，内嵌 Kestrel），把反编译与调试可视化：
+
+```bash
+dotnet-debugger-mcp --web                                  # 自动选空闲端口并拉起默认浏览器
+dotnet-debugger-mcp --web --web-port 8090                  # 指定端口（不自动拉起需手动开 http://127.0.0.1:8090）
+```
+
+- **页面功能**：反编译代码视图（Monaco 编辑器，断点/当前执行行装饰）+ 动态调试面板（调用栈/局部变量/线程）+ 最小控制（启动并附加/断点/继续/单步/断开）。
+- **双模式**：单独跑 `--web` 时页面可人工 launch/attach 目标调试；opencode 配置的 MCP server 加 `--web` 时与 agent 共享同一调试会话——agent 经 `debug_*` 工具调试，浏览器实时观看（断点命中代码高亮、面板随停点刷新）。
+- 调试目标进程以静默窗口运行（不弹控制台框）。
+
 ### 反编译
 
 ```bash
@@ -189,6 +202,8 @@ dotnet-debugger-mcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                   
 | `-ln` | `--lines` | 行号分页 `start-end` |
 | | `--timeout` | 超时秒数（默认 30） |
 | `-c` | `--check` | 检查 dotnet-debugger-mcp 新版本（无需 `-a`） |
+| | `--web` | 同时启动网页调试展示面（Blazor Server；无 MCP 会话时页面可人工调试） |
+| | `--web-port <port>` | Web 端口（配合 `--web`；缺省 0 = 自动选空闲端口并拉起默认浏览器） |
 | `-v` | `--version` | 版本号 |
 | `-h` | `--help` | 帮助 |
 
