@@ -18,6 +18,24 @@
 - 状态：**待用户确认**（open-questions.md #1）。
 - 日期：2026-09-05。
 
+## D6 · 命名决策（用户拍板）
+- 决策：主项目/仓库名 **DotNet-Debugger-MCP**。用户明确：「就 DotNet-Debugger-MCP 了」（2026-09-05）。
+- 完整映射（默认方案，子项目名称为建议值可改）：
+  | 对象 | 命名 |
+  |---|---|
+  | GitHub 仓库 | `DotNet-Debugger-MCP`（原 ILSpyMcp，rename 保留跳转） |
+  | 解决方案 | `DotNetDebuggerMcp.slnx` |
+  | 主项目目录/程序集 | `src/DotNetDebuggerMcp/`，命名空间 `DotNetDebuggerMcp` |
+  | 主 NuGet 包 / CLI 命令 | `dotnet-debugger-mcp`（ToolCommandName 同） |
+  | MCP server 注册名 | 建议 `dotnetdebugger`（工具前缀 `dotnetdebugger_*`；待实施确认） |
+  | 子项目 A（反编译/静态分析库） | 建议 `src/DotNetDecompiler/`，命名空间 `DotNetDebugger.Decompiler`（名称待确认） |
+  | 子项目 B（动态调试引擎库） | 建议 `src/DotNetDebugger.Engine/`，命名空间 `DotNetDebugger.Engine`（名称待确认） |
+  | 测试 | `tests/DotNetDebuggerMcp.Tests/`（InternalsVisibleTo 同步） |
+  | Client 端到端 | `src/DotNetDebuggerMcp.Client/` |
+- 命名空间根取向：主项目 `DotNetDebuggerMcp`；库层统一挂 `DotNetDebugger.*` 前缀以同源。
+- 理由：用户拍板；反编译与调试能力经「主项目伞（MCP+Web）+ 两库后缀」表达。
+- 日期：2026-09-05。
+
 ## D5 · v1 动态调试引擎能力范围（用户拍板）
 - 决策：**v1 = 最小但完整的 agent 调试闭环**：
   1. 会话管理：启动进程 / 附加已运行进程 / 断开

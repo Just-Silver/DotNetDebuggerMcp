@@ -88,15 +88,12 @@
 5. M4 表达式求值安全子集 + 异常断点 + PDB 行断点增强。
 6. M5 打磨：README/示例/打包/CI/端到端护栏（含 stdio 并发回归）。
 
-## 7. 命名（用户问题 6，待拍板）
+## 7. 命名（用户问题 6，已拍板 2026-09-05）
 
-**约束**：仓库名 / NuGet 包名 / CLI 工具名 / MCP server 注册名 / .NET 命名空间根，尽量同词干；与官方 `dotnet` 系与 `dotnet-tools`（官方全局工具生态术语）区分，避免误导。
+**最终决策**：主项目/仓库名 = **DotNet-Debugger-MCP**（用户：「就 DotNet-Debugger-MCP 了」）。完整映射见 `decisions.md` D6。
 
-- 用户候选：`DotNet-Tools-MCP`（注意：易与官方 `dotnet tool` 全局工具生态混淆；且未表达反编译+调试意图）。
-- 反编译子项目 A：现名 `ILSpyMcp` 名不副实（与 ILSpy 无组织关联），建议去 ILSpy。
-- 候选方向待列（见 open-questions.md #2），暂用工作名：
-  - 子项目 A 工作名：`static-analysis` / 静态反编译库
-  - 子项目 B 工作名：`debug-engine` / 动态调试库
-  - 主项目工作名：`dotnet-mcp`（对外 MCP + WebUI）
-
-> 命名决策记录到 `decisions.md`。
+命名考虑轨迹（供追溯）：
+- 原候选 `DotNet-Tools-MCP` 易与官方 `dotnet tool` 全局工具生态混淆，且未表达反编译+调试定位。
+- 「Debugger 只覆盖调试，未覆盖反编译」→ 提出伞词路线（Peek/Insight/X-Ray，dnSpy 的 "Spy" 是先例）+ 两段式命名（伞词定身份，后缀分能力）。
+- 用户最终选择直接以 **Debugger** 为主名（接受其调试主导定位；反编译作为静态分析辅助能力并入产品线）。
+- 子项目 A（反编译库）与子项目 B（调试引擎）具体库名待实施阶段确认（建议见 D6）。

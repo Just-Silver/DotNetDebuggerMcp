@@ -2,15 +2,14 @@
 
 > 最新在上。澄清后把「问题+结论」移入 decisions.md。
 
-## #2 命名决策（仍在最前）
-- 状态：**待澄清**（最新会话继续）
-- 问题：仓库名 / NuGet 包名 / CLI 工具名 / MCP server 注册名最终定哪个？（候选讨论见 01-vision-and-scope.md §7）
-- 子问题：
-  - 主项目候选：`DotNet-Tools-MCP`？风险是与官方 `dotnet tool` 全局工具生态混淆，且未表达反编译+调试定位。是否接受？（我建议候选：`dotnet-mcp` / `dotnet-debug-mcp` / `dnstool-mcp`…可再议）
-  - 子项目 A（原 ILSpyMcp 反编译）候选名？
-  - 子项目 B（调试引擎）候选名？
-  - 重命名是否含 git 仓库迁移（GitHub rename 保留跳转）？NuGet 包弃用旧名策略（1.4.0 已发布）？
-- 背景：用户候选 `DotNet-Tools-MCP`（01 §7）。
+## #4 WebUI 技术栈与实施时机确认（下一大项）
+- 状态：**待澄清**
+- 问题：WebUI（SSE+Monaco+React，research/04）是否仍按 v1 范围中的 M4 里程碑推进，还是先只做 MCP 工具面（无 Web）把动态调试跑稳后再上 Web？WebUI 的具体设计（面板布局/事件协议/回放）在何时细化（设计文档阶段 or M3 前）？
+- 背景：decisions D4/D5。
+
+## #2 命名决策（已拍板 2026-09-05）
+- 状态：**已解决** → 主项目/仓库名 **DotNet-Debugger-MCP**（decisions.md D6，01 §7 已更新）。
+- 残留待实施确认：MCP server 注册名（建议 `dotnetdebugger`）、子项目 A/B 库名与命名空间（建议见 D6）、GitHub rename 与 NuGet 旧包 ilspymcp 弃用策略。
 
 ## #1 动态调试引擎实现路线确认
 - 状态：**方向已确认**，实施细节待设计（见 decisions D3/D5）
