@@ -2,6 +2,18 @@
 
 > 最新在上。澄清后把「问题+结论」移入 decisions.md。
 
+## #4 WebUI 技术栈确认（待澄清，勿删）
+- 状态：**待澄清**（2026-09-05 恢复——曾被误标已解决）
+- 问题：WebUI 技术栈是否采纳调研建议组合 A（research/04）：
+  - 服务端：ASP.NET Core / Kestrel 单进程内嵌（静态资源 + REST + SSE 同端口）
+  - 实时推送：SSE（连接拉 `/api/state` 快照，此后增量；EventSource 自动重连）
+  - 前端框架：React + TS + Vite
+  - 代码视图：Monaco Editor（read-only + deltaDecorations 断点/当前行高亮）
+  - 图/时间线：时间线自绘 DOM 列表；时序/调用图 mermaid.js 按需动态加载
+  - IL→反编译行映射：全部在服务端（Session 层）解析后推浏览器
+  - 备选：CodeMirror 6（更轻、无 worker，但 C# 高亮弱）；vanilla TS（仅极简展示）
+- 背景：decisions D4（建议）仍是「建议待确认」状态；实施时机已定（D7：P4 再上 Web）。
+
 ## #5 子项目 A/B 库名与项目拆分（已解决 2026-09-05）
 - 状态：**已解决** → 采纳建议值 + **5 项目拆分**（decisions D6/D8）：Decompiler / Engine / Session / Web / McpHost(exe)；MCP 与 Web 不拆进程（共享会话）。
 - 残留待实施确认：MCP server 注册名（建议 `dotnetdebugger`）、Client 端到端项目归属、GitHub rename 与 NuGet 旧包 ilspymcp 弃用策略。

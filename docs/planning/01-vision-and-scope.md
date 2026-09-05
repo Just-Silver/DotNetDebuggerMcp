@@ -61,7 +61,8 @@
 - 表达式求值 v1：**安全子集**（AST 静态分析禁止副作用），函数求值经 ICorDebugEval2（可选，失败降级提示）。
 - 调试事件统一为 `DebugEvent` 流（Channel），同一引擎同时喂 MCP 与 Web。
 
-### 4.2 先做（WebUI v1）
+### 4.2 先做（WebUI v1）——技术栈待确认（open-questions #4）
+> 面板/职责为需求侧描述（不依赖具体前端选型）；**SSE/Monaco/React 等技术栈是提案**，确认后回写。
 - 服务端：主项目内嵌 Kestrel，静态资源 + REST（快照/文档）+ SSE（增量）。
 - 代码视图：反编译文档（方法/类型级）+ 当前行高亮 + 断点 gutter。
 - 面板：调用栈 / 局部变量 / 线程 / 调试事件日志 / agent 决策轨迹时间线（可回放）。
@@ -77,13 +78,13 @@
 
 | 层 | 结论 |
 |---|---|
-| 动态调试底座 | **ClrDebug（MIT，ICorDebug COM 全量托管封装）+ Microsoft.Diagnostics.DbgShim（MIT）** + 自研事件循环/断点/栈帧/值树 |
+| 动态调试底座 | **ClrDebug（MIT，ICorDebug COM 全量托管封装）+ Microsoft.Diagnostics.DbgShim（MIT）** + 自研事件循环/断点/栈帧/值树（**已确认**，D3） |
 | 不直接引用 | dnSpyEx 调试栈（GPL-3.0、无 NuGet、耦合 Roslyn fork）→ 只当参考；debug-mcp（AGPL-3.0）→ 只借鉴工具面行为 |
 | 辅助 | Microsoft.Diagnostics.NETCore.Client / ClrMD（MIT）做只读监控与 dump 事后分析（v1 可后置） |
-| Web 推送 | **SSE**（`EventSource`，快照+增量模型）；控制指令走普通 REST POST |
-| Web 代码视图 | **Monaco Editor**（read-only + `deltaDecorations` 断点/当前行；观感对齐 VS Code/Theia 调试界面） |
-| 前端框架 | **React + TypeScript + Vite**；时间线自绘列表；时序/调用图 mermaid.js 按需加载 |
-| IL→反编译行 | 服务端用 ICSharpCode.Decompiler `SequencePointBuilder`（同设置产出映射表），事件到行号**服务端解析后**再推浏览器 |
+| Web 推送 | **SSE**（`EventSource`，快照+增量模型）；控制指令走普通 REST POST —— **待确认**（open-questions #4） |
+| Web 代码视图 | **Monaco Editor**（read-only + `deltaDecorations` 断点/当前行）—— **待确认**（备选 CodeMirror 6） |
+| 前端框架 | **React + TypeScript + Vite**；时间线自绘列表；mermaid 按需 —— **待确认**（open-questions #4） |
+| IL→反编译行 | 服务端用 SequencePointBuilder 思路（Decompiler 内，同设置产出映射表），事件到行号**服务端解析后**再推浏览器（**独立于前端选型，已定**） |
 
 ## 6. 里程碑（已按 D7 定稿）
 

@@ -68,7 +68,8 @@
 - 理由：1–6 覆盖 agent 自主调试一个 bug 的全部动作；求值/行断点是最大工作量（+1–1.5 人月），后置让闭环先转起来。
 - 日期：2026-09-05。
 
-## D4 · WebUI 技术栈（调研结论，待用户最终确认）
-- 决策（建议）：Kestrel 单进程内嵌 + **SSE**（快照+增量）+ **Monaco Editor**（read-only + deltaDecorations 断点/当前行）+ **React+TS+Vite** + 时间线自绘 / mermaid 按需。IL→反编译行映射**全部服务端**（SequencePointBuilder 思路）。
-- 状态：**待用户确认**（open-questions.md #3）。
-- 日期：2026-09-05。
+## D4 · WebUI 技术栈（调研建议，**待用户确认**）
+- 状态：**待用户确认**（2026-09-05 修正：调研结论≠已拍板；详见 open-questions.md #4）
+- 建议内容：Kestrel 单进程内嵌 + **SSE**（快照+增量）+ **Monaco Editor**（read-only + deltaDecorations 断点/当前行）+ **React+TS+Vite** + 时间线自绘 / mermaid 按需。IL→反编译行映射**全部服务端**（SequencePointBuilder 思路）。
+- 备选：CodeMirror 6（更轻、无 worker，C# 高亮弱）；vanilla TS。
+- 注意：WebUI **实施时机**已定（D7：先引擎/MCP 后 Web，P4 再上）；**技术栈**本身仍是开放项。
