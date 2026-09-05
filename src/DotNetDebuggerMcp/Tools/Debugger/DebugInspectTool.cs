@@ -96,7 +96,7 @@ public static class DebugInspectTool
             {
                 lines.Add($"[{scope}]");
                 foreach (var v in list)
-                    lines.Add($"  {v.Name ?? $"slot{v.Slot}"} = {v.Value.Display}");
+                    lines.Add(RenderVariable(v, depth: 1));
             }
             DebugSessionService.Manager.Actions.Log("debug_variables", $"thread={tid}", "ok");
             return $"局部变量/参数（thread={tid}）:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
@@ -105,6 +105,17 @@ public static class DebugInspectTool
         {
             return $"读变量失败：{ex.Message}";
         }
+    }
+
+    /// <summary>递归渲染变量（对象/数组 children 缩进展示；引擎已按一级展开 + 截断）。</summary>
+    private static string RenderVariable(DotNetDebugger.Engine.Models.DebugVariable v, int depth)
+    {
+        var indent = new string(' ', depth * 2);
+        var line = $"{indent}{v.Name ?? $"slot{v.Slot}"} = {v.Value.Display}";
+        if (v.Value.Children is not { } children) return line;
+        foreach (var c in children)
+            line += Environment.NewLine + RenderVariable(c, depth + 1);
+        return line;
     }
 
     private static (DotNetDebugger.Session.ActiveDebugSession? Active, string? Error) RequireStopped()

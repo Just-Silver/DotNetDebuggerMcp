@@ -1,0 +1,21 @@
+@using DotNetDebugger.Engine.Models
+
+@* 停点变量行（递归）：对象/数组 children 缩进展示（引擎已按一级展开 + 32 条截断）。 *@
+
+<div class="small font-monospace text-truncate" style="padding-left:@(Indent * 14)px;" title="@Title">
+    @(Var.Name ?? $"slot{Var.Slot}") = @Var.Value.Display
+</div>
+@if (Var.Value.Children is { } children)
+{
+    @foreach (var child in children)
+    {
+        <DebugVarRow Var="child" Indent="@(Indent + 1)" />
+    }
+}
+
+@code {
+    [Parameter] public DebugVariable Var { get; set; } = default!;
+    [Parameter] public int Indent { get; set; }
+
+    private string Title => Var.Value.Children is { } c ? $"{Var.Value.Display}（{c.Count} 成员）" : Var.Value.Display;
+}

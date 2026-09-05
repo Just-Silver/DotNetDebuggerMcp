@@ -1,3 +1,4 @@
+using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using ClrDebug;
@@ -408,7 +409,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
                     try
                     {
                         var name = i < localNames.Length ? localNames[i] : null;
-                        locals.Add(new DebugVariable(name, i, ReadValue(localValues[i]), IsArgument: false));
+                        locals.Add(new DebugVariable(name, i, ReadValue(localValues[i], expand: true), IsArgument: false));
                     }
                     catch { /* 单变量读取失败跳过 */ }
                 }
@@ -425,7 +426,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
                     try
                     {
                         var name = i < argNames.Length ? argNames[i] : null;
-                        args.Add(new DebugVariable(name, i, ReadValue(argValues[i]), IsArgument: true));
+                        args.Add(new DebugVariable(name, i, ReadValue(argValues[i], expand: true), IsArgument: true));
                     }
                     catch { /* 单参数读取失败跳过 */ }
                 }
@@ -436,8 +437,15 @@ public sealed class DebugEngineCore : IAsyncDisposable
             return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
         }, ct);
 
-    /// <summary>CorDebugValue → DebugValue（v1：字符串/标量/引用摘要）。进程同步态调用。</summary>
+    /// <summary>停点变量上限条数（对象/数组展开 children 的截断阈值）。</summary>
+    private const int MaxChildren = 32;
+
+    /// <summary>CorDebugValue → DebugValue（顶层变量：展开对象/数组一级成员）。进程同步态调用。</summary>
     private static DebugValue ReadValue(CorDebugValue value)
+        => ReadValue(value, expand: false);
+
+    /// <summary>CorDebugValue → DebugValue。expand=true 时对象/数组展开一级 children（不再递归，天然防环）。</summary>
+    private static DebugValue ReadValue(CorDebugValue value, bool expand)
     {
         try
         {
@@ -449,8 +457,12 @@ public sealed class DebugEngineCore : IAsyncDisposable
                     return DebugValue.Scalar(ReadGeneric(g));
                 case CorDebugReferenceValue r when r.IsNull:
                     return DebugValue.Scalar("null");
+                case CorDebugArrayValue a when expand:
+                    return ReadArrayValue(a);
+                case CorDebugReferenceValue r when expand:
+                    return ReadReferenceExpanded(r);
                 case CorDebugReferenceValue r:
-                    return DebugValue.Summary("reference", $"0x{r.Value.Value:x} → <object>");
+                    return ReadReferenceShallow(r);
                 default:
                     return DebugValue.Summary("value", value.Type.ToString());
             }
@@ -459,6 +471,93 @@ public sealed class DebugEngineCore : IAsyncDisposable
         {
             return DebugValue.Summary("error", $"<读取失败:{ex.Message}>");
         }
+    }
+
+    /// <summary>引用浅读（children 内不再展开）：指向字符串则读出内容（字符串便宜且无递归风险），其余引用给摘要。</summary>
+    private static DebugValue ReadReferenceShallow(CorDebugReferenceValue r)
+    {
+        try
+        {
+            if (r.Dereference() is CorDebugStringValue s)
+                return DebugValue.Scalar($"\"{s.GetString(s.Length)}\"");
+        }
+        catch { /* 解引用失败走摘要 */ }
+        return DebugValue.Summary("reference", $"0x{r.Value.Value:x} → <object>");
+    }
+
+    /// <summary>引用展开一级：解引用后按 数组/对象 呈现成员（children 不再递归）。</summary>
+    private static DebugValue ReadReferenceExpanded(CorDebugReferenceValue r)
+    {
+        var deref = r.Dereference();
+        if (deref is null) return DebugValue.Scalar("null");
+        if (deref is CorDebugArrayValue arr) return ReadArrayValue(arr);
+        if (deref is CorDebugObjectValue obj) return ReadObjectValue(obj);
+        return ReadValue(deref); // 装箱标量等
+    }
+
+    /// <summary>对象展开：字段清单取自模块元数据（同名一级），字段值经 GetFieldValue；静态字段跳过。</summary>
+    private static DebugValue ReadObjectValue(CorDebugObjectValue obj)
+    {
+        var cls = obj.Class;
+        var modulePath = cls.Module?.Name;
+        if (string.IsNullOrEmpty(modulePath))
+            return DebugValue.Summary("object", "<unknown>");
+        var fields = ReadFieldTokens(modulePath!, (int)cls.Token.Value);
+        var children = new List<DebugVariable>();
+        foreach (var (name, fieldToken) in fields.Take(MaxChildren))
+        {
+            try
+            {
+                var fv = obj.GetFieldValue(cls.Raw, new mdFieldDef((uint)fieldToken));
+                children.Add(new DebugVariable(name, -1, ReadValue(fv), IsArgument: false));
+            }
+            catch (Exception ex)
+            {
+                children.Add(new DebugVariable(name, -1, DebugValue.Summary("error", $"<读取失败:{ex.Message}>"), IsArgument: false));
+            }
+        }
+        var display = fields.Count > MaxChildren
+            ? $"字段 {fields.Count} 个（前 {MaxChildren}）"
+            : $"{fields.Count} 字段";
+        return DebugValue.Object(display, children);
+    }
+
+    /// <summary>数组展开：按线性位置取前 N 个元素。</summary>
+    private static DebugValue ReadArrayValue(CorDebugArrayValue arr)
+    {
+        var total = arr.Count;
+        var n = Math.Min(total, MaxChildren);
+        var children = new List<DebugVariable>();
+        for (var i = 0; i < n; i++)
+        {
+            try
+            {
+                children.Add(new DebugVariable($"[{i}]", -1, ReadValue(arr.GetElementAtPosition(i)), IsArgument: false));
+            }
+            catch (Exception ex)
+            {
+                children.Add(new DebugVariable($"[{i}]", -1, DebugValue.Summary("error", $"<读取失败:{ex.Message}>"), IsArgument: false));
+            }
+        }
+        var display = $"长度 {total}" + (total > n ? $"（前 {n}）" : "");
+        return DebugValue.Object(display, children);
+    }
+
+    /// <summary>实例字段清单（名字 + mdFieldDef token）：模块元数据 TypeDefinition → Fields（静态字段跳过）。</summary>
+    private static List<(string Name, int Token)> ReadFieldTokens(string modulePath, int classToken)
+    {
+        using var fs = File.OpenRead(modulePath);
+        using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
+        var mr = pe.GetMetadataReader();
+        var td = mr.GetTypeDefinition(System.Reflection.Metadata.Ecma335.MetadataTokens.TypeDefinitionHandle(classToken));
+        var list = new List<(string Name, int Token)>();
+        foreach (var fh in td.GetFields())
+        {
+            var f = mr.GetFieldDefinition(fh);
+            if (!f.Attributes.HasFlag(System.Reflection.FieldAttributes.Static))
+                list.Add((mr.GetString(f.Name), System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(fh)));
+        }
+        return list;
     }
 
     private static string ReadGeneric(CorDebugGenericValue g)

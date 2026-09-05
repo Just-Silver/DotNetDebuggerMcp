@@ -14,6 +14,7 @@ Components/
   Debugger/CodeViewer.razor   Monaco 编辑器封装（.razor.js 是互操作桥）
   Debugger/TypeTree.razor     左侧类型树（程序集→命名空间→类型→成员，BB TreeView 数据驱动全量、非虚拟滚动）
   Debugger/AgentTimeline.razor  agent 轨迹时间线（AgentActionLog 事件推送，动作流水自动滚底）
+  Debugger/DebugVarRow.razor   停点变量行（递归渲染对象/数组 children，缩进展示）
   Debugger/LogPanel.razor     联调诊断面板（最右列下半，展示 MemoryLog 环形日志）
 Services/
   AgentViewContext.cs   宿主→Web「agent 正在看什么」可观察共享状态（核心链路）

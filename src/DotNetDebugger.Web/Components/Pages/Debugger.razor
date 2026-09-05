@@ -14,7 +14,7 @@
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
             <div class="col-md-6">
-                <input @bind="_targetPath" class="form-control form-control-sm" placeholder="目标程序（exe，可带参数），如 DebugTarget.exe 2 8" />
+                <input @bind="_targetPath" @bind:event="oninput" class="form-control form-control-sm" placeholder="目标程序（exe，可带参数），如 DebugTarget.exe 2 8" />
             </div>
             <div class="col-auto">
                 <Button IsAsync="true" Color="Color.Primary" Size="Size.Small" OnClick="LaunchTarget">启动并附加</Button>
@@ -111,7 +111,7 @@
                                     <div class="small text-secondary mt-1">[@scope]</div>
                                     <ListGroup TItem="DebugVariable" Items="@vars.ToList()">
                                         <ItemTemplate>
-                                            <div class="small font-monospace">@(context.Name ?? $"slot{context.Slot}") = @context.Value.Display</div>
+                                            <DebugVarRow Var="context" Indent="0" />
                                         </ItemTemplate>
                                     </ListGroup>
                                 }
