@@ -203,6 +203,54 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task TraceBreakpoint_RecordsWithoutStopping()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workToken = ReadMethodToken(dll, "Work");
+
+        // trace 行：Work 循环体内、异于入口的语句行（循环 3 次 → 轨迹 3 条）
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var workFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workToken);
+        var firstTarget = DotNetDebugger.Decompiler.Document.DocumentService.GetBreakpointTargetAtLine(doc, workFirstLine!.Value);
+        Assert.True(firstTarget is not null);
+        DotNetDebugger.Decompiler.Document.SourceLineResolver.SourceLineTarget? sourceTarget = null;
+        for (var l = 1; l <= 80 && sourceTarget is null; l++)
+        {
+            var t = DotNetDebugger.Decompiler.Document.SourceLineResolver.Resolve(dll, "DebugTarget.cs", l, out _);
+            if (t is not null && t.MethodToken == workToken && t.IlOffset != firstTarget.Value.IlOffset) sourceTarget = t;
+        }
+        Assert.True(sourceTarget is not null);
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        var set = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = sourceTarget.ActualLine, ["mode"] = "trace" });
+        Assert.True(set.IsError != true, set.Text());
+        Assert.Contains("断点已设", set.Text());
+        Assert.Contains("[trace]", set.Text());
+
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        // trace 不停：Work 3 次循环后进程跑完退出，wait 返回退出+整批轨迹
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("进程已退出", wait.Text());
+        Assert.Contains("trace 轨迹（3 条", wait.Text());
+        Assert.Contains("[arguments]", wait.Text());
+
+        var list = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains("[trace]", list.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
     public async Task DebugState_ConcurrentQueries_AllReturn()
     {
         var exe = DebugTargetExe;

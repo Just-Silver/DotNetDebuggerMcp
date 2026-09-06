@@ -37,7 +37,7 @@ public sealed class BreakpointTests
         await Task.Delay(200, TestContext.Current.CancellationToken); // 让订阅追上缓冲事件
 
         // 设断点：Work 方法入口 IL offset 0
-        var bp = await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0, TestContext.Current.CancellationToken);
+        var bp = await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0, ct: TestContext.Current.CancellationToken);
         Assert.True(bp.Id > 0);
 
         // 模块路径反查：断点模块短名 → 全路径（停点无条件跟随数据源）
@@ -86,7 +86,7 @@ public sealed class BreakpointTests
         await Task.Delay(200, TestContext.Current.CancellationToken);
 
         // 模块名错误：不再抛错，登记为 pending（加载后自动绑定；该模块永不加载 → 永不命中）
-        var bp = await session.SetBreakpointAsync("NoSuchModule.dll", workToken, ilOffset: 0, TestContext.Current.CancellationToken);
+        var bp = await session.SetBreakpointAsync("NoSuchModule.dll", workToken, ilOffset: 0, ct: TestContext.Current.CancellationToken);
         Assert.True(bp.Id > 0);
         Assert.False(bp.IsBound);
 

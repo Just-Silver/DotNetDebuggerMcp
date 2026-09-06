@@ -1,5 +1,6 @@
 using DotNetDebugger.Decompiler.Document;
 using DotNetDebugger.Decompiler.Metadata;
+using DotNetDebugger.Engine.Session;
 using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
 
@@ -29,7 +30,7 @@ public static class DebugBreakpointTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示（断点 id）或错误提示。</returns>
     [McpServerTool]
-    [Description("设置断点，三种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（未加载模块登记待绑定，加载后自动绑定）；② 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；③ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，模块旁需有 PDB 且已加载）。返回断点 id；设好后 debug_continue 运行至命中。")]
+    [Description("设置断点，三种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（未加载模块登记待绑定，加载后自动绑定）；② 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；③ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，模块旁需有 PDB 且已加载）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
     public static async Task<string> DebugBreakpointSet(
         [Description("模块名（如 DebugTarget.dll）；token 方式必填；行定位方式可省，省缺在已加载模块中解析。")] string moduleName = "",
         [Description("方法 token（0x06000005，从反编译 signature 行尾或 #MEMBER 取）；提供时优先按 token 定位。")] string methodToken = "",
@@ -37,19 +38,25 @@ public static class DebugBreakpointTool
         [Description("类型全名（与 decompile 输出同格式）；与 line 组合按反编译视图行定位。")] string typeName = "",
         [Description("源文件路径（绝对/相对/仅文件名如 Program.cs）；与 line 组合按 PDB 源码行定位。")] string sourcePath = "",
         [Description("行号（1-based）：typeName 方式=decompile 输出行号；sourcePath 方式=源码行号；默认 0=未提供。")] int line = 0,
+        [Description("开始生效的命中次数：第 N 次命中起每次都停/记录，默认 1=每次。")] int hitCount = 1,
+        [Description("命中行为：stop=命中停进程（默认）；trace=命中不停、快照变量记轨迹（debug_wait/debug_state 批量取回，环形上限 100 条）。")] string mode = "stop",
         CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
         if (active is null) return "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。";
+        if (hitCount < 1) return "hitCount 须 ≥ 1（第 N 次命中起生效，默认 1=每次）。";
+        var modeNorm = mode.Trim().ToLowerInvariant();
+        if (modeNorm is not ("stop" or "trace")) return $"mode 无效：{mode}（可选 stop=命中停 / trace=记轨迹）。";
+        var modeValue = modeNorm == "trace" ? DebugBreakpointMode.Trace : DebugBreakpointMode.Stop;
 
-        if (!string.IsNullOrWhiteSpace(methodToken)) return await SetByTokenAsync(active, moduleName, methodToken, ilOffset, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(sourcePath)) return await SetBySourceLineAsync(active, moduleName, sourcePath, line, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(typeName)) return await SetByTypeLineAsync(active, moduleName, typeName, line, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(methodToken)) return await SetByTokenAsync(active, moduleName, methodToken, ilOffset, hitCount, modeValue, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(sourcePath)) return await SetBySourceLineAsync(active, moduleName, sourcePath, line, hitCount, modeValue, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(typeName)) return await SetByTypeLineAsync(active, moduleName, typeName, line, hitCount, modeValue, cancellationToken);
         return "请提供定位方式之一：methodToken（token 定位）、typeName+line（反编译视图行）、sourcePath+line（PDB 源码行）。";
     }
 
     /// <summary>token 分支（现状语义）：模块必填；未加载登记 pending。</summary>
-    private static async Task<string> SetByTokenAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string methodToken, int ilOffset, CancellationToken ct)
+    private static async Task<string> SetByTokenAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string methodToken, int ilOffset, int hitCount, DebugBreakpointMode modeValue, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(moduleName)) return "请指定模块名（moduleName，token 定位方式必填）。";
         if (!TryParseToken(methodToken, out var token))
@@ -57,12 +64,9 @@ public static class DebugBreakpointTool
 
         try
         {
-            var bp = await active.Session.SetBreakpointAsync(moduleName, token, ilOffset, ct);
+            var bp = await active.Session.SetBreakpointAsync(moduleName, token, ilOffset, hitCount, modeValue, ct);
             DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{moduleName} {methodToken}+{ilOffset}", $"id={bp.Id}");
-            return bp.IsBound
-                ? $"断点已设: id={bp.Id} 位置={bp}。用 debug_continue 运行至命中。"
-                : $"断点已登记: id={bp.Id} 位置={bp}（模块 {moduleName} 尚未加载，加载后自动绑定）。" +
-                  "模块名需与已加载模块一致；绑定状态用 debug_breakpoint_list 查看。用 debug_continue 运行至命中。";
+            return DescribeSet(bp);
         }
         catch (Exception ex)
         {
@@ -70,8 +74,21 @@ public static class DebugBreakpointTool
         }
     }
 
+    /// <summary>统一断点设置成功文案（绑定状态 + 模式/计数标注）。</summary>
+    private static string DescribeSet(DebugBreakpoint bp)
+    {
+        var modeTag = bp.Mode == DebugBreakpointMode.Trace
+            ? $" [trace]（命中不停记轨迹，debug_wait/debug_state 批量取回；当前未读 {DebugSessionService.Manager.Active?.Buffer.PendingTraceCount ?? 0} 条）"
+            : "";
+        var hitTag = bp.HitCount > 1 ? $" [hitCount={bp.HitCount}，当前已命中 {bp.Hits}]" : "";
+        return bp.IsBound
+            ? $"断点已设: id={bp.Id} 位置={bp}{modeTag}{hitTag}。用 debug_continue 运行至命中。"
+            : $"断点已登记: id={bp.Id} 位置={bp}{modeTag}{hitTag}（模块 {bp.ModuleName} 尚未加载，加载后自动绑定）。" +
+              "模块名需与已加载模块一致；绑定状态用 debug_breakpoint_list 查看。用 debug_continue 运行至命中。";
+    }
+
     /// <summary>反编译视图行分支（P3-3a）：typeName 全名定位类型 → DocumentService 行映射 → token+IL → 断点。</summary>
-    private static async Task<string> SetByTypeLineAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string typeName, int line, CancellationToken ct)
+    private static async Task<string> SetByTypeLineAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string typeName, int line, int hitCount, DebugBreakpointMode modeValue, CancellationToken ct)
     {
         if (line <= 0) return "请提供行号（line，1-based，decompile 输出行号）。";
 
@@ -118,13 +135,11 @@ public static class DebugBreakpointTool
             if (target is null)
                 return $"类型 {fullName} 第 {line} 行无法定位到语句（不在任何方法区间，如 usings/类声明行）。请改用 methodToken 方式。";
 
-            var bp = await active.Session.SetBreakpointAsync(module, target.Value.MethodToken, target.Value.IlOffset, ct);
+            var bp = await active.Session.SetBreakpointAsync(module, target.Value.MethodToken, target.Value.IlOffset, hitCount, modeValue, ct);
             DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{fullName} line {line}", $"id={bp.Id}");
             var at = $"类型 {fullName} 第 {line} 行 → {module}!0x{target.Value.MethodToken:x8}+{target.Value.IlOffset}"
                      + (target.Value.Exact ? "" : "（该行无独立语句，落于方法首条语句）");
-            return bp.IsBound
-                ? $"断点已设: id={bp.Id} 位置={at}。用 debug_continue 运行至命中。"
-                : $"断点已登记: id={bp.Id} 位置={at}（模块加载后自动绑定）。";
+            return DescribeSetWithPosition(bp, at);
         }
         catch (Exception ex)
         {
@@ -133,7 +148,7 @@ public static class DebugBreakpointTool
     }
 
     /// <summary>PDB 源码行分支（P3-3b）：sourcePath+line 经 PDB 序列点 → token+IL → 断点。</summary>
-    private static async Task<string> SetBySourceLineAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string sourcePath, int line, CancellationToken ct)
+    private static async Task<string> SetBySourceLineAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string sourcePath, int line, int hitCount, DebugBreakpointMode modeValue, CancellationToken ct)
     {
         if (line <= 0) return "请提供行号（line，1-based，源码行号）。";
 
@@ -162,18 +177,28 @@ public static class DebugBreakpointTool
                 return $"源文件 \"{sourcePath}\" 第 {line} 行在多个模块命中，请提供 moduleName 消歧：{string.Join("、", resolved.Select(r => r.Module))}";
 
             var (module, target) = resolved[0];
-            var bp = await active.Session.SetBreakpointAsync(module, target.MethodToken, target.IlOffset, ct);
+            var bp = await active.Session.SetBreakpointAsync(module, target.MethodToken, target.IlOffset, hitCount, modeValue, ct);
             DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{sourcePath}:{line}", $"id={bp.Id}");
             var at = $"源 {sourcePath} 第 {line} 行 → {module}!0x{target.MethodToken:x8}+{target.IlOffset}"
                      + (target.ActualLine == line ? "" : $"（该行无独立语句，落于第 {target.ActualLine} 行）");
-            return bp.IsBound
-                ? $"断点已设: id={bp.Id} 位置={at}。用 debug_continue 运行至命中。"
-                : $"断点已登记: id={bp.Id} 位置={at}（模块加载后自动绑定）。";
+            return DescribeSetWithPosition(bp, at);
         }
         catch (Exception ex)
         {
             return $"按源码行设置断点失败：{ex.Message}";
         }
+    }
+
+    /// <summary>统一断点设置成功文案（自定义位置描述版：行断点分支用）。</summary>
+    private static string DescribeSetWithPosition(DebugBreakpoint bp, string at)
+    {
+        var modeTag = bp.Mode == DebugBreakpointMode.Trace
+            ? $" [trace]（命中不停记轨迹，debug_wait/debug_state 批量取回；当前未读 {DebugSessionService.Manager.Active?.Buffer.PendingTraceCount ?? 0} 条）"
+            : "";
+        var hitTag = bp.HitCount > 1 ? $" [hitCount={bp.HitCount}，当前已命中 {bp.Hits}]" : "";
+        return bp.IsBound
+            ? $"断点已设: id={bp.Id} 位置={at}{modeTag}{hitTag}。用 debug_continue 运行至命中。"
+            : $"断点已登记: id={bp.Id} 位置={at}{modeTag}{hitTag}（模块加载后自动绑定）。";
     }
 
     /// <summary>行定位的模块解析：显式给定 → 单模块（未加载报错）；省缺 → 全部已加载模块（调用方自行扫描/消歧）。</summary>
@@ -227,8 +252,12 @@ public static class DebugBreakpointTool
         DebugSessionService.Manager.Actions.Log("debug_breakpoint_list", "", $"{bps.Count} 个");
         if (bps.Count == 0)
             return "当前无断点。用 debug_breakpoint_set 设置。";
+        var pendingTraces = active.Buffer.PendingTraceCount;
         var lines = bps.Select(b =>
-            $"  id={b.Id} {b.ModuleName}!0x{b.MethodToken:x8}+{b.IlOffset} {(b.IsBound ? "已绑定" : "未绑定（模块未加载，加载后自动绑定）")}");
+            $"  id={b.Id} {b.ModuleName}!0x{b.MethodToken:x8}+{b.IlOffset} {(b.IsBound ? "已绑定" : "未绑定（模块未加载，加载后自动绑定）")}"
+            + $" [{(b.Mode == DebugBreakpointMode.Trace ? "trace" : "stop")}]"
+            + (b.HitCount > 1 ? $" 命中 {b.Hits}/{b.HitCount}" : "")
+            + (b.Mode == DebugBreakpointMode.Trace && pendingTraces > 0 ? $" 未读轨迹 {pendingTraces} 条" : ""));
         return $"断点列表（{bps.Count} 个）:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
     }
 

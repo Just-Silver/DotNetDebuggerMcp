@@ -33,7 +33,7 @@ public sealed class StepTests
         await Task.Delay(200, TestContext.Current.CancellationToken);
 
         // 断点 + 继续 → 命中
-        await session.SetBreakpointAsync("DebugTarget.dll", workToken, 0, TestContext.Current.CancellationToken);
+        await session.SetBreakpointAsync("DebugTarget.dll", workToken, 0, ct: TestContext.Current.CancellationToken);
         await session.ContinueAsync(TestContext.Current.CancellationToken);
         await WaitForAsync(() => events.Any(e => e.Kind == DebugEventKind.BreakpointHit), 15_000);
 

@@ -48,7 +48,7 @@ public sealed class SessionEventBufferTests
         buffer.Start(session);
         await Task.Delay(200, TestContext.Current.CancellationToken); // 让消费任务追上缓冲事件
 
-        var bp = await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0, TestContext.Current.CancellationToken);
+        var bp = await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0, ct: TestContext.Current.CancellationToken);
         Assert.True(bp.IsBound);
 
         // 先等后继续：WaitForStopAsync 应在断点命中时被 SnapshotChanged 唤醒

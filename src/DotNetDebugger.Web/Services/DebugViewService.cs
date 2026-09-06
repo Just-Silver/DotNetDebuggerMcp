@@ -55,7 +55,7 @@ public sealed class DebugViewService
         if (active is null) return "无活动调试会话，先启动/附加目标。";
         try
         {
-            var bp = await active.Session.SetBreakpointAsync(moduleName, methodToken, ilOffset, ct);
+            var bp = await active.Session.SetBreakpointAsync(moduleName, methodToken, ilOffset, ct: ct);
             WebHostBootstrap.Manager.Actions.Log("web_breakpoint_set", $"{moduleName} {methodToken}+{ilOffset}", $"id={bp.Id}");
             return $"断点已设: id={bp.Id} 位置={bp}";
         }

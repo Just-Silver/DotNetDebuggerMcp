@@ -86,12 +86,31 @@ public sealed class CallbackHandler
         }
     }
 
-    /// <summary>处理断点命中。返回 true = 已停（不 Continue）。</summary>
+    /// <summary>
+    /// 处理断点命中。返回 true = 已停（不 Continue）。
+    /// P5：先计数（RegisterHit）——Hits 未达 HitCount 放行（第 N 次起生效）；Trace 模式读快照发 TraceHit 后放行
+    /// （进程运行时态由本次 Continue 恢复，与 skipped 异常同款「不停即 Continue」）。
+    /// </summary>
     private bool HandleBreakpoint(BreakpointCorDebugManagedCallbackEventArgs e)
     {
         if (e.Breakpoint is not CorDebugFunctionBreakpoint fbp) return false; // 非函数断点：继续
         var matched = _breakpoints.Match(fbp);
         if (matched is null) return false; // 非登记断点：继续
+
+        matched.RegisterHit();
+        if (matched.Hits < matched.HitCount)
+        {
+            _core.Log("info", $"断点 {matched.Id} 第 {matched.Hits} 次命中（未达目标 {matched.HitCount}），放行");
+            return false;
+        }
+
+        if (matched.Mode == DebugBreakpointMode.Trace)
+        {
+            var traceTop = _core.ReadTopFrame(e.Thread);
+            var vars = _core.CaptureTraceVariables(e.Thread.Id);
+            _core.PublishTraceHit(matched.Id, e.Thread.Id, traceTop, vars);
+            return false; // 不停
+        }
 
         var top = _core.ReadTopFrame(e.Thread);
         _core.PublishBreakpointHit(matched.Id, e.Thread.Id, top);

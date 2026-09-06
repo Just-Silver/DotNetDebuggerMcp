@@ -1,4 +1,7 @@
 ﻿using DotNetDebugger.Engine.Models;
+using DotNetDebugger.Engine.Session;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using Xunit;
 
 namespace DotNetDebugger.Session.Tests;
@@ -99,5 +102,53 @@ public sealed class DebugSessionManagerTests
         Assert.Equal(0, active.Buffer.ConsumeSkippedExceptions().Count);
 
         await manager.CloseAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task TraceMode_TracesConsumableViaBuffer()
+    {
+        Assert.True(File.Exists(TestTarget.DebugTargetExe));
+
+        await using var manager = new DebugSessionManager();
+        // Work(5)：Compute 被调 5 次；trace 断点全程不停
+        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 5 4", TestContext.Current.CancellationToken);
+        var computeToken = ReadMethodToken(Path.ChangeExtension(TestTarget.DebugTargetExe, ".dll"), "Compute");
+        Assert.True(computeToken > 0);
+
+        await active.Session.SetBreakpointAsync("DebugTarget.dll", computeToken, 0, mode: DebugBreakpointMode.Trace, ct: TestContext.Current.CancellationToken);
+        await active.Session.ContinueAsync(TestContext.Current.CancellationToken);
+
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline && active.Buffer.CurrentState != DebugSessionState.Exited)
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        Assert.Equal(DebugSessionState.Exited, active.Buffer.CurrentState);
+        var traces = active.Buffer.ConsumeTraces(out var dropped);
+        Assert.Equal(5, traces.Count);
+        Assert.Equal(0, dropped);
+        Assert.All(traces, t => Assert.Contains(t.Variables, v => v.Scope == "arguments"));
+        // 消费式清零
+        Assert.Equal(0, active.Buffer.PendingTraceCount);
+        Assert.Empty(active.Buffer.ConsumeTraces(out _));
+
+        await manager.CloseAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>用 System.Reflection.Metadata 读 dll 中指定名方法的 mdMethodDef token。</summary>
+    private static int ReadMethodToken(string dllPath, string methodName)
+    {
+        using var fs = File.OpenRead(dllPath);
+        using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
+        var mr = pe.GetMetadataReader();
+        foreach (var th in mr.TypeDefinitions)
+        {
+            var td = mr.GetTypeDefinition(th);
+            foreach (var mh in td.GetMethods())
+            {
+                if (mr.GetString(mr.GetMethodDefinition(mh).Name) == methodName)
+                    return System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(mh);
+            }
+        }
+        return 0;
     }
 }

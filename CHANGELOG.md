@@ -10,6 +10,7 @@
 
 ### Added
 
+- **断点命中计数 + trace 模式（P5）**：`debug_breakpoint_set` 新增 `hitCount`（第 N 次命中起每次都停/记录，默认 1）与 `mode`（`stop`=命中停默认 / `trace`=命中不停、快照栈顶帧变量后自动继续）。trace 轨迹环形上限 100 条，`debug_wait`/`debug_state` 批量消费式取回（一次调用拿回整批循环命中，token 数量级节省）、`debug_breakpoint_list` 显示模式/命中计数/未读轨迹数；两者可正交组合（第 N 次起开始记录）
 - **停点上下文（P4）**：`debug_wait`/`debug_state` 新增 `contextLines` 参数（默认 100，0=不附）——停点时附反编译视图当前语句周边代码（行号=decompile 输出行号，可直接用于 `debug_breakpoint_set(typeName, line)`）；方法完整行数 ≤ 预算显示整个函数，超出按当前语句截取并注明，当前语句标 `← 当前语句`
 - **行断点（P3）**：`debug_breakpoint_set` 新增两种定位方式——`typeName`+`line`（反编译视图行：agent 看到反编译输出第 N 行可直接在该行下断点，与 decompile 输出行号同系）与 `sourcePath`+`line`（PDB 源码行：按异常堆栈/日志里的源文件+行号直接断案发现场，支持绝对/相对/仅文件名）。两种方式 moduleName 可省（跨已加载模块解析，多模块命中提示消歧）；行落在无独立语句处（大括号/签名行）自动落方法首条语句并在返回中注明；均要求模块已加载（未加载请用 token 方式，支持待绑定）
 - **异常现场增强（P2）**：`debug_variables` 异常停点新增 `$exception` 节（当前异常对象：类型全名/Message/一级字段展开）；`debug_state`/`debug_wait` 停点现场附异常 Message

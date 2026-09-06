@@ -122,6 +122,8 @@ public static class DebugSessionTool
             ? await StopContextRenderer.RenderAsync(active, contextLines)
             : null;
         if (context is not null) lines.Add(context);
+        var traces = TracesText(buffer);
+        if (traces is not null) lines.Add(traces);
         var skipped = SkippedExceptionsText(buffer);
         if (skipped is not null) lines.Add(skipped);
         DebugSessionService.Manager.Actions.Log("debug_state", "", string.Join("; ", lines));
@@ -133,6 +135,24 @@ public static class DebugSessionTool
     {
         var (count, lastType) = buffer.ConsumeSkippedExceptions();
         return count > 0 ? $"期间跳过 {count} 个不在过滤范围的异常（如 {lastType}）。" : null;
+    }
+
+    /// <summary>取走并格式化 trace 轨迹（P5；无则 null）。消费式：读走即清，防重复吐给 agent。</summary>
+    internal static string? TracesText(SessionEventBuffer buffer)
+    {
+        var traces = buffer.ConsumeTraces(out var dropped);
+        if (traces.Count == 0) return null;
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"trace 轨迹（{traces.Count} 条，旧→新{(dropped > 0 ? $"；因环形上限已丢弃最早 {dropped} 条" : "")}）:");
+        var index = 0;
+        foreach (var t in traces)
+        {
+            index++;
+            sb.Append($"{Environment.NewLine}  [{index}] {t.UtcTimestamp.LocalDateTime:HH:mm:ss.fff} id={t.BreakpointId} top={t.TopFrame?.ToString() ?? "?"}");
+            foreach (var v in t.Variables)
+                sb.Append($"{Environment.NewLine}      [{v.Scope}] {v.Name ?? $"slot{v.Slot}"} = {v.Display}");
+        }
+        return sb.ToString();
     }
 
     internal static string StateText(DotNetDebugger.Engine.Models.DebugSessionState state) => state switch

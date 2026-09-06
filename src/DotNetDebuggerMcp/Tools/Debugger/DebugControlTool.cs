@@ -79,6 +79,9 @@ public static class DebugControlTool
         var context = stop is not null ? await StopContextRenderer.RenderAsync(active, contextLines) : null;
         if (context is not null) result += Environment.NewLine + context;
 
+        var traces = DebugSessionTool.TracesText(active.Buffer);
+        if (traces is not null) result += Environment.NewLine + traces;
+
         var skipped = DebugSessionTool.SkippedExceptionsText(active.Buffer);
         if (skipped is not null) result += Environment.NewLine + skipped;
         return DebugOutputTool.AppendTargetOutput(active, result, outputLines);

@@ -46,9 +46,10 @@ public sealed class DebugSession : IAsyncDisposable
 
     // ---- 断点 ----
 
-    /// <summary>设置断点（模块名须与运行时模块一致；token 取 signature 行尾或 #MEMBER 的 token）。</summary>
-    public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, CancellationToken ct = default)
-        => _core.SetBreakpointAsync(moduleName, methodToken, ilOffset, ct);
+    /// <summary>设置断点（模块名须与运行时模块一致；token 取 signature 行尾或 #MEMBER 的 token）。
+    /// P5：hitCount=第 N 次起生效（默认 1）；mode=Stop 命中停 / Trace 命中不停记轨迹。</summary>
+    public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, CancellationToken ct = default)
+        => _core.SetBreakpointAsync(moduleName, methodToken, ilOffset, hitCount, mode, ct);
 
     /// <summary>当前登记断点快照（含未绑定模块的；Web 监视器红点渲染用）。</summary>
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)

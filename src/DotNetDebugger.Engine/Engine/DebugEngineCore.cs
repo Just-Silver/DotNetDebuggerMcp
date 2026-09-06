@@ -227,11 +227,12 @@ public sealed class DebugEngineCore : IAsyncDisposable
             return Task.CompletedTask;
         }, ct);
 
-    /// <summary>设置断点（模块未加载时登记为 pending，LoadModule 自动重绑；方法 token 无效抛错）。</summary>
-    public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, CancellationToken ct = default)
+    /// <summary>设置断点（模块未加载时登记为 pending，LoadModule 自动重绑；方法 token 无效抛错）。
+    /// P5：hitCount=第 N 次起生效（默认 1）；mode=Stop 命中停 / Trace 命中不停记轨迹。</summary>
+    public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, CancellationToken ct = default)
         => PostAsyncResult(() =>
         {
-            var bp = _breakpoints.Add(moduleName, methodToken, ilOffset);
+            var bp = _breakpoints.Add(moduleName, methodToken, ilOffset, hitCount, mode);
             PublishBreakpointsChanged();
             return bp;
         }, ct);
@@ -381,14 +382,17 @@ public sealed class DebugEngineCore : IAsyncDisposable
     /// exception 节仅在当前线程有在抛异常（first-chance 停点）时存在，合成 $exception 伪变量。
     /// </summary>
     public Task<IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>> GetVariablesAsync(int threadId, CancellationToken ct = default)
-        => PostAsyncResult(() =>
-        {
-            var result = new Dictionary<string, IReadOnlyList<DebugVariable>>();
-            if (_process is null) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
+        => PostAsyncResult(() => (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)ReadVariablesForThread(threadId), ct);
 
-            CorDebugThread? thread = null;
-            foreach (var t in _process.Threads) { if (t.Id == threadId) { thread = t; break; } }
-            if (thread is null) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
+    /// <summary>GetVariablesAsync 的同步实现（命令泵 MTA 线程内调用；P5 trace 快照路径复用）。</summary>
+    private IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>> ReadVariablesForThread(int threadId)
+    {
+        var result = new Dictionary<string, IReadOnlyList<DebugVariable>>();
+        if (_process is null) return result;
+
+        CorDebugThread? thread = null;
+        foreach (var t in _process.Threads) { if (t.Id == threadId) { thread = t; break; } }
+        if (thread is null) return result;
 
             // 异常停点：合成 $exception 首节（类型全名+Message 展示；children 走现有一级展开，读不出的成员诚实标注）
             var exceptionSection = TryReadExceptionVariable(thread);
@@ -398,7 +402,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
             result["locals"] = new List<DebugVariable>();
             result["arguments"] = new List<DebugVariable>();
 
-            if (thread.ActiveFrame is not CorDebugILFrame ilf) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
+            if (thread.ActiveFrame is not CorDebugILFrame ilf) return result;
 
             // 符号名解析：参数名取 DLL 元数据 Param 表，局部名取模块旁 PDB（缺失则保持 slot 展示）
             string?[] argNames = [], localNames = [];
@@ -448,8 +452,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
             }
             catch { /* 参数读取失败 */ }
 
-            return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
-        }, ct);
+        return result;
+    }
 
     /// <summary>停点变量上限条数（对象/数组展开 children 的截断阈值）。</summary>
     private const int MaxChildren = 32;
@@ -707,6 +711,28 @@ public sealed class DebugEngineCore : IAsyncDisposable
     internal void PublishExceptionSkipped(int threadId, string type, string? message)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.ExceptionSkipped,
             new ExceptionSkippedPayload(threadId, type, message)));
+
+    /// <summary>trace 断点命中（不停进程；快照已在此前于命令泵内同步读取）。</summary>
+    internal void PublishTraceHit(int breakpointId, int threadId, FrameLocation? top, IReadOnlyList<TraceVariable> variables)
+        => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.TraceHit,
+            new TraceHitPayload(breakpointId, threadId, DateTimeOffset.UtcNow, top, variables)));
+
+    /// <summary>
+    /// trace 快照（P5）：命令泵内读取栈顶帧 locals/arguments，展平为单行摘要（scope/name/display）。
+    /// 不展开 children（token 可控）；异常停点的 $exception 节若存在亦纳入。仅供 trace 路径调用（进程同步态）。
+    /// </summary>
+    internal IReadOnlyList<TraceVariable> CaptureTraceVariables(int threadId)
+    {
+        var list = new List<TraceVariable>();
+        try
+        {
+            foreach (var (scope, vars) in ReadVariablesForThread(threadId))
+            foreach (var v in vars)
+                list.Add(new TraceVariable(scope, v.Name, v.Slot, v.Value.Display));
+        }
+        catch { /* 快照失败：返回已读部分（可能为空），不阻塞 trace 继续 */ }
+        return list;
+    }
 
     internal void PublishState(DebugSessionState state, string? reason)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.SessionStateChanged,

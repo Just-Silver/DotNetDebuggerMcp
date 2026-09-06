@@ -31,7 +31,7 @@ public sealed class ObjectValueTests
         var reader = ConsumeAsync(session.Events, events);
         await Task.Delay(200, TestContext.Current.CancellationToken);
 
-        var bp = await session.SetBreakpointAsync("DebugTarget.dll", bagToken, 0, TestContext.Current.CancellationToken);
+        var bp = await session.SetBreakpointAsync("DebugTarget.dll", bagToken, 0, ct: TestContext.Current.CancellationToken);
         Assert.True(bp.Id > 0);
         await session.ContinueAsync(TestContext.Current.CancellationToken);
 

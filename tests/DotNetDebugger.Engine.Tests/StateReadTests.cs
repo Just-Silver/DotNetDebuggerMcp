@@ -30,7 +30,7 @@ public sealed class StateReadTests
         var reader = ConsumeAsync(session.Events, events);
         await Task.Delay(200, TestContext.Current.CancellationToken);
 
-        await session.SetBreakpointAsync("DebugTarget.dll", workToken, 0, TestContext.Current.CancellationToken);
+        await session.SetBreakpointAsync("DebugTarget.dll", workToken, 0, ct: TestContext.Current.CancellationToken);
         await session.ContinueAsync(TestContext.Current.CancellationToken);
 
         // 等命中

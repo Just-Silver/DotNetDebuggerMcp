@@ -18,6 +18,11 @@ public sealed class SessionEventBuffer : IAsyncDisposable
     private int _disposed;
     private int _skippedExceptionCount;
     private string? _lastSkippedExceptionType;
+    private readonly List<TraceHitPayload> _traces = new();
+    private int _tracesDropped;
+
+    /// <summary>trace 轨迹环形上限（条）：超出丢最旧（进程内轨迹，防 token 失控）。</summary>
+    public const int MaxTraces = 100;
 
     public DebugSessionState CurrentState { get { lock (_gate) return _state; } }
     public StopContext? LastStop { get { lock (_gate) return _lastStop; } }
@@ -38,6 +43,25 @@ public sealed class SessionEventBuffer : IAsyncDisposable
             var result = (_skippedExceptionCount, _lastSkippedExceptionType);
             _skippedExceptionCount = 0;
             _lastSkippedExceptionType = null;
+            return result;
+        }
+    }
+
+    /// <summary>当前未读取的 trace 轨迹条数（debug_breakpoint_list 展示用，不消费）。</summary>
+    public int PendingTraceCount { get { lock (_gate) return _traces.Count; } }
+
+    /// <summary>
+    /// 取走全部 trace 轨迹（旧→新）并清空（消费式，防重复吐给 agent）。
+    /// 环形丢弃的条数附在 <paramref name="dropped"/>（0=无丢弃）。
+    /// </summary>
+    public IReadOnlyList<TraceHitPayload> ConsumeTraces(out int dropped)
+    {
+        lock (_gate)
+        {
+            var result = _traces.ToList();
+            dropped = _tracesDropped;
+            _traces.Clear();
+            _tracesDropped = 0;
             return result;
         }
     }
@@ -156,6 +180,21 @@ public sealed class SessionEventBuffer : IAsyncDisposable
                     {
                         _skippedExceptionCount++;
                         _lastSkippedExceptionType = sk.ExceptionType;
+                    }
+                }
+                break;
+            case DebugEventKind.TraceHit:
+                // trace 断点命中：折叠进环形轨迹（不停进程），debug_wait/debug_state 批量消费
+                if (e.Payload is TraceHitPayload th)
+                {
+                    lock (_gate)
+                    {
+                        if (_traces.Count >= MaxTraces)
+                        {
+                            _traces.RemoveAt(0);
+                            _tracesDropped++;
+                        }
+                        _traces.Add(th);
                     }
                 }
                 break;
