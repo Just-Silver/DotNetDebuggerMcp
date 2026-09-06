@@ -7,8 +7,8 @@ public enum ProcessOutputStream
     Stderr,
 }
 
-/// <summary>一行目标输出（序号全局递增，供工具层展示与排序）。</summary>
-public sealed record ProcessOutputLine(int Sequence, ProcessOutputStream Stream, string Text);
+/// <summary>一行目标输出（序号全局递增；Timestamp 在 Append 入口锁外取本机时刻，供与断点/异常命中对时）。</summary>
+public sealed record ProcessOutputLine(int Sequence, DateTimeOffset Timestamp, ProcessOutputStream Stream, string Text);
 
 /// <summary>
 /// 目标进程 stdout/stderr 环形缓冲。DataReceived 回调在线程池线程，全部经锁串行化；
@@ -26,14 +26,15 @@ public sealed class ProcessOutputCapture
     /// <summary>当前缓冲行数。</summary>
     public int Count { get { lock (_gate) return _lines.Count; } }
 
-    /// <summary>追加一行输出；空行忽略。</summary>
+    /// <summary>追加一行输出；空行忽略。时刻在入口（锁外）取——防排队等锁把时刻扭曲到入队时。</summary>
     public void Append(ProcessOutputStream stream, string text)
     {
         if (string.IsNullOrEmpty(text)) return;
+        var timestamp = DateTimeOffset.Now;
         lock (_gate)
         {
             _sequence++;
-            _lines.Enqueue(new ProcessOutputLine(_sequence, stream, text));
+            _lines.Enqueue(new ProcessOutputLine(_sequence, timestamp, stream, text));
             while (_lines.Count > MaxLines) _lines.Dequeue();
         }
     }

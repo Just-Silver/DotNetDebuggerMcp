@@ -14,8 +14,6 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 [McpServerToolType]
 public static class DebugOutputTool
 {
-    internal const string StreamPrefixOut = "[out] ";
-    internal const string StreamPrefixErr = "[err] ";
     internal const string OutputSectionHeader = "目标输出（最近 {0} 行，旧→新）:";
 
     /// <summary>把目标输出尾部按统一格式追加到 result 之后（debug_wait 等复用）；无捕获或 0 行原样返回。</summary>
@@ -28,9 +26,13 @@ public static class DebugOutputTool
         sb.AppendLine();
         sb.AppendLine(string.Format(OutputSectionHeader, tail.Count));
         foreach (var line in tail)
-            sb.AppendLine((line.Stream == ProcessOutputStream.Stderr ? StreamPrefixErr : StreamPrefixOut) + line.Text);
+            sb.AppendLine(FormatLine(line));
         return sb.ToString().TrimEnd();
     }
+
+    /// <summary>单行展示格式：[HH:mm:ss.fff out/err] 内容（时间戳供与断点/异常命中对时）。</summary>
+    internal static string FormatLine(ProcessOutputLine line)
+        => $"[{line.Timestamp:HH:mm:ss.fff} {(line.Stream == ProcessOutputStream.Stderr ? "err" : "out")}] {line.Text}";
 
     /// <summary>
     /// 查看被调试进程的控制台输出（stdout/stderr）。进程运行中也可随时调用；
@@ -59,7 +61,7 @@ public static class DebugOutputTool
         var sb = new StringBuilder();
         sb.AppendLine(string.Format(OutputSectionHeader, tail.Count));
         foreach (var line in tail)
-            sb.AppendLine((line.Stream == ProcessOutputStream.Stderr ? StreamPrefixErr : StreamPrefixOut) + line.Text);
+            sb.AppendLine(FormatLine(line));
         return Task.FromResult(sb.ToString().TrimEnd());
     }
 }
