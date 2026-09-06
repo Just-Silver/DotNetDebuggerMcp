@@ -11,7 +11,7 @@
 - **P3（会话层 + MCP 调试工具面）已完成** ✅：Session 库 + 宿主 `debug_*` 工具 + 触发条件导向握手简介。
 - **P4-1（DocumentService）已完成** ✅：无 PDB 语句级反编译行映射服务。
 - **P4-2（WebUI 监视器）已完成** ✅（2026-09-06）：Blazor Server + BootstrapBlazor + Monaco 展示面；`web_open` 幂等工具落地、MCP server 默认去 `--web`（实施计划 `2026-09-06-p4-closeout-web-open.md`）。
-- **P5（打磨与发布）进行中** 🔄：版本三处同步（1.5.0）+ CHANGELOG 转正 + 发布前回归（tag/Release/NuGet 发布待确认）。
+- **P5（打磨与发布）已完成** ✅（2026-09-06）：版本三处同步（1.5.0）+ CHANGELOG 转正 + 发布前回归全通过；v1.5.0 已发布（GitHub Release + NuGet 包，OIDC 受信任发布打通；过程修复宿主 IsPackable=false 导致 pack 静默空跑、nuget.org 受信任发布策略仓库改名失配两处发布阻塞）。
 - **已拍板决策**：见 `decisions.md`（D1-D13，最新在上）。
 
 ## 文档地图
