@@ -114,15 +114,16 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | ---- | ---- |
 | `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时） |
 | `dotnetdebugger_debug_breakpoint_set` / `_remove` / `_clear` / `_list` | 按 模块+方法 token（signature 行尾取）+IL offset 下/删/清/列断点（模块未加载时登记待绑定，加载后自动绑定） |
-| `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场） |
+| `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场，默认附目标最近控制台输出） |
 | `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处） |
+| `dotnetdebugger_debug_output` | 查看被调试进程的控制台输出（stdout/stderr，旧→新；仅 launch 会话捕获，运行中可随时拉取） |
 | `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时） |
 | `dotnetdebugger_debug_exceptions` / `_clear` | first-chance 异常断点（异常时停下 / 清除） |
 | `dotnetdebugger_web_open` | 打开 Web 调试监视器（幂等：已启动返回现有地址不重复启动；首次自动拉起默认浏览器） |
 | `dotnetdebugger_debug_disconnect` | 断开调试会话 |
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
-> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 用 `signature`/`decompile_member` 反编译定位方法并取 token → `debug_breakpoint_set` 下断点 → `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询）；停后 `debug_stack`/`debug_variables` 观察、`debug_step` 单步、`debug_disconnect` 结束。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。
+> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 用 `signature`/`decompile_member` 反编译定位方法并取 token → `debug_breakpoint_set` 下断点 → `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察、`debug_step` 单步、`debug_disconnect` 结束。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。
 
 ## 命令行调试
 

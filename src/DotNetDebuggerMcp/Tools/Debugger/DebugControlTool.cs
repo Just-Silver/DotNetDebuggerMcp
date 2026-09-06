@@ -43,14 +43,17 @@ public static class DebugControlTool
     /// <summary>
     /// 等待进程停在断点/异常/单步或退出，最多 waitSeconds 秒。已在停点/已退出立即返回；
     /// 超时返回当前状态提示（不报错）。停点现场可直接接 debug_stack/debug_variables。
+    /// 返回默认附带目标进程最近控制台输出（outputLines=0 关闭）。
     /// </summary>
     /// <param name="waitSeconds">最长等待秒数（1-300），默认 10。</param>
+    /// <param name="outputLines">随返回附目标输出最近行数，默认 20，0=不附（仅 launch 会话有输出）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>停点现场、退出提示或超时提示。</returns>
+    /// <returns>停点现场、退出提示或超时提示（可附目标输出）。</returns>
     [McpServerTool]
-    [Description("等待进程停在断点/异常/单步或退出，最多 waitSeconds 秒（默认 10）；已在停点/已退出立即返回。返回最近停点现场，可直接接 debug_stack/debug_variables 观察。")]
+    [Description("等待进程停在断点/异常/单步或退出，最多 waitSeconds 秒（默认 10）；已在停点/已退出立即返回。返回最近停点现场，可直接接 debug_stack/debug_variables 观察；默认附带目标进程最近控制台输出（outputLines 可调，0 关闭）。")]
     public static async Task<string> DebugWait(
         [Description("最长等待秒数，默认 10，范围 1-300。")] int waitSeconds = 10,
+        [Description("随返回附目标进程最近控制台输出的行数，默认 20，0=不附（仅 debug_launch 会话有输出）。")] int outputLines = 20,
         CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
@@ -61,11 +64,14 @@ public static class DebugControlTool
         var state = active.Buffer.CurrentState;
         DebugSessionService.Manager.Actions.Log("debug_wait", $"{seconds}s", stop is not null ? "stopped" : "timeout");
 
-        if (state == DotNetDebugger.Engine.Models.DebugSessionState.Exited)
-            return "进程已退出。";
-        if (stop is not null)
-            return $"已停下。最近停点: {DebugSessionTool.StopText(stop)}。用 debug_stack/debug_variables 观察；debug_continue 继续运行。";
-        return $"等待 {seconds} 秒未停（当前状态: {DebugSessionTool.StateText(state)}）。可再次 debug_wait 继续等待，或 debug_state 查询。";
+        string result;
+        if (state == DebugSessionState.Exited)
+            result = "进程已退出。";
+        else if (stop is not null)
+            result = $"已停下。最近停点: {DebugSessionTool.StopText(stop)}。用 debug_stack/debug_variables 观察；debug_continue 继续运行。";
+        else
+            result = $"等待 {seconds} 秒未停（当前状态: {DebugSessionTool.StateText(state)}）。可再次 debug_wait 继续等待，或 debug_state 查询。";
+        return DebugOutputTool.AppendTargetOutput(active, result, outputLines);
     }
 
     /// <summary>

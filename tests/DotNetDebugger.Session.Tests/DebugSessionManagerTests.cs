@@ -50,4 +50,28 @@ public sealed class DebugSessionManagerTests
         Assert.Equal(DebugSessionState.Exited, active.Buffer.CurrentState);
         target.WaitForExit(5000);
     }
+
+    [Fact]
+    public async Task LaunchAndAttach_CapturesTargetOutput_TailContainsStartupLine()
+    {
+        Assert.True(File.Exists(TestTarget.DebugTargetExe));
+
+        await using var manager = new DebugSessionManager();
+        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 3 4", TestContext.Current.CancellationToken);
+
+        // DebugTarget 启动即打印 "[DebugTarget] start, ..."——轮询等输出到达（DataReceived 异步回调）
+        ProcessOutputLine[] tail = [];
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            tail = [.. active.Output!.Tail(50)];
+            if (tail.Any(l => l.Text.Contains("[DebugTarget] start"))) break;
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+        Assert.Contains(tail, l => l.Text.Contains("[DebugTarget] start"));
+        // launch 会话才有 Output；attach 会话为 null 由构造默认保证
+        Assert.NotNull(active.Output);
+
+        await manager.CloseAsync(TestContext.Current.CancellationToken);
+    }
 }

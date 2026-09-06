@@ -11,17 +11,27 @@ public sealed class ActiveDebugSession : IAsyncDisposable
     public SessionEventBuffer Buffer { get; }
     public AgentActionLog Actions { get; }
 
-    internal ActiveDebugSession(DebugSession session, SessionEventBuffer buffer, AgentActionLog actions)
+    /// <summary>目标进程输出捕获（仅 launch 启动的会话非 null；attach 会话无法重定向已运行进程的输出）。</summary>
+    public ProcessOutputCapture? Output { get; }
+
+    /// <summary>launch 启动的目标进程句柄（会话释放时 Dispose 停止输出读取；不杀进程，目标继续独立运行）。</summary>
+    private readonly System.Diagnostics.Process? _process;
+
+    internal ActiveDebugSession(DebugSession session, SessionEventBuffer buffer, AgentActionLog actions,
+        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null)
     {
         Session = session;
         Buffer = buffer;
         Actions = actions;
+        Output = output;
+        _process = process;
     }
 
     public async ValueTask DisposeAsync()
     {
         await Buffer.DisposeAsync();
         await Session.DisposeAsync();
+        _process?.Dispose();
     }
 }
 
@@ -78,20 +88,43 @@ public sealed class DebugSessionManager : IAsyncDisposable
             CreateNoWindow = true,
             WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
         };
-        using var process = System.Diagnostics.Process.Start(psi)
+        var process = System.Diagnostics.Process.Start(psi)
             ?? throw new InvalidOperationException($"无法启动目标进程：{exePath}");
-        // 排空 stdout/stderr 防管道阻塞
-        process.OutputDataReceived += (_, _) => { };
+        // 捕获目标输出到环形缓冲（供 debug_output / debug_wait 附带返回），同时保持续读排空防管道阻塞。
+        // Process 挂到 ActiveDebugSession（会话释放时 Dispose 停止读取），不再 using var 提前断流。
+        var output = new ProcessOutputCapture();
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) output.Append(ProcessOutputStream.Stdout, e.Data); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) output.Append(ProcessOutputStream.Stderr, e.Data); };
+        process.EnableRaisingEvents = true;
+        process.Exited += (_, _) =>
+        {
+            try { output.AppendSystem($"[进程已退出 exitCode={process.ExitCode}]"); } catch { /* 会话已释放等场景忽略 */ }
+        };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
         // 等目标进入 Main 稳定区（CLR 已加载、模块可枚举）——固定等 1s；期间退出则报错
         await Task.Delay(1000, ct);
         if (process.HasExited)
+        {
+            var tailText = string.Join(" / ", output.Tail(5).Select(l => l.Text));
             throw new InvalidOperationException(
-                $"目标进程过早退出（{exePath}）。调试目标需有启动延迟（attach 窗口），如 DebugTarget 可传 delay 参数。");
+                $"目标进程过早退出（{exePath}）。调试目标需有启动延迟（attach 窗口），如 DebugTarget 可传 delay 参数。"
+                + (tailText.Length > 0 ? $" 目标输出：{tailText}" : ""));
+        }
 
-        return await AttachAsync(process.Id, ct);
+        DebugSession engineSession;
+        try
+        {
+            engineSession = await DebugSession.AttachAsync(process.Id, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            // attach 失败也须释放进程句柄（停止输出读取），目标进程本身继续运行
+            process.Dispose();
+            throw;
+        }
+        return Activate(engineSession, $"launch+attach {commandLine}", output, process);
     }
 
     /// <summary>关闭活动会话（断开调试，进程继续独立运行）。</summary>
@@ -123,11 +156,12 @@ public sealed class DebugSessionManager : IAsyncDisposable
 
     private static int BreakpointCount(ActiveDebugSession active) => 0; // v1 断点计数由工具层维护，此处占位
 
-    private ActiveDebugSession Activate(DebugSession session, string target)
+    private ActiveDebugSession Activate(DebugSession session, string target,
+        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null)
     {
         var buffer = new SessionEventBuffer();
         buffer.Start(session);
-        var active = new ActiveDebugSession(session, buffer, Actions);
+        var active = new ActiveDebugSession(session, buffer, Actions, output, process);
         ActiveDebugSession? old;
         lock (_gate) { old = _active; _active = active; }
         // 替换旧活动会话：后台断开+释放，不阻塞新会话建立
