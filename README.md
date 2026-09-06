@@ -12,6 +12,7 @@
 - [命令行调试](#命令行调试)
 - [工具参数](#工具参数)
 - [使用示例](#使用示例)
+- [第三方组件](#第三方组件)
 - [License](#license)
 
 ## 环境要求
@@ -341,6 +342,19 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 
 - > 反编译 `bin/Debug/MyApp.dll` 到 `src`（全量 / 指定多类型 / 项目形式嵌套目录）
 - > 查看缓存占用与命中率（`dotnetdebugger_cache_stats`）
+
+## 第三方组件
+
+本项目直接依赖的上游开源项目（完整传递依赖见各包的 NuGet Dependencies 一栏）：
+
+| 组件 | 用途 | 来源 / 许可证 |
+|---|---|---|
+| ICSharpCode.Decompiler | 反编译引擎 | [ILSpy](https://github.com/icsharpcode/ilspy)（MIT） |
+| ClrDebug | ICorDebug 调试封装 | [NuGet: ClrDebug](https://www.nuget.org/packages/ClrDebug) |
+| Microsoft.Diagnostics.DbgShim.win-x64 | 调试启动器（dbgshim） | [dotnet/diagnostics](https://github.com/dotnet/diagnostics)（MIT） |
+| ModelContextProtocol | MCP C# SDK | [csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk)（MIT → Apache-2.0 过渡） |
+| BootstrapBlazor（含主题/图标扩展） | Web 展示面组件库 | [BootstrapBlazor](https://github.com/dotnetcore/BootstrapBlazor)（Apache-2.0） |
+| McMaster.Extensions.Hosting.CommandLine | CLI 参数解析 | [CommandLineUtils](https://github.com/natmcmaster/CommandLineUtils)（Apache-2.0） |
 
 ## License
 
