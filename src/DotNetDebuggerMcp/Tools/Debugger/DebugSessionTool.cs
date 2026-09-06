@@ -1,5 +1,6 @@
 using DotNetDebugger.Session;
 using DotNetDebugger.Session.Models;
+using DotNetDebuggerMcp.Configuration;
 using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
 
@@ -95,16 +96,20 @@ public static class DebugSessionTool
 
     /// <summary>
     /// 查询当前调试会话状态（有无活动会话、会话状态、最近停点）。立即返回，不等停。
+    /// 停点时默认附反编译视图上下文（行号=decompile 输出行号；contextLines=0 关闭）。
     /// </summary>
+    /// <param name="contextLines">停点上下文行数预算，默认见 AppConfig（100），0=不附。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>会话摘要文本。</returns>
     [McpServerTool]
-    [Description("查询当前调试会话状态：有无活动会话、会话状态（Running/Stopped/Exited…）、最近停点现场（断点/异常/单步）。立即返回，不等停；进程停在断点时先调此工具确认 Stopped 再 debug_stack/debug_variables。")]
-    public static Task<string> DebugState(CancellationToken cancellationToken = default)
+    [Description("查询当前调试会话状态：有无活动会话、会话状态（Running/Stopped/Exited…）、最近停点现场（断点/异常/单步）。立即返回，不等停；进程停在断点时先调此工具确认 Stopped 再 debug_stack/debug_variables。停点时默认附反编译视图上下文（当前语句周边代码，行号=decompile 输出行号，contextLines 可调/0 关闭）。")]
+    public static async Task<string> DebugState(
+        [Description(ToolParameterText.ContextLinesParam)] int contextLines = AppConfig.DefaultStopContextBudgetLines,
+        CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
         if (active is null)
-            return Task.FromResult("当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。");
+            return "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。";
 
         var buffer = active.Buffer;
         var info = DebugSessionService.Manager.GetInfo();
@@ -113,10 +118,14 @@ public static class DebugSessionTool
             $"会话状态: {StateText(buffer.CurrentState)}",
             $"最近停点: {StopText(buffer.LastStop)}",
         };
+        var context = buffer.CurrentState == DotNetDebugger.Engine.Models.DebugSessionState.Stopped
+            ? await StopContextRenderer.RenderAsync(active, contextLines)
+            : null;
+        if (context is not null) lines.Add(context);
         var skipped = SkippedExceptionsText(buffer);
         if (skipped is not null) lines.Add(skipped);
         DebugSessionService.Manager.Actions.Log("debug_state", "", string.Join("; ", lines));
-        return Task.FromResult(string.Join(Environment.NewLine, lines));
+        return string.Join(Environment.NewLine, lines);
     }
 
     /// <summary>取走并格式化「期间被过滤器跳过的异常」反馈（无则 null）。消费式：每次调用清零。</summary>

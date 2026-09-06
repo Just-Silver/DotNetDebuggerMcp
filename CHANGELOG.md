@@ -10,6 +10,7 @@
 
 ### Added
 
+- **停点上下文（P4）**：`debug_wait`/`debug_state` 新增 `contextLines` 参数（默认 100，0=不附）——停点时附反编译视图当前语句周边代码（行号=decompile 输出行号，可直接用于 `debug_breakpoint_set(typeName, line)`）；方法完整行数 ≤ 预算显示整个函数，超出按当前语句截取并注明，当前语句标 `← 当前语句`
 - **行断点（P3）**：`debug_breakpoint_set` 新增两种定位方式——`typeName`+`line`（反编译视图行：agent 看到反编译输出第 N 行可直接在该行下断点，与 decompile 输出行号同系）与 `sourcePath`+`line`（PDB 源码行：按异常堆栈/日志里的源文件+行号直接断案发现场，支持绝对/相对/仅文件名）。两种方式 moduleName 可省（跨已加载模块解析，多模块命中提示消歧）；行落在无独立语句处（大括号/签名行）自动落方法首条语句并在返回中注明；均要求模块已加载（未加载请用 token 方式，支持待绑定）
 - **异常现场增强（P2）**：`debug_variables` 异常停点新增 `$exception` 节（当前异常对象：类型全名/Message/一级字段展开）；`debug_state`/`debug_wait` 停点现场附异常 Message
 - **`debug_exceptions` 类型过滤生效**：`typeName` 空 = 全部异常；否则异常类型全名与 typeName 相等或以「.typeName」结尾（短名如 `DivideByZeroException`，忽略大小写）才停；不匹配的异常跳过不停，`debug_wait`/`debug_state` 附「期间跳过 N 个不在过滤范围的异常」反馈（防类型名写错静默空等）

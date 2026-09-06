@@ -4,7 +4,9 @@ using ICSharpCode.Decompiler.CSharp.OutputVisitor;
 using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.Metadata;
 using DotNetDebugger.Decompiler.Metadata;
+using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
+using System.Reflection.PortableExecutable;
 
 namespace DotNetDebugger.Decompiler.Document;
 
@@ -134,6 +136,45 @@ public static class DocumentService
             max = max is null || e.Line > max ? e.Line : max;
         }
         return min is null ? null : (min.Value, max!.Value);
+    }
+
+    /// <summary>
+    /// 按方法 token 反查类型全名（P4 停点上下文用；自 Web Debugger 页提升为公共实现）。读模块元数据，无命中返回 null。
+    /// 嵌套类型以「+」连接，与 MetadataNaming 全名风格互通（FindType 归一化两者）。
+    /// </summary>
+    public static string? FindTypeByToken(string dllPath, int methodToken)
+    {
+        if (!File.Exists(dllPath)) return null;
+        using var fs = File.OpenRead(dllPath);
+        using var pe = new PEReader(fs);
+        var mr = pe.GetMetadataReader();
+        foreach (var th in mr.TypeDefinitions)
+        {
+            var td = mr.GetTypeDefinition(th);
+            foreach (var mh in td.GetMethods())
+            {
+                if (MetadataTokens.GetToken(mh) == methodToken)
+                    return FullTypeNameWithNesting(mr, th);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>TypeDefinition 全名（命名空间 + 嵌套链，嵌套用「+」连接）。</summary>
+    private static string FullTypeNameWithNesting(MetadataReader mr, TypeDefinitionHandle th)
+    {
+        var td = mr.GetTypeDefinition(th);
+        var names = new List<string> { mr.GetString(td.Name) };
+        var decl = td.GetDeclaringType();
+        while (!decl.IsNil)
+        {
+            var parent = mr.GetTypeDefinition(decl);
+            names.Add(mr.GetString(parent.Name));
+            decl = parent.GetDeclaringType();
+        }
+        names.Reverse();
+        var ns = mr.GetString(td.Namespace);
+        return (ns.Length > 0 ? ns + "." : "") + string.Join("+", names);
     }
 
     /// <summary>停点定位：IL offset → 反编译文本行号。二分查 [IlOffset, EndOffset) 区间；无命中返回 null。</summary>

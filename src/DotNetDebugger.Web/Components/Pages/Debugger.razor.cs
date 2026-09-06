@@ -246,7 +246,7 @@ public partial class Debugger
                 MemoryLog.Write("StopFollow", $"停点模块 {frame.ModuleName} 反查路径失败（模块未登记或文件不在磁盘）");
                 return;
             }
-            var type = FindTypeByToken(modulePath, frame.MethodToken);
+            var type = DotNetDebugger.Decompiler.Document.DocumentService.FindTypeByToken(modulePath, frame.MethodToken);
             if (type is null)
             {
                 MemoryLog.Write("StopFollow", $"停点 token 0x{frame.MethodToken:x8} 在 {Path.GetFileName(modulePath)} 中未定位到类型");
@@ -421,42 +421,6 @@ public partial class Debugger
             }
         }
         return 0;
-    }
-
-    /// <summary>按方法 token 反查类型全名（停点无条件跟随用；读模块元数据，无命中返回 null）。</summary>
-    private static string? FindTypeByToken(string dllPath, int methodToken)
-    {
-        if (!File.Exists(dllPath)) return null;
-        using var fs = File.OpenRead(dllPath);
-        using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
-        var mr = pe.GetMetadataReader();
-        foreach (var th in mr.TypeDefinitions)
-        {
-            var td = mr.GetTypeDefinition(th);
-            foreach (var mh in td.GetMethods())
-            {
-                if (System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(mh) == methodToken)
-                    return FullTypeName(mr, th);
-            }
-        }
-        return null;
-    }
-
-    /// <summary>TypeDefinition 全名（命名空间 + 嵌套链，嵌套用 + 连接）。</summary>
-    private static string FullTypeName(System.Reflection.Metadata.MetadataReader mr, TypeDefinitionHandle th)
-    {
-        var td = mr.GetTypeDefinition(th);
-        var names = new List<string> { mr.GetString(td.Name) };
-        var decl = td.GetDeclaringType();
-        while (!decl.IsNil)
-        {
-            var parent = mr.GetTypeDefinition(decl);
-            names.Add(mr.GetString(parent.Name));
-            decl = parent.GetDeclaringType();
-        }
-        names.Reverse();
-        var ns = mr.GetString(td.Namespace);
-        return (ns.Length > 0 ? ns + "." : "") + string.Join("+", names);
     }
 
     public void Dispose()

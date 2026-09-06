@@ -44,6 +44,16 @@ internal static class ToolParameterText
         "是否包含间接后代（如接口的所有实现者、基类的所有子孙，默认 false）";
 
     /// <summary>
+    /// contextLines 参数描述（debug_wait/debug_state 共用）：行数预算语义与默认值引用 AppConfig.DefaultStopContextBudgetLines（改预算一处同步）。
+    /// </summary>
+    /// <summary>
+    /// contextLines 参数描述（debug_wait/debug_state 共用）。文案中「默认 100」须与 AppConfig.DefaultStopContextBudgetLines 同步——
+    /// [Description] 要求编译期常量，const int 无法参与 const string 拼接（int→string 非常量转换，TimeoutParam 同款先例）。
+    /// </summary>
+    public const string ContextLinesParam =
+        "停点上下文行数预算：方法完整行数 ≤ 预算显示整个函数，超出按当前语句截取预算行；默认 100，0=不附上下文";
+
+    /// <summary>
     /// 工具级描述末尾的分页页脚句（14 个工具共用，经常量拼接引用；写盘工具与 cache_stats 不含）。
     /// </summary>
     public const string FooterPagination =

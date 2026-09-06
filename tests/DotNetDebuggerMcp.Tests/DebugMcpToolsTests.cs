@@ -77,6 +77,8 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("breakpoint", wait.Text());
         Assert.Contains("目标输出", wait.Text());
         Assert.Contains("[DebugTarget] start", wait.Text());
+        Assert.Contains("停点上下文", wait.Text()); // P4：默认附当前语句反编译上下文
+        Assert.Contains("← 当前语句", wait.Text());
 
         // 6. debug_state 确认 Stopped
         var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());

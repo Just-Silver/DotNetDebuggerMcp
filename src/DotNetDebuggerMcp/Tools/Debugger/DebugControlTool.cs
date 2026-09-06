@@ -1,4 +1,5 @@
 using DotNetDebugger.Engine.Models;
+using DotNetDebuggerMcp.Configuration;
 using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
 
@@ -43,17 +44,19 @@ public static class DebugControlTool
     /// <summary>
     /// 等待进程停在断点/异常/单步或退出，最多 waitSeconds 秒。已在停点/已退出立即返回；
     /// 超时返回当前状态提示（不报错）。停点现场可直接接 debug_stack/debug_variables。
-    /// 返回默认附带目标进程最近控制台输出（outputLines=0 关闭）。
+    /// 返回默认附停点上下文（反编译视图当前语句周边，行号=decompile 输出行号）与目标进程最近控制台输出。
     /// </summary>
     /// <param name="waitSeconds">最长等待秒数（1-300），默认 10。</param>
     /// <param name="outputLines">随返回附目标输出最近行数，默认 20，0=不附（仅 launch 会话有输出）。</param>
+    /// <param name="contextLines">停点上下文行数预算，默认见 AppConfig（100），0=不附。</param>
     /// <param name="cancellationToken">取消令牌。</param>
-    /// <returns>停点现场、退出提示或超时提示（可附目标输出）。</returns>
+    /// <returns>停点现场、退出提示或超时提示（可附上下文/目标输出）。</returns>
     [McpServerTool]
-    [Description("等待进程停在断点/异常/单步或退出，最多 waitSeconds 秒（默认 10）；已在停点/已退出立即返回。返回最近停点现场，可直接接 debug_stack/debug_variables 观察；默认附带目标进程最近控制台输出（outputLines 可调，0 关闭）。")]
+    [Description("等待进程停在断点/异常/单步或退出，最多 waitSeconds 秒（默认 10）；已在停点/已退出立即返回。返回最近停点现场，可直接接 debug_stack/debug_variables 观察；默认附停点上下文（反编译视图当前语句周边代码，行号=decompile 输出行号，contextLines 可调/0 关闭）与目标进程最近控制台输出（outputLines 可调/0 关闭）。")]
     public static async Task<string> DebugWait(
         [Description("最长等待秒数，默认 10，范围 1-300。")] int waitSeconds = 10,
         [Description("随返回附目标进程最近控制台输出的行数，默认 20，0=不附（仅 debug_launch 会话有输出）。")] int outputLines = 20,
+        [Description(ToolParameterText.ContextLinesParam)] int contextLines = AppConfig.DefaultStopContextBudgetLines,
         CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
@@ -71,6 +74,11 @@ public static class DebugControlTool
             result = $"已停下。最近停点: {DebugSessionTool.StopText(stop)}。用 debug_stack/debug_variables 观察；debug_continue 继续运行。";
         else
             result = $"等待 {seconds} 秒未停（当前状态: {DebugSessionTool.StateText(state)}）。可再次 debug_wait 继续等待，或 debug_state 查询。";
+
+        // 停点上下文（P4）：仅在停点时有意义；输出尾部/跳过反馈照旧
+        var context = stop is not null ? await StopContextRenderer.RenderAsync(active, contextLines) : null;
+        if (context is not null) result += Environment.NewLine + context;
+
         var skipped = DebugSessionTool.SkippedExceptionsText(active.Buffer);
         if (skipped is not null) result += Environment.NewLine + skipped;
         return DebugOutputTool.AppendTargetOutput(active, result, outputLines);

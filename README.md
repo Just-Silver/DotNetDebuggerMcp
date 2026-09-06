@@ -114,8 +114,8 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | ---- | ---- |
 | `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时） |
 | `dotnetdebugger_debug_breakpoint_set` / `_remove` / `_clear` / `_list` | 下/删/清/列断点，三种定位：模块+方法 token+IL offset（signature 行尾取 token，未加载模块登记待绑定）；`typeName`+`line` 按反编译视图行；`sourcePath`+`line` 按 PDB 源码行（后两者需模块已加载） |
-| `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场，默认附目标最近控制台输出） |
-| `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处） |
+| `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场，默认附停点上下文与目标最近控制台输出） |
+| `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处；停点时附反编译视图上下文） |
 | `dotnetdebugger_debug_output` | 查看被调试进程的控制台输出（stdout/stderr，旧→新；仅 launch 会话捕获，运行中可随时拉取） |
 | `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时；异常停点额外返回 `$exception` 当前异常对象：类型/Message/一级字段） |
 | `dotnetdebugger_debug_exceptions` / `_clear` | first-chance 异常断点：按类型全名或短名（`.短名` 结尾，忽略大小写）过滤，不匹配的异常跳过并在 debug_wait/debug_state 提示跳过情况 / 清除 |
