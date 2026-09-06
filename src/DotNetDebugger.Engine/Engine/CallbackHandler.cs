@@ -107,27 +107,30 @@ public sealed class CallbackHandler
         _core.PublishState(DebugSessionState.Stopped, $"step complete ({e.Reason})");
     }
 
-    /// <summary>处理异常。返回 true = 已停。</summary>
+    /// <summary>
+    /// 处理异常回调。返回 true = 已停。
+    /// 仅在 FIRST_CHANCE 阶段决策停/跳（USER_FIRST_CHANCE/CATCH_HANDLER_FOUND 是同一异常传播的后续阶段，
+    /// 重复停/重复计数只会干扰调试）；过滤器 null = 全部放行（含 UNHANDLED，保持 v1 行为）。
+    /// 匹配语义：异常类型全名与过滤名相等或以「.过滤名」结尾（忽略大小写）——不匹配则发 skipped 事件后放行
+    /// （Session 计数，供 debug_wait/debug_state 给不命中反馈；对齐 sharpdbg「不停即 Continue」模式）。
+    /// </summary>
     private bool HandleException2(Exception2CorDebugManagedCallbackEventArgs e)
     {
+        if (e.EventType != CorDebugExceptionCallbackType.DEBUG_EXCEPTION_FIRST_CHANCE) return false;
         if (_exceptionFilter is null) return false; // 未设过滤器：放行
 
-        // v1：设了过滤器即停在 first-chance（类型精确过滤列 v2）
-        var top = _core.ReadTopFrame(e.Thread);
-        var typeToken = TryGetExceptionType(e);
-        _core.PublishExceptionHit(e.Thread.Id, typeToken ?? _exceptionFilter.TypeName ?? "<unknown>", null, top);
-        _core.PublishState(DebugSessionState.Stopped, $"exception {_exceptionFilter.TypeName ?? typeToken ?? "<unknown>"}");
-        return true;
-    }
-
-    private static string? TryGetExceptionType(Exception2CorDebugManagedCallbackEventArgs e)
-    {
-        try
+        var info = e.Thread.CurrentException is { } excValue ? _core.ReadCurrentExceptionInfo(excValue) : null;
+        var typeName = info?.TypeName ?? "<unknown>";
+        if (!_exceptionFilter.Matches(typeName))
         {
-            var cls = e.Thread?.CurrentException?.ExactType?.Class;
-            return cls is null ? null : $"0x{cls.Token.Value:x8}";
+            _core.PublishExceptionSkipped(e.Thread.Id, typeName, info?.Message);
+            return false; // 不停：落到默认 Continue
         }
-        catch { return null; }
+
+        var top = _core.ReadTopFrame(e.Thread);
+        _core.PublishExceptionHit(e.Thread.Id, typeName, info?.Message, top);
+        _core.PublishState(DebugSessionState.Stopped, $"exception {typeName}");
+        return true;
     }
 
     private static string SafeModuleName(CorDebugModule m)

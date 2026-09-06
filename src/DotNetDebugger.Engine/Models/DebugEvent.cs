@@ -7,6 +7,7 @@ public enum DebugEventKind
     BreakpointHit,
     StepCompleted,
     ExceptionHit,
+    ExceptionSkipped,
     ThreadsChanged,
     EngineLog,
     BreakpointsChanged,
@@ -45,6 +46,9 @@ public sealed record StepCompletedPayload(int ThreadId, FrameLocation? TopFrame,
 
 /// <summary>first-chance 异常命中事件载荷。</summary>
 public sealed record ExceptionHitPayload(int ThreadId, string ExceptionType, string? Message, FrameLocation? TopFrame);
+
+/// <summary>异常被过滤器跳过事件载荷（不停进程；Session 计数后供 debug_wait/debug_state 给不命中反馈）。</summary>
+public sealed record ExceptionSkippedPayload(int ThreadId, string ExceptionType, string? Message);
 
 /// <summary>线程列表变化事件载荷。</summary>
 public sealed record ThreadsChangedPayload(IReadOnlyList<DebugThreadInfo> Threads);

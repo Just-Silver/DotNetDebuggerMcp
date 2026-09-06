@@ -373,21 +373,26 @@ public sealed class DebugEngineCore : IAsyncDisposable
 
     /// <summary>
     /// 读取指定线程栈顶 IL 帧的局部变量与参数（停顿时调用）。v1：标量/字符串直接渲染；
-    /// 对象降级为摘要；名字为空用 slotN。返回 { "locals": [...], "arguments": [...] }。
+    /// 对象降级为摘要；名字为空用 slotN。返回 { "exception": [...], "locals": [...], "arguments": [...] }——
+    /// exception 节仅在当前线程有在抛异常（first-chance 停点）时存在，合成 $exception 伪变量。
     /// </summary>
     public Task<IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>> GetVariablesAsync(int threadId, CancellationToken ct = default)
         => PostAsyncResult(() =>
         {
-            var result = new Dictionary<string, IReadOnlyList<DebugVariable>>
-            {
-                ["locals"] = new List<DebugVariable>(),
-                ["arguments"] = new List<DebugVariable>(),
-            };
+            var result = new Dictionary<string, IReadOnlyList<DebugVariable>>();
             if (_process is null) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
 
             CorDebugThread? thread = null;
             foreach (var t in _process.Threads) { if (t.Id == threadId) { thread = t; break; } }
             if (thread is null) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
+
+            // 异常停点：合成 $exception 首节（类型全名+Message 展示；children 走现有一级展开，读不出的成员诚实标注）
+            var exceptionSection = TryReadExceptionVariable(thread);
+            if (exceptionSection is not null)
+                result["exception"] = exceptionSection;
+
+            result["locals"] = new List<DebugVariable>();
+            result["arguments"] = new List<DebugVariable>();
 
             if (thread.ActiveFrame is not CorDebugILFrame ilf) return (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)result;
 
@@ -444,6 +449,85 @@ public sealed class DebugEngineCore : IAsyncDisposable
 
     /// <summary>停点变量上限条数（对象/数组展开 children 的截断阈值）。</summary>
     private const int MaxChildren = 32;
+
+    /// <summary>
+    /// 合成 $exception 伪变量（异常停点专有）：展示「类型全名: Message」（Message 读不出则只给类型名，诚实降级），
+    /// children 走现有一级字段展开。当前线程无在抛异常（CurrentException 为空）返回 null。
+    /// </summary>
+    private List<DebugVariable>? TryReadExceptionVariable(CorDebugThread thread)
+    {
+        try
+        {
+            var excValue = thread.CurrentException;
+            if (excValue is null) return null;
+            var info = ReadCurrentExceptionInfo(excValue);
+            var expanded = ReadValue(excValue, expand: true);
+            var display = info?.TypeName ?? "<unknown>";
+            var message = info?.Message;
+            if (!string.IsNullOrEmpty(message)) display += $": {message}";
+            return [new DebugVariable("$exception", -1, expanded with { Display = display }, IsArgument: false)];
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// 读在抛异常的概况（类型全名 + Message）。类型名经 TypeNameResolver（解析失败降级 token 文本）；
+    /// Message 取 _message 字段字符串（私有字段经元数据 token + GetFieldValue，读不出返回 null）。
+    /// 进程同步态调用。
+    /// </summary>
+    internal (string TypeName, string? Message)? ReadCurrentExceptionInfo(CorDebugValue excValue)
+    {
+        try
+        {
+            var typeName = "<unknown>";
+            try
+            {
+                var cls = excValue.ExactType?.Class;
+                if (cls is not null && cls.Module?.Name is { } modulePath)
+                    typeName = TypeNameResolver.Resolve(modulePath, (int)cls.Token.Value) ?? $"token 0x{cls.Token.Value:x8}";
+            }
+            catch { /* 类型名解析失败保持 <unknown> */ }
+            return (typeName, ReadExceptionMessage(excValue));
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// 读异常对象的 _message 字段字符串。_message 声明在 System.Exception，派生异常类自身通常无此字段——
+    /// 沿运行时基类链（CorDebugType.Base）逐层找声明类再 GetFieldValue；任一层失败即停止（不虚报）。
+    /// </summary>
+    /// <summary>
+    /// 读异常对象的 _message 字段字符串。_message 声明在 System.Exception，派生异常类自身通常无此字段——
+    /// 沿运行时基类链（CorDebugType.Base）逐层找声明类再 GetFieldValue；字段值是字符串引用，解引用读内容；
+    /// 任一层失败即停止（不虚报）。
+    /// </summary>
+    private static string? ReadExceptionMessage(CorDebugValue excValue)
+    {
+        try
+        {
+            if (excValue is not CorDebugReferenceValue r) return null;
+            if (r.Dereference() is not CorDebugObjectValue obj) return null;
+            for (var t = obj.ExactType; t is not null; t = t.Base)
+            {
+                try
+                {
+                    var cls = t.Class;
+                    var modulePath = cls.Module?.Name;
+                    if (string.IsNullOrEmpty(modulePath)) continue;
+                    var field = ReadFieldTokens(modulePath!, (int)cls.Token.Value).FirstOrDefault(f => f.Name == "_message");
+                    if (field.Name is null) continue;
+                    // 字段值是 string 引用（CorDebugReferenceValue），解引用才是 CorDebugStringValue
+                    if (obj.GetFieldValue(cls.Raw, new mdFieldDef((uint)field.Token)) is CorDebugReferenceValue fr
+                        && fr.Dereference() is CorDebugStringValue s)
+                        return s.GetString(s.Length);
+                    return null; // 字段在但不是字符串引用：不向上继续
+                }
+                catch { /* 本层读取失败，向基类继续 */ }
+            }
+            return null;
+        }
+        catch { return null; }
+    }
 
     /// <summary>CorDebugValue → DebugValue（顶层变量：展开对象/数组一级成员）。进程同步态调用。</summary>
     private static DebugValue ReadValue(CorDebugValue value)
@@ -614,6 +698,11 @@ public sealed class DebugEngineCore : IAsyncDisposable
         Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.ExceptionHit,
             new ExceptionHitPayload(threadId, type, message, top)));
     }
+
+    /// <summary>异常被过滤器跳过（不停进程、不改状态；Session 计数给 debug_wait/debug_state 不命中反馈）。</summary>
+    internal void PublishExceptionSkipped(int threadId, string type, string? message)
+        => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.ExceptionSkipped,
+            new ExceptionSkippedPayload(threadId, type, message)));
 
     internal void PublishState(DebugSessionState state, string? reason)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.SessionStateChanged,

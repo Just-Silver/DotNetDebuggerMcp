@@ -16,6 +16,8 @@ public sealed class SessionEventBuffer : IAsyncDisposable
     private CancellationTokenSource _cts = new();
     private Task? _consumer;
     private int _disposed;
+    private int _skippedExceptionCount;
+    private string? _lastSkippedExceptionType;
 
     public DebugSessionState CurrentState { get { lock (_gate) return _state; } }
     public StopContext? LastStop { get { lock (_gate) return _lastStop; } }
@@ -23,6 +25,22 @@ public sealed class SessionEventBuffer : IAsyncDisposable
 
     /// <summary>当前断点快照（引擎事件驱动更新；无会话/未变更过为空）。</summary>
     public IReadOnlyList<BreakpointSnapshot> CurrentBreakpoints { get { lock (_gate) return _breakpoints; } }
+
+    /// <summary>
+    /// 取走自上次消费以来被异常过滤器跳过的异常统计（次数 + 最近类型），并清零。
+    /// 「期间」语义由消费方驱动：debug_wait/debug_state 每次调用时取走，向 agent 反馈
+    /// 「过滤器在工作、不命中」——防「设错类型名导致断点永不命中」的静默空等。
+    /// </summary>
+    public (int Count, string? LastType) ConsumeSkippedExceptions()
+    {
+        lock (_gate)
+        {
+            var result = (_skippedExceptionCount, _lastSkippedExceptionType);
+            _skippedExceptionCount = 0;
+            _lastSkippedExceptionType = null;
+            return result;
+        }
+    }
 
     /// <summary>会话快照变化事件（状态或停点变化后触发；订阅方自行切线程）。UI 推送通道，替代轮询。</summary>
     public event Action<DebugSessionState, StopContext?>? SnapshotChanged;
@@ -126,7 +144,18 @@ public sealed class SessionEventBuffer : IAsyncDisposable
                     {
                         _state = DebugSessionState.Stopped;
                         _lastStop = new StopContext(e.UtcTimestamp, e.Kind, ex.ThreadId, ex.TopFrame,
-                            $"exception {ex.ExceptionType}");
+                            $"exception {ex.ExceptionType}", Message: ex.Message);
+                    }
+                }
+                break;
+            case DebugEventKind.ExceptionSkipped:
+                // 过滤器跳过的异常：不计状态/停点，只累计给 debug_wait/debug_state 的不命中反馈
+                if (e.Payload is ExceptionSkippedPayload sk)
+                {
+                    lock (_gate)
+                    {
+                        _skippedExceptionCount++;
+                        _lastSkippedExceptionType = sk.ExceptionType;
                     }
                 }
                 break;

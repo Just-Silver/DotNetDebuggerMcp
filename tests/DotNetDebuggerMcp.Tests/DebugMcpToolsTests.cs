@@ -99,6 +99,45 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task ExceptionFilter_Match_StopsWithMessageAndExceptionVariable()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+
+        // throw 模式 + 8s delay（操作窗口）：Work 后抛 DivideByZeroException("value is zero")
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 1 throw 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        // 短名过滤（.短名 结尾匹配）→ 命中
+        var set = await CallAsync(mcp, "debug_exceptions",
+            new Dictionary<string, object?> { ["typeName"] = "DivideByZeroException" });
+        Assert.True(set.IsError != true, set.Text());
+        Assert.Contains("已设异常断点", set.Text());
+
+        var cont = await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        Assert.True(cont.IsError != true, cont.Text());
+
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("已停下", wait.Text());
+        Assert.Contains("System.DivideByZeroException", wait.Text());
+        Assert.Contains("value is zero", wait.Text()); // 停点现场附异常 Message
+
+        // $exception 伪变量：类型 + Message + 一级字段
+        var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        Assert.True(vars.IsError != true, vars.Text());
+        Assert.Contains("$exception", vars.Text());
+        Assert.Contains("System.DivideByZeroException", vars.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
     public async Task DebugState_ConcurrentQueries_AllReturn()
     {
         var exe = DebugTargetExe;

@@ -71,6 +71,8 @@ public static class DebugControlTool
             result = $"已停下。最近停点: {DebugSessionTool.StopText(stop)}。用 debug_stack/debug_variables 观察；debug_continue 继续运行。";
         else
             result = $"等待 {seconds} 秒未停（当前状态: {DebugSessionTool.StateText(state)}）。可再次 debug_wait 继续等待，或 debug_state 查询。";
+        var skipped = DebugSessionTool.SkippedExceptionsText(active.Buffer);
+        if (skipped is not null) result += Environment.NewLine + skipped;
         return DebugOutputTool.AppendTargetOutput(active, result, outputLines);
     }
 

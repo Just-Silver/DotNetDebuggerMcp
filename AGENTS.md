@@ -18,13 +18,13 @@
 
 **依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）与 `Engine`（只依赖 ClrDebug + DbgShim.win-x64）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部四库。各库**均不得反向引用宿主**。
 
-**文档导航**：`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-2 已完成、P5 发布进行中、specs/research 导航）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `..\Externals\DebuggerExternals\`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
+**文档导航**：`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-2 已完成、P5 发布进行中、specs/research 导航）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `../../Externals/DebuggerExternals/`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
 
 ## 开发铁律
 
 > **原则：遇事不猜，先查后改。**
 
-- 不熟悉 API/模块实现/报错原因时，**严禁凭经验臆测或盲目修改**。正确做法：① 本地克隆源码（`..\Externals\DebuggerExternals\`，比 websearch 快且准）② 官方文档/`--help` ③ `gh` 查 issue/PR ④ websearch ⑤ 再请教。
+- 不熟悉 API/模块实现/报错原因时，**严禁凭经验臆测或盲目修改**。正确做法：① 本地克隆源码（`../../Externals/DebuggerExternals/`，比 websearch 快且准）② 官方文档/`--help` ③ `gh` 查 issue/PR ④ websearch ⑤ 再请教。
 - 禁止：凭感觉试错、复制粘贴未经验证的代码、忽略官方/社区最佳实践。
 
 ## 关键约束（跨项目共享）

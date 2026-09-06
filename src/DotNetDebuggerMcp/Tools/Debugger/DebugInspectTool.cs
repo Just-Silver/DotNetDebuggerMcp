@@ -77,7 +77,7 @@ public static class DebugInspectTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>变量文本或错误提示。</returns>
     [McpServerTool]
-    [Description("读取栈顶帧的局部变量与参数（进程需停）。v1 覆盖标量值；对象/数组显示摘要。")]
+    [Description("读取栈顶帧的局部变量与参数（进程需停）；异常停点额外返回 $exception 节（当前异常对象：类型/Message/一级字段）。")]
     public static async Task<string> DebugVariables(
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
         CancellationToken cancellationToken = default)

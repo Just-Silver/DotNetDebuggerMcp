@@ -9,7 +9,8 @@ public sealed record StopContext(
     int ThreadId,
     FrameLocation? TopFrame,
     string? Reason,               // 断点描述 / step reason / 异常类型
-    int? BreakpointId = null);
+    int? BreakpointId = null,
+    string? Message = null);      // 异常停点的异常 Message（其它停点为 null）
 
 /// <summary>会话摘要（供 debug_state 返回与轨迹关联）。</summary>
 public sealed record DebugSessionInfo(

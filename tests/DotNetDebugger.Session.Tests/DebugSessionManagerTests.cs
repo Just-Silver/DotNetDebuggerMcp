@@ -74,4 +74,30 @@ public sealed class DebugSessionManagerTests
 
         await manager.CloseAsync(TestContext.Current.CancellationToken);
     }
+
+    [Fact]
+    public async Task ExceptionFilter_NonMatch_SkipsConsumableViaBuffer()
+    {
+        Assert.True(File.Exists(TestTarget.DebugTargetExe));
+
+        await using var manager = new DebugSessionManager();
+        // throw 模式 + 3s delay（attach 窗口）；抛 System.DivideByZeroException
+        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 1 throw 3", TestContext.Current.CancellationToken);
+
+        // 设不匹配的过滤器 → 异常被跳过（引擎 FIRST_CHANCE 计一次）
+        await active.Session.SetExceptionBreakpointAsync("System.IO.FileNotFoundException", TestContext.Current.CancellationToken);
+        await active.Session.ContinueAsync(TestContext.Current.CancellationToken);
+
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline && active.Buffer.CurrentState != DebugSessionState.Exited)
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        var (count, lastType) = active.Buffer.ConsumeSkippedExceptions();
+        Assert.Equal(1, count);
+        Assert.Equal("System.DivideByZeroException", lastType);
+        // 消费式清零
+        Assert.Equal(0, active.Buffer.ConsumeSkippedExceptions().Count);
+
+        await manager.CloseAsync(TestContext.Current.CancellationToken);
+    }
 }

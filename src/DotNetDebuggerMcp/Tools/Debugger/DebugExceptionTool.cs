@@ -12,16 +12,18 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 public static class DebugExceptionTool
 {
     /// <summary>
-    /// 设置 first-chance 异常断点：进程后续抛异常时停下（v1：typeName 空 = 全部异常停下；
-    /// 类型精确过滤 v2）。设好后 debug_continue，异常抛出时进程停，用 debug_state/debug_stack 观察。
+    /// 设置 first-chance 异常断点：进程后续抛匹配的异常时停下（typeName 空 = 全部异常停下；
+    /// 否则异常类型全名与 typeName 相等或以「.typeName」结尾即命中，忽略大小写）。
+    /// 不匹配的异常跳过不停，debug_wait/debug_state 会提示跳过了哪些类型（防类型名写错静默空等）。
+    /// 设好后 debug_continue，异常抛出时进程停，用 debug_state/debug_stack/debug_variables（含 $exception）观察。
     /// </summary>
-    /// <param name="typeName">异常类型名过滤（v2 生效）；缺省空 = 全部异常停下。</param>
+    /// <param name="typeName">异常类型名（全名如 System.DivideByZeroException 或短名 DivideByZeroException，忽略大小写）；缺省空 = 全部异常停下。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
     [McpServerTool]
-    [Description("设置 first-chance 异常断点：进程后续抛异常时停下（typeName 空 = 全部异常；类型精确过滤 v2）。设好后 debug_continue，异常抛出时进程停。")]
+    [Description("设置 first-chance 异常断点：进程后续抛匹配的异常时停下。typeName 空 = 全部异常；否则异常类型全名与 typeName 相等或以「.typeName」结尾（短名，忽略大小写）才停，不匹配的异常跳过（debug_wait/debug_state 会提示跳过情况）。设好后 debug_continue，异常抛出时进程停，debug_variables 可观察 $exception 对象。")]
     public static async Task<string> DebugExceptions(
-        [Description("异常类型名过滤（v2 生效）；缺省空 = 全部异常停下。")] string typeName = "",
+        [Description("异常类型名：全名（System.DivideByZeroException）或短名（DivideByZeroException），忽略大小写；缺省空 = 全部异常停下。")] string typeName = "",
         CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
@@ -36,7 +38,7 @@ public static class DebugExceptionTool
             DebugSessionService.Manager.Actions.Log("debug_exceptions", typeName, "ok");
             return string.IsNullOrWhiteSpace(typeName)
                 ? "已设异常断点：全部 first-chance 异常将停下进程。"
-                : $"已设异常断点：类型 {typeName.Trim()} 相关异常将停下进程（v1 为全部异常，精确过滤 v2）。";
+                : $"已设异常断点：异常类型全名与 {typeName.Trim()} 相等或以其结尾（短名，忽略大小写）时停下；不匹配的异常跳过并在 debug_wait/debug_state 提示。";
         }
         catch (Exception ex)
         {

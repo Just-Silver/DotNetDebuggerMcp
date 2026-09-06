@@ -40,11 +40,58 @@ public sealed class ExceptionBreakpointTests
         var hit = events.Last(e => e.Kind == DebugEventKind.ExceptionHit);
         var payload = Assert.IsType<ExceptionHitPayload>(hit.Payload);
         Assert.True(payload.ThreadId > 0);
+        // P2：类型全名解析（TypeRef 行内 namespace+name）+ Message 捕获（_message 字段）
+        Assert.Equal("System.DivideByZeroException", payload.ExceptionType);
+        Assert.Equal("value is zero", payload.Message);
+
+        // P2：$exception 伪变量——异常停点 GetVariables 首节，展示含类型全名
+        var vars = await session.GetVariablesAsync(payload.ThreadId, TestContext.Current.CancellationToken);
+        Assert.True(vars.ContainsKey("exception"), "异常停点应含 exception 节");
+        var exc = Assert.Single(vars["exception"]);
+        Assert.Equal("$exception", exc.Name);
+        Assert.Contains("System.DivideByZeroException", exc.Value.Display);
 
         // 命中后清理（进程是未处理异常，会崩——detach 让进程走完）
         await session.DisconnectAsync(TestContext.Current.CancellationToken);
         target.WaitForExit(10000);
         Assert.True(target.HasExited);
+        await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task ExceptionTypeFilter_NonMatch_SkipsWithoutStopping()
+    {
+        Assert.True(File.Exists(TestPaths.DebugTargetExe));
+
+        using var target = DebugTargetProcess.Start("1 throw 5");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+        Assert.False(target.HasExited, "DebugTarget(throw) 提前退出");
+
+        var events = new List<DebugEvent>();
+        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        var reader = ConsumeAsync(session.Events, events);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        // 设不匹配的过滤器：DivideByZeroException 不以 .FileNotFoundException 结尾 → 跳过不停
+        await session.SetExceptionBreakpointAsync("System.IO.FileNotFoundException", TestContext.Current.CancellationToken);
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
+
+        // 等进程跑完退出（未处理异常直接崩）；兜底 20s
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline && !events.Any(e => e.Kind == DebugEventKind.SessionStateChanged
+               && e.Payload is SessionStateChangedPayload { State: DebugSessionState.Exited }))
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain(events, e => e.Kind == DebugEventKind.ExceptionHit);
+        var skipped = events.Where(e => e.Kind == DebugEventKind.ExceptionSkipped)
+            .Select(e => Assert.IsType<ExceptionSkippedPayload>(e.Payload)).ToList();
+        Assert.NotEmpty(skipped);
+        // 只在 FIRST_CHANCE 计一次（USER_FIRST_CHANCE/UNHANDLED 等后续阶段不重复计数）
+        Assert.Single(skipped);
+        Assert.Equal("System.DivideByZeroException", skipped[0].ExceptionType);
+
+        await session.DisconnectAsync(TestContext.Current.CancellationToken);
+        target.WaitForExit(10000);
         await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
     }
 

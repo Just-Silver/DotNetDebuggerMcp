@@ -1,3 +1,4 @@
+using DotNetDebugger.Session;
 using DotNetDebugger.Session.Models;
 using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
@@ -112,8 +113,17 @@ public static class DebugSessionTool
             $"会话状态: {StateText(buffer.CurrentState)}",
             $"最近停点: {StopText(buffer.LastStop)}",
         };
+        var skipped = SkippedExceptionsText(buffer);
+        if (skipped is not null) lines.Add(skipped);
         DebugSessionService.Manager.Actions.Log("debug_state", "", string.Join("; ", lines));
         return Task.FromResult(string.Join(Environment.NewLine, lines));
+    }
+
+    /// <summary>取走并格式化「期间被过滤器跳过的异常」反馈（无则 null）。消费式：每次调用清零。</summary>
+    internal static string? SkippedExceptionsText(SessionEventBuffer buffer)
+    {
+        var (count, lastType) = buffer.ConsumeSkippedExceptions();
+        return count > 0 ? $"期间跳过 {count} 个不在过滤范围的异常（如 {lastType}）。" : null;
     }
 
     internal static string StateText(DotNetDebugger.Engine.Models.DebugSessionState state) => state switch
@@ -128,6 +138,8 @@ public static class DebugSessionTool
     internal static string StopText(StopContext? stop)
     {
         if (stop is null) return "（无）";
-        return $"{stop.Kind} thread={stop.ThreadId} top={stop.TopFrame} reason={stop.Reason}";
+        var text = $"{stop.Kind} thread={stop.ThreadId} top={stop.TopFrame} reason={stop.Reason}";
+        if (!string.IsNullOrEmpty(stop.Message)) text += $" message=\"{stop.Message}\"";
+        return text;
     }
 }
