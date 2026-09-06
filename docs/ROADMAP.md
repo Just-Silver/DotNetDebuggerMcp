@@ -3,12 +3,11 @@
 > 记录「暂不做、以后再评估」的功能想法，防止丢失。当前迭代范围见 `CHANGELOG.md` 的 `[Unreleased]` 段；**近期待办见各项目目录 `TODO.md`**（Engine/Web/宿主各自独立），进行中的 P4-2 WebUI 待办见 `docs/planning/open-questions.md` #7。
 
 ## v2 候选（vision §4.3「后做」，不阻塞当前）
-- **表达式求值安全子集**（调试器 watch 表达式，参考 debug-mcp AST 求值路线，research/01 §4）
-- **PDB 行断点**（有 PDB 程序集按源行断点；当前反编译无 PDB 用 IL offset 断点）
-- **launch 原生路径早期断点**（launch 停初始点时目标模块未必加载、直接下断点依赖 pending 重绑时序；Session/宿主现以「先起进程等稳定区再 Attach」绕开，目标需自带启动延迟）。~~模块延迟绑定断点~~——已随 1.5.0 落地（`BreakpointManager` pending 登记 + `TrackModule` 自动重绑），不再列
+
+> 2026-09-06 盘点：面向「agent 动态调试替代加日志」定位的**调试体验升级已立项为近期待办**，主清单见 `src/DotNetDebuggerMcp/TODO.md`（P1-P9：stdout 转发/异常现场/行断点/停点上下文/命中计数+trace/表达式读值子集/条件断点/进程发现/launch 早期断点）；原候选中的 PDB 行断点、表达式求值安全子集、launch 原生路径早期断点、异常类型过滤均已移入该清单排定优先级。此处仅留仍属远期评估的项：
+
 - **EventPipe / ClrMD 旁路**（轻量运行期观察，不走 ICorDebug 全 attach）
 - **多调试会话并行**（当前 v1 单活动会话；Engine 测试实测并行 attach 多目标相互干扰，需先解决会话隔离）
-- **异常断点类型精确过滤**（`ExceptionBreakpointFilter.Matches` 已有骨架未启用；v1 设了过滤器即停全部 first-chance）
 
 ## WebUI 后续（P4 收尾后的体验项）
 
