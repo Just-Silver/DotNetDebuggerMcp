@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
 
     <!-- Set up the NuGet package to be an MCP server -->
+    <!-- Web SDK 默认 IsPackable=false：不加此行 dotnet pack 仅告警"packaging has been disabled"且退出码 0，静默产出空结果（CI Pack 步骤假绿） -->
+    <IsPackable>true</IsPackable>
     <PackAsTool>true</PackAsTool>
     <PackageType>McpServer</PackageType>
     <!-- 宿主承载 RCL 的 Blazor 组件：.NET 10 框架脚本(blazor.web.js)仅在含 .razor 的 app 引入，
