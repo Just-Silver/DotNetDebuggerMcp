@@ -75,10 +75,11 @@ public sealed class BreakpointManager
     /// <summary>
     /// 登记断点。模块未加载时登记为 pending（不绑定运行时，LoadModule 时 TrackModule 自动重绑）；
     /// 模块已加载时同步绑定，方法 token 无效/无 IL 抛中文 InvalidOperationException（agent 立即拿到原因）。
+    /// P7：condition 非空 = 条件断点（P6 子集表达式；语法校验由宿主 set 时做，此处透传）。
     /// </summary>
-    public DebugBreakpoint Add(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop)
+    public DebugBreakpoint Add(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null)
     {
-        var bp = new DebugBreakpoint(_nextId++, moduleName, methodToken, ilOffset, hitCount, mode);
+        var bp = new DebugBreakpoint(_nextId++, moduleName, methodToken, ilOffset, hitCount, mode, condition);
         if (!_modules.TryGetValue(moduleName, out var module))
         {
             _breakpoints.Add(bp); // pending：等模块加载后重绑

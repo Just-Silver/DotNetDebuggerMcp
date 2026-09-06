@@ -27,7 +27,7 @@ public sealed class ObjectValueTests
         Assert.True(bagToken > 0, "DebugTarget 中未找到 WorkBag 方法");
 
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
         var reader = ConsumeAsync(session.Events, events);
         await Task.Delay(200, TestContext.Current.CancellationToken);
 

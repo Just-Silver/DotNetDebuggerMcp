@@ -52,7 +52,7 @@ public sealed class LaunchRegisterStartupSpikeTests
         var callbackMs = sw.ElapsedMilliseconds;
 
         // 3. 回调到达即标准 attach（进程停在初始同步点——Main 前）
-        await using var session = await DebugSession.AttachAsync(process.Id, TestContext.Current.CancellationToken);
+        await using var session = await DebugSession.AttachAsync(process.Id, null, TestContext.Current.CancellationToken);
         var modulesAtAttach = await session.GetModulesAsync(TestContext.Current.CancellationToken);
         var targetModuleLoadedAtAttach = modulesAtAttach.Any(m => m.Name.Equals("DebugTarget.dll", StringComparison.OrdinalIgnoreCase));
 

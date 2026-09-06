@@ -395,6 +395,77 @@ public sealed class DebugMcpToolsTests
         Assert.True(disc.IsError != true, disc.Text());
     }
 
+    [Fact]
+    public async Task DebugConditionalBreakpoint_ConditionStopsAndFailureFeedback()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workBagToken = ReadMethodToken(dll, "WorkBag");
+        Assert.True(workBagToken > 0);
+
+        // 停点坐标：WorkBag 循环体语句行（i/b/n 存活，每轮经过）——与 P6 求值测试同源解析
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var bagFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workBagToken);
+        var entryTarget = DotNetDebugger.Decompiler.Document.DocumentService.GetBreakpointTargetAtLine(doc, bagFirstLine!.Value);
+        Assert.True(entryTarget is not null);
+        DotNetDebugger.Decompiler.Document.SourceLineResolver.SourceLineTarget? loopTarget = null;
+        for (var l = 1; l <= 80 && loopTarget is null; l++)
+        {
+            var t = DotNetDebugger.Decompiler.Document.SourceLineResolver.Resolve(dll, "DebugTarget.cs", l, out _);
+            if (t is not null && t.MethodToken == workBagToken && t.IlOffset != entryTarget.Value.IlOffset) loopTarget = t;
+        }
+        Assert.True(loopTarget is not null, "未找到 WorkBag 循环体源码行");
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} bag 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        // 1. 语法错当场拒绝（parser 校验，断点不设）
+        var badSyntax = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine, ["condition"] = "b.A +" });
+        Assert.Contains("条件表达式无效", badSyntax.Text());
+        Assert.Contains("不支持", badSyntax.Text());
+        var emptyList = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains("无断点", emptyList.Text());
+
+        // 2. 条件 i == 2：前两轮放行，第 3 轮（i=2）才停——flagship 场景
+        var set = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine, ["condition"] = "i == 2" });
+        Assert.True(set.IsError != true, set.Text());
+        Assert.Contains("[条件: i == 2", set.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", wait.Text());
+        var iVar = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "i" });
+        Assert.Contains("= 2（System.Int32）", iVar.Text());
+        var list = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains("条件: i == 2", list.Text());
+        Assert.Contains("条件为真 1 次", list.Text());
+
+        // 3. 求值失败反馈：条件引用不存在的字段（语法合法、命中时语义失败）→ 放行至退出，wait 附未通过计数
+        var setFail = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine, ["condition"] = "b.Missing == 1" });
+        Assert.True(setFail.IsError != true, setFail.Text());
+        var rm = await CallAsync(mcp, "debug_breakpoint_remove",
+            new Dictionary<string, object?> { ["breakpointId"] = ParseBreakpointId(set.Text()) });
+        Assert.True(rm.IsError != true, rm.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var waitExit = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("进程已退出", waitExit.Text());
+        // i=3、i=4 两轮失败（断点在停于 i=2 后才设）
+        Assert.Contains("条件求值未通过 2 次", waitExit.Text());
+        Assert.Contains(".Missing", waitExit.Text());
+        Assert.Contains("无此字段", waitExit.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
     private static async Task<CallToolResult> CallAsync(McpClient mcp, string tool, IReadOnlyDictionary<string, object?> args)
         => await mcp.CallToolAsync(tool, args, cancellationToken: TestContext.Current.CancellationToken);
 

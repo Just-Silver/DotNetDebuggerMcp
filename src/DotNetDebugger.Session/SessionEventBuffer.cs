@@ -20,6 +20,9 @@ public sealed class SessionEventBuffer : IAsyncDisposable
     private string? _lastSkippedExceptionType;
     private readonly List<TraceHitPayload> _traces = new();
     private int _tracesDropped;
+    private int _conditionFailedCount;
+    private int _lastConditionFailedBreakpointId;
+    private string? _lastConditionFailedError;
 
     /// <summary>trace 轨迹环形上限（条）：超出丢最旧（进程内轨迹，防 token 失控）。</summary>
     public const int MaxTraces = 100;
@@ -49,6 +52,23 @@ public sealed class SessionEventBuffer : IAsyncDisposable
 
     /// <summary>当前未读取的 trace 轨迹条数（debug_breakpoint_list 展示用，不消费）。</summary>
     public int PendingTraceCount { get { lock (_gate) return _traces.Count; } }
+
+    /// <summary>
+    /// 取走自上次消费以来「断点条件求值失败」统计（P7：次数 + 最近断点 id + 最近错误），并清零。
+    /// consume 式（P2 skipped 同款）：debug_wait/debug_state 每次调用取走，向 agent 反馈
+    /// 「条件写错/变量不可见导致永不命中」——防静默空等。真性 false（条件正常但不成立）不计数。
+    /// </summary>
+    public (int Count, int BreakpointId, string? LastError) ConsumeConditionFailures()
+    {
+        lock (_gate)
+        {
+            var result = (_conditionFailedCount, _lastConditionFailedBreakpointId, _lastConditionFailedError);
+            _conditionFailedCount = 0;
+            _lastConditionFailedBreakpointId = 0;
+            _lastConditionFailedError = null;
+            return result;
+        }
+    }
 
     /// <summary>
     /// 取走全部 trace 轨迹（旧→新）并清空（消费式，防重复吐给 agent）。
@@ -195,6 +215,18 @@ public sealed class SessionEventBuffer : IAsyncDisposable
                             _tracesDropped++;
                         }
                         _traces.Add(th);
+                    }
+                }
+                break;
+            case DebugEventKind.BreakpointConditionFailed:
+                // P7 条件求值失败：不计状态/停点，只累计给 debug_wait/debug_state 的不命中反馈
+                if (e.Payload is BreakpointConditionFailedPayload cf)
+                {
+                    lock (_gate)
+                    {
+                        _conditionFailedCount++;
+                        _lastConditionFailedBreakpointId = cf.BreakpointId;
+                        _lastConditionFailedError = cf.Error;
                     }
                 }
                 break;

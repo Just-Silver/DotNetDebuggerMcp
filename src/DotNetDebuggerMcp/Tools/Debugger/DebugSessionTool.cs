@@ -124,10 +124,21 @@ public static class DebugSessionTool
         if (context is not null) lines.Add(context);
         var traces = TracesText(buffer);
         if (traces is not null) lines.Add(traces);
+        var conditionFailures = ConditionFailuresText(buffer);
+        if (conditionFailures is not null) lines.Add(conditionFailures);
         var skipped = SkippedExceptionsText(buffer);
         if (skipped is not null) lines.Add(skipped);
         DebugSessionService.Manager.Actions.Log("debug_state", "", string.Join("; ", lines));
         return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>取走并格式化「断点条件求值失败」反馈（P7；无则 null）。消费式：每次调用清零。</summary>
+    internal static string? ConditionFailuresText(SessionEventBuffer buffer)
+    {
+        var (count, breakpointId, lastError) = buffer.ConsumeConditionFailures();
+        return count > 0
+            ? $"断点 {breakpointId} 条件求值未通过 {count} 次（已放行不停止；最后错误：{lastError}）——条件引用的变量/字段在该命中点不可见或非布尔，请检查条件或改用 hitCount。"
+            : null;
     }
 
     /// <summary>取走并格式化「期间被过滤器跳过的异常」反馈（无则 null）。消费式：每次调用清零。</summary>

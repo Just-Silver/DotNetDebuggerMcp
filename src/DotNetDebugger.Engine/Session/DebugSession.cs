@@ -14,18 +14,19 @@ public sealed class DebugSession : IAsyncDisposable
 
     private DebugSession(DebugEngineCore core) => _core = core;
 
-    /// <summary>启动新进程并附加（早期断点能力）。commandLine 为目标可执行文件路径（可带参数）。</summary>
+    /// <summary>启动新进程并附加（早期断点能力）。commandLine 为目标可执行文件路径（可带参数）。
+    /// P7：conditionEvaluator 为条件断点求值器（Session 注入 P6 表达式求值；null=会话不支持条件断点）。</summary>
     public static Task<DebugSession> LaunchAsync(string commandLine, int timeoutMs = 15000, string? workingDirectory = null,
-        CancellationToken ct = default)
-        => CreateAsync(core => core.LaunchAsync(commandLine, timeoutMs, workingDirectory, ct), ct);
+        IBreakpointConditionEvaluator? conditionEvaluator = null, CancellationToken ct = default)
+        => CreateAsync(core => core.LaunchAsync(commandLine, timeoutMs, workingDirectory, ct), conditionEvaluator, ct);
 
-    /// <summary>附加到已运行进程。</summary>
-    public static Task<DebugSession> AttachAsync(int processId, CancellationToken ct = default)
-        => CreateAsync(core => core.AttachAsync(processId, ct), ct);
+    /// <summary>附加到已运行进程。P7：conditionEvaluator 同 LaunchAsync。</summary>
+    public static Task<DebugSession> AttachAsync(int processId, IBreakpointConditionEvaluator? conditionEvaluator = null, CancellationToken ct = default)
+        => CreateAsync(core => core.AttachAsync(processId, ct), conditionEvaluator, ct);
 
-    private static async Task<DebugSession> CreateAsync(Func<DebugEngineCore, Task> start, CancellationToken ct)
+    private static async Task<DebugSession> CreateAsync(Func<DebugEngineCore, Task> start, IBreakpointConditionEvaluator? conditionEvaluator, CancellationToken ct)
     {
-        var core = new DebugEngineCore();
+        var core = new DebugEngineCore(conditionEvaluator);
         await start(core).ConfigureAwait(false);
         return new DebugSession(core);
     }
@@ -47,9 +48,10 @@ public sealed class DebugSession : IAsyncDisposable
     // ---- 断点 ----
 
     /// <summary>设置断点（模块名须与运行时模块一致；token 取 signature 行尾或 #MEMBER 的 token）。
-    /// P5：hitCount=第 N 次起生效（默认 1）；mode=Stop 命中停 / Trace 命中不停记轨迹。</summary>
-    public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, CancellationToken ct = default)
-        => _core.SetBreakpointAsync(moduleName, methodToken, ilOffset, hitCount, mode, ct);
+    /// P5：hitCount=第 N 次起生效（默认 1）；mode=Stop 命中停 / Trace 命中不停记轨迹。
+    /// P7：condition=P6 表达式子集条件（非空要求会话已注入求值器，否则抛中文提示）。</summary>
+    public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null, CancellationToken ct = default)
+        => _core.SetBreakpointAsync(moduleName, methodToken, ilOffset, hitCount, mode, condition, ct);
 
     /// <summary>当前登记断点快照（含未绑定模块的；Web 监视器红点渲染用）。</summary>
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)

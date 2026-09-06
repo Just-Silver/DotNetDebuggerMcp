@@ -16,6 +16,13 @@ namespace DotNetDebugger.Engine.Engine;
 public sealed class DebugEngineCore : IAsyncDisposable
 {
     private readonly object _gate = new();
+
+    /// <summary>P7：条件求值器由 Session 经构造注入（null=会话不支持条件断点）。</summary>
+    internal DebugEngineCore(IBreakpointConditionEvaluator? conditionEvaluator = null)
+    {
+        _conditionEvaluator = conditionEvaluator;
+    }
+
     private readonly Channel<DebugEvent> _outbound = Channel.CreateUnbounded<DebugEvent>(
         new UnboundedChannelOptions { SingleReader = false, SingleWriter = false });
     private Action<DebugEvent>? _sink;
@@ -33,7 +40,10 @@ public sealed class DebugEngineCore : IAsyncDisposable
     private CallbackHandler? _handler;
     private readonly BreakpointManager _breakpoints = new();
 
-    // 停点状态：最近停住的线程（断点/步/异常命中时由回调记录）
+    // P7 条件断点：Session 注入的求值器（依赖倒置，见 IBreakpointConditionEvaluator；null=不支持条件断点）
+    private readonly IBreakpointConditionEvaluator? _conditionEvaluator;
+
+    /// <summary>停点状态：最近停住的线程（断点/步/异常命中时由回调记录）。</summary>
     private volatile int _stoppedThreadId = -1;
 
     private readonly Channel<(Func<Task> Body, TaskCompletionSource Completion)> _commandChannel
@@ -228,11 +238,14 @@ public sealed class DebugEngineCore : IAsyncDisposable
         }, ct);
 
     /// <summary>设置断点（模块未加载时登记为 pending，LoadModule 自动重绑；方法 token 无效抛错）。
-    /// P5：hitCount=第 N 次起生效（默认 1）；mode=Stop 命中停 / Trace 命中不停记轨迹。</summary>
-    public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, CancellationToken ct = default)
+    /// P5：hitCount=第 N 次起生效（默认 1）；mode=Stop 命中停 / Trace 命中不停记轨迹。
+    /// P7：condition=P6 表达式子集条件（非空时须已注入求值器；条件先于计数，false/求值失败放行）。</summary>
+    public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null, CancellationToken ct = default)
         => PostAsyncResult(() =>
         {
-            var bp = _breakpoints.Add(moduleName, methodToken, ilOffset, hitCount, mode);
+            if (!string.IsNullOrWhiteSpace(condition) && _conditionEvaluator is null)
+                throw new InvalidOperationException("当前会话无条件求值器，条件断点不可用（会话创建须注入求值器）。");
+            var bp = _breakpoints.Add(moduleName, methodToken, ilOffset, hitCount, mode, condition);
             PublishBreakpointsChanged();
             return bp;
         }, ct);
@@ -1050,6 +1063,36 @@ public sealed class DebugEngineCore : IAsyncDisposable
     internal void PublishTraceHit(int breakpointId, int threadId, FrameLocation? top, IReadOnlyList<TraceVariable> variables)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.TraceHit,
             new TraceHitPayload(breakpointId, threadId, DateTimeOffset.UtcNow, top, variables)));
+
+    /// <summary>断点条件求值失败（P7：不停进程；Session consume 式计数，debug_wait/debug_state 反馈防静默空等）。</summary>
+    internal void PublishConditionFailed(int breakpointId, int threadId, string error)
+        => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.BreakpointConditionFailed,
+            new BreakpointConditionFailedPayload(breakpointId, threadId, error)));
+
+    /// <summary>
+    /// 断点条件求值（P7，命令泵线程内、进程停住态）：求值器由 Session 注入，pathResolver 直通
+    /// ReadPathValue（同步直读）。true=条件为真（继续命中流程）；false/异常=放行——异常发
+    /// BreakpointConditionFailed 事件供 Session 计数反馈（防「条件写错永不命中」静默空等）。
+    /// </summary>
+    internal bool EvaluateBreakpointCondition(DebugBreakpoint breakpoint, CorDebugThread thread)
+    {
+        var evaluator = _conditionEvaluator;
+        if (evaluator is null)
+        {
+            // set 时已拦截；兜底放行不卡进程
+            PublishConditionFailed(breakpoint.Id, thread.Id, "会话无条件求值器");
+            return false;
+        }
+        try
+        {
+            return evaluator.Evaluate(thread.Id, breakpoint.Condition!, ReadPathValue);
+        }
+        catch (Exception ex)
+        {
+            PublishConditionFailed(breakpoint.Id, thread.Id, ex.Message);
+            return false;
+        }
+    }
 
     /// <summary>
     /// trace 快照（P5）：命令泵内读取栈顶帧 locals/arguments，展平为单行摘要（scope/name/display）。

@@ -32,7 +32,7 @@ public sealed class BreakpointTests
 
         // 收集事件
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
         var readerTask = ConsumeAsync(session.Events, events);
         await Task.Delay(200, TestContext.Current.CancellationToken); // 让订阅追上缓冲事件
 
@@ -81,7 +81,7 @@ public sealed class BreakpointTests
         var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
 
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
         var readerTask = ConsumeAsync(session.Events, events);
         await Task.Delay(200, TestContext.Current.CancellationToken);
 

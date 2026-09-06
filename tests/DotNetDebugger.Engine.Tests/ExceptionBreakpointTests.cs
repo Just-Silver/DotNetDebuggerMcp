@@ -22,7 +22,7 @@ public sealed class ExceptionBreakpointTests
         Assert.False(target.HasExited, "DebugTarget(throw) 提前退出");
 
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
         var reader = ConsumeAsync(session.Events, events);
         await Task.Delay(200, TestContext.Current.CancellationToken);
 
@@ -68,7 +68,7 @@ public sealed class ExceptionBreakpointTests
         Assert.False(target.HasExited, "DebugTarget(throw) 提前退出");
 
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
         var reader = ConsumeAsync(session.Events, events);
         await Task.Delay(200, TestContext.Current.CancellationToken);
 

@@ -25,7 +25,7 @@ public sealed class DebugSessionTests
 
         // 收集事件
         var events = new List<DebugEvent>();
-        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
 
         // AttachAsync 返回前可能已产生部分事件；订阅读端（Channel 缓冲，能追到历史事件）
         var readerTask = ConsumeAsync(session.Events, events);

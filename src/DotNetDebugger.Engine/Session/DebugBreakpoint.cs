@@ -13,14 +13,16 @@ public enum DebugBreakpointMode
 /// 断点：按 ModuleName + MethodToken + IlOffset 定位（spec §4.1）。运行时绑定到 CorDebugFunctionBreakpoint。
 /// MethodToken 为 mdMethodDef（0x06 开头），ModuleName 须与运行时模块名一致。
 /// P5：HitCount=开始生效的命中次数（第 N 次起每次都停/记录，默认 1）；Hits=已命中计数（pending 重绑后保留）。
+/// P7：Condition=P6 表达式子集条件（null=无条件；Hits 只数条件为真的通过次数，false/求值失败放行不计数）。
 /// </summary>
 public sealed class DebugBreakpoint
 {
-    internal DebugBreakpoint(int id, string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop)
+    internal DebugBreakpoint(int id, string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null)
     {
         Id = id; ModuleName = moduleName; MethodToken = methodToken; IlOffset = ilOffset;
         HitCount = Math.Max(1, hitCount);
         Mode = mode;
+        Condition = string.IsNullOrWhiteSpace(condition) ? null : condition;
     }
 
     public int Id { get; }
@@ -33,6 +35,9 @@ public sealed class DebugBreakpoint
 
     /// <summary>命中行为模式（Stop=停；Trace=不停，记轨迹）。</summary>
     public DebugBreakpointMode Mode { get; }
+
+    /// <summary>条件表达式（P6 子集；null=无条件。条件先于计数：false/求值失败放行且不计入 Hits）。</summary>
+    public string? Condition { get; }
 
     /// <summary>已命中次数（引擎命中路径递增；与 HitCount 组合实现「第 N 次起生效」）。</summary>
     public int Hits { get; private set; }

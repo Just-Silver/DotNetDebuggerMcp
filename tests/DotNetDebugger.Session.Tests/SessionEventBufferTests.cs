@@ -43,7 +43,7 @@ public sealed class SessionEventBufferTests
         var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
         Assert.True(workToken > 0);
 
-        await using var session = await DebugSession.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        await using var session = await DebugSession.AttachAsync(target.Id, ExpressionConditionEvaluator.Instance, TestContext.Current.CancellationToken);
         await using var buffer = new SessionEventBuffer();
         buffer.Start(session);
         await Task.Delay(200, TestContext.Current.CancellationToken); // 让消费任务追上缓冲事件

@@ -84,6 +84,9 @@ public static class DebugControlTool
 
         var skipped = DebugSessionTool.SkippedExceptionsText(active.Buffer);
         if (skipped is not null) result += Environment.NewLine + skipped;
+
+        var conditionFailures = DebugSessionTool.ConditionFailuresText(active.Buffer);
+        if (conditionFailures is not null) result += Environment.NewLine + conditionFailures;
         return DebugOutputTool.AppendTargetOutput(active, result, outputLines);
     }
 

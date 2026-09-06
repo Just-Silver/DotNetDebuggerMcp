@@ -14,7 +14,8 @@
 Engine/    DebugEngineCore / CorDebugBootstrap / DbgShimLoader /
            CallbackHandler / DebugCommandQueue / BreakpointManager /
            SymbolNameResolver / TypeNameResolver / ClrProcessFinder
-Session/   DebugSession(根命名空间 DotNetDebugger.Engine!) / DebugBreakpoint / ExceptionBreakpointFilter
+Session/   DebugSession(根命名空间 DotNetDebugger.Engine!) / DebugBreakpoint / ExceptionBreakpointFilter /
+           IBreakpointConditionEvaluator(P7 条件求值契约，Session 库实现注入)
 Stepping/  StepperManager
 Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
            DebugValue / DebugVariable / FrameLocation / BreakpointSnapshot /
@@ -42,6 +43,7 @@ Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
 - **路径求值（P6 `EvaluatePathAsync`，命令泵内纯读）**：根名在 locals/arguments（与 `ReadVariablesForThread` 同源：元数据参数名 + PDB 局部名）按名匹配（精确→忽略大小写→slotN 回退）+ `$exception` 伪根；逐段字段（全基类链 `ExactType→Base` 枚举 + 属性约定降级 `X→_x→_X→<X>k__BackingField`）/索引（数组 `GetElementAtPosition` 任意下标、字符串取单字符）直读，段数上限 `PathSegment.MaxSegments`(8)。坑：① `thread.CurrentException` 无在抛异常时 ClrDebug 抛 `S_FALSE`（DebugException），必须 try/catch 兜住；② 取字段前定位对象须处理 null 引用/数组/字符串/标量并给出附段号的中文诊断；③ 测试锚点不能用 Main 入口——attach 发生在 Main 已执行后（同 BreakpointTests 锚 Work 的时序），用 bag 模式的 `WorkBag`/`WorkScores` 入口（参数自入口即存活）。
 - **单步坑（已修，勿回退）**：线程级裸 `thread.CreateStepper().Step()` 会**立即完成且 IP 不动**（StepCompleted 原地 +0x0，表象是「单步无效果」）——必须**帧级 `ilf.CreateStepper()`** + `SetInterceptMask(INTERCEPT_ALL & ~(SECURITY|CLASS_INIT))` + `SetUnmappedStopMask(STOP_NONE)` + **`StepRange`（当前语句 IL 区间 [序列点, 下一序列点)，`SymbolNameResolver.GetStatementIlRange`，PDB 提供）**。**无 PDB 回退也不能用裸 Step**（无序列点同样原地完成）——用 `StepRange([ip, ip+1))` 单条 IL 指令步进（dnSpy 无符号时同款）。循环回边停回循环头 offset 变小是合法的（`StepTests` 断言：首步离开入口、后续不原地）。Engine 测试套件在有/无 `DebugTarget.pdb` 两种状态下都应全绿（局部名断言仅在 PDB 在位时生效）。
 - **launch 时序**：Engine launch 停在初始同步点但目标模块未必加载、直接 `LaunchAsync` 下断点会登记为 pending（重绑机制已实现）——Session 库的 `LaunchAndAttachAsync` 与宿主 `-dbg`/`debug_launch` 走「自起进程 + RegisterForRuntimeStartup 蹲守 CLR 启动（Main 前）再 Attach」路径（P9；dbgshim 原生 launch 无法重定向输出故弃用），不直接用 Engine `LaunchAsync`。新代码留意这个分工。
+- **条件断点（P7）**：`DebugBreakpoint.Condition`（P6 子集表达式）→ `HandleBreakpoint` **条件先于计数**（false/求值失败放行且不 RegisterHit，失败发 `BreakpointConditionFailed` 事件供 Session 计数）。求值器经依赖倒置注入（Engine 定义 `IBreakpointConditionEvaluator`，Session 实现 `ExpressionConditionEvaluator`；`DebugSession.Launch/AttachAsync` 缺省 null=不支持条件）——**求值在命令泵线程内、进程停住态**，`PathValueResolver` 直通 `ReadPathValue` 同步直读；实现方红线=纯计算不得再入命令泵/session（死锁）。真性 false 不发事件（每轮都是噪声），失败才发。
 - `StepperManager`（Stepping/）目前是**静态薄封装**，真正命令路径在 DebugEngineCore 直接 `thread.CreateStepper()`，未走它——改单步逻辑先确认实际执行路径。
 - 异常断点 v1 = 设了过滤器即停全部 first-chance；`ExceptionBreakpointFilter.Matches` 类型精确过滤列 v2（当前实际未用）。
 

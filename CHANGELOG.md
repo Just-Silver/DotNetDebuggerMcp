@@ -10,6 +10,7 @@
 
 ### Added
 
+- **条件断点（P7）**：`debug_breakpoint_set` 新增 `condition` 参数（P6 表达式子集，如 `i == 3`、`order.Customer.Id == 42`）——条件为真才停/记，循环中「第 N 轮才出错」的场景不再逐轮 continue 或全量 trace。条件求值纯读无副作用、在引擎命中瞬间完成（false 放行对目标不可见）；`Hits` 计条件为真次数（`hitCount` 组合=「第 N 次条件为真起停/记」）；条件语法错在设断点时当场拒绝；命中时求值失败（变量不可见/缺字段/非布尔）放行并在 `debug_state`/`debug_wait` 反馈「条件未通过 N 次（最后错误：…）」——防「条件写错永不命中」静默空等
 - **表达式求值 `debug_evaluate` 新工具（P6）**：进程停在断点/异常时求值表达式的当前值（纯读、无副作用，不执行目标进程代码）。支持成员访问（`order.Customer.Name`）、数组/字符串**任意下标**（`list._items[50]`——引擎按路径逐段直读，不受变量树一级 32 子项截断限制）、一元 `!` 与单次比较（`== != < <= > >=`；数值/字符串/布尔同类比较，True/False 直接判定）、字面量（int/string/true/false/null）。属性不可直接读（getter 是目标代码），自动按字段约定降级（`X→_x→_X→<X>k__BackingField`），未命中报错附可用字段清单；未知根名报错附可用变量清单。不支持算术、方法调用、赋值、链式比较、括号
 - **launch 蹲守 CLR 启动（P9）**：`debug_launch` 用 `RegisterForRuntimeStartup` 蹲守目标 CLR 启动（回调时机=Main 执行前）后立即附加，替换旧「固定等 1 秒延迟窗口」——**任意 .NET 程序无需自带启动延迟即可从第一行业务代码前调试**（launch 返回时进程冻结在 Main 前，从容设断点后 `debug_continue`）；目标进程 CLR 启动超时/提前退出给出可诊断提示
 - **进程发现（P8）**：新增 `debug_processes` 工具——列出本机可附加的 .NET 进程（pid/进程名/CLR 版本，dbgshim `EnumerateCLRs` 权威探测，调试器自身排除，`filter` 进程名子串过滤），agent 自主定位目标 pid 后 `debug_attach` 附加

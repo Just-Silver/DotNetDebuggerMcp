@@ -88,7 +88,9 @@ public sealed class CallbackHandler
 
     /// <summary>
     /// 处理断点命中。返回 true = 已停（不 Continue）。
-    /// P5：先计数（RegisterHit）——Hits 未达 HitCount 放行（第 N 次起生效）；Trace 模式读快照发 TraceHit 后放行
+    /// P7：条件先判（条件先于计数，spec §3.4）——false/求值失败放行且不 RegisterHit（失败发
+    /// BreakpointConditionFailed 事件供 Session 计数反馈）；条件为真才进入 P5 流程：
+    /// RegisterHit → Hits 未达 HitCount 放行；Trace 模式读快照发 TraceHit 后放行
     /// （进程运行时态由本次 Continue 恢复，与 skipped 异常同款「不停即 Continue」）。
     /// </summary>
     private bool HandleBreakpoint(BreakpointCorDebugManagedCallbackEventArgs e)
@@ -96,6 +98,9 @@ public sealed class CallbackHandler
         if (e.Breakpoint is not CorDebugFunctionBreakpoint fbp) return false; // 非函数断点：继续
         var matched = _breakpoints.Match(fbp);
         if (matched is null) return false; // 非登记断点：继续
+
+        if (matched.Condition is not null && !_core.EvaluateBreakpointCondition(matched, e.Thread))
+            return false; // 条件为假/求值失败：放行（失败已发事件）
 
         matched.RegisterHit();
         if (matched.Hits < matched.HitCount)

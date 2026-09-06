@@ -9,6 +9,7 @@ public enum DebugEventKind
     ExceptionHit,
     ExceptionSkipped,
     TraceHit,
+    BreakpointConditionFailed,
     ThreadsChanged,
     EngineLog,
     BreakpointsChanged,
@@ -61,6 +62,9 @@ public sealed record TraceHitPayload(
     DateTimeOffset UtcTimestamp,
     FrameLocation? TopFrame,
     IReadOnlyList<TraceVariable> Variables);
+
+/// <summary>断点条件求值失败事件载荷（P7：不停进程；Session consume 式计数，debug_wait/debug_state 反馈防静默空等）。</summary>
+public sealed record BreakpointConditionFailedPayload(int BreakpointId, int ThreadId, string Error);
 
 /// <summary>线程列表变化事件载荷。</summary>
 public sealed record ThreadsChangedPayload(IReadOnlyList<DebugThreadInfo> Threads);

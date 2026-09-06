@@ -59,14 +59,15 @@ public sealed class DebugSessionManager : IAsyncDisposable
     /// <summary>启动新进程并附加（async 返回，不等停点；超时秒由调用方传）。</summary>
     public async Task<ActiveDebugSession> LaunchAsync(string commandLine, int timeoutSeconds, CancellationToken ct = default)
     {
-        var session = await DebugSession.LaunchAsync(commandLine, timeoutSeconds * 1000, null, ct).ConfigureAwait(false);
+        var session = await DebugSession.LaunchAsync(commandLine, timeoutSeconds * 1000, null,
+            ExpressionConditionEvaluator.Instance, ct).ConfigureAwait(false);
         return Activate(session, $"launch {commandLine}");
     }
 
     /// <summary>附加到已运行进程。</summary>
     public async Task<ActiveDebugSession> AttachAsync(int processId, CancellationToken ct = default)
     {
-        var session = await DebugSession.AttachAsync(processId, ct).ConfigureAwait(false);
+        var session = await DebugSession.AttachAsync(processId, ExpressionConditionEvaluator.Instance, ct).ConfigureAwait(false);
         return Activate(session, $"attach pid={processId}");
     }
 
@@ -132,7 +133,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
         DebugSession engineSession;
         try
         {
-            engineSession = await DebugSession.AttachAsync(process.Id, ct).ConfigureAwait(false);
+            engineSession = await DebugSession.AttachAsync(process.Id, ExpressionConditionEvaluator.Instance, ct).ConfigureAwait(false);
         }
         catch
         {
