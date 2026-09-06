@@ -384,6 +384,14 @@ public sealed class DebugEngineCore : IAsyncDisposable
     public Task<IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>> GetVariablesAsync(int threadId, CancellationToken ct = default)
         => PostAsyncResult(() => (IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>)ReadVariablesForThread(threadId), ct);
 
+    /// <summary>
+    /// 按路径读值（P6 表达式读值子集的引擎底座，纯读、无 FuncEval）：rootName 为栈顶帧局部/参数名
+    /// （+$exception 伪根，与 GetVariablesAsync 同一来源），segments 逐段字段/索引解引用——
+    /// 引擎按段直读绕开 MaxChildren 截断（数组任意下标、深层链都可靠）。失败抛中文提示异常（附段号/类型/可用字段）。
+    /// </summary>
+    public Task<DebugEvalResult> EvaluatePathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, CancellationToken ct = default)
+        => PostAsyncResult(() => ReadPathValue(threadId, rootName, segments), ct);
+
     /// <summary>GetVariablesAsync 的同步实现（命令泵 MTA 线程内调用；P5 trace 快照路径复用）。</summary>
     private IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>> ReadVariablesForThread(int threadId)
     {
@@ -683,6 +691,332 @@ public sealed class DebugEngineCore : IAsyncDisposable
         }
         finally { Marshal.FreeHGlobal(buf); }
     }
+
+    // ---- 表达式路径求值（P6；命令泵内纯读，全部异常带中文可诊断提示） ----
+
+    /// <summary>求值中间态：进程内原始值，或引擎合成的标量（如字符串索引出的单字符字符串）。</summary>
+    private abstract record EvalValue
+    {
+        public sealed record Raw(CorDebugValue Value) : EvalValue;
+        public sealed record ScalarObj(object Value, string Display, string TypeName) : EvalValue;
+    }
+
+    /// <summary>路径求值主体：根解析 + 逐段解引用（段号从 1 计，报错定位到段）。</summary>
+    private DebugEvalResult ReadPathValue(int threadId, string rootName, IReadOnlyList<PathSegment> segments)
+    {
+        if (_process is null) throw new InvalidOperationException("无被调试进程。");
+        if (segments.Count > PathSegment.MaxSegments)
+            throw new InvalidOperationException($"路径段数 {segments.Count} 超上限 {PathSegment.MaxSegments}（防失控长链）。");
+        CorDebugThread? thread = null;
+        foreach (var t in _process.Threads) { if (t.Id == threadId) { thread = t; break; } }
+        if (thread is null) throw new InvalidOperationException($"找不到线程 threadId={threadId}。");
+
+        EvalValue current = new EvalValue.Raw(FindRootValue(thread, rootName));
+        for (var i = 0; i < segments.Count; i++)
+        {
+            current = segments[i] switch
+            {
+                PathSegment.Field f => ReadFieldSegment(current, i + 1, f.Name),
+                PathSegment.Index idx => ReadIndexSegment(current, i + 1, idx.Position),
+                _ => throw new InvalidOperationException("不支持的路径段类型。"),
+            };
+        }
+        return ToEvalResult(current);
+    }
+
+    /// <summary>根解析：$exception 伪根 → locals/arguments 按名匹配（与 GetVariablesAsync 同源）→ slotN 回退。</summary>
+    private CorDebugValue FindRootValue(CorDebugThread thread, string rootName)
+    {
+        if (rootName.Equals("$exception", StringComparison.OrdinalIgnoreCase))
+        {
+            // CurrentException 无在抛异常时返回 S_FALSE（ClrDebug 抛 DebugException），与 P2 TryReadExceptionVariable 同款兜住
+            CorDebugValue? exc = null;
+            try { exc = thread.CurrentException; } catch { /* 无在抛异常 */ }
+            if (exc is null) throw new InvalidOperationException("当前线程无在抛异常，$exception 不可用（仅在异常停点有效）。");
+            return exc;
+        }
+        if (thread.ActiveFrame is not CorDebugILFrame ilf)
+            throw new InvalidOperationException($"栈顶非 IL 帧，无法解析变量「{rootName}」。");
+
+        // 名字来源与 ReadVariablesForThread 同一管线：参数名取元数据、局部名取 PDB（缺失时 debug_variables 以 slotN 展示）
+        string?[] argNames = [], localNames = [];
+        var top = ReadTopFrame(thread);
+        if (top is not null)
+        {
+            var modulePath = _breakpoints.GetModulePath(top.ModuleName);
+            if (modulePath is not null)
+            {
+                var names = SymbolNameResolver.Resolve(modulePath, top.MethodToken);
+                argNames = names.ArgNames;
+                localNames = names.LocalNames;
+            }
+        }
+
+        var args = ilf.Arguments;
+        var locals = ilf.LocalVariables;
+        var hit = MatchNamed(args, argNames, rootName) ?? MatchNamed(locals, localNames, rootName);
+        if (hit is null && rootName.StartsWith("slot", StringComparison.OrdinalIgnoreCase) && int.TryParse(rootName[4..], out var slot))
+        {
+            if (slot >= 0 && slot < locals.Length) hit = locals[slot];
+            else if (slot >= 0 && slot < args.Length) hit = args[slot];
+        }
+        if (hit is not null) return hit;
+
+        var available = new List<string>();
+        for (var i = 0; i < argNames.Length; i++) available.Add(argNames[i] ?? $"slot{i}");
+        for (var i = 0; i < localNames.Length; i++) available.Add(localNames[i] ?? $"slot{i}");
+        available.Add("$exception");
+        throw new InvalidOperationException($"栈顶帧无变量「{rootName}」（可用：{string.Join(", ", available)}）。");
+    }
+
+    /// <summary>按名匹配槽位值：先精确后忽略大小写（两轮），防错名大小写抢命中。</summary>
+    private static CorDebugValue? MatchNamed(CorDebugValue[] values, string?[] names, string rootName)
+    {
+        for (var pass = 0; pass < 2; pass++)
+        {
+            for (var i = 0; i < values.Length && i < names.Length; i++)
+            {
+                var name = names[i];
+                if (name is null) continue;
+                var equals = pass == 0
+                    ? string.Equals(name, rootName, StringComparison.Ordinal)
+                    : string.Equals(name, rootName, StringComparison.OrdinalIgnoreCase);
+                if (equals) return values[i];
+            }
+        }
+        return null;
+    }
+
+    /// <summary>字段段：解引用定位对象 → 全基类链实例字段中按 约定降级候选 找名 → GetFieldValue。</summary>
+    private static EvalValue ReadFieldSegment(EvalValue current, int segNo, string fieldName)
+    {
+        var segText = $".{fieldName}";
+        var raw = current switch
+        {
+            EvalValue.Raw r => r.Value,
+            _ => throw new InvalidOperationException($"第 {segNo} 段 {segText}：标量值无字段可取。"),
+        };
+        var obj = DerefToObject(raw, segNo, segText);
+        var fields = EnumerateInstanceFields(obj);
+        foreach (var candidate in FieldCandidateNames(fieldName))
+        {
+            var hit = fields.FirstOrDefault(f => string.Equals(f.Name, candidate, StringComparison.Ordinal));
+            if (hit.Name is not null)
+                return new EvalValue.Raw(obj.GetFieldValue(hit.DeclaringClass.Raw, new mdFieldDef((uint)hit.Token)));
+        }
+        var names = string.Join(", ", fields.Select(f => f.Name).Distinct());
+        throw new InvalidOperationException(
+            $"第 {segNo} 段 {segText}：{TypeNameOfObject(obj)} 无此字段（属性不可直接读；可用字段：{names}）。");
+    }
+
+    /// <summary>属性约定降级候选：X → _x → _X → &lt;X&gt;k__BackingField（spec §4，顺序固定）。</summary>
+    private static IEnumerable<string> FieldCandidateNames(string name)
+    {
+        yield return name;
+        if (name.Length > 0)
+        {
+            yield return "_" + char.ToLowerInvariant(name[0]) + name[1..];
+            yield return "_" + name;
+        }
+        yield return $"<{name}>k__BackingField";
+    }
+
+    /// <summary>实例字段全链清单（ExactType → Base 逐层，同名以最派生为准；静态字段 ReadFieldTokens 已排除）。</summary>
+    private static List<(CorDebugClass DeclaringClass, string Name, int Token)> EnumerateInstanceFields(CorDebugObjectValue obj)
+    {
+        var list = new List<(CorDebugClass, string, int)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var t = obj.ExactType; t is not null; t = t.Base)
+        {
+            try
+            {
+                var cls = t.Class;
+                var modulePath = cls.Module?.Name;
+                if (string.IsNullOrEmpty(modulePath)) continue;
+                foreach (var f in ReadFieldTokens(modulePath!, (int)cls.Token.Value))
+                    if (seen.Add(f.Name))
+                        list.Add((cls, f.Name, f.Token));
+            }
+            catch { /* 本层元数据读取失败：向基类继续 */ }
+        }
+        return list;
+    }
+
+    /// <summary>索引段：数组任意下标（GetElementAtPosition，绕开 MaxChildren 截断）；字符串索引得单字符字符串。</summary>
+    private static EvalValue ReadIndexSegment(EvalValue current, int segNo, int index)
+    {
+        // 引擎合成的标量（单字符字符串）也可继续索引
+        if (current is EvalValue.ScalarObj s)
+        {
+            if (s.Value is string text)
+            {
+                if (index < 0 || index >= text.Length)
+                    throw new InvalidOperationException($"第 {segNo} 段 [{index}]：字符串索引越界（长度 {text.Length}，有效 0-{text.Length - 1}）。");
+                var next = text[index].ToString();
+                return new EvalValue.ScalarObj(next, $"\"{next}\"", "System.String");
+            }
+            throw new InvalidOperationException($"第 {segNo} 段 [{index}]：仅数组/字符串支持索引。");
+        }
+
+        var v = ((EvalValue.Raw)current).Value;
+        if (v is CorDebugReferenceValue r)
+        {
+            if (r.IsNull) throw new InvalidOperationException($"第 {segNo} 段 [{index}]：对象为 null，无法索引。");
+            v = r.Dereference() ?? throw new InvalidOperationException($"第 {segNo} 段 [{index}]：解引用失败。");
+        }
+        switch (v)
+        {
+            case CorDebugArrayValue arr:
+            {
+                if (arr.Rank != 1)
+                    throw new InvalidOperationException($"第 {segNo} 段 [{index}]：多维数组 v1 不支持（Rank={arr.Rank}），建议取一维数组或对象字段。");
+                var total = arr.Count;
+                if (index < 0 || index >= total)
+                    throw new InvalidOperationException($"第 {segNo} 段 [{index}]：索引越界（长度 {total}，有效 0-{total - 1}）。");
+                return new EvalValue.Raw(arr.GetElementAtPosition(index));
+            }
+            case CorDebugStringValue str:
+            {
+                var text = str.GetString(str.Length);
+                if (index < 0 || index >= text.Length)
+                    throw new InvalidOperationException($"第 {segNo} 段 [{index}]：字符串索引越界（长度 {text.Length}，有效 0-{text.Length - 1}）。");
+                var ch = text[index].ToString();
+                return new EvalValue.ScalarObj(ch, $"\"{ch}\"", "System.String");
+            }
+            default:
+                throw new InvalidOperationException(
+                    $"第 {segNo} 段 [{index}]：仅数组/字符串支持索引（当前 {ResolveValueTypeName(v) ?? "<未知类型>"}）；List 等集合请取内部字段再索引（如 _items[0]）。");
+        }
+    }
+
+    /// <summary>取字段前定位对象值：解引用 + null/数组/字符串/标量的诚实诊断（segNo/segText 供报错定位到段）。</summary>
+    private static CorDebugObjectValue DerefToObject(CorDebugValue current, int segNo, string segText)
+    {
+        var v = current;
+        if (v is CorDebugReferenceValue r)
+        {
+            if (r.IsNull) throw new InvalidOperationException($"第 {segNo} 段 {segText}：对象为 null，无法取成员。");
+            v = r.Dereference() ?? throw new InvalidOperationException($"第 {segNo} 段 {segText}：解引用失败。");
+        }
+        switch (v)
+        {
+            case CorDebugObjectValue obj:
+                return obj;
+            case CorDebugArrayValue:
+                throw new InvalidOperationException($"第 {segNo} 段 {segText}：数组无字段，取元素请用 [n] 索引。");
+            case CorDebugStringValue:
+                throw new InvalidOperationException(
+                    $"第 {segNo} 段 {segText}：字符串不支持成员访问（Length 亦不支持），可用 [n] 取单字符或经 debug_variables 查看整体。");
+            default:
+                throw new InvalidOperationException($"第 {segNo} 段 {segText}：{ResolveValueTypeName(v) ?? "<未知类型>"} 为标量值，无字段可取。");
+        }
+    }
+
+    /// <summary>终值 → DebugEvalResult：Display/Children 复用 ReadValue(expand:true)（与 debug_variables 同款），Kind/ScalarValue 供比较与布尔判定。</summary>
+    private static DebugEvalResult ToEvalResult(EvalValue value)
+        => value switch
+        {
+            EvalValue.ScalarObj s => new DebugEvalResult(s.Display, s.TypeName, DebugEvalKind.Scalar, null, s.Value),
+            EvalValue.Raw raw => RawToResult(raw.Value),
+            _ => new DebugEvalResult("<未知>", null, DebugEvalKind.Object, null, null),
+        };
+
+    private static DebugEvalResult RawToResult(CorDebugValue value)
+    {
+        var rendered = ReadValue(value, expand: true);
+        switch (value)
+        {
+            case CorDebugStringValue s:
+                return new DebugEvalResult(rendered.Display, "System.String", DebugEvalKind.Scalar, null, s.GetString(s.Length));
+            case CorDebugGenericValue g:
+                return new DebugEvalResult(rendered.Display, ResolveValueTypeName(value) ?? MapElementTypeName(g.Type), DebugEvalKind.Scalar, null, ReadScalarRaw(g));
+            case CorDebugReferenceValue r when r.IsNull:
+                return new DebugEvalResult("null", ResolveValueTypeName(value), DebugEvalKind.Null, null, null);
+            case CorDebugReferenceValue r:
+                return DerefToResult(r);
+            case CorDebugArrayValue:
+                return new DebugEvalResult(rendered.Display, null, DebugEvalKind.Array, rendered.Children, null);
+            default: // 对象/结构体终值
+                return new DebugEvalResult(rendered.Display, ResolveValueTypeName(value), DebugEvalKind.Object, rendered.Children, null);
+        }
+    }
+
+    private static DebugEvalResult DerefToResult(CorDebugReferenceValue r)
+    {
+        var rendered = ReadValue(r, expand: true); // 引用展开：字符串引号内容 / 数组 长度+children / 对象 字段+children
+        var deref = r.Dereference();
+        if (deref is CorDebugStringValue s)
+            return new DebugEvalResult(rendered.Display, "System.String", DebugEvalKind.Scalar, null, s.GetString(s.Length));
+        if (deref is CorDebugArrayValue)
+            return new DebugEvalResult(rendered.Display, null, DebugEvalKind.Array, rendered.Children, null);
+        if (deref is CorDebugGenericValue boxed) // 装箱标量
+            return new DebugEvalResult(rendered.Display, ResolveValueTypeName(deref) ?? MapElementTypeName(boxed.Type), DebugEvalKind.Scalar, null, ReadScalarRaw(boxed));
+        return new DebugEvalResult(rendered.Display, ResolveValueTypeName(r) ?? ResolveValueTypeName(deref), DebugEvalKind.Object, rendered.Children, null);
+    }
+
+    /// <summary>泛型值的标量原始值（bool/char/整型/浮点；非基元类型返回 null）。</summary>
+    private static object? ReadScalarRaw(CorDebugGenericValue g)
+    {
+        var size = g.Size;
+        var buf = Marshal.AllocHGlobal(size);
+        try
+        {
+            g.GetValue(buf);
+            var bytes = new byte[size];
+            Marshal.Copy(buf, bytes, 0, size);
+            return g.Type switch
+            {
+                CorElementType.Boolean => bytes[0] != 0,
+                CorElementType.Char => (char)BitConverter.ToUInt16(bytes),
+                CorElementType.I1 => (sbyte)bytes[0],
+                CorElementType.U1 => bytes[0],
+                CorElementType.I2 => BitConverter.ToInt16(bytes),
+                CorElementType.U2 => BitConverter.ToUInt16(bytes),
+                CorElementType.I4 => BitConverter.ToInt32(bytes),
+                CorElementType.U4 => BitConverter.ToUInt32(bytes),
+                CorElementType.I8 => BitConverter.ToInt64(bytes),
+                CorElementType.U8 => BitConverter.ToUInt64(bytes),
+                CorElementType.R4 => BitConverter.ToSingle(bytes),
+                CorElementType.R8 => BitConverter.ToDouble(bytes),
+                _ => null,
+            };
+        }
+        finally { Marshal.FreeHGlobal(buf); }
+    }
+
+    /// <summary>值 → 类型全名（ExactType 经 TypeNameResolver；失败返回 null 由调用方降级）。</summary>
+    private static string? ResolveValueTypeName(CorDebugValue value)
+    {
+        try
+        {
+            var cls = value.ExactType?.Class;
+            if (cls is null) return null;
+            var modulePath = cls.Module?.Name;
+            if (string.IsNullOrEmpty(modulePath)) return null;
+            return TypeNameResolver.Resolve(modulePath!, (int)cls.Token.Value);
+        }
+        catch { return null; }
+    }
+
+    private static string TypeNameOfObject(CorDebugObjectValue obj) => ResolveValueTypeName(obj) ?? "<未知类型>";
+
+    /// <summary>CorElementType → BCL 类型名（TypeNameResolver 失败时的降级映射）。</summary>
+    private static string? MapElementTypeName(CorElementType t) => t switch
+    {
+        CorElementType.Boolean => "System.Boolean",
+        CorElementType.Char => "System.Char",
+        CorElementType.I1 => "System.SByte",
+        CorElementType.U1 => "System.Byte",
+        CorElementType.I2 => "System.Int16",
+        CorElementType.U2 => "System.UInt16",
+        CorElementType.I4 => "System.Int32",
+        CorElementType.U4 => "System.UInt32",
+        CorElementType.I8 => "System.Int64",
+        CorElementType.U8 => "System.UInt64",
+        CorElementType.R4 => "System.Single",
+        CorElementType.R8 => "System.Double",
+        _ => null,
+    };
 
     // ---- 事件发布（CallbackHandler 调，回调线程） ----
 

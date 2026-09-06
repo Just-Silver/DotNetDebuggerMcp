@@ -106,8 +106,8 @@ public static class DebugInspectTool
         }
     }
 
-    /// <summary>递归渲染变量（对象/数组 children 缩进展示；引擎已按一级展开 + 截断）。</summary>
-    private static string RenderVariable(DotNetDebugger.Engine.Models.DebugVariable v, int depth)
+    /// <summary>递归渲染变量（对象/数组 children 缩进展示；引擎已按一级展开 + 截断）。debug_evaluate 复用。</summary>
+    internal static string RenderVariable(DotNetDebugger.Engine.Models.DebugVariable v, int depth)
     {
         var indent = new string(' ', depth * 2);
         var line = $"{indent}{v.Name ?? $"slot{v.Slot}"} = {v.Value.Display}";
@@ -120,8 +120,9 @@ public static class DebugInspectTool
     /// <summary>
     /// 前置校验：存在活动调试会话且进程处于 Stopped（断点/异常/单步停点）。
     /// 返回 false 时 <paramref name="active"/> 为 null、<paramref name="error"/> 带中文提示（调用方直接返回该提示）。
+    /// debug_evaluate 等停点读取类工具共用。
     /// </summary>
-    private static bool TryRequireStopped(
+    internal static bool TryRequireStopped(
         [NotNullWhen(true)] out DotNetDebugger.Session.ActiveDebugSession? active,
         [NotNullWhen(false)] out string? error)
     {

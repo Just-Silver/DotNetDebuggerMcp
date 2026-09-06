@@ -1,6 +1,6 @@
 # Spec · P6 表达式读值安全子集
 
-> 状态：**待评审**（2026-09-06 起草）。通过后动码；完成态回写本行。
+> 状态：**已完成**（2026-09-06 实施；三个取舍点经评审确认。与 spec 的差异仅一处澄清：v1 文法本就无括号，`!(a==b)` 会报错并指引子集范围——工具描述中已明确列出）。P7 条件断点挂接点：`ExpressionEvaluator.EvaluateAsync` + `DebugEvalResult.ScalarValue is bool`（求值失败/非 bool = 不命中）。
 > 关联：宿主 TODO P6/P7；P7 条件断点与未来 `debug_evaluate` 工具共用本组件。
 
 ## 1. 背景与目标

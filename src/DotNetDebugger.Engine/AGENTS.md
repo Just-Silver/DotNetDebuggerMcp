@@ -13,11 +13,12 @@
 ```
 Engine/    DebugEngineCore / CorDebugBootstrap / DbgShimLoader /
            CallbackHandler / DebugCommandQueue / BreakpointManager /
-           SymbolNameResolver
+           SymbolNameResolver / TypeNameResolver / ClrProcessFinder
 Session/   DebugSession(根命名空间 DotNetDebugger.Engine!) / DebugBreakpoint / ExceptionBreakpointFilter
 Stepping/  StepperManager
 Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
-           DebugValue / DebugVariable / FrameLocation / BreakpointSnapshot   （纯数据 record）
+           DebugValue / DebugVariable / FrameLocation / BreakpointSnapshot /
+           PathSegment / DebugEvalResult   （纯数据 record）
 ```
 
 - `Session/DebugSession.cs` — **对外门面**（v1 单活动会话，spec §4.1）：静态工厂 `LaunchAsync(commandLine, timeoutMs)` / `AttachAsync(processId)`；`Events` 暴露 `IAsyncEnumerable<DebugEvent>`（无界 Channel，attach 后立刻订阅也能追到缓冲历史）；`SetBreakpointAsync(moduleName, token, ilOffset)` / `GetBreakpointsAsync` / `GetModulePathAsync(moduleName)`（模块短名→全路径，停点无条件跟随用）/ `ContinueAsync` / `StepInto/Over/OutAsync` / `GetThreads/StackFrames/VariablesAsync` / 异常断点 / `DisconnectAsync`。
@@ -38,6 +39,7 @@ Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
 - **pending 断点（模块未加载）**：`Add` 遇未登记模块不再抛错，登记为未绑定断点（`IsBound=false`），`TrackModule`（LoadModule 事件 / attach 枚举）时自动 `Bind` 重绑并回传重绑数（CallbackHandler 据此补发 BreakpointsChanged）；重绑失败（token 无效/无 IL）保持未绑定不阻塞进程。全部调用在 MTA 单线程，无并发。模块已加载时 token 错/无 IL 仍同步抛错（agent 立即拿到原因）；`CreateBreakpoint` 后**必须 `Activate(true)` 才生效**。
 - **停点变量名解析（`SymbolNameResolver`）**：参数名来自 DLL 元数据 Param 表（无需 PDB），局部名来自**模块旁 portable PDB** 的 LocalScopes（`mr.GetLocalScopes(MethodDefinitionHandle)`——注意 API 在 Reader 上而非 MethodDebugInformation 上，槽位属性名是 `Index` 不是 Slot）。测试目标需 `generate-testdata.ps1` 拷出 `DebugTarget.pdb` 才有名；按 (模块路径, token) 缓存，解析失败静默回退 slot 展示。
 - **对象/数组展开（`ReadValue(value, expand)`）**：顶层变量 expand=true 展开一级 children——对象按模块元数据字段清单（静态字段跳过）+ `GetFieldValue(cls.Raw, mdFieldDef)` 取值；数组按 `GetElementAtPosition` 线性取前 `MaxChildren`(32) 条；children 内不再递归（天然防环），引用浅读仅解字符串内容。字段 token 需模块 DLL 元数据（`CorDebugClass.Token`/`Module.Name`）。
+- **路径求值（P6 `EvaluatePathAsync`，命令泵内纯读）**：根名在 locals/arguments（与 `ReadVariablesForThread` 同源：元数据参数名 + PDB 局部名）按名匹配（精确→忽略大小写→slotN 回退）+ `$exception` 伪根；逐段字段（全基类链 `ExactType→Base` 枚举 + 属性约定降级 `X→_x→_X→<X>k__BackingField`）/索引（数组 `GetElementAtPosition` 任意下标、字符串取单字符）直读，段数上限 `PathSegment.MaxSegments`(8)。坑：① `thread.CurrentException` 无在抛异常时 ClrDebug 抛 `S_FALSE`（DebugException），必须 try/catch 兜住；② 取字段前定位对象须处理 null 引用/数组/字符串/标量并给出附段号的中文诊断；③ 测试锚点不能用 Main 入口——attach 发生在 Main 已执行后（同 BreakpointTests 锚 Work 的时序），用 bag 模式的 `WorkBag`/`WorkScores` 入口（参数自入口即存活）。
 - **单步坑（已修，勿回退）**：线程级裸 `thread.CreateStepper().Step()` 会**立即完成且 IP 不动**（StepCompleted 原地 +0x0，表象是「单步无效果」）——必须**帧级 `ilf.CreateStepper()`** + `SetInterceptMask(INTERCEPT_ALL & ~(SECURITY|CLASS_INIT))` + `SetUnmappedStopMask(STOP_NONE)` + **`StepRange`（当前语句 IL 区间 [序列点, 下一序列点)，`SymbolNameResolver.GetStatementIlRange`，PDB 提供）**。**无 PDB 回退也不能用裸 Step**（无序列点同样原地完成）——用 `StepRange([ip, ip+1))` 单条 IL 指令步进（dnSpy 无符号时同款）。循环回边停回循环头 offset 变小是合法的（`StepTests` 断言：首步离开入口、后续不原地）。Engine 测试套件在有/无 `DebugTarget.pdb` 两种状态下都应全绿（局部名断言仅在 PDB 在位时生效）。
 - **launch 时序**：Engine launch 停在初始同步点但目标模块未必加载、直接 `LaunchAsync` 下断点会登记为 pending（重绑机制已实现）——Session 库的 `LaunchAndAttachAsync` 与宿主 `-dbg`/`debug_launch` 走「自起进程 + RegisterForRuntimeStartup 蹲守 CLR 启动（Main 前）再 Attach」路径（P9；dbgshim 原生 launch 无法重定向输出故弃用），不直接用 Engine `LaunchAsync`。新代码留意这个分工。
 - `StepperManager`（Stepping/）目前是**静态薄封装**，真正命令路径在 DebugEngineCore 直接 `thread.CreateStepper()`，未走它——改单步逻辑先确认实际执行路径。

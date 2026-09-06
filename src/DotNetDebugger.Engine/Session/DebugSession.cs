@@ -94,6 +94,14 @@ public sealed class DebugSession : IAsyncDisposable
     public Task<IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>> GetVariablesAsync(int threadId, CancellationToken ct = default)
         => _core.GetVariablesAsync(threadId, ct);
 
+    /// <summary>
+    /// 按路径读值（P6 表达式读值子集的引擎底座，纯读、停顿时有效）：rootName 为栈顶帧局部/参数名
+    /// （+$exception 伪根），segments 逐段字段/索引解引用——引擎直读绕开 MaxChildren 截断。
+    /// 失败抛中文提示异常（附段号/类型名/可用字段清单）。
+    /// </summary>
+    public Task<DebugEvalResult> EvaluatePathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, CancellationToken ct = default)
+        => _core.EvaluatePathAsync(threadId, rootName, segments, ct);
+
     // ---- 异常断点 ----
 
     /// <summary>设置 first-chance 异常断点（typeName 空 = 全部异常停下）。</summary>

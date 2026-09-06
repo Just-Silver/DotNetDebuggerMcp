@@ -27,6 +27,8 @@ public static class DebugBreakpointTool
     /// <param name="typeName">类型全名（与 decompile 输出同格式）；与 line 组合按反编译视图行定位（需模块已加载）。</param>
     /// <param name="sourcePath">源文件路径（绝对/相对/仅文件名如 Program.cs）；与 line 组合按 PDB 源码行定位（模块旁需有 PDB）。</param>
     /// <param name="line">行号（1-based）：typeName 方式=decompile 输出行号；sourcePath 方式=源码行号。</param>
+    /// <param name="hitCount">第 N 次命中起生效，默认 1（每次都停/记）。</param>
+    /// <param name="mode">命中模式：stop（默认）=停下；trace=不停、记变量轨迹（经 debug_wait 取回）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示（断点 id）或错误提示。</returns>
     [McpServerTool]

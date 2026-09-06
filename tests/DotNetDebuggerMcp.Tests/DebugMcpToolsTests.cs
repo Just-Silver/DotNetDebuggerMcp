@@ -285,6 +285,116 @@ public sealed class DebugMcpToolsTests
         Assert.True(disc.IsError != true, disc.Text());
     }
 
+    [Fact]
+    public async Task DebugEvaluate_PathsComparisonsAndErrors()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workBagToken = ReadMethodToken(dll, "WorkBag");
+        var workScoresToken = ReadMethodToken(dll, "WorkScores");
+        Assert.True(workBagToken > 0 && workScoresToken > 0);
+
+        // 停点坐标：WorkBag 循环体内语句行（b/n/i 全存活；入口 IL0 局部未初始化不可靠）
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var bagFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workBagToken);
+        var entryTarget = DotNetDebugger.Decompiler.Document.DocumentService.GetBreakpointTargetAtLine(doc, bagFirstLine!.Value);
+        Assert.True(entryTarget is not null);
+        DotNetDebugger.Decompiler.Document.SourceLineResolver.SourceLineTarget? loopTarget = null;
+        for (var l = 1; l <= 80 && loopTarget is null; l++)
+        {
+            var t = DotNetDebugger.Decompiler.Document.SourceLineResolver.Resolve(dll, "DebugTarget.cs", l, out _);
+            if (t is not null && t.MethodToken == workBagToken && t.IlOffset != entryTarget.Value.IlOffset) loopTarget = t;
+        }
+        Assert.True(loopTarget is not null, "未找到 WorkBag 循环体源码行");
+
+        await using var mcp = await ConnectAsync();
+
+        // 无会话前置校验
+        var noSession = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "a" });
+        Assert.Contains("无活动调试会话", noSession.Text());
+
+        // bag 模式：WorkBag(new Bag { A = 7, S = "sx" }, 5)，delay 8s 提供操作窗口
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} bag 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        // launch 初始同步点（非断点停点）：求值被前置校验拦截
+        var notStopped = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "a" });
+        Assert.DoesNotContain("表达式:", notStopped.Text());
+
+        var set = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine });
+        Assert.True(set.IsError != true, set.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", wait.Text());
+
+        // 字段链 + 字符串索引 + 标量（与 debug_variables 同款展示）
+        var field = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.A" });
+        Assert.Contains("表达式: b.A = 7（System.Int32）", field.Text());
+        var str = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.S" });
+        Assert.Contains("= \"sx\"（System.String）", str.Text());
+        var charAt = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.S[0]" });
+        Assert.Contains("= \"s\"（System.String）", charAt.Text());
+        var arg = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "n" });
+        Assert.Contains("= 5（System.Int32）", arg.Text());
+
+        // 比较 / 一元 !（True/False 文本）
+        var cmp = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "i < n" });
+        Assert.Contains("= True（System.Boolean）", cmp.Text());
+        var eq = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.S == \"sx\"" });
+        Assert.Contains("= True", eq.Text());
+        var ne = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.A != 7" });
+        Assert.Contains("= False", ne.Text());
+        var not = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "!true" });
+        Assert.Contains("= False", not.Text()); // 括号不在 v1 文法（spec §4），一元 ! 以字面量/裸路径验证
+        var notFalse = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "!false" });
+        Assert.Contains("= True", notFalse.Text());
+        var paren = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "!(i > 0)" });
+        Assert.Contains("不支持", paren.Text());
+
+        // 对象终值：children 一级与 debug_variables 一致
+        var whole = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b" });
+        Assert.Contains("A = 7", whole.Text());
+        Assert.Contains("S = \"sx\"", whole.Text());
+        var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        Assert.Contains("A = 7", vars.Text());
+
+        // 错误语义：缺字段附可用清单 / 未知根附可用变量 / 语法越子集
+        var missing = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.Missing" });
+        Assert.Contains("无此字段", missing.Text());
+        Assert.Contains("A, S", missing.Text());
+        var unknown = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "zzz" });
+        Assert.Contains("栈顶帧无变量", unknown.Text());
+        Assert.Contains("b", unknown.Text());
+        var arithmetic = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.A + 1" });
+        Assert.Contains("不支持", arithmetic.Text());
+        var oob = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.S[9]" });
+        Assert.Contains("越界", oob.Text());
+
+        // 数组任意下标：删 WorkBag 行断点 → 锚 WorkScores 入口（scores={3,1,4,1,5}）
+        var rm = await CallAsync(mcp, "debug_breakpoint_remove",
+            new Dictionary<string, object?> { ["breakpointId"] = ParseBreakpointId(set.Text()) });
+        Assert.True(rm.IsError != true, rm.Text());
+        var setScores = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workScoresToken:x8}", ["ilOffset"] = 0 });
+        Assert.True(setScores.IsError != true, setScores.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var waitScores = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", waitScores.Text());
+        var deep = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "scores[3]" });
+        Assert.Contains("= 1（System.Int32）", deep.Text());
+        var arrOob = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "scores[9]" });
+        Assert.Contains("越界", arrOob.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
     private static async Task<CallToolResult> CallAsync(McpClient mcp, string tool, IReadOnlyDictionary<string, object?> args)
         => await mcp.CallToolAsync(tool, args, cancellationToken: TestContext.Current.CancellationToken);
 

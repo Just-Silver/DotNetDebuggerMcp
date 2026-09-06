@@ -46,7 +46,7 @@
 - `decompile_member`/`call_chain` 多匹配合并输出、各成员前插 `#MEMBER {"name","token"}` JSON 分隔行（计入行号）；匹配数 > `MaxMemberMatches`（20）仅返回 `#MEMBER` 签名清单并注明「超过上限，仅列出签名」。`signature` 行尾附 token（`0x06` 方法/`0x04` 字段/`0x17` 属性/`0x14` 事件）——agent 取 token 闭环到 `decompile_member`/`call_graph`/`call_chain`/`field_access` 的 `token` 参数。
 - `hierarchy`/`dependencies`/`call_graph`/`interface_usage`/`field_access` 等分段输出，空段输出 `（无）` 占位；`includeExternal`（`-x`）外部条目格式 `全名 [程序集名]`。反编译输出含 `//IL_` 未解析注释时头部追加提示「仅供结构参考」。
 - stdout 反编译超 `DecompilerConfig.MaxOutputBytes`（64MB）时返回「建议改用 decompile_to_dir」提示，不入缓存。
-- 动态调试约定：控制类工具**异步返回（带默认超时），不等停点**（等停点用 `debug_wait`，直接返回停点现场）；进程停在断点/异常后，用 `debug_state`（确认 Stopped）→ `debug_stack`/`debug_variables`（缺省 threadId=0 = 最近停点线程）→ `debug_continue`/`debug_step`。断点按 模块名+方法 token+IL offset 定位（token 取 `signature` 行尾；模块未加载时登记待绑定、加载后自动绑定，`debug_breakpoint_list` 查看绑定状态）。
+- 动态调试约定：控制类工具**异步返回（带默认超时），不等停点**（等停点用 `debug_wait`，直接返回停点现场）；进程停在断点/异常后，用 `debug_state`（确认 Stopped）→ `debug_stack`/`debug_variables`（缺省 threadId=0 = 最近停点线程）/ `debug_evaluate`（表达式纯读求值：成员链/数组字符串任意下标/一元 !/单次比较，属性按字段约定降级；不支持算术/调用/赋值/括号）→ `debug_continue`/`debug_step`。断点按 模块名+方法 token+IL offset 定位（token 取 `signature` 行尾；模块未加载时登记待绑定、加载后自动绑定，`debug_breakpoint_list` 查看绑定状态）。
 
 ## 命令
 
