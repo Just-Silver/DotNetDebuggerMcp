@@ -16,8 +16,8 @@ public sealed record ProcessOutputLine(int Sequence, DateTimeOffset Timestamp, P
 /// </summary>
 public sealed class ProcessOutputCapture
 {
-    /// <summary>缓冲上限（行），超出丢最旧。</summary>
-    public const int MaxLines = 500;
+    /// <summary>缓冲上限（行），超出丢最旧。2000 行约数百 KB——Web 应用启动轮询日志下仍能保留更久早期关键行（R8①）。</summary>
+    public const int MaxLines = 2000;
 
     private readonly object _gate = new();
     private readonly Queue<ProcessOutputLine> _lines = new();
@@ -42,13 +42,18 @@ public sealed class ProcessOutputCapture
     /// <summary>追加系统标记行（如进程退出），按 stdout 流别记录。</summary>
     public void AppendSystem(string text) => Append(ProcessOutputStream.Stdout, text);
 
-    /// <summary>取尾部至多 maxLines 行（旧→新排序）。</summary>
-    public IReadOnlyList<ProcessOutputLine> Tail(int maxLines)
+    /// <summary>取尾部至多 maxLines 行（旧→新排序）。filter 非空时只保留文本含该子串（忽略大小写）的行，
+    /// 仍从尾部向上取够 maxLines 条命中行——高频噪声日志场景下可筛出关键行（R8①）。</summary>
+    public IReadOnlyList<ProcessOutputLine> Tail(int maxLines, string? filter = null)
     {
         lock (_gate)
         {
-            var skip = Math.Max(0, _lines.Count - Math.Max(0, maxLines));
-            return _lines.Skip(skip).ToArray();
+            IEnumerable<ProcessOutputLine> src = _lines;
+            if (!string.IsNullOrWhiteSpace(filter))
+                src = src.Where(l => l.Text.Contains(filter.Trim(), StringComparison.OrdinalIgnoreCase));
+            var list = src.ToList();
+            var skip = Math.Max(0, list.Count - Math.Max(0, maxLines));
+            return list.Skip(skip).ToArray();
         }
     }
 }

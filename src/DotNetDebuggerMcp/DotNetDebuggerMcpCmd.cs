@@ -290,7 +290,8 @@ public class DotNetDebuggerMcpCmd
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {
-            return await ListTypesTool.ListTypes(assembly, entityTypes, nameContains, namespaceContains, lines, cancellationToken);
+            return await ListTypesTool.ListTypes(assembly: assembly, categories: entityTypes,
+                nameContains: nameContains, namespaceContains: namespaceContains, lines: lines, cancellationToken: cancellationToken);
         }
         if (!string.IsNullOrEmpty(memberName))
         {

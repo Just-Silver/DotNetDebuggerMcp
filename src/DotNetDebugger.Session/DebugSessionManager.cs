@@ -19,14 +19,18 @@ public sealed class ActiveDebugSession : IAsyncDisposable
     /// <summary>launch 启动的目标进程句柄（会话释放时 Dispose 停止输出读取；不杀进程，目标继续独立运行）。</summary>
     private readonly System.Diagnostics.Process? _process;
 
+    /// <summary>目标进程 pid（launch=自起进程 Id；attach=入参 pid）。供宿主显示「目标 pid」。</summary>
+    public int ProcessId { get; }
+
     internal ActiveDebugSession(DebugSession session, SessionEventBuffer buffer, AgentActionLog actions,
-        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null)
+        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null, int processId = 0)
     {
         Session = session;
         Buffer = buffer;
         Actions = actions;
         Output = output;
         _process = process;
+        ProcessId = processId > 0 ? processId : (process?.Id ?? 0);
     }
 
     public async ValueTask DisposeAsync()
@@ -68,7 +72,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
     public async Task<ActiveDebugSession> AttachAsync(int processId, CancellationToken ct = default)
     {
         var session = await DebugSession.AttachAsync(processId, ExpressionConditionEvaluator.Instance, ct).ConfigureAwait(false);
-        return Activate(session, $"attach pid={processId}");
+        return Activate(session, $"attach pid={processId}", processId: processId);
     }
 
     /// <summary>
@@ -76,8 +80,12 @@ public sealed class DebugSessionManager : IAsyncDisposable
     /// 回调时机=运行时初始化完成、Main 执行前）后立即 attach——进程停在 Main 前的初始同步点。
     /// 目标**无需自带启动延迟**（P9 以蹲守替换旧「固定等 1s」延迟窗口）；attach 后 agent 从容设断点
     /// （模块未加载登记 pending，加载后自动绑定）再 continue。
+    /// workingDirectory：目标进程工作目录（默认=继承 MCP server 的 CWD；Web 应用等以 CWD 作 ContentRoot
+    /// 的目标应显式传 bin/publish 目录，否则 appsettings/静态资源定位错乱——R1）；environment：附加环境变量
+    /// （KEY=VALUE 多行或分号组合，默认=继承 server 环境）。
     /// </summary>
-    public async Task<ActiveDebugSession> LaunchAndAttachAsync(string commandLine, int timeoutSeconds = 30, CancellationToken ct = default)
+    public async Task<ActiveDebugSession> LaunchAndAttachAsync(string commandLine, int timeoutSeconds = 30,
+        string workingDirectory = "", string environment = "", CancellationToken ct = default)
     {
         var parts = commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var exePath = Path.GetFullPath(parts[0]);
@@ -92,6 +100,15 @@ public sealed class DebugSessionManager : IAsyncDisposable
             CreateNoWindow = true,
             WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
         };
+        if (!string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            var wd = Path.GetFullPath(workingDirectory);
+            if (!Directory.Exists(wd))
+                throw new InvalidOperationException($"工作目录不存在：{wd}");
+            psi.WorkingDirectory = wd;
+        }
+        if (!string.IsNullOrWhiteSpace(environment))
+            ApplyEnvironment(psi, environment);
         var process = System.Diagnostics.Process.Start(psi)
             ?? throw new InvalidOperationException($"无法启动目标进程：{exePath}");
         // 捕获目标输出到环形缓冲（供 debug_output / debug_wait 附带返回），同时保持续读排空防管道阻塞。
@@ -174,11 +191,11 @@ public sealed class DebugSessionManager : IAsyncDisposable
     private static int BreakpointCount(ActiveDebugSession active) => 0; // v1 断点计数由工具层维护，此处占位
 
     private ActiveDebugSession Activate(DebugSession session, string target,
-        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null)
+        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null, int processId = 0)
     {
         var buffer = new SessionEventBuffer();
         buffer.Start(session);
-        var active = new ActiveDebugSession(session, buffer, Actions, output, process);
+        var active = new ActiveDebugSession(session, buffer, Actions, output, process, processId);
         ActiveDebugSession? old;
         lock (_gate) { old = _active; _active = active; }
         // 替换旧活动会话：后台断开+释放，不阻塞新会话建立
@@ -195,4 +212,18 @@ public sealed class DebugSessionManager : IAsyncDisposable
     }
 
     public async ValueTask DisposeAsync() => await CloseAsync();
+
+    /// <summary>把 KEY=VALUE 多行/分号组合的附加环境变量写入 psi（空行/无 = 的项忽略）。</summary>
+    private static void ApplyEnvironment(System.Diagnostics.ProcessStartInfo psi, string environment)
+    {
+        foreach (var raw in environment.Replace(';', '\n').Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var eq = raw.IndexOf('=');
+            if (eq <= 0) continue; // 无 KEY= 形式：忽略
+            var key = raw[..eq].Trim();
+            var value = raw[(eq + 1)..].Trim();
+            if (key.Length == 0) continue;
+            psi.Environment[key] = value;
+        }
+    }
 }

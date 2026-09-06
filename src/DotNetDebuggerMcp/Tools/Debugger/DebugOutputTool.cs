@@ -16,11 +16,12 @@ public static class DebugOutputTool
 {
     internal const string OutputSectionHeader = "目标输出（最近 {0} 行，旧→新）:";
 
-    /// <summary>把目标输出尾部按统一格式追加到 result 之后（debug_wait 等复用）；无捕获或 0 行原样返回。</summary>
-    internal static string AppendTargetOutput(DotNetDebugger.Session.ActiveDebugSession active, string result, int outputLines)
+    /// <summary>把目标输出尾部按统一格式追加到 result 之后（debug_wait 等复用）；无捕获或 0 行原样返回。
+    /// filter 非空时只保留含该子串的行（忽略大小写），从尾部向上取够 outputLines 条。</summary>
+    internal static string AppendTargetOutput(DotNetDebugger.Session.ActiveDebugSession active, string result, int outputLines, string filter = "")
     {
         if (outputLines <= 0 || active.Output is null) return result;
-        var tail = active.Output.Tail(Math.Clamp(outputLines, 1, ProcessOutputCapture.MaxLines));
+        var tail = active.Output.Tail(Math.Clamp(outputLines, 1, ProcessOutputCapture.MaxLines), filter);
         if (tail.Count == 0) return result;
         var sb = new StringBuilder(result);
         sb.AppendLine();
@@ -38,13 +39,15 @@ public static class DebugOutputTool
     /// 查看被调试进程的控制台输出（stdout/stderr）。进程运行中也可随时调用；
     /// 仅 debug_launch 启动的会话可捕获输出。
     /// </summary>
-    /// <param name="lines">返回最近行数，默认 50，范围 1-500。</param>
+    /// <param name="lines">返回最近行数，默认 50，范围 1-2000。</param>
+    /// <param name="filter">只返回含该子串的行（忽略大小写），默认空=全部。高频日志下筛关键行（如 filter=Now listening / Content root / err）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>目标输出文本或中文提示。</returns>
     [McpServerTool]
-    [Description("查看被调试进程的控制台输出（stdout/stderr，旧→新）。进程运行中也可随时调用。仅 debug_launch 启动的会话可捕获输出（attach 已运行进程无法重定向其输出）。")]
+    [Description("查看被调试进程的控制台输出（stdout/stderr，旧→新）。进程运行中也可随时调用。仅 debug_launch 启动的会话可捕获输出（attach 已运行进程无法重定向其输出）。高频日志淹没时用 filter 筛关键行（如 Now listening/Content root/error，忽略大小写）。")]
     public static Task<string> DebugOutput(
-        [Description("返回最近行数，默认 50，范围 1-500。")] int lines = 50,
+        [Description("返回最近行数，默认 50，范围 1-2000。")] int lines = 50,
+        [Description("只返回含该子串的行（忽略大小写），默认空=全部。如 filter=\"Now listening\" / filter=\"error\"。")] string filter = "",
         CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
@@ -53,11 +56,13 @@ public static class DebugOutputTool
         if (active.Output is null)
             return Task.FromResult("当前会话为 attach 附加，未捕获目标输出（仅 debug_launch 启动的会话可捕获）。");
 
-        var tail = active.Output.Tail(Math.Clamp(lines, 1, ProcessOutputCapture.MaxLines));
+        var tail = active.Output.Tail(Math.Clamp(lines, 1, ProcessOutputCapture.MaxLines), filter);
         if (tail.Count == 0)
-            return Task.FromResult("目标暂无输出（缓冲保留最近 500 行）。");
+            return Task.FromResult(string.IsNullOrWhiteSpace(filter)
+                ? "目标暂无输出。"
+                : $"缓冲中无含 \"{filter.Trim()}\" 的输出行（缓冲保留最近 {ProcessOutputCapture.MaxLines} 行）。");
 
-        DebugSessionService.Manager.Actions.Log("debug_output", $"{lines}", "ok");
+        DebugSessionService.Manager.Actions.Log("debug_output", string.IsNullOrWhiteSpace(filter) ? $"{lines}" : $"{lines} filter={filter.Trim()}", "ok");
         var sb = new StringBuilder();
         sb.AppendLine(string.Format(OutputSectionHeader, tail.Count));
         foreach (var line in tail)

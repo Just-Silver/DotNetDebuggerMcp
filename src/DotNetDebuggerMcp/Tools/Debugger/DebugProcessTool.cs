@@ -39,9 +39,18 @@ public static class DebugProcessTool
                     : $"未发现进程名含 \"{filter.Trim()}\" 的 .NET 进程（当前共 {all.Count} 个 .NET 进程）。");
 
             var sb = new StringBuilder();
+            var currentPid = DebugSessionService.Manager.Active?.ProcessId ?? 0;
+            var sorted = hits.OrderBy(p => p.ProcessName, StringComparer.OrdinalIgnoreCase).ThenBy(p => p.ProcessId).ToList();
             sb.Append($".NET 进程（{hits.Count} 个）:");
-            foreach (var p in hits)
+            const int maxShown = 100;
+            var shown = sorted.Count > maxShown ? sorted.Take(maxShown).ToList() : sorted;
+            foreach (var p in shown)
+            {
                 sb.Append($"{Environment.NewLine}  pid={p.ProcessId}  {p.ProcessName}  (CLR {p.ClrVersion})");
+                if (p.ProcessId == currentPid) sb.Append("  ← 当前会话");
+            }
+            if (sorted.Count > maxShown)
+                sb.Append($"{Environment.NewLine}  … 其余 {sorted.Count - maxShown} 个已省略，用 filter 缩小范围。");
             sb.Append($"{Environment.NewLine}用 debug_attach(processId) 附加调试。");
             return Task.FromResult(sb.ToString());
         }

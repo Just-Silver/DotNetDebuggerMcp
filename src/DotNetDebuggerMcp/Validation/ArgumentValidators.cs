@@ -141,7 +141,7 @@ public static class ArgumentValidators
     }
 
     /// <summary>
-    /// 校验 list 参数：必填且只能由 c/i/s/d/e 组成（可组合多个字母）。
+    /// 校验 list_types 的 categories 参数：必填且只能由 c/i/s/d/e 组成（可组合多个字母）。
     /// </summary>
     /// <param name="list">实体类型类别组合，缺省为空字符串。</param>
     /// <param name="error">校验失败时的错误提示；通过时为 null。</param>
@@ -150,12 +150,12 @@ public static class ArgumentValidators
     {
         if (string.IsNullOrEmpty(list))
         {
-            error = "请指定 list 参数（实体类型类别：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 \"csi\"）。";
+            error = "请指定 categories 参数（实体类型类别：c=class, i=interface, s=struct, d=delegate, e=enum，可组合如 \"csi\"）。";
             return false;
         }
         if (list.Any(c => c is not ('c' or 'i' or 's' or 'd' or 'e')))
         {
-            error = $"无效的 list 参数：\"{list}\"。合法值为 c/i/s/d/e 的组合，例如 \"csi\"。";
+            error = $"无效的 categories 参数：\"{list}\"。合法值为 c/i/s/d/e 的组合，例如 \"csi\"。";
             return false;
         }
         error = null;

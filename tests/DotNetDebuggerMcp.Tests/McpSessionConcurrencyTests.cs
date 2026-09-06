@@ -118,8 +118,8 @@ public sealed class McpSessionConcurrencyTests
 
         var calls = new (string Tool, IReadOnlyDictionary<string, object?> Args)[]
         {
-            ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "c" }),
-            ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "csi", ["nameContains"] = "Class" }),
+            ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["categories"] = "c" }),
+            ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["categories"] = "csi", ["nameContains"] = "Class" }),
             ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.BigClass" }),
             ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.DerivedClass" }),
             ("dependencies", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Uses" }),
@@ -128,7 +128,7 @@ public sealed class McpSessionConcurrencyTests
             ("search_string", new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "big" }),
             ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Circle" }),
             ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.IAnimal", ["includeIndirect"] = true }),
-            ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["list"] = "ide" }),
+            ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["categories"] = "ide" }),
             ("call_graph", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.GenericCaller" }),
         };
 
@@ -188,7 +188,7 @@ public sealed class McpSessionConcurrencyTests
                 new Dictionary<string, object?>
                 {
                     ["assembly"] = dll,
-                    ["list"] = "cside",
+                    ["categories"] = "cside",
                     ["nameContains"] = filter,
                 },
                 cancellationToken: TestContext.Current.CancellationToken);

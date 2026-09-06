@@ -82,6 +82,50 @@ public sealed class DebugSessionManagerTests
     }
 
     [Fact]
+    public async Task LaunchAndAttach_WorkingDirectoryAndEnvironment_AppliedToTarget()
+    {
+        Assert.True(File.Exists(TestTarget.DebugTargetExe));
+
+        await using var manager = new DebugSessionManager();
+        // 传一个不存在的工作目录应报错
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 1 0", workingDirectory: "Z:\\no\\such\\dir",
+                ct: TestContext.Current.CancellationToken));
+
+        // 用临时目录作工作目录 + 附加环境变量，目标 start 后打印 cwd/env（见 generate-testdata.ps1）
+        var wd = Path.Combine(Path.GetTempPath(), "ddm-r1-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(wd);
+        try
+        {
+            var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 1 0",
+                workingDirectory: wd, environment: "R1_TEST_ENV=r1-value;OTHER=x",
+                ct: TestContext.Current.CancellationToken);
+            // ProcessId 暴露（R2：launch 会话有目标 pid）
+            Assert.True(active.ProcessId > 0);
+
+            await active.Session.ContinueAsync(TestContext.Current.CancellationToken);
+
+            ProcessOutputLine[] tail = [];
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (DateTime.UtcNow < deadline)
+            {
+                tail = [.. active.Output!.Tail(50)];
+                if (tail.Any(l => l.Text.Contains("[DebugTarget] cwd="))) break;
+                await Task.Delay(100, TestContext.Current.CancellationToken);
+            }
+            var text = string.Join('\n', tail.Select(l => l.Text));
+            Assert.Contains($"[DebugTarget] cwd={wd}", text);
+            Assert.Contains("[DebugTarget] env R1_TEST_ENV=r1-value", text);
+
+            await manager.CloseAsync(TestContext.Current.CancellationToken);
+        }
+        finally
+        {
+            try { Directory.Delete(wd, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
     public async Task ExceptionFilter_NonMatch_SkipsConsumableViaBuffer()
     {
         Assert.True(File.Exists(TestTarget.DebugTargetExe));

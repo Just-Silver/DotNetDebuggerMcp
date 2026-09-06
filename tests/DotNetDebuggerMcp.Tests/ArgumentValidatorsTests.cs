@@ -116,7 +116,7 @@ public class ArgumentValidatorsTests : IDisposable
     {
         var ok = ArgumentValidators.ValidateList("x", out var error);
         Assert.False(ok);
-        Assert.Contains("无效的 list 参数", error!);
+        Assert.Contains("无效的 categories 参数", error!);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class ArgumentValidatorsTests : IDisposable
     {
         var ok = ArgumentValidators.ValidateList("cx", out var error);
         Assert.False(ok);
-        Assert.Contains("无效的 list 参数", error!);
+        Assert.Contains("无效的 categories 参数", error!);
     }
 
     [Fact]

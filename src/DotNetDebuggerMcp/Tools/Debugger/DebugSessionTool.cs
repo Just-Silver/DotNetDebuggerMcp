@@ -22,6 +22,8 @@ public static class DebugSessionTool
     /// </summary>
     /// <param name="commandLine">目标可执行文件路径（可含参数，空格分隔），相对当前工作目录（必填）。</param>
     /// <param name="timeoutSeconds">等待目标 CLR 启动的秒数上限，默认 30。</param>
+    /// <param name="workingDirectory">目标进程工作目录（默认空=继承 MCP server 当前目录）。</param>
+    /// <param name="environment">附加环境变量（KEY=VALUE 多行或分号分隔，默认空=继承 server 环境）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>中文结果提示（会话 id 与状态）或错误提示。</returns>
     [McpServerTool]
@@ -29,6 +31,8 @@ public static class DebugSessionTool
     public static async Task<string> DebugLaunch(
         [Description("目标可执行文件路径（可含参数，如 DebugTarget.exe 3 8），相对当前工作目录（必填）。")] string commandLine = "",
         [Description("等待目标 CLR 启动的秒数上限，默认 30。")] int timeoutSeconds = 30,
+        [Description("目标进程工作目录（默认空=继承 MCP server 的当前目录）。Web 应用等以工作目录定位 appsettings/静态资源的目标应传其 bin 或 publish 目录。")] string workingDirectory = "",
+        [Description("附加环境变量，KEY=VALUE 多行或分号分隔（如 ASPNETCORE_ENVIRONMENT=Development;MY_KEY=1；默认空=继承 server 环境）。")] string environment = "",
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(commandLine))
@@ -39,9 +43,9 @@ public static class DebugSessionTool
 
         try
         {
-            var active = await DebugSessionService.Manager.LaunchAndAttachAsync(commandLine, timeoutSeconds, cancellationToken);
+            var active = await DebugSessionService.Manager.LaunchAndAttachAsync(commandLine, timeoutSeconds, workingDirectory, environment, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_launch", commandLine, "ok");
-            return $"已启动并附加调试会话。目标：{commandLine}。当前状态：{StateText(active.Buffer.CurrentState)}。" +
+            return $"已启动并附加调试会话。目标 pid={active.ProcessId}：{commandLine}。当前状态：{StateText(active.Buffer.CurrentState)}。" +
                    "进程停在 Main 前；用 debug_breakpoint_set 下断点（未加载模块自动待绑定）后 debug_continue 运行。";
         }
         catch (Exception ex)
@@ -115,6 +119,7 @@ public static class DebugSessionTool
         var info = DebugSessionService.Manager.GetInfo();
         var lines = new List<string>
         {
+            active.ProcessId > 0 ? $"目标 pid: {active.ProcessId}" : $"目标: {info?.TargetDescription ?? "?"}",
             $"会话状态: {StateText(buffer.CurrentState)}",
             $"最近停点: {StopText(buffer.LastStop)}",
         };
@@ -172,6 +177,8 @@ public static class DebugSessionTool
         DotNetDebugger.Engine.Models.DebugSessionState.Stopped => "已停止 (Stopped，停在断点/异常/单步)",
         DotNetDebugger.Engine.Models.DebugSessionState.Exited => "已退出 (Exited)",
         DotNetDebugger.Engine.Models.DebugSessionState.Detached => "已断开 (Detached)",
+        DotNetDebugger.Engine.Models.DebugSessionState.Launching => "启动中 (Launching，等待 CLR 初始化完成，进程尚冻结)",
+        DotNetDebugger.Engine.Models.DebugSessionState.Attaching => "已附加 (Attaching，进程冻结在 Main 前，可设断点后 debug_continue 放行)",
         _ => state.ToString(),
     };
 
