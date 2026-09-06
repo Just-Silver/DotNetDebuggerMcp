@@ -251,6 +251,17 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task DebugProcesses_ListsWithoutError()
+    {
+        await using var mcp = await ConnectAsync();
+        var r = await CallAsync(mcp, "debug_processes", new Dictionary<string, object?>());
+        Assert.True(r.IsError != true, r.Text());
+        Assert.DoesNotContain("列出进程失败", r.Text());
+        // 输出形态：要么进程列表（pid= 行），要么明确的空态提示
+        Assert.True(r.Text().Contains("pid=") || r.Text().Contains("未发现"), r.Text());
+    }
+
+    [Fact]
     public async Task DebugState_ConcurrentQueries_AllReturn()
     {
         var exe = DebugTargetExe;
