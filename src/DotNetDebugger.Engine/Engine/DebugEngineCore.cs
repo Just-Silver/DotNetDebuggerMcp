@@ -123,9 +123,16 @@ public sealed class DebugEngineCore : IAsyncDisposable
         PublishState(state, state == DebugSessionState.Launching ? "launched" : "attached");
     }
 
-    /// <summary>枚举进程已加载模块登记到 BreakpointManager（attach 已运行进程用）。</summary>
-    private void SyncLoadedModules()
+    /// <summary>
+    /// 枚举进程已加载模块登记到 BreakpointManager，返回本次重绑成功的断点数。
+    /// 时机① attach 引导完成（attach 已运行进程不补发 LoadModule——API 参考 §9.5）；
+    /// ② 首次 Continue 前（CI 实录：attach 窗口竞速——快照跑在入口模块加载完成之前时，
+    /// 该模块既不在快照里也不会再发 LoadModule 回调，登记表永久缺失、pending 断点永不绑定；
+    /// 进程仍冻结时重扫是完备快照，可在恢复运行前补绑断点）。
+    /// </summary>
+    private int SyncLoadedModules()
     {
+        var rebound = 0;
         try
         {
             foreach (var ad in _process!.AppDomains)
@@ -134,7 +141,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
                 {
                     foreach (var mod in asm.Modules)
                     {
-                        try { _breakpoints.TrackModule(mod); }
+                        try { rebound += _breakpoints.TrackModule(mod); }
                         catch { /* 单个模块登记失败忽略 */ }
                     }
                 }
@@ -144,6 +151,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
         {
             Log("warn", $"枚举已加载模块失败: {ex.Message}");
         }
+        return rebound;
     }
 
     // ---- 命令泵（单线程：事件处理 + 命令执行，避免并发 Continue）----
@@ -195,6 +203,12 @@ public sealed class DebugEngineCore : IAsyncDisposable
         {
             _handler?.ReleaseInitialHold(); // 清停点挂起，允许 OnAnyEvent 对后续排队事件继续 Continue
             _stoppedThreadId = -1;
+            // attach 窗口竞速自愈（见 SyncLoadedModules 注释）：有未绑定断点时，趁进程仍冻结补扫模块并补绑
+            if (_breakpoints.Breakpoints.Any(b => !b.IsBound))
+            {
+                var rebound = SyncLoadedModules();
+                if (rebound > 0) PublishBreakpointsChanged();
+            }
             if (_process is not null)
             {
                 const int maxContinues = 100;

@@ -54,7 +54,13 @@ public sealed class DebugMcpToolsTests
             new Dictionary<string, object?> { ["breakpointId"] = pendingId });
         Assert.True(rmPending.IsError != true, rmPending.Text());
 
-        // 3. 设断点：Work 入口（模块已加载 → 已绑定）
+        // 4. debug_continue 先行（CI 实录：launch 返回时模块登记可能缺目标模块——attach 竞速窗口；
+        // 先进入运行，8s delay 即设断点窗口），再设 Work 入口断点（模块已加载 → 已绑定）
+        var cont = await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        Assert.True(cont.IsError != true, cont.Text());
+        Assert.Contains("已继续", cont.Text());
+
+        // 3. 设断点：Work 入口
         var bp = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bp.IsError != true, bp.Text());
@@ -63,12 +69,7 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("断点列表（1 个）", list.Text());
         Assert.Contains("已绑定", list.Text());
 
-        // 4. debug_continue：进程运行（delay 结束进 Work 命中）
-        var cont = await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
-        Assert.True(cont.IsError != true, cont.Text());
-        Assert.Contains("已继续", cont.Text());
-
-        // 5. debug_wait：阻塞等停点（进程 delay 8s 后 Work 命中；上限 20s 内应返回已停下）；默认附目标输出
+        // 5. debug_wait：阻塞等停点（Work 命中；上限 20s 内应返回已停下）；默认附目标输出
         var wait = await CallAsync(mcp, "debug_wait",
             new Dictionary<string, object?> { ["waitSeconds"] = 20 });
         Assert.True(wait.IsError != true, wait.Text());
@@ -166,10 +167,11 @@ public sealed class DebugMcpToolsTests
 
         await using var mcp = await ConnectAsync();
 
-        // launch（delay 8s 提供操作窗口；attach 即会话建立，模块已加载）
+        // launch（delay 8s 提供操作窗口）；先 continue 再设行断点（CI 实录：launch 返回时模块登记可能缺目标模块）
         var launch = await CallAsync(mcp, "debug_launch",
             new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 8", ["timeoutSeconds"] = 20 });
         Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
 
         // 3a：typeName+line 设断点（省缺 moduleName，跨模块解析）
         var setA = await CallAsync(mcp, "debug_breakpoint_set",
@@ -178,8 +180,7 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("断点已设", setA.Text());
         Assert.Contains("DebugTarget.dll", setA.Text());
 
-        // continue → 命中 3a 断点（delay 8s 后进 Work）
-        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        // 命中 3a 断点（delay 结束进 Work）
         var waitA = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
         Assert.Contains("已停下", waitA.Text());
         var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
@@ -227,6 +228,9 @@ public sealed class DebugMcpToolsTests
         var launch = await CallAsync(mcp, "debug_launch",
             new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 8", ["timeoutSeconds"] = 20 });
         Assert.True(launch.IsError != true, launch.Text());
+
+        // 先 continue 再设 trace 断点（CI 实录：launch 返回时模块登记可能缺目标模块；delay 8s = 设断点窗口）
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
 
         var set = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = sourceTarget.ActualLine, ["mode"] = "trace" });
@@ -324,10 +328,12 @@ public sealed class DebugMcpToolsTests
         var notStopped = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "a" });
         Assert.DoesNotContain("表达式:", notStopped.Text());
 
+        // 先 continue 再设行断点（CI 实录：launch 返回时模块登记可能缺目标模块；delay 8s = 设断点窗口）
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
         var set = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine });
         Assert.True(set.IsError != true, set.Text());
-        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         var wait = await CallAsync(mcp, "debug_wait",
             new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", wait.Text());
@@ -431,12 +437,14 @@ public sealed class DebugMcpToolsTests
         var emptyList = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
         Assert.Contains("无断点", emptyList.Text());
 
+        // 先 continue 再设行断点（CI 实录：launch 返回时模块登记可能缺目标模块；delay 8s = 设断点窗口）
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
         // 2. 条件 i == 2：前两轮放行，第 3 轮（i=2）才停——flagship 场景
         var set = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine, ["condition"] = "i == 2" });
         Assert.True(set.IsError != true, set.Text());
         Assert.Contains("[条件: i == 2", set.Text());
-        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         var wait = await CallAsync(mcp, "debug_wait",
             new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", wait.Text());

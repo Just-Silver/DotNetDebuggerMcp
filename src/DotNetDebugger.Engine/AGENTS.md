@@ -45,6 +45,7 @@ Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
 - **launch 时序**：Engine launch 停在初始同步点但目标模块未必加载、直接 `LaunchAsync` 下断点会登记为 pending（重绑机制已实现）——Session 库的 `LaunchAndAttachAsync` 与宿主 `-dbg`/`debug_launch` 走「自起进程 + RegisterForRuntimeStartup 蹲守 CLR 启动（Main 前）再 Attach」路径（P9；dbgshim 原生 launch 无法重定向输出故弃用），不直接用 Engine `LaunchAsync`。新代码留意这个分工。
 - **条件断点（P7）**：`DebugBreakpoint.Condition`（P6 子集表达式）→ `HandleBreakpoint` **条件先于计数**（false/求值失败放行且不 RegisterHit，失败发 `BreakpointConditionFailed` 事件供 Session 计数）。求值器经依赖倒置注入（Engine 定义 `IBreakpointConditionEvaluator`，Session 实现 `ExpressionConditionEvaluator`；`DebugSession.Launch/AttachAsync` 缺省 null=不支持条件）——**求值在命令泵线程内、进程停住态**，`PathValueResolver` 直通 `ReadPathValue` 同步直读；实现方红线=纯计算不得再入命令泵/session（死锁）。真性 false 不发事件（每轮都是噪声），失败才发。
 - `StepperManager`（Stepping/）目前是**静态薄封装**，真正命令路径在 DebugEngineCore 直接 `thread.CreateStepper()`，未走它——改单步逻辑先确认实际执行路径。
+- **attach 窗口竞速（CI 实录，本地快机器踩不到）**：attach 完成与入口模块加载完成赛跑——`SyncLoadedModules` 快照若跑在加载完成之前，该模块既不在登记表也**不会再发 LoadModule 回调**（已加载完的模块无事件），登记表永久缺模块：pending 断点永不绑定、行断点解析报「已扫描：System.Private.CoreLib.dll」。自愈：`ContinueAsync` 在放行前检查未绑定断点，有则重扫（进程仍冻结=完备快照，能赶上 Main 入口类断点）并发布 BreakpointsChanged。
 - 异常断点 v1 = 设了过滤器即停全部 first-chance；`ExceptionBreakpointFilter.Matches` 类型精确过滤列 v2（当前实际未用）。
 
 ## 验证（tests/DotNetDebugger.Engine.Tests）

@@ -18,6 +18,9 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 [McpServerToolType]
 public static class DebugBreakpointTool
 {
+    /// <summary>行断点定位失败的通用指引（CI 实录：刚 launch 的目标模块可能尚未完成加载——attach 窗口竞速）。</summary>
+    private const string LineBreakpointRetryHint =
+        "刚 debug_launch 的目标其模块可能尚未加载完（attach 竞速窗口）——先 debug_continue 进入运行（目标带启动延迟则停在其窗口内）再设行断点，或用 methodToken 方式登记待绑定。";
     /// <summary>
     /// 设置断点：按 模块名 + 方法 token（0x06 开头）+ IL offset 定位。模块已加载即绑定；
     /// 未加载登记为 pending（加载后自动绑定）。返回断点 id。
@@ -135,7 +138,7 @@ public static class DebugBreakpointTool
                 var hits = modules.Select(m => (m.Name, m.Path, Names: TypeFullNamesInModule(m.Path, typeName)))
                     .Where(x => x.Names.Count > 0).ToList();
                 if (hits.Count == 0)
-                    return $"在已加载模块中未找到类型 {typeName}（已扫描：{string.Join("、", modules.Select(m => m.Name))}）。";
+                    return $"在已加载模块中未找到类型 {typeName}（已扫描：{string.Join("、", modules.Select(m => m.Name))}）。{LineBreakpointRetryHint}";
                 if (hits.Count > 1)
                     return $"类型 {typeName} 在多个模块中命中，请提供 moduleName 消歧：{string.Join("；", hits.Select(h => $"{h.Name}: {string.Join("、", h.Names)}"))}";
                 module = hits[0].Name;
@@ -186,7 +189,7 @@ public static class DebugBreakpointTool
             }
 
             if (resolved.Count == 0)
-                return lastError ?? "未能按源文件+行定位断点。";
+                return (lastError ?? "未能按源文件+行定位断点。") + LineBreakpointRetryHint;
             if (resolved.Count > 1)
                 return $"源文件 \"{sourcePath}\" 第 {line} 行在多个模块命中，请提供 moduleName 消歧：{string.Join("、", resolved.Select(r => r.Module))}";
 
@@ -223,12 +226,12 @@ public static class DebugBreakpointTool
         var modules = await active.Session.GetModulesAsync(CancellationToken.None);
         if (moduleName is "")
         {
-            if (modules.Count == 0) return (modules, null, "当前会话无已加载模块，无法按行定位。");
+            if (modules.Count == 0) return (modules, null, $"当前会话无已加载模块，无法按行定位。{LineBreakpointRetryHint}");
             return (modules, null, null);
         }
         var hit = modules.FirstOrDefault(m => ModuleNameMatches(m, moduleName));
         if (hit.Name is null)
-            return (modules, null, $"模块 {moduleName} 未加载（行定位方式要求模块已加载）。已加载：{string.Join("、", modules.Select(m => m.Name))}；未加载模块请用 methodToken 方式（支持待绑定）。");
+            return (modules, null, $"模块 {moduleName} 未加载（行定位方式要求模块已加载）。已加载：{string.Join("、", modules.Select(m => m.Name))}；{LineBreakpointRetryHint}");
         return ([hit], hit.Path, null);
     }
 
