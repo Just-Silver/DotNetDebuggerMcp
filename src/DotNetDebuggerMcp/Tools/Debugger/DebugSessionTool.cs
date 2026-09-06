@@ -17,18 +17,18 @@ public static class DebugSessionTool
 {
     /// <summary>
     /// 启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。返回会话 id 与初始状态；
-    /// 进程命中断点/异常停下后经 debug_state/debug_stack/debug_variables 查询。
-    /// 目标需有启动延迟（attach 窗口），如 DebugTarget 可传 delay 参数。
+    /// 进程停在 Main 前的初始同步点（P9 蹲守 CLR 启动），agent 从容设断点（未加载模块 pending）
+    /// 后 debug_continue——目标无需任何启动配合。
     /// </summary>
     /// <param name="commandLine">目标可执行文件路径（可含参数，空格分隔），相对当前工作目录（必填）。</param>
-    /// <param name="timeoutSeconds">本次启动等待秒数上限，默认 30。</param>
+    /// <param name="timeoutSeconds">等待目标 CLR 启动的秒数上限，默认 30。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>中文结果提示（会话 id 与状态）或错误提示。</returns>
     [McpServerTool]
-    [Description("启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。返回会话 id 与初始状态；命中断点后用 debug_state/debug_stack/debug_variables 查询。目标需有启动延迟（attach 窗口）。")]
+    [Description("启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。进程停在 Main 前的初始同步点——任意 .NET 程序无需启动配合即可从第一行业务代码前调试：设断点（未加载模块自动登记待绑定）后 debug_continue。返回会话 id 与初始状态；命中断点后用 debug_state/debug_stack/debug_variables 查询。")]
     public static async Task<string> DebugLaunch(
         [Description("目标可执行文件路径（可含参数，如 DebugTarget.exe 3 8），相对当前工作目录（必填）。")] string commandLine = "",
-        [Description("本次启动等待秒数上限，默认 30。")] int timeoutSeconds = 30,
+        [Description("等待目标 CLR 启动的秒数上限，默认 30。")] int timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(commandLine))
@@ -39,10 +39,10 @@ public static class DebugSessionTool
 
         try
         {
-            var active = await DebugSessionService.Manager.LaunchAndAttachAsync(commandLine, cancellationToken);
+            var active = await DebugSessionService.Manager.LaunchAndAttachAsync(commandLine, timeoutSeconds, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_launch", commandLine, "ok");
             return $"已启动并附加调试会话。目标：{commandLine}。当前状态：{StateText(active.Buffer.CurrentState)}。" +
-                   "用 debug_state 查询状态；用 debug_breakpoint_set 下断点后 debug_continue 运行。";
+                   "进程停在 Main 前；用 debug_breakpoint_set 下断点（未加载模块自动待绑定）后 debug_continue 运行。";
         }
         catch (Exception ex)
         {

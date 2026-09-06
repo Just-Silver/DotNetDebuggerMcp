@@ -60,7 +60,10 @@ public sealed class DebugSessionManagerTests
         Assert.True(File.Exists(TestTarget.DebugTargetExe));
 
         await using var manager = new DebugSessionManager();
-        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 3 4", TestContext.Current.CancellationToken);
+        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 3 4", ct: TestContext.Current.CancellationToken);
+
+        // P9：launch 返回时进程冻结在 Main 前——放行后目标才会打印 start 行
+        await active.Session.ContinueAsync(TestContext.Current.CancellationToken);
 
         // DebugTarget 启动即打印 "[DebugTarget] start, ..."——轮询等输出到达（DataReceived 异步回调）
         ProcessOutputLine[] tail = [];
@@ -85,7 +88,7 @@ public sealed class DebugSessionManagerTests
 
         await using var manager = new DebugSessionManager();
         // throw 模式 + 3s delay（attach 窗口）；抛 System.DivideByZeroException
-        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 1 throw 3", TestContext.Current.CancellationToken);
+        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 1 throw 3", ct: TestContext.Current.CancellationToken);
 
         // 设不匹配的过滤器 → 异常被跳过（引擎 FIRST_CHANCE 计一次）
         await active.Session.SetExceptionBreakpointAsync("System.IO.FileNotFoundException", TestContext.Current.CancellationToken);
@@ -111,7 +114,7 @@ public sealed class DebugSessionManagerTests
 
         await using var manager = new DebugSessionManager();
         // Work(5)：Compute 被调 5 次；trace 断点全程不停
-        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 5 4", TestContext.Current.CancellationToken);
+        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 5 4", ct: TestContext.Current.CancellationToken);
         var computeToken = ReadMethodToken(Path.ChangeExtension(TestTarget.DebugTargetExe, ".dll"), "Compute");
         Assert.True(computeToken > 0);
 

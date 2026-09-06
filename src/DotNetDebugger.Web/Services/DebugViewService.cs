@@ -22,7 +22,7 @@ public sealed class DebugViewService
     {
         try
         {
-            var active = await WebHostBootstrap.Manager.LaunchAndAttachAsync(commandLine, ct);
+            var active = await WebHostBootstrap.Manager.LaunchAndAttachAsync(commandLine, ct: ct);
             WebHostBootstrap.Manager.Actions.Log("web_launch", commandLine, $"状态 {active.Buffer.CurrentState}");
             return $"已启动并附加：{commandLine}（状态 {active.Buffer.CurrentState}）";
         }

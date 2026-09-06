@@ -113,7 +113,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | 工具 | 用途 |
 | ---- | ---- |
 | `dotnetdebugger_debug_processes` | 列出本机可附加的 .NET 进程（pid/进程名/CLR 版本，dbgshim 权威探测，调试器自身已排除；`filter` 进程名子串过滤）——选 pid 后 `debug_attach` |
-| `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时） |
+| `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时）。launch 蹲守 CLR 启动、停在 Main 前——任意程序无需启动配合即可从第一行业务代码前调试 |
 | `dotnetdebugger_debug_breakpoint_set` / `_remove` / `_clear` / `_list` | 下/删/清/列断点，三种定位：模块+方法 token+IL offset（signature 行尾取 token，未加载模块登记待绑定）；`typeName`+`line` 按反编译视图行；`sourcePath`+`line` 按 PDB 源码行（后两者需模块已加载）。可选 `hitCount`（第 N 次命中起生效）与 `mode`（stop=命中停 / trace=命中不停记轨迹，`debug_wait` 批量取回） |
 | `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场，默认附停点上下文与目标最近控制台输出） |
 | `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处；停点时附反编译视图上下文） |

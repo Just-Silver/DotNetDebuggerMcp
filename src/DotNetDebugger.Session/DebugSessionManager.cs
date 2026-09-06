@@ -1,3 +1,5 @@
+using ClrDebug;
+using DotNetDebugger.Engine.Engine;
 using DotNetDebugger.Engine.Models;
 using DotNetDebugger.Engine.Session;
 using DotNetDebugger.Session.Models;
@@ -69,11 +71,12 @@ public sealed class DebugSessionManager : IAsyncDisposable
     }
 
     /// <summary>
-    /// v1 启动并附加：内部启动目标进程（等待进入 Main 稳定区让模块加载），再 attach——绕开引擎 launch 路径
-    /// 「进程停初始点但目标模块未加载、断点设不了」的时序（引擎 launch 早期断点/pending 绑定列 v2）。
-    /// 目标需有启动延迟（如 DebugTarget 的 delay 参数）提供 attach 窗口。
+    /// v1 启动并附加：内部启动目标进程（重定向并捕获输出），蹲守 CLR 启动（RegisterForRuntimeStartup，
+    /// 回调时机=运行时初始化完成、Main 执行前）后立即 attach——进程停在 Main 前的初始同步点。
+    /// 目标**无需自带启动延迟**（P9 以蹲守替换旧「固定等 1s」延迟窗口）；attach 后 agent 从容设断点
+    /// （模块未加载登记 pending，加载后自动绑定）再 continue。
     /// </summary>
-    public async Task<ActiveDebugSession> LaunchAndAttachAsync(string commandLine, CancellationToken ct = default)
+    public async Task<ActiveDebugSession> LaunchAndAttachAsync(string commandLine, int timeoutSeconds = 30, CancellationToken ct = default)
     {
         var parts = commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var exePath = Path.GetFullPath(parts[0]);
@@ -103,15 +106,28 @@ public sealed class DebugSessionManager : IAsyncDisposable
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        // 等目标进入 Main 稳定区（CLR 已加载、模块可枚举）——固定等 1s；期间退出则报错
-        await Task.Delay(1000, ct);
-        if (process.HasExited)
+        // 蹲守 CLR 启动（P9）：回调在运行时线程触发，经 TCS 切回调用方上下文。
+        // dbgshim CreateProcessForLaunch 不支持输出重定向（会污染 MCP stdio），故原生 launch 路径不可用，
+        // 必须自起进程 + 本蹲守机制。回调已触发后 unregister 属无害失败，统一吞掉。
+        var shim = DbgShimLoader.Load();
+        var runtimeStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        PSTARTUP_CALLBACK onStart = (_, _, _) => runtimeStarted.TrySetResult(true);
+        var unregisterToken = shim.RegisterForRuntimeStartup(process.Id, onStart);
+        try
         {
-            var tailText = string.Join(" / ", output.Tail(5).Select(l => l.Text));
-            throw new InvalidOperationException(
-                $"目标进程过早退出（{exePath}）。调试目标需有启动延迟（attach 窗口），如 DebugTarget 可传 delay 参数。"
-                + (tailText.Length > 0 ? $" 目标输出：{tailText}" : ""));
+            await runtimeStarted.Task.WaitAsync(TimeSpan.FromSeconds(timeoutSeconds), ct).ConfigureAwait(false);
         }
+        catch (TimeoutException)
+        {
+            try { shim.TryUnregisterForRuntimeStartup(unregisterToken); } catch { /* 已触发/已退出：忽略 */ }
+            var tailText = string.Join(" / ", output.Tail(5).Select(l => l.Text));
+            if (process.HasExited)
+                throw new InvalidOperationException(
+                    $"目标进程过早退出（{exePath}），未等到 CLR 启动。"
+                    + (tailText.Length > 0 ? $" 目标输出：{tailText}" : ""));
+            throw new TimeoutException($"等待目标进程 CLR 启动超时（{timeoutSeconds}s，pid={process.Id}）。");
+        }
+        try { shim.TryUnregisterForRuntimeStartup(unregisterToken); } catch { /* 已触发后再注销属预期失败：忽略 */ }
 
         DebugSession engineSession;
         try

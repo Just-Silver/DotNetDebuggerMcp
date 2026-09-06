@@ -12,7 +12,7 @@
 
 - `DebugSessionManager.cs` — **v1 单活动会话管理器**：
   - `Active`（lock 读）/ `Actions`（agent 轨迹日志，跨会话累积）/ `GetInfo()` → `DebugSessionInfo`
-  - `LaunchAndAttachAsync(commandLine)`：**绕开 Engine launch 路径**——先自起进程（CreateNoWindow + 重定向并排空 stdout/stderr，防子进程写满管道卡死），固定 `Task.Delay(1000)` 等目标进 Main 稳定区，再 `AttachAsync`。Engine launch 停在初始同步点但模块未加载——这是 `debug_launch` 与 `-dbg` 都走 attach 路径的原因。
+  - `LaunchAndAttachAsync(commandLine, timeoutSeconds=30)`：**绕开 Engine launch 路径**（dbgshim CreateProcessForLaunch 不支持输出重定向，会污染 MCP stdio）——先自起进程（CreateNoWindow + 重定向捕获到 ProcessOutputCapture），再 `RegisterForRuntimeStartup` 蹲守 CLR 启动（P9，回调时机=Main 前），到达即 `AttachAsync`——目标无需自带启动延迟。Engine launch 停在初始同步点但模块未加载——这是 `debug_launch` 与 `-dbg` 都走 attach 路径的原因。
   - `Activate` 替换旧会话时不阻塞：旧会话后台 `Task.Run` 断开+释放。即换会话自动后台回收旧会话。
 - `SessionEventBuffer.cs` — 后台任务消费 `DebugSession.Events`，折叠成**最新状态快照** `CurrentState` + `LastStop`（`StopContext`），线程安全。**设计目的：让 debug_state/debug_stack 等查询「不等停点、立即返回」**。只认 SessionStateChanged/BreakpointHit/StepCompleted/ExceptionHit 四类事件。
 - `AgentActionLog.cs` — agent 轨迹环形日志（MaxEntries=1000，超限逐最旧），`Log`/`Snapshot`/`Clear`；P4 Web 回放源。**数据由宿主工具层喂**（每个 `debug_*` 工具成功/失败都写一条）。

@@ -36,12 +36,11 @@ public sealed class DebugMcpToolsTests
         Assert.True(launch.IsError != true, launch.Text());
         Assert.Contains("已启动", launch.Text());
 
-        // 1b. debug_output：launch 会话可拉目标输出（DebugTarget 启动即打印 start 行）
+        // 1b. debug_output：launch 会话可拉目标输出（P9 冻结在 Main 前，此刻多为暂无输出——start 行断言在第 5 步 continue 之后）
         var output = await CallAsync(mcp, "debug_output",
             new Dictionary<string, object?> { ["lines"] = 10 });
         Assert.True(output.IsError != true, output.Text());
-        Assert.Contains("目标输出", output.Text());
-        Assert.Contains("[DebugTarget] start", output.Text());
+        Assert.True(output.Text().Contains("目标输出") || output.Text().Contains("暂无输出"), output.Text());
 
         // 2. pending 断点：错误模块名不再报错，登记待绑定；list 可见、remove 可删
         var pending = await CallAsync(mcp, "debug_breakpoint_set",

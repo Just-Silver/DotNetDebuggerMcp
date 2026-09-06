@@ -10,6 +10,7 @@
 
 ### Added
 
+- **launch 蹲守 CLR 启动（P9）**：`debug_launch` 用 `RegisterForRuntimeStartup` 蹲守目标 CLR 启动（回调时机=Main 执行前）后立即附加，替换旧「固定等 1 秒延迟窗口」——**任意 .NET 程序无需自带启动延迟即可从第一行业务代码前调试**（launch 返回时进程冻结在 Main 前，从容设断点后 `debug_continue`）；目标进程 CLR 启动超时/提前退出给出可诊断提示
 - **进程发现（P8）**：新增 `debug_processes` 工具——列出本机可附加的 .NET 进程（pid/进程名/CLR 版本，dbgshim `EnumerateCLRs` 权威探测，调试器自身排除，`filter` 进程名子串过滤），agent 自主定位目标 pid 后 `debug_attach` 附加
 - **断点命中计数 + trace 模式（P5）**：`debug_breakpoint_set` 新增 `hitCount`（第 N 次命中起每次都停/记录，默认 1）与 `mode`（`stop`=命中停默认 / `trace`=命中不停、快照栈顶帧变量后自动继续）。trace 轨迹环形上限 100 条，`debug_wait`/`debug_state` 批量消费式取回（一次调用拿回整批循环命中，token 数量级节省）、`debug_breakpoint_list` 显示模式/命中计数/未读轨迹数；两者可正交组合（第 N 次起开始记录）
 - **停点上下文（P4）**：`debug_wait`/`debug_state` 新增 `contextLines` 参数（默认 100，0=不附）——停点时附反编译视图当前语句周边代码（行号=decompile 输出行号，可直接用于 `debug_breakpoint_set(typeName, line)`）；方法完整行数 ≤ 预算显示整个函数，超出按当前语句截取并注明，当前语句标 `← 当前语句`
