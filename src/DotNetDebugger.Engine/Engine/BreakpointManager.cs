@@ -57,6 +57,21 @@ public sealed class BreakpointManager
         try { return module.Name; } catch { return null; }
     }
 
+    /// <summary>已加载模块快照（短名 → 磁盘路径，按路径去重；用户目标模块在前、路径稳定排序）。
+    /// 行断点跨模块解析用（typeName/sourcePath 省缺 moduleName 时遍历）。MTA 单线程调用。</summary>
+    public IReadOnlyList<(string Name, string Path)> GetModules()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var list = new List<(string Name, string Path)>();
+        foreach (var key in _modules.Keys)
+        {
+            var path = GetModulePath(key);
+            if (string.IsNullOrEmpty(path) || !seen.Add(path!)) continue;
+            list.Add((System.IO.Path.GetFileName(path!), path!));
+        }
+        return list.OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
     /// <summary>
     /// 登记断点。模块未加载时登记为 pending（不绑定运行时，LoadModule 时 TrackModule 自动重绑）；
     /// 模块已加载时同步绑定，方法 token 无效/无 IL 抛中文 InvalidOperationException（agent 立即拿到原因）。

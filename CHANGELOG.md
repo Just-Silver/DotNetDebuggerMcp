@@ -10,6 +10,7 @@
 
 ### Added
 
+- **行断点（P3）**：`debug_breakpoint_set` 新增两种定位方式——`typeName`+`line`（反编译视图行：agent 看到反编译输出第 N 行可直接在该行下断点，与 decompile 输出行号同系）与 `sourcePath`+`line`（PDB 源码行：按异常堆栈/日志里的源文件+行号直接断案发现场，支持绝对/相对/仅文件名）。两种方式 moduleName 可省（跨已加载模块解析，多模块命中提示消歧）；行落在无独立语句处（大括号/签名行）自动落方法首条语句并在返回中注明；均要求模块已加载（未加载请用 token 方式，支持待绑定）
 - **异常现场增强（P2）**：`debug_variables` 异常停点新增 `$exception` 节（当前异常对象：类型全名/Message/一级字段展开）；`debug_state`/`debug_wait` 停点现场附异常 Message
 - **`debug_exceptions` 类型过滤生效**：`typeName` 空 = 全部异常；否则异常类型全名与 typeName 相等或以「.typeName」结尾（短名如 `DivideByZeroException`，忽略大小写）才停；不匹配的异常跳过不停，`debug_wait`/`debug_state` 附「期间跳过 N 个不在过滤范围的异常」反馈（防类型名写错静默空等）
 - **`debug_output` 新工具（目标进程输出转发）**：查看被调试进程的控制台输出（stdout/stderr，旧→新，每行带 `HH:mm:ss.fff` 时间戳便于与断点/异常命中对时，`lines` 默认 50）；`debug_launch` 启动的会话自动捕获目标输出（环形缓冲最近 500 行，进程运行中可随时拉取，attach 附加的会话不捕获）。agent 调试时可直接看到目标自己的日志/异常打印/退出码
@@ -18,6 +19,7 @@
 
 ### Changed
 
+- **`decompile`（类型级）输出渲染统一**：与行映射/Web 代码视图切换为同款渲染管线（探针实测与旧行为存在行数与行内容差异）——从此 `decompile` 输出行号 = 行断点坐标 = Web 视图行号三方一致；表现为输出不再以 `using` 指令开头、成员间空行略有变化，代码内容不变
 - `debug_exceptions` 行为变化：此前设了过滤器即停**全部** first-chance 异常（typeName 不生效）；现按上述语义过滤，且同一异常的后续传播阶段（USER_FIRST_CHANCE/CATCH_HANDLER_FOUND）不再重复停
 
 ## [1.5.0] - 2026-09-06

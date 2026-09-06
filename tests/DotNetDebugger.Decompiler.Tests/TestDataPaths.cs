@@ -20,6 +20,9 @@ public static class TestDataPaths
     /// <summary>反编译/映射测试用样例程序集（653 class，含 BigClass 大方法等多样构造）。</summary>
     public static readonly string TestSamplesDll = Locate("tests", "TestData", TestSamplesAssemblyName + ".dll");
 
+    /// <summary>P3-3b 源码行断点测试用调试目标（exe+dll+pdb，generate-testdata.ps1 产出）。</summary>
+    public static readonly string DebugTargetExe = Locate("tests", "TestData", "DebugTarget.exe");
+
     /// <summary>按段逐级上溯到仓库根后拼接相对路径；找不到根抛异常。</summary>
     private static string Locate(params string[] segments)
     {

@@ -40,11 +40,7 @@ public static class DocumentService
             var tree = decompiler.DecompileType(fullName);
 
             // 关键：位置回写 writer 输出（勿用 tree.ToString()——节点位置留 (0,0) 导致映射全错）
-            var sw = new StringWriter();
-            var raw = new TextWriterTokenWriter(sw) { IndentationString = "\t" };
-            var locWriter = TokenWriter.WrapInWriterThatSetsLocationsInAST(raw);
-            tree.AcceptVisitor(new CSharpOutputVisitor(locWriter, settings.CSharpFormattingOptions));
-            var text = sw.ToString();
+            var text = RenderTypeText(tree);
 
             var mapping = BuildMapping(decompiler, tree);
             return new SourceDocument(assemblyPath, typeFullName, text,
@@ -61,8 +57,86 @@ public static class DocumentService
     }
 
     /// <summary>
-    /// 停点定位：IL offset → 反编译文本行号。二分查 [IlOffset, EndOffset) 区间；无命中返回 null。
+    /// 类型级反编译的统一文本渲染：位置回写 writer（tab 缩进）+ 默认格式化选项。P3 步骤0 探针结论：
+    /// DecompileAsString 自带 using 头且空行策略不同、与行映射坐标不同系——类型级文本（decompile 工具与
+    /// 本服务）必须共用本渲染，保证 agent 所见行号 = 映射坐标 = Web 代码视图行号。
     /// </summary>
+    internal static string RenderTypeText(SyntaxTree tree)
+    {
+        var sw = new StringWriter();
+        var raw = new TextWriterTokenWriter(sw) { IndentationString = "\t" };
+        var locWriter = TokenWriter.WrapInWriterThatSetsLocationsInAST(raw);
+        tree.AcceptVisitor(new CSharpOutputVisitor(locWriter, new DecompilerSettings().CSharpFormattingOptions));
+        return sw.ToString();
+    }
+
+    /// <summary>
+    /// 光标行 → 所在方法 token（双向联动/行断点用）：按各方法映射行的 [min,max] 区间判定；
+    /// 行不在任何方法区间（usings/类声明/大括号行）时取其后最近的方法；文档无映射返回 null。
+    /// （自 Web DocumentStore 提升为公共实现，P3 行断点与 Web 共用。）
+    /// </summary>
+    public static int? FindMethodTokenAtLine(SourceDocument doc, int line)
+    {
+        var ranges = new Dictionary<int, (int Min, int Max)>();
+        foreach (var e in doc.Mapping)
+        {
+            if (e.Line < 1) continue;
+            if (ranges.TryGetValue(e.MethodToken, out var r))
+                ranges[e.MethodToken] = (Math.Min(r.Min, e.Line), Math.Max(r.Max, e.Line));
+            else
+                ranges[e.MethodToken] = (e.Line, e.Line);
+        }
+        (int Token, int Min)? next = null;
+        foreach (var (token, r) in ranges)
+        {
+            if (line >= r.Min && line <= r.Max) return token;
+            if (r.Min > line && (next is null || r.Min < next.Value.Min)) next = (token, r.Min);
+        }
+        return next?.Token;
+    }
+
+    /// <summary>
+    /// 编辑器行 → 断点落点（行断点用，Web glyph 与 MCP debug_breakpoint_set 共用）：Exact=true 该行有语句序列点
+    /// (token, ilStart)；false = 行无独立序列点（大括号/签名/空行），落到所在方法首条语句；null = 无法定位。
+    /// </summary>
+    public static (int MethodToken, int IlOffset, bool Exact)? GetBreakpointTargetAtLine(SourceDocument doc, int line)
+    {
+        if (GetIlStartForLine(doc, line) is { } exact) return (exact.MethodToken, exact.IlStart, true);
+        if (FindMethodTokenAtLine(doc, line) is not { } token) return null;
+        foreach (var e in doc.Mapping)
+        {
+            if (e.MethodToken != token || e.Line < 1) continue;
+            return (token, e.IlOffset, false);
+        }
+        return null;
+    }
+
+    /// <summary>方法 token → 文档中首个映射行（树点成员叶子定位用）。无映射返回 null。</summary>
+    public static int? GetMethodFirstLine(SourceDocument doc, int methodToken)
+    {
+        int? first = null;
+        foreach (var e in doc.Mapping)
+        {
+            if (e.MethodToken != methodToken || e.Line < 1) continue;
+            if (first is null || e.Line < first) first = e.Line;
+        }
+        return first;
+    }
+
+    /// <summary>方法 token → 文档行区间 [首行, 末行]（选中成员高亮用）。无映射返回 null。</summary>
+    public static (int Start, int End)? GetMethodLineRange(SourceDocument doc, int methodToken)
+    {
+        int? min = null, max = null;
+        foreach (var e in doc.Mapping)
+        {
+            if (e.MethodToken != methodToken || e.Line < 1) continue;
+            min = min is null || e.Line < min ? e.Line : min;
+            max = max is null || e.Line > max ? e.Line : max;
+        }
+        return min is null ? null : (min.Value, max!.Value);
+    }
+
+    /// <summary>停点定位：IL offset → 反编译文本行号。二分查 [IlOffset, EndOffset) 区间；无命中返回 null。</summary>
     public static int? GetLineForIlOffset(SourceDocument doc, int methodToken, int ilOffset)
     {
         var mapping = doc.Mapping;

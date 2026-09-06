@@ -64,67 +64,21 @@ public sealed class DocumentStore
     public static (int MethodToken, int IlStart)? GetIlStartAtLine(SourceDocument doc, int line)
         => DocumentService.GetIlStartForLine(doc, line);
 
-    /// <summary>光标行 → 所在方法 token（双向联动用）：按各方法映射行的 [min,max] 区间判定；
-    /// 行不在任何方法区间（usings/类声明/大括号行）时取其后最近的方法；文档无映射返回 null。</summary>
+    /// <summary>光标行 → 所在方法 token（双向联动用）。实现已提升至 DocumentService（P3 行断点与 MCP 共用）。</summary>
     public static int? FindMethodTokenAtLine(SourceDocument doc, int line)
-    {
-        var ranges = new Dictionary<int, (int Min, int Max)>();
-        foreach (var e in doc.Mapping)
-        {
-            if (e.Line < 1) continue;
-            if (ranges.TryGetValue(e.MethodToken, out var r))
-                ranges[e.MethodToken] = (Math.Min(r.Min, e.Line), Math.Max(r.Max, e.Line));
-            else
-                ranges[e.MethodToken] = (e.Line, e.Line);
-        }
-        (int Token, int Min)? next = null;
-        foreach (var (token, r) in ranges)
-        {
-            if (line >= r.Min && line <= r.Max) return token;
-            if (r.Min > line && (next is null || r.Min < next.Value.Min)) next = (token, r.Min);
-        }
-        return next?.Token;
-    }
+        => DocumentService.FindMethodTokenAtLine(doc, line);
 
-    /// <summary>编辑器行 → 断点落点（glyph 点击设断点用）：优先该行语句的序列点 (token, ilStart)；
-    /// 行无序列点（大括号/签名/空行）时落到所在方法的首条语句（Mapping 按 token+offset 有序）。
-    /// 无法定位返回 null。</summary>
-    public static (int MethodToken, int IlOffset)? GetBreakpointTargetAtLine(SourceDocument doc, int line)
-    {
-        if (DocumentService.GetIlStartForLine(doc, line) is { } exact) return (exact.MethodToken, exact.IlStart);
-        if (FindMethodTokenAtLine(doc, line) is not { } token) return null;
-        foreach (var e in doc.Mapping)
-        {
-            if (e.MethodToken != token || e.Line < 1) continue;
-            return (token, e.IlOffset);
-        }
-        return null;
-    }
+    /// <summary>编辑器行 → 断点落点（glyph 点击设断点用）。实现已提升至 DocumentService；Exact 标志 Web 暂不消费。</summary>
+    public static (int MethodToken, int IlOffset, bool Exact)? GetBreakpointTargetAtLine(SourceDocument doc, int line)
+        => DocumentService.GetBreakpointTargetAtLine(doc, line);
 
-    /// <summary>方法 token → 文档中首个映射行（树点成员叶子定位用）。无映射返回 null。</summary>
+    /// <summary>方法 token → 文档中首个映射行（树点成员叶子定位用）。实现已提升至 DocumentService。</summary>
     public static int? GetMethodFirstLine(SourceDocument doc, int methodToken)
-    {
-        int? first = null;
-        foreach (var e in doc.Mapping)
-        {
-            if (e.MethodToken != methodToken || e.Line < 1) continue;
-            if (first is null || e.Line < first) first = e.Line;
-        }
-        return first;
-    }
+        => DocumentService.GetMethodFirstLine(doc, methodToken);
 
-    /// <summary>方法 token → 文档行区间 [首行, 末行]（选中成员高亮用）。无映射返回 null。</summary>
+    /// <summary>方法 token → 文档行区间 [首行, 末行]（选中成员高亮用）。实现已提升至 DocumentService。</summary>
     public static (int Start, int End)? GetMethodLineRange(SourceDocument doc, int methodToken)
-    {
-        int? min = null, max = null;
-        foreach (var e in doc.Mapping)
-        {
-            if (e.MethodToken != methodToken || e.Line < 1) continue;
-            min = min is null || e.Line < min ? e.Line : min;
-            max = max is null || e.Line > max ? e.Line : max;
-        }
-        return min is null ? null : (min.Value, max!.Value);
-    }
+        => DocumentService.GetMethodLineRange(doc, methodToken);
 
     /// <summary>清空缓存（换目标程序集/类型浏览时调用，避免缓存膨胀）。</summary>
     public void Clear()

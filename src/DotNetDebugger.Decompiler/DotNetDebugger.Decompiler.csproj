@@ -15,6 +15,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="DotNetDebuggerMcp" />
     <InternalsVisibleTo Include="DotNetDebuggerMcp.Tests" />
+    <InternalsVisibleTo Include="DotNetDebugger.Decompiler.Tests" />
   </ItemGroup>
 
 </Project>

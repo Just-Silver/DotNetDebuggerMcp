@@ -1,6 +1,6 @@
 # Spec · P3 行断点：反编译视图行 + PDB 源码行
 
-> 状态：**待评审**（2026-09-06 起草）。通过后动码；完成态回写本行。
+> 状态：**已完成（2026-09-06）**。步骤 0 探针实测结论：`DecompileAsString` 与 DocumentService 渲染**不一致**（using 头/空行策略差异，非仅空白）→ 按 §3 fallback 执行：类型级 `decompile` 已统一切换到 DocumentService 渲染（`RenderTypeText`），行号坐标三方一致（探针测试 `DecompileCoordinateProbeTests` 转正为守护测试）。3b 实现补充实测坑：portable PDB 无 MethodDef 表，方法枚举必须走 DLL 元数据 reader（序列点经 PDB reader 按 rid 取）。
 > 关联：宿主 TODO P3（`src/DotNetDebuggerMcp/TODO.md`）；现状锚点均已在起草时核实（标注文件:行号以起草时为准）。
 
 ## 1. 背景与目标

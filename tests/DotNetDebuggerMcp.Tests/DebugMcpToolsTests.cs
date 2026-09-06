@@ -138,6 +138,69 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task LineBreakpoints_TypeNameLine_And_SourceLine_Hit()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workToken = ReadMethodToken(dll, "Work");
+        Assert.True(workToken > 0);
+
+        // 3a 坐标：Work 方法的反编译视图首语句行（与映射同源，行号必然有效）
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var workFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workToken);
+        Assert.True(workFirstLine.GetValueOrDefault() > 0);
+
+        // 3b 坐标：Work 方法内、与 3a 落点不同 IL 位置的源码行（循环体行，每轮迭代经过），动态找防脚本漂移
+        var firstTarget = DotNetDebugger.Decompiler.Document.DocumentService.GetBreakpointTargetAtLine(doc, workFirstLine!.Value);
+        Assert.True(firstTarget is not null);
+        DotNetDebugger.Decompiler.Document.SourceLineResolver.SourceLineTarget? sourceTarget = null;
+        for (var l = 1; l <= 80 && sourceTarget is null; l++)
+        {
+            var t = DotNetDebugger.Decompiler.Document.SourceLineResolver.Resolve(dll, "DebugTarget.cs", l, out _);
+            if (t is not null && t.MethodToken == workToken && t.IlOffset != firstTarget.Value.IlOffset) sourceTarget = t;
+        }
+        Assert.True(sourceTarget is not null, "未在 DebugTarget.cs 中找到 Work 方法的另一语句源码行");
+
+        await using var mcp = await ConnectAsync();
+
+        // launch（delay 8s 提供操作窗口；attach 即会话建立，模块已加载）
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        // 3a：typeName+line 设断点（省缺 moduleName，跨模块解析）
+        var setA = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["typeName"] = "DebugTarget.Program", ["line"] = workFirstLine });
+        Assert.True(setA.IsError != true, setA.Text());
+        Assert.Contains("断点已设", setA.Text());
+        Assert.Contains("DebugTarget.dll", setA.Text());
+
+        // continue → 命中 3a 断点（delay 8s 后进 Work）
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var waitA = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
+        Assert.Contains("已停下", waitA.Text());
+        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.Contains($"0x{workToken:x8}", stack.Text()); // 栈帧以 token 形式展示，命中方法即 Work
+
+        // 3b：sourcePath+line 设断点（Work 方法内靠后源码行），continue 后循环迭代再命中
+        var setB = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = sourceTarget.ActualLine });
+        Assert.True(setB.IsError != true, setB.Text());
+        Assert.Contains("断点已设", setB.Text());
+
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var waitB = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
+        Assert.Contains("已停下", waitB.Text());
+        var stackB = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.Contains($"0x{workToken:x8}", stackB.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
     public async Task DebugState_ConcurrentQueries_AllReturn()
     {
         var exe = DebugTargetExe;

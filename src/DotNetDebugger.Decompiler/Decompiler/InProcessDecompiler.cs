@@ -70,7 +70,12 @@ public sealed class InProcessDecompiler
         {
             var handle = MetadataNaming.FindType(module.Metadata, typeName);
             if (handle is null) return MetadataNaming.BuildNotFoundMessage(module.Metadata, typeName);
-            return CheckOutputSize(decompiler.DecompileAsString(handle.Value));
+            // P3 步骤0 探针结论：DecompileAsString 自带 using 头、空行策略不同，与 DocumentService 行映射坐标不同系——
+            // 类型级文本统一走 DocumentService 渲染（位置回写 writer），保证 agent 所见行号 = 断点行坐标 = Web 代码视图行号
+            var fullName = new ICSharpCode.Decompiler.TypeSystem.FullTypeName(
+                MetadataNaming.FullName(module.Metadata, module.Metadata.GetTypeDefinition(handle.Value)));
+            var tree = decompiler.DecompileType(fullName);
+            return CheckOutputSize(Document.DocumentService.RenderTypeText(tree));
         });
     }
 
