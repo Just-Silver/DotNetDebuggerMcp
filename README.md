@@ -40,7 +40,7 @@ dotnet tool uninstall --global DotNetDebuggerMcp # 卸载
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
     "servers": {
-      "dotnetdebugger": {
+      "DotNetDebugger": {
         "type": "local",
         "command": ["DotNetDebuggerMcp"]
       }
@@ -57,7 +57,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 {
   "$schema": "https://opencode.ai/config.json",
   "mcp": {
-    "dotnetdebugger": {
+    "DotNetDebugger": {
       "type": "local",
       "command": ["DotNetDebuggerMcp"]
     }
