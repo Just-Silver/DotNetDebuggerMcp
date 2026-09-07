@@ -509,6 +509,93 @@ public sealed class DebugMcpToolsTests
         Assert.True(disc.IsError != true, disc.Text());
     }
 
+    [Fact]
+    public async Task AsyncStateMachine_MoveNextBreakpoint_ShowsAnnotationAndGuidance()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        // 正路径素材：DebugTarget 的 async 方法 RunAsync（generate-testdata.ps1 内嵌）产编译器状态机 <RunAsync>d__N。
+        // 读其 MoveNext 方法 token（状态机类型是嵌套 TypeDef，Name 含 "<RunAsync>"）——对 MoveNext 入口下断点，
+        // 命中即物理停在状态机帧内（Task 3 引导/标注要拦截的场景）。
+        var moveNextToken = ReadMethodTokenInType(dll, "<RunAsync>", "MoveNext");
+        Assert.True(moveNextToken > 0, "DebugTarget 未找到 <RunAsync>d__N.MoveNext——generate-testdata.ps1 需已加 RunAsync 并重跑");
+        var runAsyncToken = ReadMethodToken(dll, "RunAsync");
+        Assert.True(runAsyncToken > 0, "DebugTarget 未找到 RunAsync 外壳方法");
+
+        await using var mcp = await ConnectAsync();
+
+        // launch async 模式（delay 8s 提供操作窗口）：RunAsync 经 GetAwaiter().GetResult() 同步等待
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} async 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        Assert.Contains("已启动", launch.Text());
+
+        // 先 continue（进入 delay 窗口）再设 MoveNext 断点（CI 实录：launch 返回时模块登记可能缺目标模块）
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var bp = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{moveNextToken:x8}", ["ilOffset"] = 0 });
+        Assert.True(bp.IsError != true, bp.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(bp.Text()));
+
+        // 进程 delay 结束进 RunAsync → await 挂起 → continuation 在 MoveNext → 入口断点命中停住
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("已停下", wait.Text());
+        Assert.Contains("breakpoint", wait.Text());
+
+        // C④ 正路径：debug_stack 状态机帧应带 "<RunAsync>" + "(状态机 RunAsync)" 标注
+        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.True(stack.IsError != true, stack.Text());
+        Assert.Contains("<RunAsync>", stack.Text());
+        Assert.Contains("(状态机 RunAsync)", stack.Text());
+        Assert.Contains("MoveNext", stack.Text());
+
+        // B① 正路径：debug_state 停点上下文应带「编译器生成 async 状态机（对应 async 方法 RunAsync）」备注
+        var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        Assert.True(st.IsError != true, st.Text());
+        // 状态机帧的备注独立于 doc 渲染（StopContextRenderer 对状态机直接返回备注，不尝试渲染 MoveNext）
+        Assert.Contains("编译器生成 async 状态机", st.Text());
+        Assert.Contains("RunAsync", st.Text());
+
+        // B① 正路径：debug_step 在状态机帧内提交 → 返回附「async 状态机帧」引导
+        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["stepType"] = "into" });
+        Assert.True(step.IsError != true, step.Text());
+        Assert.Contains("已提交 step into", step.Text());
+        Assert.Contains("async 状态机帧", step.Text());
+        Assert.Contains("RunAsync", step.Text());
+
+        // step 完成后进程会退出（async after 后 Main 结束）——等退出或停点后清理
+        var waitStep = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", waitStep.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    /// <summary>读指定名称子串的嵌套类型内某方法 token（状态机等编译器生成类型是嵌套 TypeDef）。</summary>
+    private static int ReadMethodTokenInType(string dllPath, string typeNameSubstring, string methodName)
+    {
+        using var fs = File.OpenRead(dllPath);
+        using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
+        var mr = pe.GetMetadataReader();
+        foreach (var th in mr.TypeDefinitions)
+        {
+            var td = mr.GetTypeDefinition(th);
+            if (!mr.GetString(td.Name).Contains(typeNameSubstring, StringComparison.Ordinal)) continue;
+            foreach (var mh in td.GetMethods())
+            {
+                var md = mr.GetMethodDefinition(mh);
+                if (mr.GetString(md.Name) == methodName)
+                    return System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(mh);
+            }
+        }
+        return 0;
+    }
+
     private static async Task<CallToolResult> CallAsync(McpClient mcp, string tool, IReadOnlyDictionary<string, object?> args)
         => await mcp.CallToolAsync(tool, args, cancellationToken: TestContext.Current.CancellationToken);
 

@@ -24,6 +24,19 @@ internal static class StopContextRenderer
             if (modulePath is null) return "停点上下文不可用：模块路径未登记。";
             var typeFullName = DocumentService.FindTypeByToken(modulePath, frame.MethodToken);
             if (typeFullName is null) return "停点上下文不可用：无法从方法 token 反查类型（动态/生成方法）。";
+
+            // B①：编译器生成的 async 状态机类型（Ns.X+<Foo>d__N）——该帧是 MoveNext 编译器生成步骤，
+            // 无业务源码；备注原 async 方法并建议用行断点断外壳方法还原源码的 await 行。
+            // 判定必须独立于下方 doc 渲染：状态机类型本身经 GetOrLoad 反编译常失败（含 '<' 的类型定位
+            // 会报「未找到类型」），且渲染出的 MoveNext 机器码对 agent 无业务价值——命中即直接返回备注。
+            if (StateMachineFrameHelper.TryParseStateMachine(typeFullName) is { } sm)
+            {
+                return $"备注：编译器生成 async 状态机（对应 async 方法 {sm.MethodName}）。" +
+                    "业务代码见该方法的还原源码（decompile_member 取外壳方法）；建议用行断点 " +
+                    "debug_breakpoint_set typeName+line 断 await 行跟踪业务逻辑。" +
+                    $"（当前帧 {typeFullName}.MoveNext 为编译器生成步骤，无业务源码可展示。）";
+            }
+
             var doc = DebugSessionService.Documents.GetOrLoad(modulePath, typeFullName);
             if (doc.Error is not null) return $"停点上下文不可用：{doc.Error}";
 
@@ -35,15 +48,6 @@ internal static class StopContextRenderer
             var (start, end, truncation) = SelectWindow(doc, frame.MethodToken, currentLine.Value, budgetLines);
 
             var sb = new StringBuilder();
-            // B①：编译器生成的 async 状态机类型（Ns.X+<Foo>d__N）——该帧是 MoveNext 编译器生成步骤，
-            // 无业务源码；备注原 async 方法并建议用行断点断外壳方法还原源码的 await 行。
-            if (StateMachineFrameHelper.TryParseStateMachine(typeFullName) is { } sm)
-            {
-                sb.Append($"备注：编译器生成 async 状态机（对应 async 方法 {sm.MethodName}）。" +
-                    "业务代码见该方法的还原源码（decompile_member 取外壳方法）；建议用行断点 " +
-                    "debug_breakpoint_set typeName+line 断 await 行跟踪业务逻辑。");
-                sb.AppendLine();
-            }
             sb.Append($"停点上下文（{typeFullName} 第 {currentLine} 行");
             if (truncation.Length > 0) sb.Append($"，{truncation}");
             sb.Append("）:");
