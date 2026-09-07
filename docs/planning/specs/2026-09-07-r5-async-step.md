@@ -1,7 +1,7 @@
 # Spec · R5 async 状态机单步体验
 
-> 状态：**草案待评审**（2026-09-07 起草）。
-> 关联：宿主 TODO R5；agent 实战反馈清单 R5（2026-09-06 收到，中-大项）；引擎动态调试 StepAsync。
+> 状态：**Superseded（不实施，2026-09-07）**——经评审跳过：agent 主导下状态机不可读非问题（agent 消化 token/MoveNext，工作流为断点直达非逐步走查）；.NET 11 runtime-async（epic dotnet/runtime#109632）查证对 V1 状态机无运行时级可读性改进（V2 需 net11+opt-in 重编译）；L3 语义单步重量在跨挂起点 continuation 追踪（dnSpy 全套 1-2 周+ 需新底座），与 agent 工作流不匹配。决策记录与未来计划见 `docs/ROADMAP.md` v2 候选（async 单步语义 + V2 观察）。本 spec 保留作调研记录，不实施。
+> 关联：宿主 TODO R5（已勾选=决策完成）；agent 实战反馈清单 R5（2026-09-06 收到）；引擎动态调试 StepAsync。
 > 参考：本地克隆 dnSpy `Extensions/dnSpy.Debugger/dnSpy.Debugger.DotNet/Steppers/Engine/DbgEngineStepperImpl.cs`（async 步进完整实现，本 spec 取其思路、缩窄到务实子集）。
 
 ## 1. 背景与目标
