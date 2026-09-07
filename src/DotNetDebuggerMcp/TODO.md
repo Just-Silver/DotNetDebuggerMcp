@@ -42,14 +42,14 @@
 
 > 来源：对真实 WPF 工业应用 CoreMes.exe 全流程实证（debug_launch→断手自动切换 async 方法 0x06000117→step into 落状态机 `<SwitchAutoState>d__44` 0x060006fb）。A-O 逐条探讨+实测后定案。**完整论证已 commit（git log 可查），此处保留待办完整方案 + 关闭项一行结论**。实施铁律：每项先补方案段（中大型 spec）；改 MCP 工具同 commit 改根 README；build+单测+Client 端到端。
 
-### 确认待办（做，建议实施顺序）
+### 确认待办（2026-09-08 全部完成，分支 feat/agent-debug-experience-dcbei1o 合并后归档）
 
-- [ ] **D. `debug_launch` workingDirectory 空默认改 exe 目录（宿主｜行为变化）**——现空=继承 server CWD（CoreMes 产物 Config/Db 污染仓库根，R1 坑实证复现）。**改**：空默认 = exe 所在目录（对齐人类手动启动 exe；目标产物写自己目录、天然隔离、不引入断依赖）；launch 返回报告实际生效工作目录；保留显式传参覆盖。同步：`DebugSessionManager.LaunchAndAttachAsync` 默认值、`debug_launch`/`-dbg`/CLI 测试、README 参数表。
-- [ ] **C. `debug_stack` 帧名真名化（Engine+宿主｜B 的前置）**——现 21 帧全 `模块!0x06000xxx+0x`。代码核查：`DebugStackFrame` 已有 TypeName/MethodName 字段且已填充，但 `TryGetTypeName`(:1235)/`TryGetMethodName`(:1245) 只返回 token（未调 resolver）；宿主渲染只用 `f.Location`（DebugInspectTool.cs:38）。**改**：① 引擎 `TryGetTypeName`→`TypeNameResolver.Resolve`、`SymbolNameResolver` 加 `ReadMethodName` 后 `TryGetMethodName` 调它，失败降级 token；② 宿主渲染优先 `类型.方法`，token 行尾保留（下断点用）；③ 全帧真名化不折叠；④ 状态机类型 `<Foo>d__N`→标注「(状态机) Foo」（为 B 铺路）。同步：Engine StateReadTests（断言 token 文本）、宿主 e2e/Client 断言。
-- [ ] **B. async 方法调试工作流引导 + 状态机帧降级兜底（Session+宿主）**——**关键发现（实证）**：ILSpy 还原 async 时业务行序列点挂**外壳方法** token（非 MoveNext）；`typeName+line` 行断点断还原源码行 → 命中即渲染还原 async C#（源码断点兼得）。故 async 正确工作流 = **行断点直达（typeName+line 断 await 行）+ continue，勿 step into**（step into 物理进 MoveNext 死区无源码）。**改**：① 主=引导（step 落状态机帧/欲停 async 方法时，Description/返回提示改用行断点）；停点上下文遇 `<>...d__N` 帧备注「编译器生成 async 状态机（对应 async 方法 X）」。② 辅=IL 兜底：新增「按 token 返回 IL 反汇编」入口（ICSharpCode.Decompiler `MethodBodyDisassembler` 现成），需时按需取。③ 依赖 C。**.NET 前提**：Async V2 需 net11+opt-in 重编译，老代码（.NET6/5/Core3.1/Framework）永为 V1 状态机——本能力是常备兜底非过渡。
-- [ ] **E. `debug_breakpoint_set` 增 typeName+memberName 成员级定位（宿主）**——现设「某方法」断点需 反编译→signature 拿 token→set 两跳。**改**：加 typeName+memberName 定位（复用 DecompileMember 的 MemberResolver）：单匹配直设、多匹配回 `#MEMBER` 清单（token 闭环重设）、未匹配相近名提示。触发：typeName 非空+memberName 非空+line=0。
-- [ ] **I1. 「运行到某行/某方法」Run to（宿主+Session）**——对标 VS Run to Cursor。现无 one-shot/临时断点语义（grep 确认），手动 set→continue→remove 三步且断点残留。**改**：独立工具 `debug_run_to(typeName+line 或 typeName+memberName)`=设一次性断点→自动 continue→命中即停且自动移除（超时提示，未命中可继续等/放弃）；定位复用 E；Session 层加 one-shot 断点语义。agent 调试 async 不需理解状态机，「跑到业务行」直接停。
-- [ ] **O. `debug_launch` Description/返回状态准确性（宿主｜文案/小改）**——3 处：① launch 返回 `当前状态：None`（StateText 对 None 裸吐 "None"）与 Description「停在 Main 前」矛盾——Buffer 消费状态事件异步延迟致 Activate 时未追上（R3 修过 Attaching 没处理 None）；修=返回不依赖 Buffer 状态或等追上。② `workingDirectory` 参数描述随 D 同步「默认空=exe 所在目录」。③ launch 返回加「实际生效工作目录」。改 Description 同 commit 同步根 README。
+- [x] **D. `debug_launch` workingDirectory 空默认改 exe 目录（宿主｜行为变化）**——**已完成 2026-09-08**：空默认 = exe 所在目录；launch 返回报告实际生效工作目录（`ActiveDebugSession.WorkingDirectory`）；显式传参覆盖保留。原描述见 git log。
+- [x] **C. `debug_stack` 帧名真名化（Engine+宿主｜B 的前置）**——**已完成 2026-09-08**：`TryGetTypeName`/`TryGetMethodName` 接 resolver 出真名；宿主渲染 `类型.方法 [token]`（token 保留供下断点）；嵌套类型名用 `+` 连接（对齐产品约定）；`TypeNameResolver` 嵌套连接 `.`→`+`。
+- [x] **B. async 方法调试工作流引导 + 状态机帧降级兜底（Session+宿主）**——**已完成 2026-09-08**：① 引导——`debug_step` 落状态机帧给行断点提示、停点上下文遇 `<X>d__N` 备注「编译器生成 async 状态机（对应 async 方法 X）」；状态机备注独立于 doc 渲染（不被反编译失败吞掉，正路径 e2e 实证）；② IL 兜底——新增 `decompile_il` 工具按 token 返回 IL 反汇编。DebugTarget 加 `RunAsync` async 目标 + 状态机正路径 e2e。
+- [x] **E. `debug_breakpoint_set` 增 typeName+memberName 成员级定位（宿主）**——**已完成 2026-09-08**：加 `memberName` 参数；单方法命中直设、多匹配回 `#MEMBER` 清单、非方法成员（字段/属性/事件）中文提示、未匹配相近名。
+- [x] **I1. 「运行到某行/某方法」Run to（宿主+Session）**——**已完成 2026-09-08**：新工具 `debug_run_to`（对标 VS Run to Cursor）——纯宿主编排：设临时断点→continue→等命中→命中/超时/其它断点/退出都自动清理（finally 兜底，client 取消也清理）；处理陈旧停点快照/Exited/Attaching 竞态。
+- [x] **O. `debug_launch` Description/返回状态准确性（宿主｜文案/小改）**——**已完成 2026-09-08**：StateText 加 None 中文 case；launch 返回去「当前状态：快照」改固定「已冻结在 Main 前」语义；Description/XML 同步。
 
 ### 已评估关闭（一行结论，详细论证见 git log）
 

@@ -6,7 +6,23 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
-## [1.6.0] - 2026-09-07
+## [Unreleased]
+
+### Added
+
+- **`decompile_il` 新工具**：按方法 token（0x06 开头，signature 行尾取）返回该方法体的 IL 反汇编文本——async 状态机等无业务源码可看时直接看真实 IL（含结构化 try/catch 块），与 `decompile_member` 的 C# 还原互补
+- **`debug_run_to` 新工具**（对标 VS「运行到光标」）：让进程运行到目标位置后自动停下——`typeName`+`line`（反编译视图行）或 `typeName`+`memberName` 任一定位即可；内部设一次性断点→自动继续→命中即停且临时断点自动移除（超时/命中其它断点/进程退出也都自动清理，不留残留）；调试 async 业务「让程序跑到某行停一下」无需理解状态机内部
+- **`debug_breakpoint_set` 成员级定位**：`typeName`+`memberName` 直接对方法设断点（单匹配直设；重载/同名多匹配返回 `#MEMBER` 清单用 `methodToken` 精确重设；属性/事件/字段成员给中文提示）——不再需要先反编译拿 token 再设的两跳
+
+### Changed
+
+- **`debug_launch` 默认工作目录**：`workingDirectory` 空时默认 = **目标 exe 所在目录**（原为继承 MCP server 当前目录）——对齐手动启动 exe，目标产物写到自己目录、不污染 server 环境；launch 返回会报告实际生效工作目录；Web 应用等需显式传 bin/publish 目录的场景不受影响（可传参覆盖）
+- **`debug_launch` 返回不再附「当前状态：」瞬时快照**：改为固定说明「进程已冻结在 Main 前」（原返回在事件缓冲未追上时可能出现误导性的 `None`）；实时状态经 `debug_state` 查询
+
+### Improved
+
+- **`debug_stack` 帧名真名化**：每帧显示 `类型.方法 [token]`（如 `DebugTarget.Program.Work [0x06000005]`）取代裸 `模块!0x…`；token 保留在行尾供下断点闭环。嵌套类型名用 `+` 连接（`Ns.Outer+Inner`，可直接作 `typeName` 定位）
+- **async 状态机调试引导**：`debug_step` 停在编译器生成的 async 状态机帧（`<X>d__N.MoveNext`）时，返回提示改用行断点；`debug_wait`/`debug_state` 停点上下文遇状态机帧显示「编译器生成 async 状态机（对应 async 方法 X）」备注并建议用行断点断还原源码的 await 行——agent 不再迷失在无源码的 MoveNext 机器码里
 
 ### Added
 
