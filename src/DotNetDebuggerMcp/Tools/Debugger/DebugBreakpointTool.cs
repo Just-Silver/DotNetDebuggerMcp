@@ -248,10 +248,13 @@ public static class DebugBreakpointTool
                 {
                     var only = search.Matches[0];
                     var kind = only.Token.StartsWith("0x04") ? "字段" : only.Token.StartsWith("0x17") ? "属性" : only.Token.StartsWith("0x14") ? "事件" : "成员";
-                    return $"成员 {only.Name} 是{kind}，不能设方法断点（token {only.Token} 非 0x06 方法）。请改用：① 其所在方法定位（typeName+line 断方法体行），或 decompile_member 看访问器方法（get_/set_）token 后以 methodToken 设置；② memberName 改输入普通方法名。";
+                    // 只给可落地的替代路径，不承诺 decompile_member 搜访问器名（memberName 搜索默认排除 get_/set_，搜不到）：
+                    // ① decompile 该类型定位该成员访问器方法体（属性/事件）或读写/使用该成员的代码行（字段），typeName+line 断所在方法体行；
+                    // ② signature 列该类型签名（方法行行尾 0x06 token）或 decompile_member 定位方法后，取方法 token 以 methodToken 设置。
+                    return $"成员 {only.Name} 是{kind}，不能设方法断点（token {only.Token} 非 0x06 方法）。请改用：① decompile 该类型定位访问器方法体（属性/事件）或读写/使用处代码行（字段），typeName+line 断所在方法体行；② signature 列该类型签名行或 decompile_member 定位方法，取 0x06 方法 token 后以 methodToken 设置；③ memberName 改输入普通方法名。";
                 }
                 if (search.Matches.Count > 1)
-                    return $"类型 {fullName} 中名称含 \"{memberName}\" 的 {search.Matches.Count} 个成员均非方法（属性/事件/字段），不能设方法断点——请改用 typeName+line 或 decompile_member 看访问器 token 后以 methodToken 设置。";
+                    return $"类型 {fullName} 中名称含 \"{memberName}\" 的 {search.Matches.Count} 个成员均非方法（属性/事件/字段），不能设方法断点——请改用 decompile 该类型定位访问器方法体/使用处代码行后 typeName+line 设断，或取 signature/decompile_member 的方法 0x06 token 以 methodToken 设置。";
                 var message = $"类型 {fullName} 中未找到名称含 \"{memberName}\" 的方法成员";
                 if (search.SimilarNames.Count > 0) message += $"。相近成员：{string.Join("、", search.SimilarNames)}";
                 return message + "。可 decompile_member 按成员名定位确认实际名称，或用 methodToken 方式。";

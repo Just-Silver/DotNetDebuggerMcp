@@ -161,7 +161,9 @@ public sealed class ToolPipeline
         }
         catch (Exception ex)
         {
-            return new ToolPipelineResult($"{AppText.DecompileFailurePrefix}{ex.Message}");
+            // 错误文本已带「反编译失败：」/「反汇编失败：」前缀时不重复包装——decompile_il 的库内错误自带
+            // 「反汇编失败：」（非方法/非法 token/越界），二次包装会成「反编译失败：反汇编失败：…」双前缀
+            return new ToolPipelineResult(PrefixError(ex.Message));
         }
         var fmtContext = fromCache && context is not null ? context with { IsCached = true } : context;
         return new ToolPipelineResult(OutputFormatter.Format(source, lines, fmtContext));
@@ -190,7 +192,7 @@ public sealed class ToolPipeline
             }
             catch (Exception ex)
             {
-                return new ToolPipelineResult($"{AppText.DecompileFailurePrefix}{ex.Message}");
+                return new ToolPipelineResult(PrefixError(ex.Message));
             }
             allCached &= fromCache;
             if (!string.IsNullOrEmpty(command.MemberName) && !string.IsNullOrEmpty(command.MemberToken))
@@ -280,4 +282,17 @@ public sealed class ToolPipeline
         if (InProcessDecompiler.IsErrorResult(text)) throw new InvalidOperationException(text);
         return OutputFormatter.SplitLines(text);
     }
+
+    /// <summary>
+    /// 错误文本统一加「反编译失败：」前缀（ExecuteAsync/ExecuteMergedAsync 的错误转提示路径共用）。
+    /// 底层错误已带「反编译失败：」/「反汇编失败：」前缀时不重复包装——decompile_il 的库内错误自带
+    /// 「反汇编失败：」（非方法/非法 token/越界），decompile 引擎兜底自带「反编译失败：」，二次包装会成
+    /// 「反编译失败：反汇编失败：…」双前缀误导 agent。未带这两个前缀的错误（未找到类型/超时/元数据 IO 等）
+    /// 保持既有「反编译失败：」包装行为不变（非 IL 工具输出不受影响）。
+    /// </summary>
+    private static string PrefixError(string message)
+        => message.StartsWith(AppText.DecompileFailurePrefix, StringComparison.Ordinal)
+           || message.StartsWith(AppText.IlFailurePrefix, StringComparison.Ordinal)
+            ? message
+            : $"{AppText.DecompileFailurePrefix}{message}";
 }

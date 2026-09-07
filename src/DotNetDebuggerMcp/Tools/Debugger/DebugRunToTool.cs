@@ -130,9 +130,11 @@ public static class DebugRunToTool
         }
         finally
         {
-            // 兜底清理临时断点（命中/未命中/超时/退出/异常都移除；Remove 幂等，断点已不在也安全——防残留副作用）
+            // 兜底清理临时断点（命中/未命中/超时/退出/异常都移除；Remove 幂等，断点已不在也安全——防残留副作用）。
+            // 必须用 CancellationToken.None 而非请求取消令牌：客户端取消时清理不能一并被取消（否则临时断点残留），
+            // 会话关闭/进程退出等由 TryRemoveSafeAsync 的吞异常兜住。
             if (targetId is not null)
-                await TryRemoveSafeAsync(active, targetId.Value, cancellationToken);
+                await TryRemoveSafeAsync(active, targetId.Value, CancellationToken.None);
         }
         DebugSessionService.Manager.Actions.Log("debug_run_to", $"{typeName} member={memberName} line={line}", message);
         return message;

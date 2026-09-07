@@ -6,9 +6,10 @@ namespace DotNetDebugger.Engine.Engine;
 
 /// <summary>
 /// 运行时类型全名解析：按 CorDebugClass 的 (模块路径, TypeDef/TypeRef token) 从模块元数据解出「命名空间.类型名」。
-/// TypeDef/TypeRef 行自身携带 namespace+name，嵌套类型走 enclosing 链（'.' 连接，与反编译侧全名风格一致），
-/// 无需跨程序集解析。按 (模块路径, token) 缓存（同 DLL 同 token 恒定，可跨会话复用）；
-/// 解析失败返回 null（调用方降级为 token 展示）。全部调用在引擎命令泵 MTA 线程，锁仅防御。
+/// TypeDef/TypeRef 行自身携带 namespace+name，嵌套类型走 enclosing 链（'+' 连接，与反编译/元数据侧
+/// MetadataNaming.FullName 的嵌套分隔风格一致，可直接用作 typeName 坐标），无需跨程序集解析。
+/// 按 (模块路径, token) 缓存（同 DLL 同 token 恒定，可跨会话复用）；解析失败返回 null（调用方降级为 token 展示）。
+/// 全部调用在引擎命令泵 MTA 线程，锁仅防御。
 /// </summary>
 public static class TypeNameResolver
 {
@@ -67,7 +68,8 @@ public static class TypeNameResolver
     {
         var ns = namespaceHandle.IsNil ? "" : reader.GetString(namespaceHandle);
         if (string.IsNullOrEmpty(enclosing)) return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
-        // 嵌套类型：namespace 挂在最外层（enclosing 已含），嵌套行自身 namespace 为空
-        return string.IsNullOrEmpty(ns) ? $"{enclosing}.{name}" : $"{ns}.{enclosing}.{name}";
+        // 嵌套类型：namespace 挂在最外层（enclosing 已含），嵌套行自身 namespace 为空；用 '+' 连接嵌套层级
+        // （与反编译/元数据侧 MetadataNaming.FullName 的嵌套全名风格一致，如 Ns.Outer+Inner）
+        return string.IsNullOrEmpty(ns) ? $"{enclosing}+{name}" : $"{ns}.{enclosing}+{name}";
     }
 }

@@ -15,6 +15,12 @@ internal static class AppText
     public const string DecompileFailurePrefix = DecompilerText.DecompileFailurePrefix;
 
     /// <summary>
+    /// IL 反汇编失败提示前缀（转发 Decompiler 库 <see cref="DecompilerText.IlFailurePrefix"/>，单一来源； ToolPipeline
+    /// 错误包装判重共用——decompile_il 的库内错误自带此前缀，包装时不得二次加「反编译失败：」）。
+    /// </summary>
+    public const string IlFailurePrefix = DecompilerText.IlFailurePrefix;
+
+    /// <summary>
     /// 匹配数量超过上限时「仅列出签名」的头部标注（decompile_member / call_chain 共用）。
     /// </summary>
     public const string OverLimitOnlySignatures = "超过上限，仅列出签名";
