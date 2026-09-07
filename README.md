@@ -113,7 +113,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | 工具 | 用途 |
 | ---- | ---- |
 | `dotnetdebugger_debug_processes` | 列出本机可附加的 .NET 进程（pid/进程名/CLR 版本，dbgshim 权威探测，调试器自身已排除；`filter` 进程名子串过滤；进程名排序，当前会话目标行标注「← 当前会话」，超 100 条截断提示用 filter）——选 pid 后 `debug_attach` |
-| `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时）。launch 蹲守 CLR 启动、停在 Main 前——任意程序无需启动配合即可从第一行业务代码前调试。`debug_launch` 可传 `workingDirectory`（目标工作目录，Web 应用应传 bin/publish 目录，否则以 MCP server 的 CWD 为 ContentRoot 致 appsettings/静态资源错位）与 `environment`（KEY=VALUE 多行或分号，如 `ASPNETCORE_ENVIRONMENT=Development`）；返回与 `debug_state` 均含目标 pid |
+| `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时）。launch 蹲守 CLR 启动、停在 Main 前——任意程序无需启动配合即可从第一行业务代码前调试。`debug_launch` 可传 `workingDirectory`（默认空=目标 exe 所在目录，对齐手动启动 exe；Web 应用等以工作目录定位 appsettings/静态资源的目标应显式传 bin/publish 目录）与 `environment`（KEY=VALUE 多行或分号，如 `ASPNETCORE_ENVIRONMENT=Development`）；返回与 `debug_state` 均含目标 pid，launch 返回另含实际生效工作目录 |
 | `dotnetdebugger_debug_breakpoint_set` / `_remove` / `_clear` / `_list` | 下/删/清/列断点，三种定位：模块+方法 token+IL offset（signature 行尾取 token，未加载模块登记待绑定）；`typeName`+`line` 按反编译视图行（需模块已加载）；`sourcePath`+`line` 按 PDB 源码行（模块未加载/未命中时登记延迟项，模块加载后自动按 PDB 解析绑定——launch 冻结 Main 前可直接设源行断点）。可选 `hitCount`（第 N 次命中起生效）与 `mode`（stop=命中停 / trace=命中不停记轨迹，`debug_wait` 批量取回）；可选 `condition`（P6 子集表达式如 `i == 3`，为真才停/记——语法错当场拒绝，命中时求值失败放行并在 debug_state/debug_wait 反馈「条件未通过」防静默空等） |
 | `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场，默认附停点上下文与目标最近控制台输出） |
 | `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处；停点时附反编译视图上下文） |
@@ -314,7 +314,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | ---- | ---- | ---- |
 | `debug_launch` | `commandLine`（必填） | 目标可执行文件路径（可含参数，如 `DebugTarget.exe 3 8`） |
 | | `timeoutSeconds` | 等待目标 CLR 启动秒数上限，默认 30 |
-| | `workingDirectory` | 目标进程工作目录，默认空=继承 MCP server 当前目录。Web 应用等以工作目录定位 appsettings/静态资源的目标应传其 bin 或 publish 目录 |
+| | `workingDirectory` | 目标进程工作目录，默认空=目标 exe 所在目录（对齐手动启动 exe，目标产物写自己目录）。可显式传目录覆盖；Web 应用等以工作目录定位 appsettings/静态资源的目标应传其 bin 或 publish 目录 |
 | | `environment` | 附加环境变量，KEY=VALUE 多行或分号分隔（如 `ASPNETCORE_ENVIRONMENT=Development;MY_KEY=1`），默认空=继承 server 环境 |
 | `debug_attach` | `processId`（必填） | 目标进程 id（用 `debug_processes` 查） |
 | `debug_state` | `contextLines` | 停点上下文行数预算，默认 100，0=不附。返回含目标 pid、会话状态（Attaching=进程冻结在 Main 前可设断点后 continue 放行）、最近停点 |

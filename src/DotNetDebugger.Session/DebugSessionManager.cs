@@ -22,8 +22,12 @@ public sealed class ActiveDebugSession : IAsyncDisposable
     /// <summary>目标进程 pid（launch=自起进程 Id；attach=入参 pid）。供宿主显示「目标 pid」。</summary>
     public int ProcessId { get; }
 
+    /// <summary>目标进程实际生效的工作目录（launch 会话：启动时解析的 wd，空默认=exe 所在目录；attach 会话无此概念=null）。供宿主报告。</summary>
+    public string? WorkingDirectory { get; }
+
     internal ActiveDebugSession(DebugSession session, SessionEventBuffer buffer, AgentActionLog actions,
-        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null, int processId = 0)
+        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null, int processId = 0,
+        string? workingDirectory = null)
     {
         Session = session;
         Buffer = buffer;
@@ -31,6 +35,7 @@ public sealed class ActiveDebugSession : IAsyncDisposable
         Output = output;
         _process = process;
         ProcessId = processId > 0 ? processId : (process?.Id ?? 0);
+        WorkingDirectory = workingDirectory;
     }
 
     public async ValueTask DisposeAsync()
@@ -82,9 +87,9 @@ public sealed class DebugSessionManager : IAsyncDisposable
     /// 回调时机=运行时初始化完成、Main 执行前）后立即 attach——进程停在 Main 前的初始同步点。
     /// 目标**无需自带启动延迟**（P9 以蹲守替换旧「固定等 1s」延迟窗口）；attach 后 agent 从容设断点
     /// （模块未加载登记 pending，加载后自动绑定）再 continue。
-    /// workingDirectory：目标进程工作目录（默认=继承 MCP server 的 CWD；Web 应用等以 CWD 作 ContentRoot
-    /// 的目标应显式传 bin/publish 目录，否则 appsettings/静态资源定位错乱——R1）；environment：附加环境变量
-    /// （KEY=VALUE 多行或分号组合，默认=继承 server 环境）。
+    /// workingDirectory：目标进程工作目录（默认空=目标 exe 所在目录，对齐手动启动 exe——目标产物写自己目录、
+    /// 天然隔离；Web 应用等以 CWD 作 ContentRoot 的目标仍应显式传 bin/publish 目录以防静态资源定位错乱——R1）；
+    /// environment：附加环境变量（KEY=VALUE 多行或分号组合，默认=继承 server 环境）。
     /// </summary>
     public async Task<ActiveDebugSession> LaunchAndAttachAsync(string commandLine, int timeoutSeconds = 30,
         string workingDirectory = "", string environment = "", CancellationToken ct = default)
@@ -102,13 +107,12 @@ public sealed class DebugSessionManager : IAsyncDisposable
             CreateNoWindow = true,
             WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
         };
-        if (!string.IsNullOrWhiteSpace(workingDirectory))
-        {
-            var wd = Path.GetFullPath(workingDirectory);
-            if (!Directory.Exists(wd))
-                throw new InvalidOperationException($"工作目录不存在：{wd}");
-            psi.WorkingDirectory = wd;
-        }
+        var effectiveWd = string.IsNullOrWhiteSpace(workingDirectory)
+            ? Path.GetDirectoryName(exePath)!   // 空默认 = exe 所在目录（对齐手动启动 exe）
+            : Path.GetFullPath(workingDirectory);
+        if (!Directory.Exists(effectiveWd))
+            throw new InvalidOperationException($"工作目录不存在：{effectiveWd}");
+        psi.WorkingDirectory = effectiveWd;
         if (!string.IsNullOrWhiteSpace(environment))
             ApplyEnvironment(psi, environment);
         var process = System.Diagnostics.Process.Start(psi)
@@ -161,7 +165,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
             process.Dispose();
             throw;
         }
-        return Activate(engineSession, $"launch+attach {commandLine}", output, process);
+        return Activate(engineSession, $"launch+attach {commandLine}", output, process, workingDirectory: effectiveWd);
     }
 
     /// <summary>关闭活动会话（断开调试，进程继续独立运行）。</summary>
@@ -194,11 +198,12 @@ public sealed class DebugSessionManager : IAsyncDisposable
     private static int BreakpointCount(ActiveDebugSession active) => 0; // v1 断点计数由工具层维护，此处占位
 
     private ActiveDebugSession Activate(DebugSession session, string target,
-        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null, int processId = 0)
+        ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null, int processId = 0,
+        string? workingDirectory = null)
     {
         var buffer = new SessionEventBuffer();
         buffer.Start(session);
-        var active = new ActiveDebugSession(session, buffer, Actions, output, process, processId);
+        var active = new ActiveDebugSession(session, buffer, Actions, output, process, processId, workingDirectory);
         ActiveDebugSession? old;
         lock (_gate) { old = _active; _active = active; }
         // 替换旧活动会话：后台断开+释放，不阻塞新会话建立

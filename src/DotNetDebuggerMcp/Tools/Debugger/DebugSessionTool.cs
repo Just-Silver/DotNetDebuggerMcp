@@ -22,16 +22,16 @@ public static class DebugSessionTool
     /// </summary>
     /// <param name="commandLine">目标可执行文件路径（可含参数，空格分隔），相对当前工作目录（必填）。</param>
     /// <param name="timeoutSeconds">等待目标 CLR 启动的秒数上限，默认 30。</param>
-    /// <param name="workingDirectory">目标进程工作目录（默认空=继承 MCP server 当前目录）。</param>
+    /// <param name="workingDirectory">目标进程工作目录（默认空=目标 exe 所在目录，对齐手动启动 exe）。</param>
     /// <param name="environment">附加环境变量（KEY=VALUE 多行或分号分隔，默认空=继承 server 环境）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
-    /// <returns>中文结果提示（会话 id 与状态）或错误提示。</returns>
+    /// <returns>中文结果提示（会话 id、实际工作目录与状态）或错误提示。</returns>
     [McpServerTool]
-    [Description("启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。进程停在 Main 前的初始同步点——任意 .NET 程序无需启动配合即可从第一行业务代码前调试：设断点（未加载模块自动登记待绑定）后 debug_continue。返回会话 id 与初始状态；命中断点后用 debug_state/debug_stack/debug_variables 查询。")]
+    [Description("启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。进程停在 Main 前的初始同步点——任意 .NET 程序无需启动配合即可从第一行业务代码前调试：设断点（未加载模块自动登记待绑定）后 debug_continue。返回会话 id、实际生效工作目录与初始状态；命中断点后用 debug_state/debug_stack/debug_variables 查询。")]
     public static async Task<string> DebugLaunch(
         [Description("目标可执行文件路径（可含参数，如 DebugTarget.exe 3 8），相对当前工作目录（必填）。")] string commandLine = "",
         [Description("等待目标 CLR 启动的秒数上限，默认 30。")] int timeoutSeconds = 30,
-        [Description("目标进程工作目录（默认空=继承 MCP server 的当前目录）。Web 应用等以工作目录定位 appsettings/静态资源的目标应传其 bin 或 publish 目录。")] string workingDirectory = "",
+        [Description("目标进程工作目录（默认空=目标 exe 所在目录——对齐手动启动 exe，目标产物写自己目录）。可显式传目录覆盖（如 Web 应用传其 bin 或 publish 目录）。")] string workingDirectory = "",
         [Description("附加环境变量，KEY=VALUE 多行或分号分隔（如 ASPNETCORE_ENVIRONMENT=Development;MY_KEY=1；默认空=继承 server 环境）。")] string environment = "",
         CancellationToken cancellationToken = default)
     {
@@ -45,7 +45,7 @@ public static class DebugSessionTool
         {
             var active = await DebugSessionService.Manager.LaunchAndAttachAsync(commandLine, timeoutSeconds, workingDirectory, environment, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_launch", commandLine, "ok");
-            return $"已启动并附加调试会话。目标 pid={active.ProcessId}：{commandLine}。当前状态：{StateText(active.Buffer.CurrentState)}。" +
+            return $"已启动并附加调试会话。目标 pid={active.ProcessId}：{commandLine}。工作目录：{active.WorkingDirectory}。当前状态：{StateText(active.Buffer.CurrentState)}。" +
                    "进程停在 Main 前；用 debug_breakpoint_set 下断点（未加载模块自动待绑定）后 debug_continue 运行。";
         }
         catch (Exception ex)

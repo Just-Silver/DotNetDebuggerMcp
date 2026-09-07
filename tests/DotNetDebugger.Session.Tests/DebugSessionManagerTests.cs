@@ -126,6 +126,35 @@ public sealed class DebugSessionManagerTests
     }
 
     [Fact]
+    public async Task LaunchAndAttach_EmptyWorkingDirectory_DefaultsToExeDirectory()
+    {
+        Assert.True(File.Exists(TestTarget.DebugTargetExe));
+
+        await using var manager = new DebugSessionManager();
+        // workingDirectory 省略 → 空：实际生效工作目录应默认 = exe 所在目录（D，对齐手动启动 exe）
+        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 1 0",
+            ct: TestContext.Current.CancellationToken);
+        Assert.True(active.ProcessId > 0);
+        var exeDir = Path.GetDirectoryName(TestTarget.DebugTargetExe);
+        Assert.NotNull(exeDir);
+        Assert.Equal(exeDir, active.WorkingDirectory);
+
+        // 目标自报 cwd 应与 exe 目录一致（generate-testdata.ps1 打印 [DebugTarget] cwd=）；放行后轮询等输出到达
+        await active.Session.ContinueAsync(TestContext.Current.CancellationToken);
+        ProcessOutputLine[] tail = [];
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            tail = [.. active.Output!.Tail(100, filter: "")];
+            if (tail.Any(l => l.Text.Contains("[DebugTarget] cwd="))) break;
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+        Assert.Contains($"[DebugTarget] cwd={exeDir}", string.Join('\n', tail.Select(l => l.Text)));
+
+        await manager.CloseAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task ExceptionFilter_NonMatch_SkipsConsumableViaBuffer()
     {
         Assert.True(File.Exists(TestTarget.DebugTargetExe));

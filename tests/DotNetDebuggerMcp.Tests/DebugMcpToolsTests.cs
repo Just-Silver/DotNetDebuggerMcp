@@ -35,6 +35,11 @@ public sealed class DebugMcpToolsTests
         if (launch.IsError == true) Console.WriteLine($"[diag] launch error: {launch.Text()}");
         Assert.True(launch.IsError != true, launch.Text());
         Assert.Contains("已启动", launch.Text());
+        // D：空 workingDirectory 的 launch 返回应报告实际生效工作目录（默认=exe 所在目录）
+        Assert.Contains("工作目录", launch.Text());
+        var exeDir = Path.GetDirectoryName(exe);
+        Assert.NotNull(exeDir);
+        Assert.Contains(exeDir, launch.Text());
 
         // 1b. debug_output：launch 会话可拉目标输出（P9 冻结在 Main 前，此刻多为暂无输出——start 行断言在第 5 步 continue 之后）
         var output = await CallAsync(mcp, "debug_output",
