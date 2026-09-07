@@ -54,17 +54,20 @@ public sealed class DebugMcpToolsTests
             new Dictionary<string, object?> { ["breakpointId"] = pendingId });
         Assert.True(rmPending.IsError != true, rmPending.Text());
 
-        // 4. debug_continue 先行（CI 实录：launch 返回时模块登记可能缺目标模块——attach 竞速窗口；
-        // 先进入运行，8s delay 即设断点窗口），再设 Work 入口断点（模块已加载 → 已绑定）
+        // 3. debug_continue 先行（CI 实录：launch 返回时模块登记可能缺目标模块——attach 竞速窗口；
+        // 先进入运行，8s delay 即设断点窗口）
         var cont = await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         Assert.True(cont.IsError != true, cont.Text());
         Assert.Contains("已继续", cont.Text());
 
-        // 3. 设断点：Work 入口
+        // 4. 设断点：Work 入口。module-load 竞态下可能返回「断点已登记（pending）」（登记表暂缺该模块）——
+        // 语义上 pending 随后自动补绑并命中（race_probe3 实锤 100% 闭环），故等待绑定到「已绑定」再断言，
+        // 而非要求 set 立即返回「断点已设」。若 15s 内未绑定（模块未加载/token 无效）WaitBoundAsync 断言失败。
         var bp = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bp.IsError != true, bp.Text());
-        Assert.Contains("断点已设", bp.Text());
+        var bpId = ParseBreakpointId(bp.Text());
+        await WaitBoundAsync(mcp, bpId);
         var list = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
         Assert.Contains("断点列表（1 个）", list.Text());
         Assert.Contains("已绑定", list.Text());
@@ -173,12 +176,11 @@ public sealed class DebugMcpToolsTests
         Assert.True(launch.IsError != true, launch.Text());
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
 
-        // 3a：typeName+line 设断点（省缺 moduleName，跨模块解析）
-        var setA = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["typeName"] = "DebugTarget.Program", ["line"] = workFirstLine });
-        Assert.True(setA.IsError != true, setA.Text());
-        Assert.Contains("断点已设", setA.Text());
-        Assert.Contains("DebugTarget.dll", setA.Text());
+        // 3a：typeName+line 设断点（省缺 moduleName，跨模块解析）。
+        // continue 后模块登记是异步的——set 过早会报「在已加载模块中未找到类型」，轮询重试等模块就绪
+        var setAText = await RetrySetUntilAsync(mcp,
+            new Dictionary<string, object?> { ["typeName"] = "DebugTarget.Program", ["line"] = workFirstLine }, "断点已设");
+        Assert.Contains("DebugTarget.dll", setAText);
 
         // 命中 3a 断点（delay 结束进 Work）
         var waitA = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
@@ -186,11 +188,12 @@ public sealed class DebugMcpToolsTests
         var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
         Assert.Contains($"0x{workToken:x8}", stack.Text()); // 栈帧以 token 形式展示，命中方法即 Work
 
-        // 3b：sourcePath+line 设断点（Work 方法内靠后源码行），continue 后循环迭代再命中
+        // 3b：sourcePath+line 设断点（Work 方法内靠后源码行），continue 后循环迭代再命中。
+        // 竞态下 set 可能返回「断点已登记（延迟绑定）」（含 id，模块加载后自动补绑命中）——等「已绑定」终态
         var setB = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = sourceTarget.ActualLine });
         Assert.True(setB.IsError != true, setB.Text());
-        Assert.Contains("断点已设", setB.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(setB.Text()));
 
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         var waitB = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
@@ -232,11 +235,12 @@ public sealed class DebugMcpToolsTests
         // 先 continue 再设 trace 断点（CI 实录：launch 返回时模块登记可能缺目标模块；delay 8s = 设断点窗口）
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
 
+        // sourcePath+line 需模块已登记（PDB 解析）；continue 后登记异步——竞态下 set 返回「断点已登记（延迟）」，
+        // 模块加载后自动补绑并命中（含 id），故 set 一次取 id → 等「已绑定」终态
         var set = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = sourceTarget.ActualLine, ["mode"] = "trace" });
         Assert.True(set.IsError != true, set.Text());
-        Assert.Contains("断点已设", set.Text());
-        Assert.Contains("[trace]", set.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(set.Text()));
 
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         // trace 不停：Work 3 次循环后进程跑完退出，wait 返回退出+整批轨迹
@@ -331,9 +335,13 @@ public sealed class DebugMcpToolsTests
         // 先 continue 再设行断点（CI 实录：launch 返回时模块登记可能缺目标模块；delay 8s = 设断点窗口）
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
 
-        var set = await CallAsync(mcp, "debug_breakpoint_set",
+        // sourcePath+line 断点：continue 后模块登记是异步的——竞态下 set 返回「断点已登记（延迟绑定）」
+        // （非失败，含断点 id，模块加载后自动补绑命中）。故 set 一次取 id → 等「已绑定」终态，不重复 set。
+        var setText = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine });
-        Assert.True(set.IsError != true, set.Text());
+        Assert.True(setText.IsError != true, setText.Text());
+        var setBpId = ParseBreakpointId(setText.Text());
+        await WaitBoundAsync(mcp, setBpId);
         var wait = await CallAsync(mcp, "debug_wait",
             new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", wait.Text());
@@ -383,11 +391,13 @@ public sealed class DebugMcpToolsTests
 
         // 数组任意下标：删 WorkBag 行断点 → 锚 WorkScores 入口（scores={3,1,4,1,5}）
         var rm = await CallAsync(mcp, "debug_breakpoint_remove",
-            new Dictionary<string, object?> { ["breakpointId"] = ParseBreakpointId(set.Text()) });
+            new Dictionary<string, object?> { ["breakpointId"] = setBpId });
         Assert.True(rm.IsError != true, rm.Text());
         var setScores = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workScoresToken:x8}", ["ilOffset"] = 0 });
         Assert.True(setScores.IsError != true, setScores.Text());
+        // module-load 竞态：set 可能返回 pending——等待绑定到「已绑定」（pending 随后自动补绑并命中）
+        await WaitBoundAsync(mcp, ParseBreakpointId(setScores.Text()));
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         var waitScores = await CallAsync(mcp, "debug_wait",
             new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
@@ -440,11 +450,15 @@ public sealed class DebugMcpToolsTests
         // 先 continue 再设行断点（CI 实录：launch 返回时模块登记可能缺目标模块；delay 8s = 设断点窗口）
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
 
-        // 2. 条件 i == 2：前两轮放行，第 3 轮（i=2）才停——flagship 场景
-        var set = await CallAsync(mcp, "debug_breakpoint_set",
+        // 2. 条件 i == 2：前两轮放行，第 3 轮（i=2）才停——flagship 场景。
+        // sourcePath+line 需模块已登记（PDB 解析）——竞态下 set 返回「断点已登记（延迟）」（含 id，
+        // 模块加载后自动补绑），故 set 一次取 id → 等「已绑定」终态（delay 窗口内必然早于 WorkBag 进入）
+        var setCond = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine, ["condition"] = "i == 2" });
-        Assert.True(set.IsError != true, set.Text());
-        Assert.Contains("[条件: i == 2", set.Text());
+        Assert.True(setCond.IsError != true, setCond.Text());
+        Assert.Contains("[条件: i == 2", setCond.Text());
+        var condBpId = ParseBreakpointId(setCond.Text());
+        await WaitBoundAsync(mcp, condBpId);
         var wait = await CallAsync(mcp, "debug_wait",
             new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", wait.Text());
@@ -454,12 +468,14 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("条件: i == 2", list.Text());
         Assert.Contains("条件为真 1 次", list.Text());
 
-        // 3. 求值失败反馈：条件引用不存在的字段（语法合法、命中时语义失败）→ 放行至退出，wait 附未通过计数
+        // 3. 求值失败反馈：条件引用不存在的字段（语法合法、命中时语义失败）→ 放行至退出，wait 附未通过计数。
+        // set 一次取 id → 等「已绑定」（竞态 pending 会补绑；此刻模块已登记故必为「断点已设」立即绑定）
         var setFail = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine, ["condition"] = "b.Missing == 1" });
         Assert.True(setFail.IsError != true, setFail.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(setFail.Text()));
         var rm = await CallAsync(mcp, "debug_breakpoint_remove",
-            new Dictionary<string, object?> { ["breakpointId"] = ParseBreakpointId(set.Text()) });
+            new Dictionary<string, object?> { ["breakpointId"] = condBpId });
         Assert.True(rm.IsError != true, rm.Text());
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         var waitExit = await CallAsync(mcp, "debug_wait",
@@ -476,6 +492,50 @@ public sealed class DebugMcpToolsTests
 
     private static async Task<CallToolResult> CallAsync(McpClient mcp, string tool, IReadOnlyDictionary<string, object?> args)
         => await mcp.CallToolAsync(tool, args, cancellationToken: TestContext.Current.CancellationToken);
+
+    /// <summary>
+    /// 等待断点进入「已绑定」状态（poll debug_breakpoint_list）。背景：launch 后先 continue 再 set 存在
+    /// module-load 竞态窗口——set 返回「断点已登记」（pending，模块登记表暂缺该模块），随后 LoadModule/
+    /// TrackModule 自动补绑。产品语义 pending→自动补绑→命中是完备闭环，故断言绑定状态而非「set 即已设」。
+    /// 模块在 delay 窗口内必然加载，轮询毫秒级返回；上限防模块永不加载（此时断言失败暴露真问题）。
+    /// </summary>
+    private static async Task WaitBoundAsync(McpClient mcp, int bpId, int timeoutSeconds = 15)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        string last = "";
+        while (DateTime.UtcNow < deadline)
+        {
+            var list = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+            Assert.True(list.IsError != true, list.Text());
+            last = list.Text();
+            var line = last.Split('\n').FirstOrDefault(l => l.Contains($"id={bpId} "));
+            if (line is not null && line.Contains("已绑定")) return;
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+        Assert.Fail($"断点 {bpId} 在 {timeoutSeconds}s 内未绑定（模块可能未加载或 token 无效）。最近 debug_breakpoint_list：{last}");
+    }
+
+    /// <summary>
+    /// 反复调 debug_breakpoint_set 直到结果文本含 successMarker（模块/类型未就绪的错误/提示文本会被重试）。
+    /// 背景：typeName+line 定位要求模块已登记（已加载模块列表扫描）——刚 continue 的目标其模块登记是异步的，
+    /// set 过早会返回「在已加载模块中未找到类型」等提示而非错误；轮询重试等模块就绪（delay 窗口内必然），
+    /// 成功即「断点已设」（typeName+line 仅在模块已登记时才能定位成功）。
+    /// </summary>
+    private static async Task<string> RetrySetUntilAsync(McpClient mcp, IReadOnlyDictionary<string, object?> args, string successMarker, int timeoutSeconds = 15)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
+        string last = "";
+        while (DateTime.UtcNow < deadline)
+        {
+            var r = await CallAsync(mcp, "debug_breakpoint_set", args);
+            Assert.True(r.IsError != true, r.Text());
+            last = r.Text();
+            if (last.Contains(successMarker)) return last;
+            await Task.Delay(250, TestContext.Current.CancellationToken);
+        }
+        Assert.Fail($"debug_breakpoint_set 在 {timeoutSeconds}s 内未返回「{successMarker}」（模块/类型迟迟未就绪？）。最后结果：{last}");
+        return last;
+    }
 
     /// <summary>从断点设置结果文本（"断点已设: id=N ..."）解析断点 id。</summary>
     private static int ParseBreakpointId(string text)
