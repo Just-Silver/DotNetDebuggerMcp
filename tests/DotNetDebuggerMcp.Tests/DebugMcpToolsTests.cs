@@ -61,7 +61,7 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("已继续", cont.Text());
 
         // 4. 设断点：Work 入口。module-load 竞态下可能返回「断点已登记（pending）」（登记表暂缺该模块）——
-        // 语义上 pending 随后自动补绑并命中（race_probe3 实锤 100% 闭环），故等待绑定到「已绑定」再断言，
+        // 语义上 pending 随后自动补绑并命中（排查探针实测 100% 闭环），故等待绑定到「已绑定」再断言，
         // 而非要求 set 立即返回「断点已设」。若 15s 内未绑定（模块未加载/token 无效）WaitBoundAsync 断言失败。
         var bp = await CallAsync(mcp, "debug_breakpoint_set",
             new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
