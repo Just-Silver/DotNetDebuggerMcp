@@ -22,6 +22,7 @@ public static class CacheStatsTool
     {
         [CacheSignatures.Type] = "decompile",
         [CacheSignatures.Member] = "decompile_member",
+        [CacheSignatures.Il] = "decompile_il",
         [CacheSignatures.WholeModule] = "decompile（整模块）",
         [CacheSignatures.ListTypes] = "list_types",
         [CacheSignatures.Signature] = "signature",

@@ -6,7 +6,7 @@
 
 ## 目录结构（每目录一个命名空间）
 
-- `Tools/`（`DotNetDebuggerMcp.Tools`）— 反编译 4（Decompile/DecompileMember/DecompileToDir/DecompileToProject）+ 元数据 13（ListTypes/Signature/Hierarchy/Dependencies/CallGraph/AssemblyInfo/InterfaceUsage/GenericInstantiation/SearchString/FieldAccess/CallChain/CacheStats/…）+ **`Debugger/`（5 个 debug_* 工具类，见下）**
+- `Tools/`（`DotNetDebuggerMcp.Tools`）— 反编译 5（Decompile/DecompileMember/DecompileIl/DecompileToDir/DecompileToProject）+ 元数据 13（ListTypes/Signature/Hierarchy/Dependencies/CallGraph/AssemblyInfo/InterfaceUsage/GenericInstantiation/SearchString/FieldAccess/CallChain/CacheStats/…）+ **`Debugger/`（5 个 debug_* 工具类，见下）**
 - `Tools/Debugger/` — **动态调试 MCP 工具面**（git 状态：整目录 5 文件当时未提交——提交前确认）：
   - `DebugSessionTool`：`debug_launch`/`debug_attach`/`debug_disconnect`/`debug_state`
   - `DebugBreakpointTool`：`debug_breakpoint_set`(模块名+token+IL offset；模块未加载=登记待绑定)/`_remove`/`_clear`/`_list`(含绑定状态)

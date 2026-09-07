@@ -362,13 +362,16 @@ public class ToolPipelineTests
     {
         var type = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Type, "A"));
         var member = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Member, "0x06000005"));
+        var il = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.Il, "0x06000005"));
         var whole = new ToolCommand(SamplesDll, new DecompileRequest(DecompileKind.WholeModule, ""));
 
         Assert.Equal("type\u001FA", type.Signature);
         Assert.Equal("member\u001F0x06000005", member.Signature);
+        Assert.Equal("il\u001F0x06000005", il.Signature);
         Assert.Equal("whole-module", whole.Signature);
         Assert.Equal(SamplesDll, type.Assembly);
         Assert.Equal(DecompileKind.Member, member.Request.Kind);
+        Assert.Equal(DecompileKind.Il, il.Request.Kind);
     }
 
     /// <summary>

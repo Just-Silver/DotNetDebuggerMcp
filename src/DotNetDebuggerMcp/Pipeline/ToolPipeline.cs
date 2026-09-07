@@ -29,6 +29,11 @@ public enum DecompileKind
     Member,
 
     /// <summary>
+    /// 反汇编指定方法的方法体为 IL 文本：Target 为方法定义 token（0x06 开头，如 0x06000005）。
+    /// </summary>
+    Il,
+
+    /// <summary>
     /// 反编译整个程序集：Target 忽略。
     /// </summary>
     WholeModule,
@@ -107,6 +112,7 @@ public sealed class ToolCommand
         {
             DecompileKind.Type => CacheSignatures.Type,
             DecompileKind.Member => CacheSignatures.Member,
+            DecompileKind.Il => CacheSignatures.Il,
             DecompileKind.WholeModule => CacheSignatures.WholeModule,
             _ => throw new ArgumentOutOfRangeException(nameof(request), $"未知反编译请求类型 {request.Kind}"),
         };
@@ -248,6 +254,7 @@ public sealed class ToolPipeline
         {
             DecompileKind.Type => InProcessDecompiler.DecompileType(command.Assembly, request.Target, cancellationToken),
             DecompileKind.Member => InProcessDecompiler.DecompileMember(command.Assembly, request.Target, cancellationToken),
+            DecompileKind.Il => InProcessDecompiler.DecompileIl(command.Assembly, request.Target, cancellationToken),
             DecompileKind.WholeModule => InProcessDecompiler.DecompileWholeModule(command.Assembly, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(request), $"未知反编译请求类型 {request.Kind}"),
         };

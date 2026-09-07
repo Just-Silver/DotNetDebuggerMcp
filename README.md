@@ -73,7 +73,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 - **行号与分页**：结果按 `行号<TAB>内容` 输出，默认返回前约 8 KB，可用 `lines="start-end"`（如 `200-400`）按行号分页，单次最多约 32 KB。
 - **缓存**：除写盘工具外全部结果按 `程序集 + 参数` 共享缓存（64 MB LRU，固定 30 分钟滑动过期 + 5 分钟定时清理，程序集更新自动失效），超时/失败不入缓存。
 - **类型名格式**：与 `dotnetdebugger_list_types` 输出一致（`命名空间.类型`，嵌套用 `+`，泛型带 arity 如 ``GenericBox`1``），行首类别前缀（如 `class Foo.Bar`）可直接复用。
-- **Token 闭环**：`dotnetdebugger_signature` 每行行尾附成员 token（`0x06…`），`#MEMBER` 分隔行含 `token`，均可直接用于 `dotnetdebugger_decompile_member` / `dotnetdebugger_call_graph` / `dotnetdebugger_call_chain` / `dotnetdebugger_field_access` 精确定位。
+- **Token 闭环**：`dotnetdebugger_signature` 每行行尾附成员 token（`0x06…`），`#MEMBER` 分隔行含 `token`，均可直接用于 `dotnetdebugger_decompile_member` / `dotnetdebugger_decompile_il` / `dotnetdebugger_call_graph` / `dotnetdebugger_call_chain` / `dotnetdebugger_field_access` 精确定位。
 
 ## 工具一览
 
@@ -83,6 +83,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | ---- | ---- |
 | `dotnetdebugger_decompile` | 按类型反编译源码到 stdout（类型级，含全部成员） |
 | `dotnetdebugger_decompile_member` | 按成员名子串或 token 反编译一个或多个成员，多匹配合并输出、超 20 个仅列签名 |
+| `dotnetdebugger_decompile_il` | 按方法 token（`0x06…`）反汇编方法体为 IL 文本——async 状态机等编译器生成类型反编译为 C# 失败/难读时的 IL 兜底 |
 | `dotnetdebugger_decompile_to_dir` | 反编译写入目录（全量或 `typeName` 逗号分隔批量，单文件输出） |
 | `dotnetdebugger_decompile_to_project` | 以可编译项目形式反编译整个程序集到目录（按命名空间嵌套） |
 | `dotnetdebugger_call_chain` | 从起始方法出发的正向调用序列 + 被调用内部成员反编译 |
@@ -156,6 +157,8 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -o src                                 
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -o src -t "MyApp.IWorker,MyApp.Worker"     # 批量写盘多类型
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -o src -p --nested-directories             # dotnetdebugger_decompile_to_project
 ```
+
+> `dotnetdebugger_decompile_il`（方法体 IL 反汇编）当前仅 MCP 工具可用、无命令行开关——需在 MCP 客户端内按方法 token 调用（agent 场景）。
 
 ### 结构探测
 
@@ -238,6 +241,17 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 
 多匹配合并输出、各成员前 `#MEMBER {"name","token","type"}` 分隔行；超过 20 个仅返回签名清单；无匹配时附相近成员名。
 
+### `dotnetdebugger_decompile_il`
+
+| 参数 | 说明 | 必填 | 默认 |
+| ---- | ---- | ---- | ---- |
+| `assembly` | 目标程序集路径 | 是 | — |
+| `token` | 方法定义 token（`0x06` 开头，如 `0x06000005`） | 是 | — |
+| `lines` | 行号范围 | 否 | — |
+| `timeoutSeconds` | 超时秒数 | 否 | 30 |
+
+按方法 token 反汇编方法体为 IL 文本（ILSpy 风格：头部注释 RVA/Header size/Code size、`.maxstack`/`.locals`、结构化 `.try`/`catch`/`finally`/循环块、每条指令行首 `IL_xxxx` 偏移标签）。行号体系独立于 C# 反编译视图（不与 `decompile`/`decompile_member` 行号对齐）。字段/属性/事件 token（非 `0x06`）返回「不是方法定义」提示。
+
 ### `dotnetdebugger_decompile_to_dir` / `dotnetdebugger_decompile_to_project`
 
 | 参数 | 说明 | 必填 | 默认 |
@@ -266,7 +280,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `typeName` | 类型全名 | 是 | — |
 | `lines` | 行号范围 | 否 | — |
 
-每行一成员签名，行尾附 token（`0x06`/`0x04`/`0x17`/`0x14`），可直接用于 `decompile_member`；未找到时附相近类型名。
+每行一成员签名，行尾附 token（`0x06`/`0x04`/`0x17`/`0x14`），可直接用于 `decompile_member`（`0x06` 方法 token 亦可用于 `decompile_il`）；未找到时附相近类型名。
 
 ### `dotnetdebugger_hierarchy` / `dotnetdebugger_interface_usage` / `dotnetdebugger_generic_instantiations`
 
@@ -341,6 +355,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 
 - > 反编译 `MyApp.Program` / 搜索 `Main` 成员并反编译 / 跨程序集搜索 `Parse`
 - > 列出 `MyApp.Program` 的成员签名（API 地图），取行尾 token 反编译单个成员
+- > 用 `signature`/`#MEMBER` 行尾的 `0x06` token 反汇编某个方法的方法体 IL（`dotnetdebugger_decompile_il`——async 状态机等编译器生成类型 C# 反编译失败/难读时的兜底）
 - > 按行拉取 `MyApp.Program` 第 200-400 行
 
 **继承与引用**

@@ -66,11 +66,11 @@ internal static class ToolExecutor
     public static async Task<string> RunPipelineAsync(ToolCommand command, string lines, TimeSpan timeout, CancellationToken cancellationToken, FormatContext context)
     {
         // agent 视图联动：反编译了什么类型/成员 → 写入共享上下文（Web 订阅侧据此展开树/切代码）。
-        // Member 时 Target 为成员 token，经 MemberType 带所属类型全名（decompile_member 提供）；无则只记成员 token。
+        // Member/Il 时 Target 为成员 token，经 MemberType 带所属类型全名（decompile_member 提供）；无则只记成员 token。
         var typeName = command.Request.Kind switch
         {
             DecompileKind.Type => command.Request.Target,
-            DecompileKind.Member => command.MemberType,
+            DecompileKind.Member or DecompileKind.Il => command.MemberType,
             _ => null,
         };
         AgentViewService.Context.Update(command.Assembly, typeName, command.MemberName ?? command.MemberToken);

@@ -1,6 +1,7 @@
 using ICSharpCode.Decompiler;
 using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.ProjectDecompiler;
+using ICSharpCode.Decompiler.Disassembler;
 using ICSharpCode.Decompiler.Metadata;
 using DotNetDebugger.Decompiler.Configuration;
 using DotNetDebugger.Decompiler.Metadata;
@@ -115,6 +116,52 @@ public sealed class InProcessDecompiler
             }
 
             return CheckOutputSize(decompiler.DecompileAsString(candidate));
+        });
+    }
+
+    /// <summary>
+    /// 反汇编指定方法（元数据 token，如 "0x06000005"）的方法体为 IL 文本（ILSpy 风格：头部注释 RVA/Header size/Code size、
+    /// .maxstack/.locals/异常处理块结构、每条指令行首 IL_xxxx 偏移标签）。 面向反编译失败场景的 IL 兜底：async 状态机等编译器生成
+    /// 类型反编译为 C# 常失败或难读，IL 文本逐指令还原方法体真相。 仅接受方法定义 token（0x06 开头）；字段/属性/事件等非方法 token
+    /// 返回中文提示。token 非法/越界返回中文提示。
+    /// </summary>
+    /// <param name="assemblyPath">程序集文件路径（dll/exe）。</param>
+    /// <param name="token">方法定义元数据 token，0x 开头的十六进制，如 0x06000005。</param>
+    /// <param name="cancellationToken">取消令牌，透传给反汇编引擎实现协作式中断。</param>
+    /// <returns>IL 反汇编文本或中文提示。</returns>
+    public static string DecompileIl(string assemblyPath, string token, CancellationToken cancellationToken = default)
+    {
+        return Execute(assemblyPath, cancellationToken, (module, _) =>
+        {
+            var trimmed = token.Trim();
+            if (!trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                || !int.TryParse(trimmed.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var tokenValue))
+            {
+                return $"{DecompilerText.IlFailurePrefix}\"{trimmed}\" 不是有效的元数据 token，应为 0x 开头的十六进制格式，如 0x06000005";
+            }
+
+            // 按 token 的 Kind 校验 row 数防越界，并限定为方法定义 token（0x06）：字段/属性/事件等非方法 token 无方法体可反汇编
+            if ((tokenValue >> 24) != (int)HandleKind.MethodDefinition)
+            {
+                return $"{DecompilerText.IlFailurePrefix}元数据 token {trimmed} 不是方法定义（IL 反汇编仅接受 0x06 开头的方法 token，如 0x06000005）";
+            }
+            var rowNumber = tokenValue & 0x00ffffff;
+            if (rowNumber < 1 || rowNumber > module.Metadata.MethodDefinitions.Count)
+            {
+                return $"{DecompilerText.IlFailurePrefix}元数据 token {trimmed} 未引用本模块的方法";
+            }
+
+            var handle = MetadataTokens.MethodDefinitionHandle(rowNumber);
+            using var writer = new StringWriter();
+            var output = new PlainTextOutput(writer);
+            var disassembler = new MethodBodyDisassembler(output, cancellationToken)
+            {
+                // 显示结构化 .try/catch/finally 与循环块（ILSpy 默认）——async 状态机 MoveNext 含大 try 块，
+                // 结构化后 agent 才能分辨异常处理边界；ShowSequencePoints 需 PDB 调试信息，无 PDB 反汇编不显示
+                DetectControlStructure = true,
+            };
+            disassembler.Disassemble(module, handle);
+            return writer.ToString();
         });
     }
 
@@ -235,15 +282,18 @@ public sealed class InProcessDecompiler
 
     /// <summary>
     /// 判定文本是否为 InProcessDecompiler 生成的错误提示（而非反编译结果）。 供执行管道在写缓存前排除错误提示——错误提示不入缓存， 同 key
-    /// 后续调用可重试。覆盖全部错误提示形态：反编译异常兜底、未找到类型、输出超限、非法/越界 token、反编译已取消。 超时提示（timeoutHint） 由调用方另行判定（本方法不命中该类文本），无需重复处理。新增错误提示时必须同步扩展本判定，否则会被管道误当正常结果写入缓存。
+    /// 后续调用可重试。覆盖全部错误提示形态：反编译异常兜底、未找到类型、输出超限、非法/越界 token、反编译已取消、IL 反汇编失败（DecompileIl）。
+    /// 超时提示（timeoutHint） 由调用方另行判定（本方法不命中该类文本），无需重复处理。新增错误提示时必须同步扩展本判定，否则会被管道误当正常结果写入缓存。
     /// </summary>
     /// <param name="text">反编译入口返回的文本。</param>
     /// <returns>是错误提示返回 true；反编译结果返回 false。</returns>
     internal static bool IsErrorResult(string text)
     {
         // 全部错误提示前缀：Execute/RunWithTimeoutAsync 的「反编译失败：」兜底、未找到类型、输出超限、 「元数据 token
-        // …未引用…」越界、「反编译已取消」（引擎检查点中断）、以及以引号开头的非法 token 提示 （正常反编译文本不可能以这些开头）
+        // …未引用…」越界、「反编译已取消」（引擎检查点中断）、「反汇编失败：」（DecompileIl token 校验/非方法 token/引擎异常兜底）、以及以引号开头的非法 token 提示
+        // （正常反编译文本不可能以这些开头）
         return DecompilerText.StartsWithDecompileFailure(text)
+            || DecompilerText.StartsWithIlFailure(text)
             || text.StartsWith("反编译已取消", StringComparison.Ordinal)
             || text.StartsWith("未找到类型 ", StringComparison.Ordinal)
             || text.StartsWith("反编译输出超过上限", StringComparison.Ordinal)

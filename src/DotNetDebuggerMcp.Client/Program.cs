@@ -14,6 +14,7 @@ try
     await runner.ListToolsAsync();
     await runner.RunAsync(DecompileCases.All(dll));
     await runner.RunAsync(DecompileMemberCases.All(dll));
+    await runner.RunAsync(DecompileIlCases.All(dll));
     await runner.RunAsync(ListTypesCases.All(dll));
     await runner.RunAsync(AssemblyInfoCases.All(dll));
     await runner.RunAsync(SignatureCases.All(dll));

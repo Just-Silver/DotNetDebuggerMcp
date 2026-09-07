@@ -29,6 +29,11 @@ internal static class CacheSignatures
     public const string Member = "member";
 
     /// <summary>
+    /// decompile_il（方法体 IL 反汇编）。
+    /// </summary>
+    public const string Il = "il";
+
+    /// <summary>
     /// decompile（整模块）。
     /// </summary>
     public const string WholeModule = "whole-module";

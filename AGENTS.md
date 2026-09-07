@@ -36,7 +36,7 @@
 - **更新版本号同步三处**：`src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` `<Version>`、`.mcp/server.json`（顶层 + `packages[0].version`）、`CHANGELOG.md`（发布前把 `[Unreleased]` 转 `## [<version>] - <date>`）。CI 从 CHANGELOG 提取版本段作 GitHub Release 正文，缺段发布失败。CHANGELOG 面向包使用者，只记使用者可见变更。
 - **改 MCP 工具（新增/删除/改名/加参/改默认值/改行为）必须把根 `README.md` 一并改到位**再提交——README 打包为 `PackageReadmeFile`（用户看到的是打包时快照），且与代码改动同 commit。
 - **跨层/多处重复使用的字面量必须定义成常量**，改文案只在常量类改一处：`Configuration/AppText.cs`（转发 Decompiler 库 `DecompilerText` 单一来源）、`Configuration/CacheSignatures.cs`（缓存签名前缀 + `\u001F` 分隔符；**改动必须同步 `CacheStatsTool.ToolNames`**）、`MetadataNaming.FormatToken`、`OutputFormatter.MemberLine`（`#MEMBER` 行）、`SectionBuilder.EmptyPlaceholder`（`（无）`）。新增工具/提示先查这些常量类。
-- **新增错误提示必须扩展 `InProcessDecompiler.IsErrorResult`**（六类前缀判定），否则管道会把错误提示误当正常结果写入缓存。
+- **新增错误提示必须扩展 `InProcessDecompiler.IsErrorResult`**（七类前缀判定），否则管道会把错误提示误当正常结果写入缓存。
 - 工程惯例：修改逻辑后 build 通过 + 单元测试通过 + 本机跑 Client/CLI 确认输出（CI 的 build.yml 只做 build/test/发布，不跑端到端）。
 
 ## 输出约定（agent 消费的 API 形状）
