@@ -226,7 +226,7 @@ public static class DebugBreakpointTool
                 {
                     var only = search.Matches[0];
                     var kind = only.Token.StartsWith("0x04") ? "字段" : only.Token.StartsWith("0x17") ? "属性" : only.Token.StartsWith("0x14") ? "事件" : "成员";
-                    return $"成员 {only.Name} 是{kind}，不能设方法断点（token {only.Token} 非 0x06 方法）。请改用：① 其所在方法定位（typeName+line 断方法体行）或 decompile_member 看访问器 token 后以 methodToken 设置；② memberName 改输入方法名（可含访问器 get_/set_ 前缀）。";
+                    return $"成员 {only.Name} 是{kind}，不能设方法断点（token {only.Token} 非 0x06 方法）。请改用：① 其所在方法定位（typeName+line 断方法体行），或 decompile_member 看访问器方法（get_/set_）token 后以 methodToken 设置；② memberName 改输入普通方法名。";
                 }
                 if (search.Matches.Count > 1)
                     return $"类型 {fullName} 中名称含 \"{memberName}\" 的 {search.Matches.Count} 个成员均非方法（属性/事件/字段），不能设方法断点——请改用 typeName+line 或 decompile_member 看访问器 token 后以 methodToken 设置。";
