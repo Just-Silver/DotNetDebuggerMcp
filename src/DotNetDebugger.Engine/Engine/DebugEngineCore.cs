@@ -430,8 +430,9 @@ public sealed class DebugEngineCore : IAsyncDisposable
                         var ip = ilf.IP.pnOffset;
                         frames.Add(new DebugStackFrame(new FrameLocation(moduleName, (int)token, ip), idx++)
                         {
-                            TypeName = TryGetTypeName(ilf),
-                            MethodName = TryGetMethodName(ilf),
+                            // rawModule 为 "<unknown>"（模块不可达）时 resolver 读文件失败返回 null → 展示端降级位置文本
+                            TypeName = TryGetTypeName(ilf, rawModule),
+                            MethodName = TryGetMethodName(ilf, rawModule),
                         });
                     }
                     catch { /* 帧读取失败跳过 */ }
@@ -1232,22 +1233,24 @@ public sealed class DebugEngineCore : IAsyncDisposable
         return completion.Task.WaitAsync(ct);
     }
 
-    private static string? TryGetTypeName(CorDebugILFrame ilf)
+    /// <summary>栈帧类名真名化：TypeDef/TypeRef token 经 TypeNameResolver 解全名（失败返回 null → 展示端降级 token）。</summary>
+    private static string? TryGetTypeName(CorDebugILFrame ilf, string modulePath)
     {
         try
         {
             var cls = ilf.Function?.Class;
-            return cls is null ? null : $"0x{cls.Token.Value:x8}";
+            return cls is null ? null : TypeNameResolver.Resolve(modulePath, (int)cls.Token.Value);
         }
         catch { return null; }
     }
 
-    private static string? TryGetMethodName(CorDebugILFrame ilf)
+    /// <summary>栈帧方法名真名化：MethodDef token 经 SymbolNameResolver 解名（失败返回 null → 展示端降级 token）。</summary>
+    private static string? TryGetMethodName(CorDebugILFrame ilf, string modulePath)
     {
         try
         {
             var token = ilf.FunctionToken;
-            return token.IsNil ? null : $"0x{token.Value:x8}";
+            return token.IsNil ? null : SymbolNameResolver.ReadMethodName(modulePath, (int)token.Value);
         }
         catch { return null; }
     }

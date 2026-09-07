@@ -92,11 +92,12 @@ public sealed class DebugMcpToolsTests
         var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
         Assert.Contains("已停止", st.Text());
 
-        // 7. debug_stack：读调用栈（应含 Work 帧）
+        // 7. debug_stack：读调用栈（应含 Work 帧，真名 类型.方法 + token 后缀）
         var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
         Assert.True(stack.IsError != true, stack.Text());
         Assert.Contains("调用栈", stack.Text());
-        Assert.Contains("DebugTarget.dll", stack.Text());
+        Assert.Contains("DebugTarget.Program.Work", stack.Text()); // C：帧名真名化（类型.方法）
+        Assert.Contains($"0x{workToken:x8}", stack.Text()); // token 后缀保留（下断点闭环）
 
         // 8. debug_variables：读局部变量
         var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());

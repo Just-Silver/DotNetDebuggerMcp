@@ -15,13 +15,13 @@ public static class DebugInspectTool
 {
     /// <summary>
     /// 读取调用栈（进程需停在断点/异常/单步）。缺省读最近停点线程；threadId 指定时读该线程。
-    /// 每帧输出 模块!token+ILoffset 位置。
+    /// 每帧输出 类型.方法 [token]，附位置（模块!token+ILoffset，仅当类型/方法名缺失时）。
     /// </summary>
     /// <param name="threadId">线程 id；缺省 0 = 用最近停点线程。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>调用栈文本或错误提示。</returns>
     [McpServerTool]
-    [Description("读取调用栈（进程需停在断点/异常/单步）。每帧输出 模块!token+ILoffset。缺省读最近停点线程；threadId 指定时读该线程。")]
+    [Description("读取调用栈（进程需停在断点/异常/单步）。每帧输出 类型.方法 [token]（解析失败降级为 模块!token+ILoffset）。缺省读最近停点线程；threadId 指定时读该线程。")]
     public static async Task<string> DebugStack(
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
         CancellationToken cancellationToken = default)
@@ -35,7 +35,17 @@ public static class DebugInspectTool
         {
             var frames = await active.Session.GetStackFramesAsync(tid, cancellationToken);
             if (frames.Count == 0) return "调用栈为空（可能停在非托管/无 IL 帧处）。";
-            var lines = frames.Select(f => $"  {f.FrameIndex}: {f.Location}").ToList();
+            var lines = frames.Select(f =>
+            {
+                var loc = f.Location;
+                // 仅当类型名与方法名都解析出才组合真名（单侧成功会拼出 "Ns.Foo." / ".Bar" 残形）
+                var name = f.TypeName is not null && f.MethodName is not null
+                    ? $"{f.TypeName}.{f.MethodName}"
+                    : null;
+                var tokenSuffix = $"  [{loc.MethodTokenText}]"; // token 保留，供 debug_breakpoint_set 下断点
+                var pos = $"{loc.ModuleName}!{loc.MethodTokenText}+0x{loc.IlOffset:x}";
+                return $"  {f.FrameIndex}: {name ?? pos}{tokenSuffix}";
+            }).ToList();
             DebugSessionService.Manager.Actions.Log("debug_stack", $"thread={tid}", $"{frames.Count} 帧");
             return $"调用栈（thread={tid}，{frames.Count} 帧）:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
         }

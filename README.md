@@ -118,7 +118,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场，默认附停点上下文与目标最近控制台输出） |
 | `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处；停点时附反编译视图上下文） |
 | `dotnetdebugger_debug_output` | 查看被调试进程的控制台输出（stdout/stderr，旧→新；仅 launch 会话捕获，运行中可随时拉取） |
-| `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时；异常停点额外返回 `$exception` 当前异常对象：类型/Message/一级字段） |
+| `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时；异常停点额外返回 `$exception` 当前异常对象：类型/Message/一级字段）。`debug_stack` 每帧输出 `类型.方法 [token]`（解析失败降级为 `模块!token+ILoffset`；token 保留供下断点） |
 | `dotnetdebugger_debug_evaluate` | 求值表达式读当前值（纯读、无副作用，进程停时）：成员访问 `a.b.c`、数组/字符串**任意下标** `a[i]`（引擎按路径直读，不受变量树一级 32 子项截断限制）、一元 `!`、单次比较（`== != < <= > >=`）、字面量 int/string/true/false/null。属性不可直接读——按 `X→_x→_X→<X>k__BackingField` 字段约定降级，未命中报错附可用字段清单；未知根名报错附可用变量清单。不支持算术/方法调用/赋值/链式比较/括号 |
 | `dotnetdebugger_debug_exceptions` / `_clear` | first-chance 异常断点：按类型全名或短名（`.短名` 结尾，忽略大小写）过滤，不匹配的异常跳过并在 debug_wait/debug_state 提示跳过情况 / 清除 |
 | `dotnetdebugger_web_open` | 打开 Web 调试监视器（幂等：已启动返回现有地址不重复启动；首次自动拉起默认浏览器） |

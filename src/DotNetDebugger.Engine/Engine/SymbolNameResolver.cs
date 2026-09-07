@@ -93,6 +93,22 @@ internal static class SymbolNameResolver
         return names;
     }
 
+    /// <summary>方法名：DLL 元数据 MethodDef 表（无需 PDB）。解析失败返回 null（调用方降级为 token 文本）。</summary>
+    public static string? ReadMethodName(string modulePath, int methodToken)
+    {
+        try
+        {
+            using var fs = File.OpenRead(modulePath);
+            using var pe = new PEReader(fs);
+            var md = pe.GetMetadataReader();
+            var handle = MetadataTokens.MethodDefinitionHandle(methodToken);
+            if (handle.IsNil) return null;
+            var mdef = md.GetMethodDefinition(handle);
+            return md.GetString(mdef.Name);
+        }
+        catch { return null; }
+    }
+
     /// <summary>
     /// 当前 IL offset 所在语句的 IL 区间 [start,end)（PDB 序列点；单步 StepRange 用）。
     /// start = 含 ilOffset（或其前最近）的非隐藏序列点偏移，end = 其后下一个序列点偏移（无则 IL 末尾）。

@@ -54,6 +54,9 @@ public sealed class StateReadTests
         var topFrame = frames[0];
         Assert.Equal("DebugTarget.dll", topFrame.Location.ModuleName);
         Assert.Equal(workToken, topFrame.Location.MethodToken);
+        // C：栈帧真名化——顶帧应能解析出 类型.方法（模块全路径经 resolver）
+        Assert.Equal("DebugTarget.Program", topFrame.TypeName);
+        Assert.Equal("Work", topFrame.MethodName);
 
         // 读局部变量（Work 有 for 的 i / acc；参数名取 DLL Param 表，局部名取模块旁 PDB）
         var vars = await session.GetVariablesAsync(threadId, TestContext.Current.CancellationToken);
