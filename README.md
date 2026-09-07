@@ -117,6 +117,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时）。launch 蹲守 CLR 启动、停在 Main 前——任意程序无需启动配合即可从第一行业务代码前调试。`debug_launch` 可传 `workingDirectory`（默认空=目标 exe 所在目录，对齐手动启动 exe；Web 应用等以工作目录定位 appsettings/静态资源的目标应显式传 bin/publish 目录）与 `environment`（KEY=VALUE 多行或分号，如 `ASPNETCORE_ENVIRONMENT=Development`）；返回与 `debug_state` 均含目标 pid，launch 返回另含实际生效工作目录 |
 | `dotnetdebugger_debug_breakpoint_set` / `_remove` / `_clear` / `_list` | 下/删/清/列断点，四种定位：模块+方法 token+IL offset（signature 行尾取 token，未加载模块登记待绑定）；`typeName`+`memberName` 按类型内方法名子串定位（命中唯一方法即设断点；属性/事件/字段成员提示改用访问器 token；多方法匹配返回 `#MEMBER` 清单用 `methodToken` 精确重设）；`typeName`+`line` 按反编译视图行（需模块已加载）；`sourcePath`+`line` 按 PDB 源码行（模块未加载/未命中时登记延迟项，模块加载后自动按 PDB 解析绑定——launch 冻结 Main 前可直接设源行断点）。可选 `hitCount`（第 N 次命中起生效）与 `mode`（stop=命中停 / trace=命中不停记轨迹，`debug_wait` 批量取回）；可选 `condition`（P6 子集表达式如 `i == 3`，为真才停/记——语法错当场拒绝，命中时求值失败放行并在 debug_state/debug_wait 反馈「条件未通过」防静默空等） |
 | `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场，默认附停点上下文与目标最近控制台输出）。`debug_step` 停在编译器生成的 async 状态机帧（类型形如 `<Foo>d__N`）时返回附行断点引导（建议断还原源码的 await 行，勿 step into 状态机 MoveNext） |
+| `dotnetdebugger_debug_run_to` | 运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、**临时断点自动移除**。目标定位同 `debug_breakpoint_set` 的 `typeName`+`line`（decompile 输出行号）或 `typeName`+`memberName`（方法名子串，命中唯一方法）。超时 / 命中其它断点 / 进程退出均返回对应提示且临时断点一并自动清理。边界：只对「目标会被进程自然执行到」有效——停住不自己走的路径请改用普通断点 + `debug_continue` |
 | `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处；停点时附反编译视图上下文——停点类型是编译器生成的 async 状态机 `<Foo>d__N` 时头部附备注：对应 async 方法 Foo、业务代码见外壳方法还原源码、建议用行断点断 await 行） |
 | `dotnetdebugger_debug_output` | 查看被调试进程的控制台输出（stdout/stderr，旧→新；仅 launch 会话捕获，运行中可随时拉取） |
 | `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时；异常停点额外返回 `$exception` 当前异常对象：类型/Message/一级字段）。`debug_stack` 每帧输出 `类型.方法 [token]`（解析失败降级为 `模块!token+ILoffset`；token 保留供下断点）；帧类型是编译器生成的 async 状态机（`Ns.X+<Foo>d__N`）时标注原方法：`Ns.X+<Foo>d__N (状态机 Foo).MoveNext` |
@@ -126,7 +127,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_disconnect` | 断开调试会话 |
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
-> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、`debug_step` 单步、`debug_disconnect` 结束。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。
+> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。
 
 ## 命令行调试
 
@@ -322,7 +323,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 
 序列行带内部成员 token；被调内部成员超 20 个仅返签名清单。
 
-### 动态调试工具（`dotnetdebugger_debug_launch` / `debug_state` / `debug_output` / `debug_processes` 等）
+### 动态调试工具（`dotnetdebugger_debug_launch` / `debug_state` / `debug_output` / `debug_run_to` / `debug_processes` 等）
 
 | 工具 | 参数 | 说明 |
 | ---- | ---- | ---- |
@@ -338,6 +339,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `debug_wait` | `waitSeconds` / `outputLines` / `outputFilter` / `contextLines` | 等停秒数（默认 10）/ 附输出行数（默认 20，0=不附）/ 附输出只留含该子串的行 / 停点上下文预算 |
 | `debug_processes` | `filter` | 进程名子串过滤，忽略大小写；缺省空=全部。进程名排序，当前会话目标行标注「← 当前会话」，超 100 条截断提示用 filter |
 | `debug_breakpoint_set` | `moduleName`+`methodToken`+`ilOffset` / `typeName`+`memberName` / `typeName`+`line` / `sourcePath`+`line` | 四种定位方式；`typeName`+`memberName` 按类型内方法名子串定位（唯一命中即设断点，多方法匹配返回 `#MEMBER` 清单，属性/事件/字段成员提示）；`sourcePath`+`line` 模块未加载/未命中时登记延迟项（模块加载后自动按 PDB 解析绑定）；可选 `hitCount`、`mode`（stop/trace）、`condition`（P6 子集表达式，为真才停/记） |
+| `debug_run_to` | `typeName`+`line` / `typeName`+`memberName` | 运行到目标位置后停下（对标 VS Run to Cursor）：设一次性临时断点 + 继续运行，命中即停且**自动移除**临时断点。`typeName` 必填，`line`（decompile 输出行号）或 `memberName` 二选一，`moduleName` 可省；`timeoutSeconds` 等待命中上限（默认 30）。超时/命中其它断点/进程退出都返回提示并清理临时断点。只对「目标会被自然执行到」有效 |
 | `debug_continue` / `debug_disconnect` | — | 继续执行（异步返回，停点后 `debug_state` 确认）/ 断开会话（目标继续独立运行） |
 
 > 输出捕获仅 `debug_launch` 会话可用（attach 已运行进程无法重定向）；缓冲保留最近 2000 行，被高频日志淹没时用 `filter` 筛关键行。

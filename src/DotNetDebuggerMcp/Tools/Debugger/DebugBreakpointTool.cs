@@ -55,6 +55,21 @@ public static class DebugBreakpointTool
         [Description("条件表达式（P6 子集：成员访问/索引/一元 !/单次比较），默认空=无条件。条件为真才停/记——Hits 只数条件为真次数；语法错当场拒绝；命中时求值失败（未知名/缺字段/非布尔）放行并计入 debug_state/debug_wait 的「条件未通过」反馈。如 i == 3、b.A > 0。")] string condition = "",
         CancellationToken cancellationToken = default)
     {
+        // 公开入口与 debug_run_to 共用同一套「校验→定位→设置」内部入口（SetResolvedAsync），保证定位语义一致
+        return await SetResolvedAsync(moduleName, methodToken, ilOffset, typeName, memberName,
+            sourcePath, line, hitCount, mode, condition, cancellationToken);
+    }
+
+    /// <summary>
+    /// 断点「校验→定位→设置」统一内部入口（I1 debug_run_to 与 debug_breakpoint_set 共用同一套逻辑）：
+    /// 校验 → 按 methodToken→memberName→sourcePath→typeName 优先级分发到各 SetBy* 分支。
+    /// 返回设置/失败/指引文本（与公开工具同文案）；成功文本必含 "id=N"（调用方用 <see cref="ParseBreakpointIdText"/>
+    /// 提取断点 id 后编排后续——run_to 设临时断点即复用本入口，无需复制各分支的定位解析）。
+    /// </summary>
+    internal static async Task<string> SetResolvedAsync(
+        string moduleName, string methodToken, int ilOffset, string typeName, string memberName,
+        string sourcePath, int line, int hitCount, string mode, string? condition, CancellationToken ct)
+    {
         var active = DebugSessionService.Manager.Active;
         if (active is null) return "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。";
         if (hitCount < 1) return "hitCount 须 ≥ 1（第 N 次命中起生效，默认 1=每次）。";
@@ -71,11 +86,18 @@ public static class DebugBreakpointTool
         }
 
         // E：memberName 定位优先于 sourcePath/typeName 行定位（memberName+line 同给时以成员级为准，line 忽略）
-        if (!string.IsNullOrWhiteSpace(methodToken)) return await SetByTokenAsync(active, moduleName, methodToken, ilOffset, hitCount, modeValue, conditionNorm, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(memberName)) return await SetByMemberAsync(active, moduleName, typeName, memberName, hitCount, modeValue, conditionNorm, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(sourcePath)) return await SetBySourceLineAsync(active, moduleName, sourcePath, line, hitCount, modeValue, conditionNorm, cancellationToken);
-        if (!string.IsNullOrWhiteSpace(typeName)) return await SetByTypeLineAsync(active, moduleName, typeName, line, hitCount, modeValue, conditionNorm, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(methodToken)) return await SetByTokenAsync(active, moduleName, methodToken, ilOffset, hitCount, modeValue, conditionNorm, ct);
+        if (!string.IsNullOrWhiteSpace(memberName)) return await SetByMemberAsync(active, moduleName, typeName, memberName, hitCount, modeValue, conditionNorm, ct);
+        if (!string.IsNullOrWhiteSpace(sourcePath)) return await SetBySourceLineAsync(active, moduleName, sourcePath, line, hitCount, modeValue, conditionNorm, ct);
+        if (!string.IsNullOrWhiteSpace(typeName)) return await SetByTypeLineAsync(active, moduleName, typeName, line, hitCount, modeValue, conditionNorm, ct);
         return "请提供定位方式之一：methodToken（token 定位）、typeName+memberName（成员级）、typeName+line（反编译视图行）、sourcePath+line（PDB 源码行）。";
+    }
+
+    /// <summary>从断点设置成功文本（"断点已设: id=N …"）提取断点 id；非成功文本（定位失败/指引）返回 null。</summary>
+    internal static int? ParseBreakpointIdText(string text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text, @"id=(\d+)");
+        return m.Success && int.TryParse(m.Groups[1].Value, out var id) ? id : null;
     }
 
     /// <summary>token 分支（现状语义）：模块必填；未加载登记 pending。</summary>

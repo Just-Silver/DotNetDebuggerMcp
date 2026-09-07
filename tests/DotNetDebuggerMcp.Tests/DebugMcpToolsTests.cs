@@ -9,7 +9,8 @@ namespace DotNetDebuggerMcp.Tests;
 
 /// <summary>
 /// MCP 调试工具端到端测试：真实子进程宿主 + DebugTarget 目标，
-/// 验证 debug_launch → breakpoint（token/typeName+line/sourcePath+line/typeName+memberName）→ continue → 命中 → stack/variables 闭环。
+/// 验证 debug_launch → breakpoint（token/typeName+line/sourcePath+line/typeName+memberName）→ continue → 命中 → stack/variables 闭环，
+/// 以及 debug_run_to（一次性断点命中自动移除 / 退出清理）闭环。
 /// </summary>
 public sealed class DebugMcpToolsTests
 {
@@ -653,6 +654,156 @@ public sealed class DebugMcpToolsTests
         var waitStep = await CallAsync(mcp, "debug_wait",
             new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", waitStep.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
+    public async Task RunTo_LaunchContinueHit_AutoRemovesTempBreakpoint()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workToken = ReadMethodToken(dll, "Work");
+        Assert.True(workToken > 0);
+
+        // 目标：Work 方法入口的反编译视图首语句行（与 3a 行断点测试同源坐标，保证可定位可命中）
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var workFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workToken);
+        Assert.True(workFirstLine.GetValueOrDefault() > 0);
+
+        await using var mcp = await ConnectAsync();
+
+        // launch（delay 8s 提供操作窗口）；先 continue 再 run_to（CI 实录：launch 返回时模块登记可能缺目标模块）
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        Assert.Contains("已启动", launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        // run_to：typeName+line（moduleName 省缺跨模块解析）。定位需模块已登记——轮询重试等就绪
+        // （与 RetrySetUntilAsync 同背景：continue 后模块登记是异步的，过早 run_to 会报「在已加载模块中未找到类型」）
+        string runToText = "";
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < deadline)
+        {
+            runToText = (await CallAsync(mcp, "debug_run_to",
+                new Dictionary<string, object?> { ["typeName"] = "DebugTarget.Program", ["line"] = workFirstLine })).Text();
+            if (runToText.Contains("已运行到目标")) break;   // 成功
+            if (runToText.Contains("未能在")) { await Task.Delay(250, TestContext.Current.CancellationToken); continue; } // 模块未就绪，重试
+            break; // 其它终态（超时等）直接断言暴露
+        }
+        Assert.Contains("已运行到目标", runToText);
+        Assert.Contains("自动移除", runToText);
+
+        // 命中现场：进程停在 Work（栈帧含 Work token）——run_to 停点可直接接 debug_stack/debug_variables
+        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.True(stack.IsError != true, stack.Text());
+        Assert.Contains($"0x{workToken:x8}", stack.Text());
+
+        // 临时断点已自动移除：debug_breakpoint_list 应为空（无残留）
+        var list = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains("无断点", list.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
+    public async Task RunTo_Timeout_AutoRemovesTempBreakpointAndHonestMessage()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workToken = ReadMethodToken(dll, "Work");
+        Assert.True(workToken > 0);
+
+        // Work 入口反编译视图首语句行（run_to 定位目标）
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var workFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workToken);
+        Assert.True(workFirstLine.GetValueOrDefault() > 0);
+
+        await using var mcp = await ConnectAsync();
+
+        // launch 长 delay（15s）提供「进程 Running 但暂未到目标」的纯超时窗口：delay 期间 Work 尚未被调用。
+        // run_to Work（typeName+line）配 timeoutSeconds=2 → 2s 内不命中 → 走超时分支返回提示。
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 15", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        Assert.Contains("已启动", launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        // run_to 定位需模块已登记（typeName 跨模块扫描）——轮询重试等模块就绪（delay 15s 窗口内必然）
+        string runToText = "";
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < deadline)
+        {
+            runToText = (await CallAsync(mcp, "debug_run_to",
+                new Dictionary<string, object?> { ["typeName"] = "DebugTarget.Program", ["line"] = workFirstLine, ["timeoutSeconds"] = 2 })).Text();
+            if (runToText.Contains("未命中")) break;   // 模块就绪 + 超时
+            if (runToText.Contains("未能在")) { await Task.Delay(250, TestContext.Current.CancellationToken); continue; } // 模块未就绪，重试
+            break;
+        }
+        Assert.Contains("未命中", runToText);
+        Assert.Contains("当前 运行中", runToText);
+
+        // 临时断点已自动清理：无残留
+        var list = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains("无断点", list.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
+    public async Task RunTo_FromStoppedBreakpoint_ContinuesAndHitsTarget()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workBagToken = ReadMethodToken(dll, "WorkBag");
+        var workScoresToken = ReadMethodToken(dll, "WorkScores");
+        Assert.True(workBagToken > 0 && workScoresToken > 0);
+
+        await using var mcp = await ConnectAsync();
+
+        // bag 模式（delay 8s 操作窗口）：Main 依次 WorkBag(5轮) → WorkScores → return。
+        // 先停 WorkBag 入口（进程 Stopped）→ run_to WorkScores（WorkBag 结束后才执行）→
+        // run_to 看到 Stopped 自动 continue 放行 → WorkBag 跑完 → WorkScores 命中。这是 VS run-to-cursor 的对等场景。
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} bag 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        // 停 WorkBag 入口（token 断点；竞态下 set 返回 pending——等绑定终态）
+        var bpSet = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workBagToken:x8}", ["ilOffset"] = 0 });
+        Assert.True(bpSet.IsError != true, bpSet.Text());
+        var workBagBpId = ParseBreakpointId(bpSet.Text());
+        await WaitBoundAsync(mcp, workBagBpId);
+        var waitBag = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", waitBag.Text());
+
+        // 此刻 Stopped 于 WorkBag → run_to WorkScores（memberName 定位）。run_to 内部应自动 continue 放行。
+        var runTo = await CallAsync(mcp, "debug_run_to",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["typeName"] = "DebugTarget.Program", ["memberName"] = "WorkScores", ["timeoutSeconds"] = 25 });
+        Assert.True(runTo.IsError != true, runTo.Text());
+        Assert.Contains("已运行到目标", runTo.Text());
+        Assert.Contains("自动移除", runTo.Text());
+
+        // 停在 WorkScores（栈帧含其 token）
+        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.True(stack.IsError != true, stack.Text());
+        Assert.Contains($"0x{workScoresToken:x8}", stack.Text());
+
+        // run_to 临时断点已移除；WorkBag 常驻断点仍在（恰好 1 个，无残留新断点）
+        var list = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains($"id={workBagBpId} ", list.Text());
+        Assert.Contains("断点列表（1 个）", list.Text());
 
         var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
         Assert.True(disc.IsError != true, disc.Text());
