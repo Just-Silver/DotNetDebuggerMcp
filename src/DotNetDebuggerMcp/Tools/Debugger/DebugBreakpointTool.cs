@@ -37,7 +37,7 @@ public static class DebugBreakpointTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示（断点 id）或错误提示。</returns>
     [McpServerTool]
-    [Description("设置断点，三种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（未加载模块登记待绑定，加载后自动绑定）；② 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；③ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，模块旁需有 PDB 且已加载）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
+    [Description("设置断点，三种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（未加载模块登记待绑定，加载后自动绑定）；② 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；③ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，需模块旁有 PDB；模块未加载/未命中时登记延迟项，模块加载后自动解析绑定）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
     public static async Task<string> DebugBreakpointSet(
         [Description("模块名（如 DebugTarget.dll）；token 方式必填；行定位方式可省，省缺在已加载模块中解析。")] string moduleName = "",
         [Description("方法 token（0x06000005，从反编译 signature 行尾或 #MEMBER 取）；提供时优先按 token 定位。")] string methodToken = "",
@@ -164,7 +164,8 @@ public static class DebugBreakpointTool
         }
     }
 
-    /// <summary>PDB 源码行分支（P3-3b）：sourcePath+line 经 PDB 序列点 → token+IL → 断点。</summary>
+    /// <summary>PDB 源码行分支（P3-3b）：sourcePath+line 经 PDB 序列点 → token+IL → 断点。
+    /// R6：显式 moduleName 未加载 / 已加载模块全试不命中 → 登记源行延迟项（pending，模块加载后自动解析绑定）。</summary>
     private static async Task<string> SetBySourceLineAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string sourcePath, int line, int hitCount, DebugBreakpointMode modeValue, string? condition, CancellationToken ct)
     {
         if (line <= 0) return "请提供行号（line，1-based，源码行号）。";
@@ -176,7 +177,12 @@ public static class DebugBreakpointTool
                 ? modules.Where(m => ModuleNameMatches(m, moduleName)).ToList()
                 : modules.ToList();
             if (moduleName is not "" && candidates.Count == 0)
-                return $"模块 {moduleName} 未加载（行定位方式要求模块已加载）。已加载：{string.Join("、", modules.Select(m => m.Name))}；未加载模块请用 methodToken 方式（支持待绑定）。";
+            {
+                // R6：显式模块未加载 → 登记源行延迟项（moduleName 限定），模块加载后自动解析绑定
+                var pending = await active.Session.SetSourceLineBreakpointAsync(sourcePath, line, moduleName, hitCount, modeValue, condition, ct);
+                DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{sourcePath}:{line} → {moduleName}（未加载，延迟绑定）", $"id={pending.Id}");
+                return DescribeSetWithPosition(pending, $"源 {sourcePath} 第 {line} 行 → 模块 {moduleName}（未加载，加载后按 PDB 自动解析绑定）");
+            }
 
             var resolved = new List<(string Module, SourceLineResolver.SourceLineTarget Target)>();
             string? lastError = null;
@@ -189,7 +195,18 @@ public static class DebugBreakpointTool
             }
 
             if (resolved.Count == 0)
+            {
+                // R6：已加载模块全试不命中（无此源文件/无 PDB）→ 登记源行延迟项（任意模块），
+                // 后续模块加载时自动尝试解析（覆盖 launch 早期业务模块未加载场景）
+                if (moduleName is "")
+                {
+                    var pending = await active.Session.SetSourceLineBreakpointAsync(sourcePath, line, "", hitCount, modeValue, condition, ct);
+                    DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{sourcePath}:{line}（已加载模块未命中，延迟绑定）", $"id={pending.Id}");
+                    return DescribeSetWithPosition(pending, $"源 {sourcePath} 第 {line} 行（已加载模块未命中，登记延迟——模块加载后按 PDB 自动解析绑定）")
+                        + " " + (lastError ?? "");
+                }
                 return (lastError ?? "未能按源文件+行定位断点。") + LineBreakpointRetryHint;
+            }
             if (resolved.Count > 1)
                 return $"源文件 \"{sourcePath}\" 第 {line} 行在多个模块命中，请提供 moduleName 消歧：{string.Join("、", resolved.Select(r => r.Module))}";
 
@@ -272,7 +289,13 @@ public static class DebugBreakpointTool
             return "当前无断点。用 debug_breakpoint_set 设置。";
         var pendingTraces = active.Buffer.PendingTraceCount;
         var lines = bps.Select(b =>
-            $"  id={b.Id} {b.ModuleName}!0x{b.MethodToken:x8}+{b.IlOffset} {(b.IsBound ? "已绑定" : "未绑定（模块未加载，加载后自动绑定）")}"
+            "  id=" + b.Id + " "
+            + (b.IsSourceLine && b.MethodToken == 0
+                ? $"源行 {b.SourcePath}:{b.SourceLine}（{(string.IsNullOrEmpty(b.ModuleName) ? "任意模块" : $"限模块 {b.ModuleName}")}）"
+                : $"{b.ModuleName}!0x{b.MethodToken:x8}+{b.IlOffset}")
+            + (b.IsSourceLine && b.MethodToken == 0
+                ? " 未绑定（源行待解析，模块加载后自动绑定）"
+                : (b.IsBound ? " 已绑定" : " 未绑定（模块未加载，加载后自动绑定）"))
             + $" [{(b.Mode == DebugBreakpointMode.Trace ? "trace" : "stop")}]"
             + (b.HitCount > 1 ? $" 命中 {b.Hits}/{b.HitCount}" : (b.Condition is not null ? $" 条件为真 {b.Hits} 次" : ""))
             + (b.Condition is not null ? $" 条件: {b.Condition}" : "")

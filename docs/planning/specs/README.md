@@ -8,7 +8,7 @@
 | `2026-09-05-overview-design.md` | **总览 spec**：五项目全局架构、命名布局、各层设计原则、线程/事件模型、阶段边界 P1-P5、风险与合规 | **已确认**（用户 2026-09-05 review OK） |
 | `2026-09-05-p4-webui.md` | **P4 WebUI 细化 spec**：运行形态双模式、页面布局 v1 核心面、文档模型/行映射、技术集成定稿（BB 10.10.0 + 自研 Monaco 互操作 + 宿主 --web 接线） | **已冻结**（用户 2026-09-05 review OK） |
 | `2026-09-07-r5-async-step.md` | **R5 async 状态机单步体验 spec**（agent 反馈 R5）：状态机帧识别 + step-over/out 自动连步滤帧 + step-into 诚实停住 + `debug_stack` 帧名真名化；参考 dnSpy DbgEngineStepperImpl | **Superseded 不实施**（2026-09-07 评审跳过，决策见 ROADMAP v2 候选） |
-| `2026-09-07-r6-line-breakpoint-deferred.md` | **R6 行断点延迟解析登记 spec**（agent 反馈 R6）：SourceLineResolver 迁引擎 + 源行延迟项表 + TrackModule 解析补设（sharpdbg 模型，引擎内闭环）；sourcePath 先行，typeName 排除 | **已定稿**（2026-09-07，方案 C 经评审确认） |
+| `2026-09-07-r6-line-breakpoint-deferred.md` | **R6 行断点延迟解析登记 spec**（agent 反馈 R6）：SourceLineResolver 迁引擎 + 源行延迟项表 + TrackModule 解析补设（sharpdbg 模型，引擎内闭环）；sourcePath 先行，typeName 排除 | **已完成**（2026-09-07 实施，方案 C；Engine 23/Session 90 全过） |
 
 ## 阶段对应关系（decisions D7）
 

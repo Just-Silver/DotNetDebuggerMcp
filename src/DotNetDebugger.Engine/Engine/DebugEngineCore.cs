@@ -17,10 +17,12 @@ public sealed class DebugEngineCore : IAsyncDisposable
 {
     private readonly object _gate = new();
 
-    /// <summary>P7：条件求值器由 Session 经构造注入（null=会话不支持条件断点）。</summary>
-    internal DebugEngineCore(IBreakpointConditionEvaluator? conditionEvaluator = null)
+    /// <summary>P7：条件求值器由 Session 经构造注入（null=会话不支持条件断点）。
+    /// R6：源行断点解析器由 Session 经构造注入（null=不支持 sourcePath+line 延迟断点）。</summary>
+    internal DebugEngineCore(IBreakpointConditionEvaluator? conditionEvaluator = null, ISourceLineBreakpointResolver? sourceLineResolver = null)
     {
         _conditionEvaluator = conditionEvaluator;
+        _breakpoints = new BreakpointManager(sourceLineResolver);
     }
 
     private readonly Channel<DebugEvent> _outbound = Channel.CreateUnbounded<DebugEvent>(
@@ -38,7 +40,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
     private DbgShim? _dbgshim;
     private CorDebugManagedCallback? _callback;
     private CallbackHandler? _handler;
-    private readonly BreakpointManager _breakpoints = new();
+    private readonly BreakpointManager _breakpoints;
 
     // P7 条件断点：Session 注入的求值器（依赖倒置，见 IBreakpointConditionEvaluator；null=不支持条件断点）
     private readonly IBreakpointConditionEvaluator? _conditionEvaluator;
@@ -263,6 +265,42 @@ public sealed class DebugEngineCore : IAsyncDisposable
             PublishBreakpointsChanged();
             return bp;
         }, ct);
+
+    /// <summary>
+    /// 设置源行型断点（R6）：sourcePath+line 按 PDB 解析绑定。模块未加载/未命中时登记为 pending，
+    /// 后续模块加载（TrackModule）自动解析补设。moduleName 非空=限该模块（未加载也登记 pending）；
+    /// 空=任意模块（当前已加载模块立即尝试，未命中则等后续模块）。无源行解析器（会话创建未注入）抛中文提示。
+    /// </summary>
+    public Task<DebugBreakpoint> SetSourceLineBreakpointAsync(string sourcePath, int line, string moduleName = "", int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null, CancellationToken ct = default)
+        => PostAsyncResult(() =>
+        {
+            if (_breakpoints.HasNoSourceLineResolver)
+                throw new InvalidOperationException("当前会话无源行解析器，sourcePath+line 断点不可用（会话创建须注入 ISourceLineBreakpointResolver）。");
+            if (string.IsNullOrWhiteSpace(sourcePath) || line <= 0)
+                throw new InvalidOperationException("源行断点须提供 sourcePath 与 line（1-based）。");
+            var bp = _breakpoints.AddSourceLine(sourcePath.Trim(), line, moduleName, hitCount, mode, condition);
+            // 模块已加载（attach 已运行进程 / launch 后模块已就绪）时立即尝试解析绑定
+            TryBindSourceLineNow(bp);
+            PublishBreakpointsChanged();
+            return bp;
+        }, ct);
+
+    /// <summary>源行 pending 在已登记模块上立即尝试解析绑定（模块加载时 TrackModule 已自动做；此处兜 attach 后快照已登记模块）。命令泵内调用。</summary>
+    private void TryBindSourceLineNow(DebugBreakpoint bp)
+    {
+        if (bp.IsBound || !bp.IsSourceLine || bp.MethodToken != 0) return;
+        try
+        {
+            var modules = _breakpoints.GetModules();
+            foreach (var (name, path) in modules)
+            {
+                if (!string.IsNullOrEmpty(bp.ModuleName) && !BreakpointManager.ModuleMatches(bp.ModuleName, name)
+                    && !BreakpointManager.ModuleMatches(bp.ModuleName, path)) continue;
+                if (_breakpoints.TryBindSourceLine(bp, path)) return; // 绑上即止
+            }
+        }
+        catch { /* 解析失败保持 pending */ }
+    }
 
     /// <summary>当前登记断点快照（经命令泵读，与增删互斥；Web 监视器红点渲染数据源）。</summary>
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
@@ -1137,7 +1175,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
     internal void PublishBreakpointsChanged()
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.BreakpointsChanged,
             new BreakpointsChangedPayload(_breakpoints.Breakpoints
-                .Select(b => new BreakpointSnapshot(b.Id, b.ModuleName, b.MethodToken, b.IlOffset)).ToList())));
+                .Select(b => new BreakpointSnapshot(b.Id, b.ModuleName, b.MethodToken, b.IlOffset, b.SourcePath, b.SourceLine)).ToList())));
 
     /// <summary>读线程栈顶 IL 帧位置（供断点/步/异常事件附 top frame）。回调线程调用。</summary>
     internal FrameLocation? ReadTopFrame(CorDebugThread thread)

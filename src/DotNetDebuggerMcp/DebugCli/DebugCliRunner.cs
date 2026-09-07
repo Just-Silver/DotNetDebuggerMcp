@@ -60,7 +60,10 @@ public static class DebugCliRunner
 
         try
         {
-            await using var session = await DebugSession.AttachAsync(processId: process.Id, DotNetDebugger.Session.ExpressionConditionEvaluator.Instance, ct);
+            await using var session = await DebugSession.AttachAsync(processId: process.Id,
+                conditionEvaluator: DotNetDebugger.Session.ExpressionConditionEvaluator.Instance,
+                sourceLineResolver: DotNetDebugger.Session.SourceLineBreakpointResolver.Instance,
+                ct: ct);
             Console.WriteLine($"已附加: {exePath} (pid={process.Id})");
 
             var events = new List<DebugEvent>();

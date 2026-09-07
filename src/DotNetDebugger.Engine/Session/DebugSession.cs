@@ -15,18 +15,21 @@ public sealed class DebugSession : IAsyncDisposable
     private DebugSession(DebugEngineCore core) => _core = core;
 
     /// <summary>启动新进程并附加（早期断点能力）。commandLine 为目标可执行文件路径（可带参数）。
-    /// P7：conditionEvaluator 为条件断点求值器（Session 注入 P6 表达式求值；null=会话不支持条件断点）。</summary>
+    /// P7：conditionEvaluator 为条件断点求值器（Session 注入 P6 表达式求值；null=会话不支持条件断点）。
+    /// R6：sourceLineResolver 为源行断点解析器（Session 注入 PDB 源行解析；null=会话不支持 sourcePath+line 延迟断点）。</summary>
     public static Task<DebugSession> LaunchAsync(string commandLine, int timeoutMs = 15000, string? workingDirectory = null,
-        IBreakpointConditionEvaluator? conditionEvaluator = null, CancellationToken ct = default)
-        => CreateAsync(core => core.LaunchAsync(commandLine, timeoutMs, workingDirectory, ct), conditionEvaluator, ct);
+        IBreakpointConditionEvaluator? conditionEvaluator = null, CancellationToken ct = default,
+        ISourceLineBreakpointResolver? sourceLineResolver = null)
+        => CreateAsync(core => core.LaunchAsync(commandLine, timeoutMs, workingDirectory, ct), conditionEvaluator, sourceLineResolver, ct);
 
-    /// <summary>附加到已运行进程。P7：conditionEvaluator 同 LaunchAsync。</summary>
-    public static Task<DebugSession> AttachAsync(int processId, IBreakpointConditionEvaluator? conditionEvaluator = null, CancellationToken ct = default)
-        => CreateAsync(core => core.AttachAsync(processId, ct), conditionEvaluator, ct);
+    /// <summary>附加到已运行进程。P7/R6：注入参数同 LaunchAsync。</summary>
+    public static Task<DebugSession> AttachAsync(int processId, IBreakpointConditionEvaluator? conditionEvaluator = null, CancellationToken ct = default,
+        ISourceLineBreakpointResolver? sourceLineResolver = null)
+        => CreateAsync(core => core.AttachAsync(processId, ct), conditionEvaluator, sourceLineResolver, ct);
 
-    private static async Task<DebugSession> CreateAsync(Func<DebugEngineCore, Task> start, IBreakpointConditionEvaluator? conditionEvaluator, CancellationToken ct)
+    private static async Task<DebugSession> CreateAsync(Func<DebugEngineCore, Task> start, IBreakpointConditionEvaluator? conditionEvaluator, ISourceLineBreakpointResolver? sourceLineResolver, CancellationToken ct)
     {
-        var core = new DebugEngineCore(conditionEvaluator);
+        var core = new DebugEngineCore(conditionEvaluator, sourceLineResolver);
         await start(core).ConfigureAwait(false);
         return new DebugSession(core);
     }
@@ -52,6 +55,11 @@ public sealed class DebugSession : IAsyncDisposable
     /// P7：condition=P6 表达式子集条件（非空要求会话已注入求值器，否则抛中文提示）。</summary>
     public Task<DebugBreakpoint> SetBreakpointAsync(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null, CancellationToken ct = default)
         => _core.SetBreakpointAsync(moduleName, methodToken, ilOffset, hitCount, mode, condition, ct);
+
+    /// <summary>设置源行型断点（R6，sourcePath+line 按 PDB 解析绑定）：模块未加载登记 pending、加载后自动补设。
+    /// moduleName 非空=限该模块；空=任意模块。要求会话创建时注入 ISourceLineBreakpointResolver（Session 库工厂默认注入）。</summary>
+    public Task<DebugBreakpoint> SetSourceLineBreakpointAsync(string sourcePath, int line, string moduleName = "", int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null, CancellationToken ct = default)
+        => _core.SetSourceLineBreakpointAsync(sourcePath, line, moduleName, hitCount, mode, condition, ct);
 
     /// <summary>当前登记断点快照（含未绑定模块的；Web 监视器红点渲染用）。</summary>
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)

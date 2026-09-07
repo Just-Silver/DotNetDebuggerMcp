@@ -90,7 +90,7 @@ public sealed class DebugViewService
         try
         {
             var list = await active.Session.GetBreakpointsAsync(ct);
-            return list.Select(b => new BreakpointSnapshot(b.Id, b.ModuleName, b.MethodToken, b.IlOffset)).ToList();
+            return list.Select(b => new BreakpointSnapshot(b.Id, b.ModuleName, b.MethodToken, b.IlOffset, b.SourcePath, b.SourceLine)).ToList();
         }
         catch { return []; }
     }

@@ -12,11 +12,15 @@ public sealed class BreakpointManager
 {
     private readonly List<DebugBreakpoint> _breakpoints = new();
     private readonly Dictionary<string, CorDebugModule> _modules = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ISourceLineBreakpointResolver? _sourceLineResolver;
     private int _nextId = 1;
+
+    public BreakpointManager(ISourceLineBreakpointResolver? sourceLineResolver = null) => _sourceLineResolver = sourceLineResolver;
 
     /// <summary>
     /// 模块加载时登记（供按名查找；Name 可能是全路径，归一化为文件名），并重绑该模块下
-    /// 未绑定的 pending 断点。全部调用在引擎 MTA 线程（attach 枚举 / 命令泵 LoadModule），无并发。
+    /// 未绑定的 pending 断点：普通 token 断点直接 Bind；源行型断点先经 resolver 解析（若解析器注入）
+    /// 出 token+IL 再 Bind。全部调用在引擎 MTA 线程（attach 枚举 / 命令泵 LoadModule），无并发。
     /// 返回本次重绑成功的断点数。
     /// </summary>
     public int TrackModule(CorDebugModule module)
@@ -32,12 +36,24 @@ public sealed class BreakpointManager
         catch { return 0; /* 登记失败无从重绑 */ }
 
         var rebound = 0;
-        foreach (var bp in _breakpoints.Where(b => !b.IsBound && ModuleMatches(b.ModuleName, name)).ToList())
+        var modulePath = SafeName(module); // 全路径（磁盘定位用）
+        foreach (var bp in _breakpoints.Where(b => !b.IsBound
+                && (b.IsSourceLine && b.MethodToken == 0 && string.IsNullOrEmpty(b.ModuleName) // 源行任意模块
+                    || ModuleMatches(b.ModuleName, name))).ToList())
         {
             try
             {
-                Bind(bp, module);
-                rebound++;
+                if (bp.IsSourceLine && bp.MethodToken == 0)
+                {
+                    // 源行型 pending：先解析出 token+IL（该模块 PDB 含此源文件才命中），再绑定；
+                    // 失败保持 pending 等其它模块
+                    if (TryBindSourceLine(bp, modulePath)) rebound++;
+                }
+                else
+                {
+                    Bind(bp, module);
+                    rebound++;
+                }
             }
             catch
             {
@@ -88,6 +104,49 @@ public sealed class BreakpointManager
         Bind(bp, module);
         _breakpoints.Add(bp);
         return bp;
+    }
+
+    /// <summary>
+    /// 登记源行型断点（R6）：sourcePath+line 在模块未加载时登记为 pending（IsBound=false），
+    /// 模块加载时 TrackModule 经 ISourceLineBreakpointResolver 解析出 token+IL 再绑定；
+    /// 若 moduleName 指定则只在该模块加载时尝试，空串=任意模块（sharpdbg 语义）。
+    /// 未注入 resolver 或模块始终不加载 → 保持 pending（agent 经 debug_breakpoint_list 可见）。
+    /// </summary>
+    public DebugBreakpoint AddSourceLine(string sourcePath, int line, string moduleName = "", int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null)
+    {
+        var bp = new DebugBreakpoint(_nextId++, moduleName, 0, 0, hitCount, mode, condition)
+        {
+            SourcePath = sourcePath,
+            SourceLine = line,
+        };
+        _breakpoints.Add(bp);
+        return bp;
+    }
+
+    /// <summary>是否未注入源行解析器（源行断点不可用）。</summary>
+    public bool HasNoSourceLineResolver => _sourceLineResolver is null;
+
+    /// <summary>
+    /// 源行型 pending 断点在指定模块磁盘路径上解析并绑定（TrackModule/SetSourceLine 兜底共用）。
+    /// 解析成功（该模块 PDB 含此源文件）→ 填充 ModuleName/MethodToken/IlOffset 并 Bind，返回 true；
+    /// 解析失败/无解析器 → 保持 pending 返回 false。MTA 单线程调用。
+    /// </summary>
+    public bool TryBindSourceLine(DebugBreakpoint bp, string modulePath)
+    {
+        if (_sourceLineResolver is null || bp.IsBound || !bp.IsSourceLine || bp.MethodToken != 0) return false;
+        if (!_modules.TryGetValue(Path.GetFileName(modulePath), out var module)
+            && !_modules.TryGetValue(modulePath, out module)) return false;
+        var resolved = _sourceLineResolver.Resolve(modulePath, bp.SourcePath!, bp.SourceLine);
+        if (resolved is null) return false;
+        try
+        {
+            bp.ModuleName = resolved.ModuleName;
+            bp.MethodToken = resolved.MethodToken;
+            bp.IlOffset = resolved.IlOffset;
+            Bind(bp, module);
+            return true;
+        }
+        catch { return false; /* 绑定失败（罕见）：保持 pending */ }
     }
 
     /// <summary>绑定断点到 模块/函数/IL。token 定位失败/无 IL 抛中文 InvalidOperationException。</summary>

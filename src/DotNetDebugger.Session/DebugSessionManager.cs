@@ -64,14 +64,16 @@ public sealed class DebugSessionManager : IAsyncDisposable
     public async Task<ActiveDebugSession> LaunchAsync(string commandLine, int timeoutSeconds, CancellationToken ct = default)
     {
         var session = await DebugSession.LaunchAsync(commandLine, timeoutSeconds * 1000, null,
-            ExpressionConditionEvaluator.Instance, ct).ConfigureAwait(false);
+            ExpressionConditionEvaluator.Instance, ct: ct,
+            sourceLineResolver: SourceLineBreakpointResolver.Instance).ConfigureAwait(false);
         return Activate(session, $"launch {commandLine}");
     }
 
     /// <summary>附加到已运行进程。</summary>
     public async Task<ActiveDebugSession> AttachAsync(int processId, CancellationToken ct = default)
     {
-        var session = await DebugSession.AttachAsync(processId, ExpressionConditionEvaluator.Instance, ct).ConfigureAwait(false);
+        var session = await DebugSession.AttachAsync(processId, ExpressionConditionEvaluator.Instance, ct: ct,
+            sourceLineResolver: SourceLineBreakpointResolver.Instance).ConfigureAwait(false);
         return Activate(session, $"attach pid={processId}", processId: processId);
     }
 
@@ -150,7 +152,8 @@ public sealed class DebugSessionManager : IAsyncDisposable
         DebugSession engineSession;
         try
         {
-            engineSession = await DebugSession.AttachAsync(process.Id, ExpressionConditionEvaluator.Instance, ct).ConfigureAwait(false);
+            engineSession = await DebugSession.AttachAsync(process.Id, ExpressionConditionEvaluator.Instance, ct: ct,
+                sourceLineResolver: SourceLineBreakpointResolver.Instance).ConfigureAwait(false);
         }
         catch
         {
