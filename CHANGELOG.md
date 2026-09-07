@@ -6,7 +6,7 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
-## [Unreleased]
+## [1.6.0] - 2026-09-07
 
 ### Added
 
@@ -20,8 +20,8 @@
 - **源行断点延迟登记（R6）**：`debug_breakpoint_set` 的 `sourcePath`+`line` 方式不再要求模块已加载——模块未加载/已加载模块未命中时登记延迟项并返回「断点已登记」，目标模块加载后自动按 PDB 解析「源行 → 方法+IL」并绑定（`debug_launch` 冻结在 Main 前即可直接设源行断点，agent 无需感知模块加载时机）；`debug_breakpoint_list` 对未解析的源行断点展示「待解析绑定」。`typeName`+`line`（反编译视图行）仍要求模块已加载（反编译行本质绑定模块视图）
 - **异常现场增强（P2）**：`debug_variables` 异常停点新增 `$exception` 节（当前异常对象：类型全名/Message/一级字段展开）；`debug_state`/`debug_wait` 停点现场附异常 Message
 - **`debug_exceptions` 类型过滤生效**：`typeName` 空 = 全部异常；否则异常类型全名与 typeName 相等或以「.typeName」结尾（短名如 `DivideByZeroException`，忽略大小写）才停；不匹配的异常跳过不停，`debug_wait`/`debug_state` 附「期间跳过 N 个不在过滤范围的异常」反馈（防类型名写错静默空等）
-- **`debug_output` 新工具（目标进程输出转发）**：查看被调试进程的控制台输出（stdout/stderr，旧→新，每行带 `HH:mm:ss.fff` 时间戳便于与断点/异常命中对时，`lines` 默认 50）；`debug_launch` 启动的会话自动捕获目标输出（环形缓冲最近 500 行，进程运行中可随时拉取，attach 附加的会话不捕获）。agent 调试时可直接看到目标自己的日志/异常打印/退出码
-- **`debug_wait` 附带目标输出**：新增 `outputLines` 参数（默认 20，0=不附），停点/退出/超时三种返回都附目标最近控制台输出，免额外调用
+- **`debug_output` 新工具（目标进程输出转发，R8 增强）**：查看被调试进程的控制台输出（stdout/stderr，旧→新，每行带 `HH:mm:ss.fff` 时间戳便于与断点/异常命中对时，`lines` 默认 50，`filter` 只返回含关键字的行）；`debug_launch` 启动的会话自动捕获目标输出（环形缓冲最近 2000 行，进程运行中可随时拉取，attach 附加的会话不捕获）。agent 调试时可直接看到目标自己的日志/异常打印/退出码
+- **`debug_wait` 附带目标输出**：新增 `outputLines` 参数（默认 20，0=不附），停点/退出/超时三种返回都附目标最近控制台输出，免额外调用；高频日志下可用 `outputFilter` 只保留含关键字的行
 - README 新增「第三方组件」一节：列出直接依赖的上游开源项目及其许可证
 
 ### Changed
