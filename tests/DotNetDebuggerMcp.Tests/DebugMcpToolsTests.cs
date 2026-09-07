@@ -88,9 +88,12 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("停点上下文", wait.Text()); // P4：默认附当前语句反编译上下文
         Assert.Contains("← 当前语句", wait.Text());
 
-        // 6. debug_state 确认 Stopped
+        // 6. debug_state 确认 Stopped（默认附停点上下文；Work 停点是 DebugTarget.Program——普通同步类型）
         var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
         Assert.Contains("已停止", st.Text());
+        // B① 负路径：普通同步类型停点上下文不得带「编译器生成 async 状态机」备注
+        Assert.Contains("停点上下文", st.Text());
+        Assert.DoesNotContain("编译器生成 async 状态机", st.Text());
 
         // 7. debug_stack：读调用栈（应含 Work 帧，真名 类型.方法 + token 后缀）
         var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
@@ -98,8 +101,18 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("调用栈", stack.Text());
         Assert.Contains("DebugTarget.Program.Work", stack.Text()); // C：帧名真名化（类型.方法）
         Assert.Contains($"0x{workToken:x8}", stack.Text()); // token 后缀保留（下断点闭环）
+        // C④ 负路径：DebugTarget 全同步无状态机——正常方法帧不得带「(状态机 X)」标注
+        Assert.DoesNotContain("状态机", stack.Text());
 
-        // 8. debug_variables：读局部变量
+        // 7b. debug_step 负路径（B①）：停在普通同步方法（Work），step 返回不得附 async 状态机引导
+        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["stepType"] = "into" });
+        Assert.True(step.IsError != true, step.Text());
+        Assert.Contains("已提交 step into", step.Text());
+        Assert.DoesNotContain("async 状态机帧", step.Text());
+
+        // 8. debug_variables：读局部变量（step 后仍处停点——wait 等 step 完成的新停点）
+        var waitStep = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", waitStep.Text());
         var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
         Assert.True(vars.IsError != true, vars.Text());
         Assert.Contains("局部变量", vars.Text());

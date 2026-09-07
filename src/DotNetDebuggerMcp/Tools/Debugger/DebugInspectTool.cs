@@ -42,6 +42,10 @@ public static class DebugInspectTool
                 var name = f.TypeName is not null && f.MethodName is not null
                     ? $"{f.TypeName}.{f.MethodName}"
                     : null;
+                // C④：类型名是编译器生成的 async 状态机（Ns.Outer+<Foo>d__N）时，在帧名上标注
+                // 原 async 方法 Foo 并归一化方法名（状态机自身的 MoveNext 是编译器生成步骤，非业务方法）。
+                if (name is not null && StateMachineFrameHelper.TryParseStateMachine(f.TypeName!) is { } sm)
+                    name = $"{f.TypeName} (状态机 {sm.MethodName}).{f.MethodName}";
                 var tokenSuffix = $"  [{loc.MethodTokenText}]"; // token 保留，供 debug_breakpoint_set 下断点
                 var pos = $"{loc.ModuleName}!{loc.MethodTokenText}+0x{loc.IlOffset:x}";
                 return $"  {f.FrameIndex}: {name ?? pos}{tokenSuffix}";

@@ -35,6 +35,15 @@ internal static class StopContextRenderer
             var (start, end, truncation) = SelectWindow(doc, frame.MethodToken, currentLine.Value, budgetLines);
 
             var sb = new StringBuilder();
+            // B①：编译器生成的 async 状态机类型（Ns.X+<Foo>d__N）——该帧是 MoveNext 编译器生成步骤，
+            // 无业务源码；备注原 async 方法并建议用行断点断外壳方法还原源码的 await 行。
+            if (StateMachineFrameHelper.TryParseStateMachine(typeFullName) is { } sm)
+            {
+                sb.Append($"备注：编译器生成 async 状态机（对应 async 方法 {sm.MethodName}）。" +
+                    "业务代码见该方法的还原源码（decompile_member 取外壳方法）；建议用行断点 " +
+                    "debug_breakpoint_set typeName+line 断 await 行跟踪业务逻辑。");
+                sb.AppendLine();
+            }
             sb.Append($"停点上下文（{typeFullName} 第 {currentLine} 行");
             if (truncation.Length > 0) sb.Append($"，{truncation}");
             sb.Append("）:");
