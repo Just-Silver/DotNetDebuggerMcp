@@ -1,99 +1,99 @@
 # Spec · R6 行断点模块加载前可用（延迟解析登记）
 
-> 状态：**草案待评审**（2026-09-07 起草）。
-> 关联：宿主 TODO R6；agent 实战反馈清单 R6（2026-09-06 收到，中）；P3 行断点（typeName+line / sourcePath+line）、P9 launch 早期接管（模块未加载是常态）。
+> 状态：**已定稿**（2026-09-07，方案 C 经评审确认）。
+> 关联：宿主 TODO R6；agent 实战反馈清单 R6（2026-09-06 收到）；P3 行断点（typeName+line 反编译行 / sourcePath+line PDB 源行）；P9 launch 早期接管（模块未加载是常态）。
+> **关键参考：本地克隆 sharpdbg**（`src/SharpDbg.Infrastructure/Debugger/ManagedDebugger.cs:309` TryBindBreakpoint / `:376` TryBindPendingBreakpoints / `:119-127` HandleModuleLoaded）——源码行断点模型直接抄它。dnSpy/ILSpy 经核实**无此机制可参考**（dnSpy 断点设置时模块已定；ILSpy 无调试器）。
 
 ## 1. 背景与目标
 
-agent 用行断点（`typeName`+`line` 反编译行 / `sourcePath`+`line` PDB 源码行）调试时，**目标模块未加载就设断点会被当场拒绝**——报「模块 X 未加载（行定位方式要求模块已加载）」并附提示引导改用 token 或 continue 后重试（`LineBreakpointRetryHint`）。
+agent 用行断点（`typeName`+`line` 反编译行 / `sourcePath`+`line` PDB 源码行）调试时，**目标模块未加载就设断点会被当场拒绝**——报「模块 X 未加载（行定位方式要求模块已加载）」（`DebugBreakpointTool` 的 `ResolveModuleForLineAsync`/`SetBySourceLineAsync`）。token 断点天然支持 pending（`BreakpointManager.Add` 未绑定 + LoadModule 自动重绑），行断点却要等模块加载后才能设。
 
-痛点场景：P9 之后 `debug_launch` 返回即冻结在 Main 前，**目标业务模块尚未加载是常态**；agent 想「先看代码、在入口行设断点、再 continue」——token 断点天然支持 pending（`BreakpointManager.Add` 未绑定 + LoadModule 自动重绑），行断点却要等模块加载后才能设，多一轮往返且与「先设断点再放行」的直觉相悖。
+痛点场景：P9 之后 `debug_launch` 返回即冻结在 Main 前，**目标业务模块尚未加载是常态**——agent 想「先看代码、在入口行设断点、再 continue」，却被迫多一轮往返。
 
-目标：行断点支持**延迟解析登记**——模块未加载时把 `typeName`/`sourcePath`+`line`（+期望模块名）登记为延迟项，模块加载后自动重试「行 → token+IL」解析并补设绑定，agent 无需感知模块加载时机。
+目标：**sourcePath+line 断点支持延迟登记**——模块未加载时登记为 pending，模块加载后自动按 PDB 解析「源行 → token+IL」并绑定，agent 无需感知模块加载时机。
 
-非目标：延迟项永不解绑的清理/超时（模块始终不加载则一直 pending，`debug_breakpoint_list` 可见，disconnect/clear 清理）；Web 断点面板交互（agent 是主消费者）；「模块加载但行解析失败」的自动重试风暴控制以外的复杂策略。
+非目标：typeName+line（反编译行）断点延迟化（v1 不做——反编译行本质绑定具体模块的反编译视图，模块未加载无从 decompile，语义上就该等模块，保持现状报错+引导）；Web/CLI 断点面板；模块卸载重绑。
 
 ## 2. 现状锚点（起草时已核实）
 
 | 设施 | 位置 | 关系 |
 |---|---|---|
-| `DebugBreakpointTool.SetByTypeLineAsync` / `SetBySourceLineAsync` | 宿主 `Tools/Debugger/DebugBreakpointTool.cs:104/:168` | 行断点两分支：解析模块（`ResolveModuleForLineAsync`）→ 行解析（DocumentService / SourceLineResolver）→ token+IL → `Session.SetBreakpointAsync`。**模块未加载当场返回错误**（:141/:179/:234） |
-| `ResolveModuleForLineAsync` | 同文件 :223 | 行定位模块解析：显式给定 → 单模块（未加载报错）；省缺 → 全部已加载模块扫描/消歧 |
-| `LineBreakpointRetryHint` | 同文件 :23 | 现状引导文案「先 debug_continue 再设行断点，或 methodToken 待绑定」 |
-| token pending 机制 | 引擎 `BreakpointManager.Add`（未绑定登记）+ `CallbackHandler.cs:56-64` LoadModule `TrackModule` 自动重绑 | **行断点缺的就是把「行→token」转换延后的登记**；token 断点无需本 spec |
-| `DocumentService.GetTypeDocument`/`GetBreakpointTargetAtLine` | Decompiler/Document | 反编译行 → token+IL（**静态、不依赖目标进程**，模块文件可读即可） |
-| `SourceLineResolver.Resolve` | Decompiler/Document | PDB 源行 → token+IL（同上，需模块旁 PDB） |
-| 模块加载信号 | 引擎 CallbackHandler LoadModule → `TrackModule` 重绑 | **仅 rebound>0 才发 BreakpointsChanged**（:62）；行断点延迟场景引擎里无 pending 断点 → **无任何事件发出**，宿主无从得知模块已加载 |
-| `SessionEventBuffer` | Session | 消费引擎 DebugEvent 流，暴露事件（`BreakpointsChanged` 等）供宿主/Web 订阅——模块加载通知的中转点 |
+| `SourceLineResolver.Resolve(modulePath, sourcePath, line)` | Decompiler `Document/SourceLineResolver.cs` | PDB 源行 → token+IL。**纯 SRM + 磁盘 PDB，零 Decompiler/ICSharpCode 依赖**（文件头自注「纯 SRM，无 ICorDebug 依赖」），可直接移植引擎 |
+| token pending 机制 | 引擎 `BreakpointManager.Add`（未绑定登记）/ `TrackModule`（LoadModule 自动重绑） | 现成。源行断点延迟 = 新增「未解析的源行延迟项」，TrackModule 时解析补设 |
+| 模块加载信号 | 引擎 CallbackHandler LoadModule → `TrackModule` | **引擎内已有**（不需要宿主层事件）——延迟解析在引擎内 TrackModule 时做，天然覆盖「新模块刚加载」 |
+| `BreakpointManager.TrackModule` | `Engine/BreakpointManager.cs:22` | 每次模块加载登记模块并重绑 pending token 断点——**源行延迟项解析补设的同款时机** |
+| sharpdbg 参考 | `ManagedDebugger.cs` | 源码行断点 = 纯 `(FilePath, Line)` 登记（`Verified=false`）；每次模块加载 `TryBindPendingBreakpoints` 全量重试：遍历已加载模块、逐模块 PDB `ResolveBreakpoint(FilePath, Line)`，命中即绑；绑不到保持 pending + Message「no symbols」 |
 
-## 3. 分层设计与关键决策
+## 3. 方案（C，sharpdbg 模型 + 引擎内闭环）
 
-### 3.1 信号：引擎 LoadModule 发 ModuleLoaded 事件（决策①）
+### 3.1 核心模型：源行延迟项（决策①，sharpdbg 同款）
 
-现状 LoadModule 只重绑不发事件（除非 rebound>0）。行断点延迟项要「模块加载后自动补设」，必须先有模块加载信号穿透到宿主。改 `CallbackHandler.HandleEvent` LoadModule 分支：**TrackModule 后无条件发一个轻量事件**（新 `DebugEventKind.ModuleLoaded`，payload 带模块名/路径），不再依赖 rebound>0。
-
-- 事件频率：LoadModule 每个程序集一次（进程启动期集中几十个，可忽略）；SessionEventBuffer 不累计状态（模块加载不影响停点/状态快照），只透传给订阅方。
-- 为什么引擎发而不是宿主轮询 `GetModulesAsync`：事件驱动与现有架构一致（P4 快照推送精神），零轮询延迟；引擎改动极小（一处 case + 事件类型）。
-- 兼容：现有 BreakpointsChanged 语义不变（断点集合变化仍发）；ModuleLoaded 是新增独立事件，互不替代。
-
-### 3.2 延迟项登记：宿主工具层持有（决策②）
-
-延迟项放**宿主 `DebugBreakpointTool`（静态表）**，而非 Session/引擎——因为「行→token」转换是宿主/Decompiler 能力（DocumentService），引擎无此能力也不该引。登记项：
+不扩展现有 token `DebugBreakpoint`，而是新增**独立的源行延迟项**（登记时无 token）：
 
 ```
-record PendingLineBreakpoint(
-    int RequestId,                 // 登记序号
-    string LocatorKind,            // Type | Source
-    string TypeName | SourcePath,  // 定位方式二选一
-    int Line,
-    string? ModuleName,            // 显式给的模块（未加载）；省缺=首次扫描未命中，模块加载后重扫
-    int HitCount, DebugBreakpointMode Mode, string? Condition)   // 透传参数
+Engine（新，BreakpointManager 或独立 PendingSourceLineBreakpoint 表）
+  record SourceLinePending(
+      int RequestId, string SourcePath, int Line,
+      int HitCount, DebugBreakpointMode Mode, string? Condition,   // 透传
+      string? ModuleName)          // 显式模块提示（可选；省缺=全模块试）
 ```
 
-登记时机（工具方法内）：行解析已就绪、但模块未加载/未命中 → 不再报错返回，改**登记延迟项并返回「已登记待绑定」**（文案对齐 token 断点 pending 的「断点已登记」）。模块已加载的既有路径零变化。
+- 登记 `AddPendingSourceLine(...)` → 返回 id，不绑定（pending）。
+- `TrackModule`（模块加载）时，对每个源行延迟项：`SourceLineResolver.Resolve(模块磁盘路径, SourcePath, Line)`——命中（该模块 PDB 含此源文件+行）→ `Bind` 成真断点（落 token+IL）、从延迟项转正；未命中 → 保持 pending。
+- sharpdbg 是**每次模块加载全量重试所有 pending**（遍历所有已加载模块逐个 Resolve）。我们同款：TrackModule 里对新增模块 Resolve；bind 成功后延迟项转正（后续模块不再试）。若一个源文件被多模块共享（罕见），sharpdbg 绑多个 binding——我们 v1 绑**第一个命中模块**（`debug_breakpoint_list` 展示绑定模块名；共享源文件多模块场景 agent 可显式给 moduleName 消歧）。
 
-### 3.3 触发补设：宿主订阅 ModuleLoaded（决策③）
+### 3.2 层向论证：SourceLineResolver 进引擎不破边界（决策②）
 
-`DebugBreakpointTool` 订阅 Session 的 ModuleLoaded 事件（经 `DebugSessionManager.Active` 切换时重订阅，与 Web 重订阅模式同款），收到模块加载后重扫延迟项：
+引擎 AGENTS 边界「不反编译、不解析类型名，全用 token」——但 `SymbolNameResolver`/`TypeNameResolver` 已是引擎内读模块元数据（PDB 局部名在引擎内做）的先例。`SourceLineResolver` **纯 SRM 读 PDB 序列点，不反编译**，逻辑上属引擎已有能力（与 SymbolNameResolver 同族），**拷贝/迁移进引擎不引入 Decompiler 依赖、不破依赖方向**。
 
-1. 取延迟项中 `ModuleName` 匹配新模块（或省缺项）的候选；
-2. 对新模块做行解析（Type → `GetTypeDocument`+`GetBreakpointTargetAtLine`；Source → `SourceLineResolver.Resolve`）→ 得 token+IL；
-3. 调 `Session.SetBreakpointAsync` 补设（**先查重**：同一 模块+token+IL+参数 已存在则跳过）；
-4. 补设成功 → 移除延迟项、发 BreakpointsChanged（list 自动反映）；仍失败（该模块不是目标/行不在该模块）→ 保留延迟项等下一模块。
+实施：把 `SourceLineResolver` 从 Decompiler **复制**到 Engine（Engine 不引 Decompiler，只能复制；Decompiler 原版保留——宿主/Web 反编译行断点仍用）。两处同源，后续若漂移以引擎版为准（或注释互指）。
 
-补设调用链与 set 工具内一致，复用同一解析逻辑（抽公共方法），避免双份实现。补设异步执行（不进工具请求上下文，ModuleLoaded 事件线程自行驱动），失败记 AgentActionLog + 日志，不抛。
+### 3.3 工具面（宿主）
 
-### 3.4 失败/清理语义
+`debug_breakpoint_set` sourcePath+line 分支：模块未加载/未命中时**不再报错**，改登记源行延迟项：
+
+```
+SetBySourceLineAsync：
+  现有逻辑（已加载模块内 Resolve → 立即绑）不变；
+  若显式 moduleName 且未加载，或省缺 moduleName 且已加载模块全试不命中：
+    → Session/引擎新增 SetSourceLineBreakpointAsync(modulePath: null 或 ""，sourcePath, line, ...)
+      登记 pending，返回「断点已登记: id=…（模块加载后按 PDB 自动解析绑定）」
+debug_breakpoint_list → 延迟项展示「待绑定（源行，模块加载后解析）」
+debug_breakpoint_remove/clear → 同 id 移除
+disconnect/会话结束 → 延迟项随断点表清理
+```
+
+### 3.4 引擎 API 形状
+
+```
+Engine DebugSession（新，仿 SetBreakpointAsync）
+  Task<DebugBreakpoint> SetSourceLineBreakpointAsync(string modulePath, string sourcePath, int line, int hitCount=1, mode=Stop, condition=null, ct)
+    —— modulePath 非空：登记延迟项（附模块提示）；TrackModule 命中该模块才试
+    —— modulePath 空：登记延迟项（省缺=任意模块命中即试，sharpdbg 语义）
+    登记即返回 id（pending）；模块已加载时若可立即 Resolve 命中则当场绑定（IsBound=true）
+宿主 DebugBreakpointTool sourcePath+line 分支改为调它（原来先查模块再 Resolve 的逻辑保留为「已加载快速路径」，未加载走延迟登记）
+```
+
+### 3.5 失败/清理语义
 
 | 场景 | 行为 |
 |---|---|
-| 登记后模块一直不加载 | 延迟项保持 pending；`debug_breakpoint_list` 展示（含「行待解析」标注）；disconnect/clear 清理 |
-| 模块加载但行解析失败（行不在方法区间等） | 保留延迟项（可能后续模块命中），记日志；最终 disconnect 清理 |
-| 行断点补设后重复命中 | 查重防重复补设 |
-| 会话结束 | 延迟项表随会话清理（静态表按 session id 隔离或随 Active 切换清空） |
-| agent 主动 remove | remove 时同步移除对应延迟项（按 RequestId/位置匹配） |
+| 模块一直不加载 | 延迟项保持 pending；list 可见；disconnect/clear 清理 |
+| 模块加载但 Resolve 失败（无 PDB/无此源文件/行无映射） | 保持 pending（可能后续模块命中），不阻塞 |
+| 多模块含同源文件 | v1 绑首个命中模块；显式 moduleName 消歧 |
+| 绑成功后 | 延迟项转正为普通断点（id 不变，IsBound=true），list 显示模块+token |
 
-## 4. 工具面
+## 4. 测试计划
 
-```
-debug_breakpoint_set（typeName+line / sourcePath+line）
-  模块未加载 → 不再报错：登记延迟项，返回「断点已登记: id=… 位置=…（模块 X 尚未加载，加载后自动解析绑定）」
-  模块已加载 → 现状不变（立即解析设断点）
-debug_breakpoint_list → 延迟项展示「待绑定（行解析，模块加载后）」
-debug_breakpoint_remove → 按 id 同时移除对应延迟项
-LineBreakpointRetryHint 文案 → 更新（不再需要「先 continue 再设」的引导，改述延迟语义）
-```
+- **Engine 集成**（DebugTarget，P9 launch 冻结 Main 前是天然场景）：launch 后（DebugTarget.dll 未加载）立即 `SetSourceLineBreakpointAsync(modulePath:"", "DebugTarget.cs", Work 内行)` → 返回 pending id、IsBound=false；continue → DebugTarget.dll 加载 → TrackModule 解析补绑 → 命中停。**必须先 continue 场景（attach 已加载/运行中）**：模块已加载时登记即绑。
+- **源行延迟项单测**：TrackModule 命中/未命中/多模块首中；remove/clear 清理。
+- **宿主 e2e**：`debug_breakpoint_set sourcePath+line` 未加载 → 返回「断点已登记」非报错；continue → 自动补设 → `debug_wait` 命中（无需手动重设）。
+- **回归**：模块已加载 sourcePath 断点路径零变化（P3 用例）；typeName+line 现状零变化；全量套件 + Client。
 
-## 5. 测试计划
+## 5. 工作量与顺序
 
-- **宿主 e2e**（DebugTarget，P9 launch 冻结 Main 前是天然场景）：launch 后立即 `debug_breakpoint_set typeName+line`（目标模块未加载）→ 返回「断点已登记」非报错；`debug_continue` → 模块加载后自动补设 → `debug_wait` 命中（无需手动重设）。sourcePath+line 同场景各一。
-- **补设查重**：延迟项 + 同位置手动 set 不重复；remove 移除延迟项后模块加载不再补设。
-- **回归**：模块已加载设行断点路径零变化（P3 既有用例）；token pending 机制零变化；全量五套件 + Client。
+SourceLineResolver 迁引擎 + 源行延迟项表 + TrackModule 解析补设（1.5）→ 引擎 API SetSourceLineBreakpointAsync（0.5）→ 宿主工具面改造（0.5）→ 测试（1），≈ 3.5 人日。
 
-## 6. 工作量与顺序
+## 6. 与旧草案差异（2026-09-07 定稿修订）
 
-引擎 ModuleLoaded 事件（0.5，含 SessionEventBuffer 透传）→ 宿主延迟项表 + 登记/清理（0.5）→ ModuleLoaded 订阅 + 补设（含解析逻辑复用抽取）（1）→ 工具面文案 + list/remove（0.5）→ 测试（1），≈ 3.5 人日。顺序即依赖序。
-
-## 7. 待评审取舍点
-
-① 引擎 LoadModule 无条件发 ModuleLoaded 事件 vs 只在「有延迟项」时才发（后者引擎需知道宿主有延迟项——耦合，倾向无条件发、事件轻量）；② 延迟项登记宿主静态表 vs Session 持有（倾向宿主——行解析在宿主侧，Session 引 Decompiler 会加重中枢依赖）；③ 省缺 moduleName 的延迟项在每次模块加载时全量重扫（v1 简单）vs 按类型名预判模块（P3 消歧复杂，v1 不预判）。
+旧草案设想「引擎发 ModuleLoaded 事件 → 宿主登记延迟项 → 订阅补设」；查证 sharpdbg 后废弃——**源行延迟解析全程引擎内闭环即可**（TrackModule 是现成时机），无需新事件、无需宿主订阅、无需跨层回调；「省缺 moduleName 全量重扫」从取舍点改为 sharpdbg 同款默认语义。typeName+line 排除在范围外（反编译行语义绑定模块视图）。
