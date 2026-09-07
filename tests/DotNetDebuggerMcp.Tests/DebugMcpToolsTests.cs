@@ -9,7 +9,7 @@ namespace DotNetDebuggerMcp.Tests;
 
 /// <summary>
 /// MCP 调试工具端到端测试：真实子进程宿主 + DebugTarget 目标，
-/// 验证 debug_launch → breakpoint → continue → 命中 → stack/variables 闭环。
+/// 验证 debug_launch → breakpoint（token/typeName+line/sourcePath+line/typeName+memberName）→ continue → 命中 → stack/variables 闭环。
 /// </summary>
 public sealed class DebugMcpToolsTests
 {
@@ -219,6 +219,88 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("已停下", waitB.Text());
         var stackB = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
         Assert.Contains($"0x{workToken:x8}", stackB.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
+    public async Task MemberBreakpoint_Set_TypeNameMemberName_SingleHitListingAndNonMethodHints()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        // E 测试素材：Program 的方法 Compute/Work/WorkBag/WorkScores + Bag 的字段 A
+        var computeToken = ReadMethodToken(dll, "Compute");
+        var workToken = ReadMethodToken(dll, "Work");
+        var workBagToken = ReadMethodToken(dll, "WorkBag");
+        var workScoresToken = ReadMethodToken(dll, "WorkScores");
+        Assert.True(computeToken > 0 && workToken > 0 && workBagToken > 0 && workScoresToken > 0);
+
+        await using var mcp = await ConnectAsync();
+
+        // launch（delay 8s 提供操作窗口）；先 continue 再设断点（CI 实录：launch 返回时模块登记可能缺目标模块）
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        // 1. 单方法唯一命中：typeName+memberName（省缺 moduleName——跨已加载模块扫描路径）+ 设断点命中 Compute。
+        //    continue 后模块登记是异步的——set 过早会报「在已加载模块中未找到类型」，轮询重试等模块就绪
+        var setText = await RetrySetUntilAsync(mcp,
+            new Dictionary<string, object?> { ["typeName"] = "DebugTarget.Program", ["memberName"] = "Compute" }, "断点已设");
+        Assert.Contains("成员 Compute", setText);
+        Assert.Contains($"DebugTarget.dll!0x{computeToken:x8}+0x0", setText); // 位置文案：类型 成员 → 模块!token+0x0
+        var bpId = ParseBreakpointId(setText);
+        await WaitBoundAsync(mcp, bpId);
+
+        // 2. 多方法匹配：memberName="Work" 子串命中 Work/WorkBag/WorkScores 3 个 → #MEMBER 清单 + 未设断点提示
+        var multi = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["typeName"] = "DebugTarget.Program", ["memberName"] = "Work" });
+        Assert.True(multi.IsError != true, multi.Text());
+        Assert.Contains("匹配 3 个方法成员", multi.Text());
+        Assert.Contains("#MEMBER", multi.Text());
+        Assert.Contains("Work", multi.Text());
+        Assert.Contains("WorkBag", multi.Text());
+        Assert.Contains("WorkScores", multi.Text());
+        Assert.Contains("未设断点", multi.Text());
+        // 清单 token 可闭环 methodToken 重设：与元数据解析的 3 个方法 token 一致
+        var listingTokens = System.Text.RegularExpressions.Regex.Matches(multi.Text(), @"""token"":""(0x[0-9a-f]+)""")
+            .Select(m => m.Groups[1].Value).OrderBy(t => t, StringComparer.Ordinal).ToArray();
+        var expectedTokens = new[] { workToken, workBagToken, workScoresToken }
+            .Select(t => $"0x{t:x8}").OrderBy(t => t, StringComparer.Ordinal).ToArray();
+        Assert.Equal(expectedTokens, listingTokens);
+        // 清单不产生断点：当前只有第 1 步的 Compute 断点
+        var listAfterMulti = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
+        Assert.Contains("断点列表（1 个）", listAfterMulti.Text());
+
+        // 3. 非方法成员：Bag.A 是字段（0x04）→ 不能设方法断点提示
+        var field = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["typeName"] = "DebugTarget.Bag", ["memberName"] = "A" });
+        Assert.True(field.IsError != true, field.Text());
+        Assert.Contains("成员 A 是字段", field.Text());
+        Assert.Contains("不能设方法断点", field.Text());
+
+        // 4. 未找到 + 相近名：Program 内无 "Wrok"，相近成员 Work
+        var missing = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["typeName"] = "DebugTarget.Program", ["memberName"] = "Wrok" });
+        Assert.True(missing.IsError != true, missing.Text());
+        Assert.Contains("未找到名称含 \"Wrok\" 的方法成员", missing.Text());
+        Assert.Contains("相近成员", missing.Text());
+
+        // 5. 缺 typeName 校验：memberName 单独给 → 成员级需类型全名
+        var noType = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["memberName"] = "Compute" });
+        Assert.Contains("请提供 typeName", noType.Text());
+
+        // 6. delay 结束后进 Work → 循环内 Compute 命中停住（第 1 步断点闭环）
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("已停下", wait.Text());
+        Assert.Contains("breakpoint", wait.Text());
+        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.Contains($"0x{computeToken:x8}", stack.Text()); // 栈帧含 Compute 方法 token → 命中的正是成员定位的方法
 
         var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
         Assert.True(disc.IsError != true, disc.Text());

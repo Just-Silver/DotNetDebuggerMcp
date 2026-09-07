@@ -2,18 +2,21 @@ using DotNetDebugger.Decompiler.Document;
 using DotNetDebugger.Decompiler.Metadata;
 using DotNetDebugger.Engine.Session;
 using DotNetDebugger.Session;
+using DotNetDebuggerMcp.Formatting;
 using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
 
 using System.ComponentModel;
 using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
 
 namespace DotNetDebuggerMcp.Tools.Debugger;
 
 /// <summary>
-/// 调试断点工具：设置/移除/清除断点。三种定位方式（P3）：① 模块名+方法 token+IL offset（未加载模块登记待绑定）；
-/// ② typeName+反编译视图行（agent 看到的 decompile 输出行号）；③ sourcePath+PDB 源码行（顺堆栈行号断案发现场）。
+/// 调试断点工具：设置/移除/清除断点。四种定位方式：① 模块名+方法 token+IL offset（未加载模块登记待绑定）；
+/// ② typeName+memberName（类型内成员名子串，命中方法直接设断点）；③ typeName+反编译视图行（agent 看到的 decompile 输出行号）；
+/// ④ sourcePath+PDB 源码行（顺堆栈行号断案发现场）。
 /// </summary>
 [McpServerToolType]
 public static class DebugBreakpointTool
@@ -22,13 +25,14 @@ public static class DebugBreakpointTool
     private const string LineBreakpointRetryHint =
         "刚 debug_launch 的目标其模块可能尚未加载完（attach 竞速窗口）——先 debug_continue 进入运行（目标带启动延迟则停在其窗口内）再设行断点，或用 methodToken 方式登记待绑定。";
     /// <summary>
-    /// 设置断点：按 模块名 + 方法 token（0x06 开头）+ IL offset 定位。模块已加载即绑定；
+    /// 设置断点：按 模块名 + 方法 token（0x06 开头）+ IL offset 定位，或 typeName+memberName 成员级、typeName+line 反编译行、sourcePath+line 源码行定位。模块已加载即绑定；
     /// 未加载登记为 pending（加载后自动绑定）。返回断点 id。
     /// </summary>
-    /// <param name="moduleName">模块名（如 DebugTarget.dll）；token 方式必填；行定位方式可省（省缺在已加载模块中解析）。</param>
+    /// <param name="moduleName">模块名（如 DebugTarget.dll）；token 方式必填；行/成员定位方式可省（省缺在已加载模块中解析）。</param>
     /// <param name="methodToken">方法 token（0x06000005，从反编译 signature 行尾取）；提供时按 token 定位（优先）。</param>
     /// <param name="ilOffset">IL offset，默认 0（方法入口）。</param>
-    /// <param name="typeName">类型全名（与 decompile 输出同格式）；与 line 组合按反编译视图行定位（需模块已加载）。</param>
+    /// <param name="typeName">类型全名（与 decompile 输出同格式）；与 memberName 组合按成员级定位（方法名子串），或与 line 组合按反编译视图行定位（需模块已加载）。</param>
+    /// <param name="memberName">成员名（方法，子串忽略大小写）；与 typeName 组合按成员级定位（line 忽略，命中方法即设断点）。</param>
     /// <param name="sourcePath">源文件路径（绝对/相对/仅文件名如 Program.cs）；与 line 组合按 PDB 源码行定位（模块旁需有 PDB）。</param>
     /// <param name="line">行号（1-based）：typeName 方式=decompile 输出行号；sourcePath 方式=源码行号。</param>
     /// <param name="hitCount">第 N 次命中起生效，默认 1（每次都停/记）。</param>
@@ -37,12 +41,13 @@ public static class DebugBreakpointTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示（断点 id）或错误提示。</returns>
     [McpServerTool]
-    [Description("设置断点，三种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（未加载模块登记待绑定，加载后自动绑定）；② 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；③ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，需模块旁有 PDB；模块未加载/未命中时登记延迟项，模块加载后自动解析绑定）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
+    [Description("设置断点，四种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（未加载模块登记待绑定，加载后自动绑定）；② 成员：typeName+memberName（类型内方法名子串，忽略大小写，命中唯一方法即设断点；属性/事件/字段成员会提示；多方法匹配返回 #MEMBER 清单，取 methodToken 精确重设）；③ 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；④ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，需模块旁有 PDB；模块未加载/未命中时登记延迟项，模块加载后自动解析绑定）。memberName 提供时成员级优先（line 忽略）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
     public static async Task<string> DebugBreakpointSet(
-        [Description("模块名（如 DebugTarget.dll）；token 方式必填；行定位方式可省，省缺在已加载模块中解析。")] string moduleName = "",
+        [Description("模块名（如 DebugTarget.dll）；token 方式必填；行/成员定位方式可省，省缺在已加载模块中解析。")] string moduleName = "",
         [Description("方法 token（0x06000005，从反编译 signature 行尾或 #MEMBER 取）；提供时优先按 token 定位。")] string methodToken = "",
         [Description("IL offset，默认 0（方法入口）。")] int ilOffset = 0,
-        [Description("类型全名（与 decompile 输出同格式）；与 line 组合按反编译视图行定位。")] string typeName = "",
+        [Description("类型全名（与 decompile 输出同格式）；与 memberName 组合按成员级定位（方法名子串，命中方法即设断点），或与 line 组合按反编译视图行定位。")] string typeName = "",
+        [Description("成员名（方法，子串忽略大小写，默认空=不启用）；与 typeName 组合按成员级定位——命中唯一方法即设断点（line 忽略）；属性/事件/字段成员会提示改用方法或访问器；多方法匹配返回 #MEMBER 清单，用返回的 methodToken 精确重设。")] string memberName = "",
         [Description("源文件路径（绝对/相对/仅文件名如 Program.cs）；与 line 组合按 PDB 源码行定位。")] string sourcePath = "",
         [Description("行号（1-based）：typeName 方式=decompile 输出行号；sourcePath 方式=源码行号；默认 0=未提供。")] int line = 0,
         [Description("开始生效的命中次数：第 N 次命中起每次都停/记录，默认 1=每次。")] int hitCount = 1,
@@ -65,10 +70,12 @@ public static class DebugBreakpointTool
             catch (ExpressionEvaluationException ex) { return $"条件表达式无效，断点未设：{ex.Message}"; }
         }
 
+        // E：memberName 定位优先于 sourcePath/typeName 行定位（memberName+line 同给时以成员级为准，line 忽略）
         if (!string.IsNullOrWhiteSpace(methodToken)) return await SetByTokenAsync(active, moduleName, methodToken, ilOffset, hitCount, modeValue, conditionNorm, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(memberName)) return await SetByMemberAsync(active, moduleName, typeName, memberName, hitCount, modeValue, conditionNorm, cancellationToken);
         if (!string.IsNullOrWhiteSpace(sourcePath)) return await SetBySourceLineAsync(active, moduleName, sourcePath, line, hitCount, modeValue, conditionNorm, cancellationToken);
         if (!string.IsNullOrWhiteSpace(typeName)) return await SetByTypeLineAsync(active, moduleName, typeName, line, hitCount, modeValue, conditionNorm, cancellationToken);
-        return "请提供定位方式之一：methodToken（token 定位）、typeName+line（反编译视图行）、sourcePath+line（PDB 源码行）。";
+        return "请提供定位方式之一：methodToken（token 定位）、typeName+memberName（成员级）、typeName+line（反编译视图行）、sourcePath+line（PDB 源码行）。";
     }
 
     /// <summary>token 分支（现状语义）：模块必填；未加载登记 pending。</summary>
@@ -164,6 +171,121 @@ public static class DebugBreakpointTool
         }
     }
 
+    /// <summary>成员级分支（E）：typeName 全名定位类型 → MemberResolver 类型内按方法名子串定位 → 0x06 方法 token → 断点。
+    /// 解析规则：先 FindTypes 判歧义/未找到（仿 decompile_member LocateMembers——MemberResolver.FindMembers 内部 FindType 取首个候选会吞歧义）；
+    /// 唯一候选类型全名再 FindMembers；token 按前缀过滤（字段 0x04/属性 0x17/事件 0x14 不能作函数断点——Bind 用 GetFunctionFromToken），
+    /// 仅 0x06 方法为候选：唯一方法即设断点，多方法返回 #MEMBER 清单（methodToken 闭环重设）。</summary>
+    private static async Task<string> SetByMemberAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string typeName, string memberName, int hitCount, DebugBreakpointMode modeValue, string? condition, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(typeName)) return "请提供 typeName（成员级定位需类型全名，如 DebugTarget.Program；memberName 在其内定位方法）。";
+
+        try
+        {
+            var (modules, singlePath, resolveError) = await ResolveModuleForLineAsync(active, moduleName);
+            if (resolveError is not null) return resolveError;
+
+            // 类型定位：与行分支同规则——显式模块 → 单模块内 FindTypes；省缺 → 跨已加载模块扫描消歧
+            string module;
+            string modulePath;
+            string fullName;
+            if (singlePath is not null)
+            {
+                var typeHits = TypeFullNamesInModule(singlePath, typeName);
+                if (typeHits.Count == 0)
+                {
+                    using var fs = File.OpenRead(singlePath);
+                    using var pe = new PEReader(fs);
+                    return MetadataNaming.BuildNotFoundMessage(pe.GetMetadataReader(), typeName);
+                }
+                if (typeHits.Count > 1)
+                    return $"类型 {typeName} 有歧义，匹配：{string.Join("、", typeHits)}。请提供更精确的全名。";
+                module = Path.GetFileName(singlePath);
+                modulePath = singlePath;
+                fullName = typeHits[0];
+            }
+            else
+            {
+                var hits = modules.Select(m => (m.Name, m.Path, Names: TypeFullNamesInModule(m.Path, typeName)))
+                    .Where(x => x.Names.Count > 0).ToList();
+                if (hits.Count == 0)
+                    return $"在已加载模块中未找到类型 {typeName}（已扫描：{string.Join("、", modules.Select(m => m.Name))}）。{LineBreakpointRetryHint}";
+                if (hits.Count > 1)
+                    return $"类型 {typeName} 在多个模块中命中，请提供 moduleName 消歧：{string.Join("；", hits.Select(h => $"{h.Name}: {string.Join("、", h.Names)}"))}";
+                module = hits[0].Name;
+                modulePath = hits[0].Path;
+                fullName = hits[0].Names[0];
+            }
+
+            // 类型唯一候选：类型内按 memberName 子串定位成员（MemberMatch 无种类字段——按 token 前缀过滤：仅 0x06 方法可作断点）
+            var search = MemberResolver.FindMembers(modulePath, fullName, memberName);
+            var methodCandidates = search.Matches.Where(m => m.Token.StartsWith("0x06", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (methodCandidates.Count == 0)
+            {
+                // 无 0x06 候选：把唯一非方法命中/未找到区分成 agent 可行动的提示
+                if (search.Matches.Count == 1)
+                {
+                    var only = search.Matches[0];
+                    var kind = only.Token.StartsWith("0x04") ? "字段" : only.Token.StartsWith("0x17") ? "属性" : only.Token.StartsWith("0x14") ? "事件" : "成员";
+                    return $"成员 {only.Name} 是{kind}，不能设方法断点（token {only.Token} 非 0x06 方法）。请改用：① 其所在方法定位（typeName+line 断方法体行）或 decompile_member 看访问器 token 后以 methodToken 设置；② memberName 改输入方法名（可含访问器 get_/set_ 前缀）。";
+                }
+                if (search.Matches.Count > 1)
+                    return $"类型 {fullName} 中名称含 \"{memberName}\" 的 {search.Matches.Count} 个成员均非方法（属性/事件/字段），不能设方法断点——请改用 typeName+line 或 decompile_member 看访问器 token 后以 methodToken 设置。";
+                var message = $"类型 {fullName} 中未找到名称含 \"{memberName}\" 的方法成员";
+                if (search.SimilarNames.Count > 0) message += $"。相近成员：{string.Join("、", search.SimilarNames)}";
+                return message + "。可 decompile_member 按成员名定位确认实际名称，或用 methodToken 方式。";
+            }
+
+            if (methodCandidates.Count == 1)
+            {
+                var match = methodCandidates[0];
+                var token = ParseTokenRow(match.Token);
+                var bp = await active.Session.SetBreakpointAsync(module, token, 0, hitCount, modeValue, condition, ct);
+                DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{fullName}.{match.Name}", $"id={bp.Id}");
+                return DescribeSetWithPosition(bp, $"类型 {fullName} 成员 {match.Name} → {module}!0x{token:x8}+0x0");
+            }
+
+            // 多方法匹配：返回 #MEMBER 签名清单（token 可闭环 methodToken 重设），不设断点
+            return RenderMemberListing(modulePath, fullName, memberName, methodCandidates)
+                + $"匹配 {methodCandidates.Count} 个方法成员（子串忽略大小写），未设断点——用返回的 methodToken 精确重设（或缩小 memberName）。";
+        }
+        catch (Exception ex)
+        {
+            return $"按成员定位设置断点失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>多方法匹配清单：复用 OutputFormatter.MemberLine 的 #MEMBER JSON 行格式（与 decompile_member 超限清单同形），
+    /// 签名经 SignatureRenderer 渲染。方法句柄按 metadata token 取——token 唯一，足以解析出所属类型与方法体。</summary>
+    private static string RenderMemberListing(string modulePath, string fullName, string memberName, IReadOnlyList<MemberMatch> matches)
+    {
+        var tokens = matches.Select(m => ParseTokenRow(m.Token)).ToHashSet();
+        var lines = new List<string> { $"类型 {fullName} 中名称含 \"{memberName}\" 的方法成员匹配:" };
+        using var fs = File.OpenRead(modulePath);
+        using var pe = new PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        var seen = new HashSet<int>();
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(handle);
+            if (MetadataNaming.FullName(reader, type) != fullName) continue;
+            foreach (var mh in type.GetMethods())
+            {
+                var row = MetadataTokens.GetToken(mh);
+                if (!tokens.Contains(row) || !seen.Add(row)) continue;
+                var method = reader.GetMethodDefinition(mh);
+                var sig = SignatureRenderer.RenderMemberSignature(reader, type, method);
+                var token = MetadataNaming.FormatToken(row);
+                var name = reader.GetString(method.Name);
+                lines.Add(OutputFormatter.MemberLine(name, token, sig, fullName));
+            }
+        }
+        return string.Join(Environment.NewLine, lines) + Environment.NewLine;
+    }
+
+    /// <summary>解析 "0x06000005" 文本为 int token（与 TryParseToken 同实现）。</summary>
+    private static int ParseTokenRow(string tokenText)
+        => TryParseToken(tokenText, out var t) ? t : 0;
+
     /// <summary>PDB 源码行分支（P3-3b）：sourcePath+line 经 PDB 序列点 → token+IL → 断点。
     /// R6：显式 moduleName 未加载 / 已加载模块全试不命中 → 登记源行延迟项（pending，模块加载后自动解析绑定）。</summary>
     private static async Task<string> SetBySourceLineAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string sourcePath, int line, int hitCount, DebugBreakpointMode modeValue, string? condition, CancellationToken ct)
@@ -248,7 +370,7 @@ public static class DebugBreakpointTool
         }
         var hit = modules.FirstOrDefault(m => ModuleNameMatches(m, moduleName));
         if (hit.Name is null)
-            return (modules, null, $"模块 {moduleName} 未加载（行定位方式要求模块已加载）。已加载：{string.Join("、", modules.Select(m => m.Name))}；{LineBreakpointRetryHint}");
+            return (modules, null, $"模块 {moduleName} 未加载（行/成员定位方式要求模块已加载）。已加载：{string.Join("、", modules.Select(m => m.Name))}；{LineBreakpointRetryHint}");
         return ([hit], hit.Path, null);
     }
 
