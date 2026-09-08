@@ -30,6 +30,12 @@
 
 > **已评估不列入**：脱壳/patch/de4dot 生态与运行时 dump（定位不符——面向正常 .NET 程序调试非恶意样本，且破坏「引擎内置零外部依赖」卖点）；44 条路由规则 + 多 skill frontmatter 架构（单 MCP server 单入口，过度设计）；agent 自动装工具/自举（无此需求）。动态调试优先于死磕静态的方向与 reverse-skill 一致，P1-P9 已覆盖并更强（agent 可编程工具面 vs 其 dnSpy GUI 手点）。
 
+## 近期评估转远期（2026-09-08 决策）
+
+> 宿主 TODO「agent 自动化调试闭环缺口清单」评估后转来的项。spec 草案保留在 `docs/planning/specs/`（查证结论仍有效），触发条件出现再立项。
+
+- **V2 崩溃自动 dump 保留现场**（原宿主 TODO V2，spec `2026-09-08-v2-crash-dump.md`）——**转远期理由（2026-09-08 用户决策）**：自动抓 dump 对 agent 代价大——路径 C 需注入 `DOTNET_DbgEnableMiniDump` 环境变量（改变目标运行环境，调试行为可疑）；路径 A（被 ICorDebug 冻结的进程是否响应诊断口 WriteDump）spike 不确定；收益边际低（V3 时间线 + 退出码/崩溃判定已覆盖大部分复盘）。**保留的价值点**：① 退出码 + 崩溃判定小增量（ExitProcess 现无退出码，补到 Reason，成本极小——可随 V3 顺手做，仍算近期但独立小项）；② 完整 dump 若未来要做：.NET 崩溃默认不生成 dump；WER LocalDumps 对 .NET 无效（微软文档明言）；正解 = 会话内异常停点抓 + `DOTNET_DbgEnableMiniDump=1` 注入。**触发条件**：收到 agent「进程崩溃后不知道死前状态」类反馈且 V3 时间线不足以回答。
+
 ## WebUI 后续（P4 收尾后的体验项）
 
 > 近期待办已分散到各项目目录 `TODO.md`（当前仅 Web 剩 watch 表达式输入，已注记暂不做）。P4-2 全部待办（断点红点、刷新保持、树/编辑器双向联动、agent 时间线、零轮询化、`web_open` 幂等工具 + 默认去 `--web`）已完成（2026-09-06），不再列。
