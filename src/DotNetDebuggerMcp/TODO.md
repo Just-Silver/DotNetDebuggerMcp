@@ -6,7 +6,7 @@
 
 ## 执行推进顺序总览（2026-09-08 排定，按批推进）
 
-> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README；小型项先补方案段。spec 均为草案（未立项）——按批次立项时逐条确认。
+> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并新开 CHANGELOG `[Unreleased]` 段（1.7.0 已发布，当前无该段，下一批工具落地时新开）；小型项先补方案段。spec 均为草案（未立项）——按批次立项时逐条确认。
 
 | 批次 | 项 | spec | 状态 | 依赖 |
 |---|---|---|---|---|
@@ -20,8 +20,8 @@
 | **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | spec 草案；FlaUI 引用定 | — |
 | | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | spec 草案 | W1/U1/V3 |
 | **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | spike 前置 | — |
-| **远期** | **W2 SetIP** | `2026-09-08-w2-set-ip.md` | 建议转 ROADMAP | — |
-| | **V2 崩溃 dump** | `2026-09-08-v2-crash-dump.md` | **转远期（2026-09-08 决策，见 ROADMAP）** | V3 |
+| **远期** | **W2 SetIP** | `2026-09-08-w2-set-ip.md` | **已转 ROADMAP（2026-09-08）** | — |
+| | **V2 崩溃 dump** | `2026-09-08-v2-crash-dump.md` | **转远期（2026-09-08 决策，见 ROADMAP）**；退出码增量①随 V3 | V3 |
 
 > 注：UI 自动化条目（上方独立 section）对应总览 U1，两者同源；执行以本总览批次为准。
 
@@ -38,15 +38,14 @@
 ### 观察/假设/验证 环节
 
 - [ ] **W1 现场改写（SetValue）后继续**（Engine+Session+宿主｜中-大）——**能力**：停点把 locals/字段/数组元素改成指定值再 continue，支撑「改 X 再跑看是否复现/消失」的二分定位（agent 调试最常用实验）。**spec 草案**：`docs/planning/specs/2026-09-08-w1-set-value.md`（关键信息已沉淀）。**技术信息**：读值链路已有（`ReadPathValue`/`GetFieldValue` 只读）；写路径 = 读定位到值对象 → `As<CorDebugGenericValue>().SetValue(IntPtr)`（栈上值类型局部经 `GetLocalVariable` 读后可直接写——**VS 同款底层，已查证**）；引用重定向 `CorDebugReferenceValue.SetValue`。**方案**：新工具 `debug_set`（路径+新值，复用 P6 文法解析标量）；Engine 命令泵内新增同步写原语（与读同线程，天然安全）。**难度**：中（读已通，写只需在泵内补值写 + 标量解析）。**边界**：不改 readonly/常量；构造新对象/字符串不支持（func-eval 已关）；返回必须带原值回显防 agent 误判。**待 spike**：数组元素写、struct 字段、值类型局部活引用确认。
-- [ ] **W2 强制返回 / 跳过执行（SetIP）**（Engine｜大，建议转 ROADMAP 远期）——**能力**：同方法内跳执行（VS Set Next Statement 近似）。**spec 草案**：`docs/planning/specs/2026-09-08-w2-set-ip.md`。**已查证**：ClrDebug `SetIP`/`CanSetIP` 均封装（`CorDebugILFrame.cs:115/368`），但 CanSetIP 注释明言"非 S_OK 仍可调但无安全保证"；**无方法强制返回 API**；async 状态机帧行为未验证。**建议**：转 ROADMAP（风险/收益比低——agent 场景断点直达+W1 改值多可替代）；若做只走"同方法内向前跳 + CanSetIP 预检 S_OK 才允许"安全子集。
 - [ ] **W3 数据断点（值变化即停）**（Engine+Session｜大，spike 前置）——**能力**：字段/局部变量值变化时停下。**spec 草案**：`docs/planning/specs/2026-09-08-w3-data-breakpoint.md`。**已查证**：ClrDebug 有两条相关路径——A `CorDebugValue.CreateBreakpoint()`（ValueBreakpoint，挂值对象，受值对象存活/GC/帧约束）+ B `OnDataBreakpoint` 回调（Callback4 已封装）但**未搜到创建端 API**。**spike 必答**：A 对栈上局部是否可行/对对象字段是否有效；B 的创建入口是否在 ICorDebug 新接口或诊断口；两者是否 A 触发→B 通知。**结论三选一**：A 可行（ValueBreakpoint 版）/B 可行（现代版）/不可行→降级条件断点+转 ROADMAP。**立项前置 = spike**。
 
 ### 修复/复验 环节（agent「改完 bug 确认修好」的最后一跳）
 
 - [ ] **V1 一键复验闭环**（宿主｜中-大，ROADMAP reverse-skill 闭环落地）——**能力**：agent 改完代码自证修复：重编译→重启（可复现快照）→重跑场景→断言 pass/fail。**spec 草案**：`docs/planning/specs/2026-09-08-v1-verify-loop.md`。**核心设计**：结构化手写场景 JSON（target 启动快照 + 可选 build + steps 数组）+ 断言原语（breakpointHit/evaluate/output/state/noException）+ 宿主 `debug_verify` 编排（同进程直调 Session 不走 MCP 往返）。**关键取舍**：不做录制回放（v1 手写场景，录制 v2 从 AgentActionLog 生成）；fail-fast；编译步建议 v1 含（闭环缺"改码"半环）。**依赖**：debug_launch 可复现 ✅；W1/U1/V3 为增强断言源（纯断点版可先行）。
-- [ ] **V2 崩溃现场自动保留（dump + 轨迹）**（Engine+Session+宿主｜中）——**转远期（2026-09-08 决策）**：dump 自动抓取对 agent 代价大（依赖注入 `DOTNET_DbgEnableMiniDump` 环境变量改变目标运行环境；路径 A 抓取时机 spike 不确定），收益边际低（V3 时间线 + 退出码判定已覆盖大部分复盘）。保留事项：① **第一增量「退出码 + 崩溃判定」可随 V3 顺手做**（ExitProcess 只发 Exited 无退出码，补 code 到 Reason 成本极小）；② 完整 dump 转 `docs/ROADMAP.md` 远期。spec 草案保留：`docs/planning/specs/2026-09-08-v2-crash-dump.md`（dump 路径查证结论仍有效：.NET 崩溃默认不生成 dump；WER LocalDumps 对 .NET 无效已否决；正解 = 会话内异常停点抓 + `DOTNET_DbgEnableMiniDump=1` 注入）。
-- [ ] **V3 日志+事件统一时间线**（Session+宿主｜小-中）——**能力**：目标日志行 + 断点/异常/trace 事件 + agent 动作合并成统一时间轴，解决「先 A 日志后 B 断点再崩溃」因果拼图。**spec 草案**：`docs/planning/specs/2026-09-08-v3-timeline.md`（三源结构已查证）。**技术信息**：三源都带时间戳且同钟（`ProcessOutputCapture` 行时间戳、`DebugEvent.UtcTimestamp`、`AgentAction.UtcTimestamp`）；**隐藏缺口**：`SessionEventBuffer` 只折叠成最新快照、不保留事件历史——需新增事件历史环形缓冲（建议 500 条）存关键事件；TraceHit 现有独立轨迹缓冲（100 条消费式）保留、timeline 另存历史。**方案**：新工具 `debug_timeline(filter, lines, kind?)`——Session 缓冲聚合按 UTC 时间排序输出（同毫秒用各源自增 Sequence 打平）。**难度**：小-中（纯内存归并 + 事件历史缓冲，Engine 零改动）。**依赖**：P1 输出时间戳已完成。
-- [ ] **V4 修复回归护栏（语料断言）**（宿主测试｜小，ROADMAP reverse-skill 候选）——**能力**：把关键文案/行为契约固化为断言测试防回归。**spec 草案**：`docs/planning/specs/2026-09-08-v4-copy-guard.md`。**技术要点**：只测关键片段（非全匹配，防脆）；断言源直接引 `AppText`/`ToolParameterText` 常量（改文案不同步改测试即红，与常量纪律互补）；新工具落地强制同批补 V4。已有先例：McpSessionConcurrencyTests 等行为级护栏。**建议**：debug_set/debug_object/debug_verify/ui_* 落地时同批补断言。
+- [ ] **V2 崩溃现场自动保留（dump + 轨迹）**（Engine+Session+宿主｜中）——**转远期（2026-09-08 决策）**：dump 自动抓取对 agent 代价大（依赖注入 `DOTNET_DbgEnableMiniDump` 环境变量改变目标运行环境；路径 A 抓取时机 spike 不确定），收益边际低（V3 时间线 + 退出码判定已覆盖大部分复盘）。保留事项：① **第一增量「退出码 + 崩溃判定」随 V3 顺手做（已写入 V3 条目顺手项）**（ExitProcess 只发 Exited 无退出码，补 code 到 Reason 成本极小）；② 完整 dump 转 `docs/ROADMAP.md` 远期。spec 草案保留：`docs/planning/specs/2026-09-08-v2-crash-dump.md`（dump 路径查证结论仍有效：.NET 崩溃默认不生成 dump；WER LocalDumps 对 .NET 无效已否决；正解 = 会话内异常停点抓 + `DOTNET_DbgEnableMiniDump=1` 注入）。
+- [ ] **V3 日志+事件统一时间线**（Session+宿主｜小-中）——**能力**：目标日志行 + 断点/异常/trace 事件 + agent 动作合并成统一时间轴，解决「先 A 日志后 B 断点再崩溃」因果拼图。**spec 草案**：`docs/planning/specs/2026-09-08-v3-timeline.md`（三源结构已查证）。**技术信息**：三源都带时间戳且同钟（`ProcessOutputCapture` 行时间戳、`DebugEvent.UtcTimestamp`、`AgentAction.UtcTimestamp`）；**隐藏缺口**：`SessionEventBuffer` 只折叠成最新快照、不保留事件历史——需新增事件历史环形缓冲（建议 500 条）存关键事件；TraceHit 现有独立轨迹缓冲（100 条消费式）保留、timeline 另存历史。**方案**：新工具 `debug_timeline(filter, lines, kind?)`——Session 缓冲聚合按 UTC 时间排序输出（同毫秒用各源自增 Sequence 打平）。**难度**：小-中（纯内存归并 + 事件历史缓冲，Engine 零改动）。**依赖**：P1 输出时间戳已完成。**顺手项（V2 保留增量①，随本项做防丢失）**：Exited 状态 Reason 补退出码/崩溃判定——现状注记：launch 会话输出缓冲已带 `[进程已退出 exitCode=N]`（`DebugSessionManager` 的 `process.Exited`，`debug_output`/`debug_wait` 已可见），真正缺口 = Engine Exited Reason 硬编码 `"process exited"`（`CallbackHandler.cs:55`）+ attach 会话无 Process 对象拿退出码（ICorDebug 不提供；需 Win32 `GetExitCodeProcess` 或立项时明确不覆盖 attach）。
+- [ ] **V4 修复回归护栏（语料断言）**（宿主测试｜小，ROADMAP reverse-skill 候选）——**能力**：把关键文案/行为契约固化为断言测试防回归。**spec 草案**：`docs/planning/specs/2026-09-08-v4-copy-guard.md`。**技术要点**：只测关键片段（非全匹配，防脆）；断言源直接引 `AppText`/`ToolParameterText` 常量（改文案不同步改测试即红，与常量纪律互补）；新工具落地强制同批补 V4。已有先例：McpSessionConcurrencyTests 等行为级护栏。**建议**：debug_set/debug_object/debug_verify/ui_* 落地时同批补断言；语料可吸收 DebugMCP 停点返回常驻「你找到的是症状还是根因」+ 下一步建议的文案形态（v4 spec 关联行已注，立项时拍板）。
 
 ### 现场纵深/环境 环节
 
@@ -55,7 +54,7 @@
 
 ### 已评估关闭/远期（防重复立项，一行结论）
 
-- **func-eval 主动调用业务方法** = **关闭**（I 项结论：async/UI/外设方法 func-eval 必死锁；纯函数触发需求未见）。**完整 SetIP/强制返回** = 远期（W2，先查证）。**崩溃自动 dump** = **远期（2026-09-08 决策）**：agent 代价大（注入 `DOTNET_DbgEnableMiniDump` 改环境）+ spike 不确定，保留退出码/崩溃判定小增量（随 V3），完整 dump 见 ROADMAP。**ClrMD live 内存分析** = ROADMAP 已有（dump 事后分析，live 会话内与 ICorDebug 冲突）。**多调试会话并行** = ROADMAP 已有（Engine 实测干扰）。
+- **func-eval 主动调用业务方法** = **关闭**（I 项结论：async/UI/外设方法 func-eval 必死锁；纯函数触发需求未见）。**完整 SetIP/强制返回** = 远期（W2，已转 ROADMAP 2026-09-08，查证结论/触发条件随条目移入）。**崩溃自动 dump** = **远期（2026-09-08 决策）**：agent 代价大（注入 `DOTNET_DbgEnableMiniDump` 改环境）+ spike 不确定，保留退出码/崩溃判定小增量（随 V3），完整 dump 见 ROADMAP。**ClrMD live 内存分析** = ROADMAP 已有（dump 事后分析，live 会话内与 ICorDebug 冲突）。**多调试会话并行** = ROADMAP 已有（Engine 实测干扰）。
 
 ## DebugMCP 调研可借鉴点（2026-09-08，源码实读 microsoft/DebugMCP）
 

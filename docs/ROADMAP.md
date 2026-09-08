@@ -35,6 +35,7 @@
 > 宿主 TODO「agent 自动化调试闭环缺口清单」评估后转来的项。spec 草案保留在 `docs/planning/specs/`（查证结论仍有效），触发条件出现再立项。
 
 - **V2 崩溃自动 dump 保留现场**（原宿主 TODO V2，spec `2026-09-08-v2-crash-dump.md`）——**转远期理由（2026-09-08 用户决策）**：自动抓 dump 对 agent 代价大——路径 C 需注入 `DOTNET_DbgEnableMiniDump` 环境变量（改变目标运行环境，调试行为可疑）；路径 A（被 ICorDebug 冻结的进程是否响应诊断口 WriteDump）spike 不确定；收益边际低（V3 时间线 + 退出码/崩溃判定已覆盖大部分复盘）。**保留的价值点**：① 退出码 + 崩溃判定小增量（ExitProcess 现无退出码，补到 Reason，成本极小——可随 V3 顺手做，仍算近期但独立小项）；② 完整 dump 若未来要做：.NET 崩溃默认不生成 dump；WER LocalDumps 对 .NET 无效（微软文档明言）；正解 = 会话内异常停点抓 + `DOTNET_DbgEnableMiniDump=1` 注入。**触发条件**：收到 agent「进程崩溃后不知道死前状态」类反馈且 V3 时间线不足以回答。
+- **W2 SetIP / 强制返回（同方法内跳执行）**（原宿主 TODO W2，spec `2026-09-08-w2-set-ip.md`）——**转远期理由（2026-09-08）**：风险/收益比低——agent 场景断点直达 + W1 现场改值已可替代大部分「跳过执行」需求。**已查证**：ClrDebug `SetIP`/`CanSetIP` 均封装（`CorDebugILFrame.cs:115/368`），但 CanSetIP 注释明言「非 S_OK 仍可调但无安全保证」；**无方法强制返回 API**；async 状态机帧行为未验证。**若做**只走「同方法内向前跳 + CanSetIP 预检 S_OK 才允许」安全子集。**触发条件**：收到 agent「需要跳过中间执行/强制返回」类反馈且 W1 改值无法替代。
 
 ## WebUI 后续（P4 收尾后的体验项）
 
