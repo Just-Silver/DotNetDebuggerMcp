@@ -394,7 +394,8 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | Microsoft.Diagnostics.DbgShim.win-x64 | 调试启动器（dbgshim） | [dotnet/diagnostics](https://github.com/dotnet/diagnostics)（MIT） |
 | ModelContextProtocol | MCP C# SDK | [csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk)（MIT → Apache-2.0 过渡） |
 | BootstrapBlazor（含主题/图标扩展） | Web 展示面组件库 | [BootstrapBlazor](https://github.com/dotnetcore/BootstrapBlazor)（Apache-2.0） |
-| McMaster.Extensions.Hosting.CommandLine | CLI 参数解析 | [CommandLineUtils](https://github.com/natmcmaster/CommandLineUtils)（Apache-2.0） |
+| Monaco Editor | Web 代码视图编辑器（vendored 静态资产随包分发，非 NuGet 依赖，许可证文本随目录分发：`src/DotNetDebugger.Web/wwwroot/lib/monaco-editor/LICENSE.txt`） | [microsoft/monaco-editor](https://github.com/microsoft/monaco-editor)（MIT，Copyright © 2016-present Microsoft Corporation） |
+| McMaster.Extensions.Hosting.CommandLine | CLI 参数解析 | [CommandLineUtils](https://github.com/natemcmaster/CommandLineUtils)（Apache-2.0） |
 
 ## License
 
