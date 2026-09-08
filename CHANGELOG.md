@@ -24,6 +24,8 @@
 - **`debug_stack` 帧名真名化**：每帧显示 `类型.方法 [token]`（如 `DebugTarget.Program.Work [0x06000005]`）取代裸 `模块!0x…`；token 保留在行尾供下断点闭环。嵌套类型名用 `+` 连接（`Ns.Outer+Inner`，可直接作 `typeName` 定位）
 - **async 状态机调试引导**：`debug_step` 停在编译器生成的 async 状态机帧（`<X>d__N.MoveNext`）时，返回提示改用行断点；`debug_wait`/`debug_state` 停点上下文遇状态机帧显示「编译器生成 async 状态机（对应 async 方法 X）」备注并建议用行断点断还原源码的 await 行——agent 不再迷失在无源码的 MoveNext 机器码里
 
+## [1.6.0] - 2026-09-07
+
 ### Added
 
 - **条件断点（P7）**：`debug_breakpoint_set` 新增 `condition` 参数（P6 表达式子集，如 `i == 3`、`order.Customer.Id == 42`）——条件为真才停/记，循环中「第 N 轮才出错」的场景不再逐轮 continue 或全量 trace。条件求值纯读无副作用、在引擎命中瞬间完成（false 放行对目标不可见）；`Hits` 计条件为真次数（`hitCount` 组合=「第 N 次条件为真起停/记」）；条件语法错在设断点时当场拒绝；命中时求值失败（变量不可见/缺字段/非布尔）放行并在 `debug_state`/`debug_wait` 反馈「条件未通过 N 次（最后错误：…）」——防「条件写错永不命中」静默空等
