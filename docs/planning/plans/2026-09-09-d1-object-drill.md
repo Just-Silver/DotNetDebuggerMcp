@@ -39,13 +39,13 @@
 - Consumes: `DebugEngineCore.ResolvePathValue`/`ReadPathValue`（既有私有，P6 路径定位）；`EnumerateInstanceFields`/`ReadFieldTokens`；`DebugValue`/`DebugVariable`（Engine Models，`Children` 递归嵌套已支持）。
 - Produces:
   - `Engine.DebugEngineCore` 常量 `public const int MaxDrillDepth = 6`；
-  - `DebugSession.ReadObjectAtPathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, int depth, CancellationToken ct = default)` → `Task<DebugValue>`（终值为对象/数组时含嵌套 children 树；标量/字符串/null 抛中文 `InvalidOperationException`）。
+  - `DebugSession.ReadObjectAtPathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, int depth, int limit = 32, CancellationToken ct = default)` → `Task<DebugValue>`（终值为对象/数组时含嵌套 children 树；标量/字符串/null 抛中文 `InvalidOperationException`「…不是对象/数组…」）。
 
 - [ ] **Step 1: DebugTarget 追加 drill 样本（链 + 环）**
 
 `generate-testdata.ps1` 的 `$dbgSrc` 末尾追加（新类型，token 追加不漂移）：
 ```csharp
-// D1 对象深读样本：三层链 + 自引用环（drill 模式入口锚点 Drill(drillRoot)）
+// D1 对象深读样本：三层链 + 自引用环 + 数组下钻（drill 模式入口锚点 Drill(drillRoot, arr)）
 public class DrillNode
 {
     public string Name = "";
@@ -61,12 +61,12 @@ if (args.Length > 0 && args[0] == "drill")
     var b = new DrillNode { Name = "B", Value = 2 };
     var c = new DrillNode { Name = "C", Value = 3 };
     a.Next = b; b.Next = c; c.Next = a; // 故意成环：验证 <cyclic> 而非死循环
-    Drill(a);
+    Drill(a, new[] { 3, 1, 4 });
     return;
 }
-public static void Drill(DrillNode root)
+public static void Drill(DrillNode root, int[] arr)
 {
-    Console.WriteLine("[DebugTarget] drill " + root.Name);
+    Console.WriteLine("[DebugTarget] drill " + root.Name + " arr0=" + arr[0]);
     Thread.Sleep(2000); // 让调试器从容设断点/观察
 }
 ```
@@ -74,7 +74,7 @@ public static void Drill(DrillNode root)
 
 - [ ] **Step 2: 写失败测试（Engine）**
 
-`ReadObjectDrillTests.cs`（骨架复刻 `EvaluatePathTests`：attach `drill 0` → 断点 `Drill` 入口 offset 0 → `WaitForHit`）：
+`ReadObjectDrillTests.cs`（骨架复刻 `EvaluatePathTests`：attach **`drill 5`** → 断点 `Drill` 入口 offset 0 → `WaitForHit`。**注意时序**：`drill 0` 无延迟，attach 窗口过后 `Drill` 入口已执行过、断点不再命中——沿用 bag 模式 `delay 5s`）：
 ```csharp
 // depth=1：仅一层 children（与 debug_variables/Evaluate 一致）
 var d1 = await session.ReadObjectAtPathAsync(tid, "root", [], 1, ct);
@@ -87,17 +87,27 @@ var next = d2.Children!.Single(c => c.Name == "Next");
 Assert.NotNull(next.Value.Children);
 Assert.Contains(next.Value.Children!, c => c.Name == "Name");
 
-// 环：depth 足够深时环路径上出现 <cyclic> 占位而非死循环/栈溢出
-var deep = await session.ReadObjectAtPathAsync(tid, "root", [], 6, ct);
-Assert.Contains("cyclic", deep.Display) ; // 或沿 Next.Next… 链断言某层出现 <cyclic>（实现按 spec 用 Summary("<cyclic>", …)）
+// 数组：arr 根 depth=1 → 3 个元素
+var arr1 = await session.ReadObjectAtPathAsync(tid, "arr", [], 1, ct);
+Assert.NotNull(arr1.Children);
+Assert.Equal(3, arr1.Children!.Count);
 
-// 错误语义：标量/字符串/null 非对象目标
+// 环：沿 Next 链递归找 <cyclic> 占位（根的 Display 是「N 字段」，不会含 cyclic）
+var deep = await session.ReadObjectAtPathAsync(tid, "root", [], 6, ct);
+Assert.True(ContainsCyclic(deep));
+
+// 错误语义：标量/字符串/null 非对象目标（spec §4.1 同文案）
 var scalarErr = await Assert.ThrowsAsync<InvalidOperationException>(() =>
     session.ReadObjectAtPathAsync(tid, "root", [new PathSegment.Field("Value")], 1, ct));
 Assert.Contains("不是对象/数组", scalarErr.Message);
-// depth 越界（>MaxDrillDepth）拒绝
+var nullErr = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+    session.ReadObjectAtPathAsync(tid, "nullRoot", [], 1, ct)); // Drill 传入 null 的场景见样本注释——或用环终点
+Assert.Contains("不是对象/数组", nullErr.Message);
+
+static bool ContainsCyclic(DebugValue v) =>
+    v.Display == "<cyclic>" || (v.Children?.Any(c => ContainsCyclic(c.Value)) ?? false);
 ```
-Run，Expected: FAIL（类型/方法不存在）。注：环路径断言以实际调试目标行为为准——DebugTarget 链成环后 `Next.Next.Next` 回到 a，expander 遇到已访问地址返回 `<cyclic>`，测试落在「deep 展开能正常返回且含 cyclic 标记」。
+Run，Expected: FAIL（类型/方法不存在）。注：DebugTarget 链成环后 `Next.Next.Next` 回到 a，expander 遇已访问地址返回 `<cyclic>`；null 场景样本若不便造则删 nullErr 用例、以字符串/标量错误覆盖 spec 语义。
 
 - [ ] **Step 3: 实现受控递归展开器**
 
@@ -106,89 +116,124 @@ Run，Expected: FAIL（类型/方法不存在）。注：环路径断言以实�
 /// <summary>debug_object 展开深度上限（防失控长链；同 DebugMCP maxDepth）。</summary>
 public const int MaxDrillDepth = 6;
 
-public Task<DebugValue> ReadObjectAtPathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, int depth, CancellationToken ct = default)
-    => PostAsyncResult(() => ReadObjectAtPath(threadId, rootName, segments, depth), ct);
+public Task<DebugValue> ReadObjectAtPathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments,
+    int depth, int limit = 32, CancellationToken ct = default)
+    => PostAsyncResult(() => ReadObjectAtPath(threadId, rootName, segments, depth, limit), ct);
 
-private DebugValue ReadObjectAtPath(int threadId, string rootName, IReadOnlyList<PathSegment> segments, int depth)
+private DebugValue ReadObjectAtPath(int threadId, string rootName, IReadOnlyList<PathSegment> segments, int depth, int limit)
 {
     if (_process is null) throw new InvalidOperationException("无被调试进程。");
     var d = Math.Clamp(depth, 1, MaxDrillDepth);
+    var lim = Math.Clamp(limit, 1, 128);
     var thread = FindThread(threadId) ?? throw new InvalidOperationException($"找不到线程 threadId={threadId}。");
     var raw = ResolvePathValue(thread, rootName, segments);   // P6 定位（含 $exception/字段/下标）
     if (raw is not EvalValue.Raw r)
         throw new InvalidOperationException("路径终值不可展开（字符串索引单字符等合成标量）。");
+    var value = ValidateExpandable(r.Value, rootName, segments);  // 终值必须是对象/数组（2026-09-09 审查修正）
     var visited = new HashSet<long>();                        // 引用地址集合：防环
-    return ExpandNode(r.Value, d, visited);
+    return value is CorDebugObjectValue obj ? ExpandObject(obj, d, visited, lim)
+         : value is CorDebugArrayValue arr ? ExpandArray(arr, d, visited, lim)
+         : throw new InvalidOperationException("该路径不是对象/数组（当前为标量/字符串/null），请给对象或数组路径。");
 }
 
-private DebugValue ExpandNode(CorDebugValue value, int depth, HashSet<long> visited)
+/// <summary>解引用并校验：null 引用 / 标量 / 字符串 → 中文报错；返回可展开对象/数组。</summary>
+private static CorDebugValue ValidateExpandable(CorDebugValue target, string rootName, IReadOnlyList<PathSegment> segments)
 {
-    var shallow = ReadValue(value, expand: depth > 1);        // 到深度边界或标量时用现成浅读
-    switch (value)
+    if (target is CorDebugReferenceValue rr && rr.IsNull)
+        throw new InvalidOperationException($"路径 {Describe(rootName, segments)} 为 null——请给对象或数组路径。");
+    var deref = target is CorDebugReferenceValue r2 ? r2.Dereference() : target;
+    return deref switch
     {
-        case CorDebugReferenceValue r when r.IsNull:
-            return DebugValue.Summary("null", "null");
-        case CorDebugReferenceValue r:
-            return ExpandReference(r, depth, visited);
-        case CorDebugObjectValue obj:                          // 装箱标量/结构体对象（罕见）
-            return DebugValue.Summary("object", ReadValue(obj).Display);
-        default:                                              // 标量/字符串/数组由 ReadValue 已处理
-            return shallow;
-    }
+        CorDebugObjectValue or CorDebugArrayValue => deref!,
+        CorDebugStringValue => throw new InvalidOperationException(
+            $"路径 {Describe(rootName, segments)} 是字符串——请给对象或数组路径（或取其字段/索引）。"),
+        _ => throw new InvalidOperationException(
+            $"路径 {Describe(rootName, segments)} 不是对象/数组（当前为标量）——请给对象或数组路径。"),
+    };
 }
 
-private DebugValue ExpandReference(CorDebugReferenceValue r, int depth, HashSet<long> visited)
+private DebugValue ExpandObject(CorDebugObjectValue obj, int depth, HashSet<long> visited, int limit)
 {
-    if (r.IsNull) return DebugValue.Summary("null", "null");
-    var address = r.Value;                                     // 被引用对象地址（ClrDebug 属性名以本地源码为准）
-    if (!visited.Add(address)) return DebugValue.Summary("cyclic", "<cyclic>"); // 环：占位不再下钻
-    try
-    {
-        var deref = r.Dereference() ?? throw new InvalidOperationException("解引用失败。");
-        return deref switch
-        {
-            CorDebugObjectValue obj => ExpandObject(obj, depth, visited),
-            CorDebugArrayValue arr => ExpandArray(arr, depth, visited),
-            CorDebugStringValue s => DebugValue.Scalar($"\"{s.GetString(s.Length)}\""),   // 字符串不再下钻
-            _ => ReadValue(deref),
-        };
-    }
-    finally { visited.Remove(address); }   // 沿路径集合：兄弟分支同地址不算环
-}
-
-private DebugValue ExpandObject(CorDebugObjectValue obj, int depth, HashSet<long> visited)
-{
-    var fields = EnumerateInstanceFields(obj).Take(limitOfDepth).ToList(); // limit 走读常量 MaxChildren（见 Task1 Step4 细化）——v1 用 32 沿用
+    var fields = EnumerateInstanceFields(obj);
+    var shown = fields.Take(limit).ToList();
     var children = new List<DebugVariable>();
-    foreach (var (cls, name, token) in fields)
+    foreach (var (cls, name, token) in shown)
     {
         try
         {
             var fv = obj.GetFieldValue(cls.Raw, new mdFieldDef((uint)token));
             children.Add(new DebugVariable(name, -1,
-                depth <= 1 ? ReadValue(fv) : ExpandNode(fv, depth - 1, visited), IsArgument: false));
+                depth <= 1 ? ReadValue(fv) : ExpandNode(fv, depth - 1, visited, limit), IsArgument: false));
         }
         catch (Exception ex) { children.Add(new DebugVariable(name, -1, DebugValue.Summary("error", $"<读取失败:{ex.Message}>"), IsArgument: false)); }
     }
-    var display = fields.Count > children.Count ? $"字段 {fields.Count} 个（前 {children.Count}）" : $"{children.Count} 字段";
+    var display = fields.Count > shown.Count ? $"字段 {fields.Count} 个（前 {shown.Count}）" : $"{children.Count} 字段";
     return DebugValue.Object(display, children);
 }
 
-private DebugValue ExpandArray(CorDebugArrayValue arr, int depth, HashSet<long> visited)
+private DebugValue ExpandArray(CorDebugArrayValue arr, int depth, HashSet<long> visited, int limit)
 {
-    // 数组元素逐个展开：rank=1，线性取前 MaxChildren；元素为引用时沿 ExpandNode 继续
-    // display/children 形态复用 ReadArrayValue 现逻辑，仅把「元素值」改经 ExpandNode(…, depth-1, visited)
+    // rank=1 线性取前 limit 元素；元素为引用/对象时沿 ExpandNode 继续（depth-1）；标量元素浅读
+    if (arr.Rank != 1)
+        return DebugValue.Summary("array", $"多维数组 Rank={arr.Rank} v1 不展开（可用 debug_evaluate [i] 直读）");
+    var children = new List<DebugVariable>();
+    var total = arr.Count;
+    for (var i = 0; i < total && children.Count < limit; i++)
+    {
+        try
+        {
+            var el = arr.GetElementAtPosition(i);
+            children.Add(new DebugVariable($"[{i}]", -1,
+                depth <= 1 ? ReadValue(el) : ExpandNode(el, depth - 1, visited, limit), IsArgument: false));
+        }
+        catch (Exception ex) { children.Add(new DebugVariable($"[{i}]", -1, DebugValue.Summary("error", $"<读取失败:{ex.Message}>"), IsArgument: false)); }
+    }
+    var display = total > children.Count ? $"数组 {total} 项（前 {children.Count}）" : $"数组 {total} 项";
+    return DebugValue.Object(display, children);
 }
+
+private DebugValue ExpandNode(CorDebugValue value, int depth, HashSet<long> visited, int limit)
+{
+    // 不再无条件先浅读（避免每层重复展开）；default 叶（标量/字符串）按需浅读
+    switch (value)
+    {
+        case CorDebugReferenceValue r when r.IsNull:
+            return DebugValue.Summary("null", "null");
+        case CorDebugReferenceValue r:
+        {
+            var address = r.Value;                                   // 被引用对象地址（ClrDebug 属性名以本地源码为准）
+            if (!visited.Add(address)) return DebugValue.Summary("cyclic", "<cyclic>"); // 环：占位不再下钻
+            try
+            {
+                var deref = r.Dereference() ?? throw new InvalidOperationException("解引用失败。");
+                return deref switch
+                {
+                    CorDebugObjectValue obj => ExpandObject(obj, depth, visited, limit),
+                    CorDebugArrayValue a => ExpandArray(a, depth, visited, limit),
+                    CorDebugStringValue s => DebugValue.Scalar($"\"{s.GetString(s.Length)}\""), // 字符串不再下钻
+                    _ => ReadValue(deref),
+                };
+            }
+            finally { visited.Remove(address); }   // 沿路径集合：兄弟分支同地址不算环
+        }
+        case CorDebugObjectValue obj: return ExpandObject(obj, depth, visited, limit);  // 装箱结构对象
+        case CorDebugArrayValue arr: return ExpandArray(arr, depth, visited, limit);
+        default: return ReadValue(value);          // 标量叶：不展开
+    }
+}
+
+private static string Describe(string root, IReadOnlyList<PathSegment> segments) =>
+    root + string.Concat(segments.Select(s => s switch { PathSegment.Field f => "." + f.Name, PathSegment.Index i => $"[{i.Position}]", _ => "" }));
 ```
-> 实现注（动手前先查再写）：① `ReadValue(value, expand:)`/`ReadObjectValue`/`ReadArrayValue` 现为 static，字段清单机制直接复用 `EnumerateInstanceFields`（`DebugEngineCore.cs:891`）与 `ReadFieldTokens`；② 数组展开细节以现 `ReadArrayValue`（`:697`）为准（Rank/元素取法），只把元素值换成深度递归；③ `CorDebugReferenceValue` 读地址属性名以本地 ClrDebug 源码为准；④ 环检测用「引用地址 + 沿路径集合（finally remove）」语义 = 兄弟同对象不误判环、祖孙链成环才 `<cyclic>`。
+> 实现注（动手前先查再写）：① **前置小重构**：`DebugEngineCore` 现无 `ResolvePathValue`/`FindThread`——把 `ReadPathValue`（`:771`）的「根解析+逐段求值 → `EvalValue`」抽成私有 `ResolvePathValue(CorDebugThread, rootName, segments)`、线程查找提为 `FindThread(threadId)`（评审修正，勿依赖不存在的名字）；② `ReadValue`/`EnumerateInstanceFields`/`ReadFieldTokens` 现成复用；③ `CorDebugReferenceValue` 读地址属性名以本地 ClrDebug 源码为准；④ 环检测 = 引用地址 + 沿路径集合（finally remove）——兄弟同对象不误判环、祖孙链成环才 `<cyclic>`。
 
-- [ ] **Step 4: limit 参数透传（常量 `MaxChildren` 沿用，工具侧可调后段实现）**
+- [ ] **Step 4: limit 语义（动态每层，2026-09-09 审查修正）**
 
-v1 Engine 内部展开沿用既有 `MaxChildren=32` 每层截断（display 带「前 N 个」）；`limit` 的宿主可调值先收敛为常量默认（32）——工具参数保留但 v1 固定 32，README 注明「每层上限当前固定 32」（避免引擎模型为 limit 额外带参，后续 v1.5 再动态化）。此取舍在 Task 2 工具 Description 同步。
+limit 为**真实参数**：`ReadObjectAtPathAsync(…, depth, limit=32)` 与 `ExpandObject/ExpandArray/ExpandNode` 逐层透传（Step 3 代码已含），宿主钳制 1-128；超限 display 提示「共 N 个（前 M）」。无 no-op /「固定 32」描述。
 
 - [ ] **Step 5: 验证 + 提交**
 
-Run Engine `ReadObjectDrillTests` + 既有 `EvaluatePathTests`（读不回归）+ `StateReadTests`。`git commit -m "feat: Engine 受控递归对象展开 ReadObjectAtPathAsync（depth+防环 <cyclic>，D1）"`
+Run Engine `ReadObjectDrillTests` + 既有 `EvaluatePathTests`（读不回归）+ `StateReadTests`。`git commit -m "feat: Engine 受控递归对象展开 ReadObjectAtPathAsync（depth+limit+防环 <cyclic>，D1）"`
 
 ---
 
@@ -200,18 +245,33 @@ Run Engine `ReadObjectDrillTests` + 既有 `EvaluatePathTests`（读不回归）
 - Test: `tests/DotNetDebuggerMcp.Tests/DebugMcpToolsTests.cs`
 
 **Interfaces:**
-- Consumes: `DebugInspectTool.TryRequireStopped`；`ExpressionParser.Parse`（path → `PathNode`）；`active.Buffer.StoppedThreadId`；`active.Session.ReadObjectAtPathAsync`；`DebugInspectTool.RenderVariable`（children 渲染）；`DebugSessionService.Manager.Actions.Log`。
+- Consumes: `DebugInspectTool.TryRequireStopped`；`ExpressionParser.Parse`（path → `PathNode`，**`$exception` 前缀特判见 Step 1**）；`active.Buffer.StoppedThreadId`；`active.Session.ReadObjectAtPathAsync`；`DebugInspectTool.RenderVariable`（children 渲染）；`DebugSessionService.Manager.Actions.Log`。
 - Produces: MCP 工具 `debug_object(path, depth=2, limit=32, threadId=0)` → `Task<string>`。
 
-- [ ] **Step 1: 实现工具**
+- [ ] **Step 1: 实现工具（含 `$exception` 前缀特判）**
 
+`ExpressionParser` 分词器不接受 `$` 开头（`$exception` 根只能由引擎直传 rootName 到达）——工具层对 `$exception` / `$exception.…` 前缀特判：根固定 `$exception`，剩余段串经 `ExpressionParser.Parse` 复用其 Segments（2026-09-09 审查修正）：
+```csharp
+// 解析 path → (root, segments)；支持 $exception 伪根（spec 拍板 #2）
+private static (string Root, IReadOnlyList<PathSegment> Segments)? ParseObjectPath(string path)
+{
+    if (path == "$exception") return ("$exception", []);
+    if (path.StartsWith("$exception.", StringComparison.Ordinal))
+    {
+        var rest = path["$exception.".Length..];
+        return ExpressionParser.Parse(rest) is PathNode p ? ("$exception", p.Segments) : null;
+    }
+    return ExpressionParser.Parse(path) is PathNode p ? (p.Root, p.Segments) : null;
+}
+```
+工具方法：
 ```csharp
 [McpServerTool]
-[Description("查看对象/数组的下一级结构（受控递归下钻，进程需停）：path 用 P6 文法定位对象（根=栈顶帧局部/参数，支持 $exception），depth 递归层数（默认 2，上限 6，同路径环输出 <cyclic>），返回该对象的 children 递归清单。与 debug_evaluate 分工：debug_evaluate 取标量值，debug_object 探索对象结构。")]
+[Description("查看对象/数组的下一级结构（受控递归下钻，进程需停）：path 用 P6 文法定位对象（根=栈顶帧局部/参数，支持 $exception 伪根），depth 递归层数（默认 2，上限 6），limit 每层字段/元素上限（默认 32，范围 1-128），同路径环输出 <cyclic>。返回 children 递归清单。与 debug_evaluate 分工：debug_evaluate 取标量值，debug_object 探索对象结构。")]
 public static async Task<string> DebugObject(
     [Description("对象路径（必填），如 order.Customer、$exception.InnerException（根为栈顶帧局部/参数名）。")] string path,
     [Description("递归深度（默认 2，范围 1-6）。")] int depth = 2,
-    [Description("每层 children 上限（当前固定 32，v1 仅接受默认）。")] int limit = 32,
+    [Description("每层字段/元素上限（默认 32，范围 1-128）。")] int limit = 32,
     [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
     CancellationToken cancellationToken = default)
 {
@@ -221,12 +281,14 @@ public static async Task<string> DebugObject(
     if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";
     try
     {
-        if (ExpressionParser.Parse(path) is not PathNode p)
-            return $"path「{path}」不是有效路径（应为变量名/字段/下标链）。";
+        var target = ParseObjectPath(path);
+        if (target is null) return $"path「{path}」不是有效路径（应为变量名/字段/下标链）。";
         var d = Math.Clamp(depth, 1, DebugEngineCore.MaxDrillDepth);
-        var value = await active.Session.ReadObjectAtPathAsync(tid, p.Root, p.Segments, d, cancellationToken);
-        DebugSessionService.Manager.Actions.Log("debug_object", $"{path} depth={d}", "ok");
-        if (value.Children is not { Count: > 0 } children) return $"对象 {path}：{value.Display}（无 children 可展开——{path} 可能是标量/空对象/字符串，见提示）。";
+        var lim = Math.Clamp(limit, 1, 128);
+        var value = await active.Session.ReadObjectAtPathAsync(tid, target.Value.Root, target.Value.Segments, d, lim, cancellationToken);
+        DebugSessionService.Manager.Actions.Log("debug_object", $"{path} depth={d} limit={lim}", "ok");
+        if (value.Children is not { Count: > 0 } children)
+            return $"对象 {path}（depth={d}）：{value.Display}（空对象/空数组，无 children）。"; // 标量/字符串/null 已由引擎抛错
         var sb = new StringBuilder($"对象 {path}（depth={d}，{children.Count} 项）:");
         foreach (var c in children)
             sb.AppendLine().Append(DebugInspectTool.RenderVariable(c, depth: 1));
@@ -255,7 +317,7 @@ public static async Task<string> DebugObject(
 
 ## Self-Review（writing-plans 内审）
 
-- **Spec 覆盖**：受控递归 depth（Task1 ExpandNode）、`<cyclic>` 防环（Task1 visited 地址集合）、每层预算（Task1 Step4 沿用 MaxChildren=32）、$exception/根支持（ResolvePathValue 复用）、标量/字符串/null 中文提示（Task1 Step2 测试 + 工具兜底）、分工 README（Task2）。
-- **占位符**：无 TBD；唯一实现期查证点（ClrDebug 引用地址属性名/数组展开细节）已注明「以本地源码为准」并给 fallback 语义。
-- **类型一致**：`ReadObjectAtPathAsync` Task1 定义 Task2 用；`MaxDrillDepth` Task1 定义 Task2 用；`RenderVariable` 渲染嵌套 children 树（DebugValue.Children 递归）。
-- **风险点已标**：环检测「沿路径集合 + finally remove」语义（兄弟同对象不误判）；深度/预算双护栏；debug_target 链故意成环供 e2e 验证不死循环。
+- **Spec 覆盖**：受控递归 depth（Task1 ExpandObject/Array/Node）、`<cyclic>` 防环（visited 地址集合 + finally remove）、每层 limit 动态透传 1-128（Task1 Step3/4 + Task2）、$exception 伪根（Task2 ParseObjectPath 前缀特判）、标量/字符串/null 终值中文提示（Task1 ValidateExpandable + 工具兜底）、分工 README（Task2）。
+- **占位符**：无 TBD；ClrDebug 引用地址属性名/解引用 API 以本地源码为准（已给 fallback 语义）；数组展开已写实（ExpandArray）。
+- **类型一致**：`ReadObjectAtPathAsync(…, depth, limit=32)` Task1 定义 Task2 用；`MaxDrillDepth` Task1 定义 Task2 用；`ParseObjectPath` Task2 定义 Task2 用；`RenderVariable` 渲染嵌套 children 树（DebugValue.Children 递归）。
+- **风险点已标**：环检测「沿路径集合 + finally remove」语义；深度/limit 双护栏；`drill 0` 时序（Engine 测试用 `drill 5`）；`ReadPathValue` 需先小重构出 `ResolvePathValue`/`FindThread`。

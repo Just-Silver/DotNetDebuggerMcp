@@ -91,7 +91,8 @@ internal static class SensitiveValueRedactor
     internal static bool IsSensitiveExpression(string expression)
     {
         // 表达式子集无方法调用/括号——末段标识符 = 最后一个非 `]`/`.` 边界标识符；用正则抓全部标识符取最后
-        var ids = Regex.Matches(expression, "[A-Za-z_][A-Za-z0-9_]*").Select(m => m.Value).ToArray();
+        // 标识符体含 `-`（对齐 DebugMCP `[A-Za-z_][A-Za-z0-9_-]*`）
+        var ids = Regex.Matches(expression, "[A-Za-z_][A-Za-z0-9_-]*").Select(m => m.Value).ToArray();
         return ids.Length > 0 && IsSensitiveName(ids[^1]);
     }
 }
@@ -110,8 +111,25 @@ Run 定向测试过 + 宿主既有编译。`git commit -m "feat: SensitiveValueR
 - Modify: `src/DotNetDebuggerMcp/Tools/Debugger/DebugInspectTool.cs`（`RenderVariable:124`）
 - Modify: `src/DotNetDebuggerMcp/Tools/Debugger/DebugEvaluateTool.cs`（`:44` 标量行 + children 已走 RenderVariable）
 - Modify: `src/DotNetDebuggerMcp/Tools/Debugger/DebugSessionTool.cs`（trace 变量行 `:169`）
+- Modify: `tests/TestData/generate-testdata.ps1`（Step 0：DebugTarget 增敏感字段）
 - Modify: `CHANGELOG.md`、`README.md`
 - Test: `tests/DotNetDebuggerMcp.Tests/DebugMcpToolsTests.cs`
+
+- [ ] **Step 0: 测试数据（generate-testdata.ps1，2026-09-09 审查修正补步）**
+
+`$dbgSrc` 的 `class Bag`（脚本内最后一个类型——字段表末尾追加不位移既有字段/方法 token）**尾部**追加敏感字段；`Main` 的 `bag` 分支初始化器赋真实凭据形值。**勿在 `A`/`S` 之间插字段**（既有 `Assert.Contains("A, S")` 可用字段清单断言不破）；**不动既有方法体**。重跑脚本。
+```csharp
+public class Bag
+{
+    public int A;
+    public string S = "";
+    // DB1 e2e 敏感字段（append，不进 A/S 之间）
+    public string Password = "";
+    public string Token = "";
+}
+// Main bag 分支：
+//   WorkBag(new Bag { A = 7, S = "sx", Password = "hunter2", Token = "Bearer eyJhbGciOiJIUzI1NiJ9.e30.abc" }, 5);
+```
 
 - [ ] **Step 1: RenderVariable 递归脱敏 + 计数提示**
 
@@ -127,11 +145,14 @@ internal static string RenderVariable(DebugVariable v, int depth)
     return line;
 }
 ```
-`DebugVariables`（`:106`）：渲染前先数命中——遍历变量树（递归收集 `v.Name + v.Value.Display`），`count` 写入返回头：`…（{count} 个值疑似凭据已脱敏——用类型/长度/null 判断，勿读原始值）`。注意 RenderVariable 单行命中即替换——**统计与渲染两次遍历各判一次，纯函数无副作用，成本可忽略**。
+`DebugVariables`（`:106`）：渲染前先数命中——遍历变量树（递归收集 `v.Name + v.Value.Display`），`count` 写入返回头：`…（{count} 个值疑似凭据已脱敏——用类型/长度/null 判断，勿读原始值）`。注意 RenderVariable 单行命中即替换——**统计与渲染两次遍历各判一次，纯函数无副作用，成本可忽略**。**与 DB2 白名单同批落地时**：计数放白名单过滤**之后**（只数可见命中值，避免提示含未展示项）。
 
 - [ ] **Step 2: debug_evaluate 标量/children 脱敏**
 
-`DebugEvaluateTool.DebugEvaluate`（`:44`）：`result.Display` 先经 `Redact(result.TypeName is "System.String" ? null : null, ...)`——实际按**表达式名**判定：表达式是路径时末段字段名敏感即脱敏（`IsSensitiveExpression(expression)` 先行，命中整行值换占位符）；未命中表达式级再对 `result.Display` 走内容匹配 `LooksLikeSecret`。children 走 `RenderVariable`（Step 1 已脱敏）。
+`DebugEvaluateTool.DebugEvaluate`（`:44`）最终形态（2026-09-09 审查修正，无占位残句）：
+1. `IsSensitiveExpression(expression)` 命中 → 值整行换占位符，置命中标志；
+2. 未命中表达式级，再对 `result.Display` 走 `LooksLikeSecret`；
+3. 命中（表达式级或内容级）时值行同段附**单次提示**「（疑似凭据已脱敏——用类型/长度/null 判断，勿读原始值）」（与 debug_variables 同文案）；children 走 `RenderVariable`（Step 1 已脱敏，其提示由出口头带出）。
 > 表达式级判定原则（DebugMCP 同款）：路径末段名（如 `cfg.Token` 末段 `Token`）敏感即脱敏，防「换个变量名读同一 secret」绕过。
 
 - [ ] **Step 3: trace/停点上下文变量行脱敏**
