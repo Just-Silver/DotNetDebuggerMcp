@@ -94,7 +94,18 @@ public sealed class SessionEventBuffer : IAsyncDisposable
 
     private IReadOnlyList<BreakpointSnapshot> _breakpoints = [];
 
-    /// <summary>开始消费事件流（Session 创建后立即调用，避免错过停点）。</summary>
+    /// <summary>事件历史环形上限（条）：供 debug_timeline 复盘用；含 EngineLog，超限丢最旧（V3）。</summary>
+    public const int MaxHistory = 500;
+
+    private readonly Queue<DebugEvent> _history = new();
+
+    /// <summary>事件历史快照（旧→新；debug_timeline 事件源）。</summary>
+    public IReadOnlyList<DebugEvent> SnapshotHistory()
+    {
+        lock (_gate) return _history.ToArray();
+    }
+
+    /// <summary>后台消费事件流（生产路径；fire-and-forget，语义同现状）。</summary>
     public void Start(DebugSession session)
     {
         _cts = new CancellationTokenSource();
@@ -110,6 +121,12 @@ public sealed class SessionEventBuffer : IAsyncDisposable
             catch (OperationCanceledException) { }
             catch { /* 会话关闭后事件流结束 */ }
         });
+    }
+
+    /// <summary>同步喂入事件序列（internal，纯内存测试用：遍历即 OnEvent，返回后断言无竞态）。</summary>
+    internal void Feed(IEnumerable<DebugEvent> events)
+    {
+        foreach (var e in events) OnEvent(e);
     }
 
     /// <summary>
@@ -153,6 +170,7 @@ public sealed class SessionEventBuffer : IAsyncDisposable
         DebugSessionState prevState;
         StopContext? prevStop;
         lock (_gate) { prevState = _state; prevStop = _lastStop; }
+        AppendHistory(e);
 
         switch (e.Kind)
         {
@@ -245,6 +263,23 @@ public sealed class SessionEventBuffer : IAsyncDisposable
         if (nextState != prevState || !ReferenceEquals(nextStop, prevStop))
             SnapshotChanged?.Invoke(nextState, nextStop);
     }
+
+    /// <summary>把关键事件追加进历史环形（与状态折叠同锁串行，不新增后台任务）。TraceHit 存原 DebugEvent
+    /// （载荷对象引用共享，非复制字符串；_traces 消费式语义不动——双轨并存）。</summary>
+    private void AppendHistory(DebugEvent e)
+    {
+        if (!IsHistoryKind(e.Kind)) return;
+        lock (_gate)
+        {
+            _history.Enqueue(e);
+            while (_history.Count > MaxHistory) _history.Dequeue();
+        }
+    }
+
+    private static bool IsHistoryKind(DebugEventKind k) => k is
+        DebugEventKind.SessionStateChanged or DebugEventKind.BreakpointHit or
+        DebugEventKind.StepCompleted or DebugEventKind.ExceptionHit or
+        DebugEventKind.ExceptionSkipped or DebugEventKind.TraceHit or DebugEventKind.EngineLog;
 
     public async ValueTask DisposeAsync()
     {

@@ -12,4 +12,8 @@
     <ProjectReference Include="..\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="DotNetDebugger.Session.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -67,6 +67,37 @@ public sealed class SessionEventBufferTests
         Assert.True(target.HasExited, "DebugTarget 在断点恢复后未正常退出");
     }
 
+    [Fact]
+    public async Task History_KeepsKeptKindsAndDropsOldestBeyondCap()
+    {
+        await using var buffer = new SessionEventBuffer();
+        var events = new List<DebugEvent>();
+        // 投喂 MaxHistory+5=505 条 BreakpointHit + 1 条 EngineLog（共 506）：500 上限挤掉最早 6 条 BP，EngineLog 最后入队必保留
+        for (var i = 0; i < SessionEventBuffer.MaxHistory + 5; i++)
+            events.Add(new DebugEvent("s", i, DateTimeOffset.UtcNow.AddMilliseconds(i), DebugEventKind.BreakpointHit, null));
+        events.Add(new DebugEvent("s", 10_000, DateTimeOffset.UtcNow, DebugEventKind.EngineLog, new EngineLogPayload("info", "hello")));
+        buffer.Feed(events);                                         // internal 同步接缝：返回后断言无竞态
+        var snap = buffer.SnapshotHistory();
+        Assert.Equal(SessionEventBuffer.MaxHistory, snap.Count);             // 环形上限
+        Assert.Contains(snap, e => e.Kind is DebugEventKind.EngineLog);      // 最新 EngineLog 保留
+        Assert.Equal(6, snap[0].Sequence);                 // 最早保留 seq=6（seq 0..5 六条 BP 被挤掉）
+        Assert.Equal(10_000L, snap[^1].Sequence);          // 最新一条是 EngineLog
+        for (var i = 1; i < snap.Count; i++) Assert.True(snap[i].Sequence >= snap[i - 1].Sequence); // 按 Sequence 升序
+    }
+
+    [Fact]
+    public async Task History_OnlyKeepsConfiguredKinds()
+    {
+        await using var buffer = new SessionEventBuffer();
+        // 被排除 kind（BreakpointConditionFailed/BreakpointsChanged/ThreadsChanged）不入历史 → 快照为空
+        buffer.Feed(new DebugEvent[] {
+            new("s", 1, DateTimeOffset.UtcNow, DebugEventKind.BreakpointConditionFailed, new BreakpointConditionFailedPayload(1, 1, "e")),
+            new("s", 2, DateTimeOffset.UtcNow, DebugEventKind.BreakpointsChanged, new BreakpointsChangedPayload([])),
+            new("s", 3, DateTimeOffset.UtcNow, DebugEventKind.ThreadsChanged, null),
+        });
+        Assert.Empty(buffer.SnapshotHistory());
+    }
+
     /// <summary>用 System.Reflection.Metadata 读 dll 中指定名方法的 mdMethodDef token。</summary>
     private static int ReadMethodToken(string dllPath, string methodName)
     {
