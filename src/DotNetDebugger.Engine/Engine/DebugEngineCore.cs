@@ -1229,7 +1229,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
 
     /// <summary>
     /// 引用重定向：源路径在「同一停点、同一线程」解析为引用值，取源引用地址回写（spec 拍板：重定向进 v1）。
-    /// 类型兼容保守校验：两端 deref 后 ExactType 全名一致才放行（目标当前为 null 时只校验源为非 null）。
+    /// 类型兼容保守校验：两端 deref 后 ExactType 全名一致才放行；**目标当前为 null 时无法 deref 比对——
+    /// v1 未实现「声明字段类型」解码校验，仅校验源为非 null**（边界见 spec §7/README 风险：目标为 null 的重定向由 agent 保证同型）。
     /// </summary>
     private void WriteReferenceRedirect(CorDebugThread thread, CorDebugReferenceValue target, DebugWriteValue.CopyPath p, string rootName, IReadOnlyList<PathSegment> segments)
     {
@@ -1261,7 +1262,11 @@ public sealed class DebugEngineCore : IAsyncDisposable
         target.Value = srcRef.Value; // CorDebugReferenceValue.Value = 被引用对象地址
     }
 
-    /// <summary>标量文本 → 目标元素类型字节（写回 GenericValue）。数值允许 0x 前缀/负号/小数/科学计数；m/f/d 后缀在转换前剥离，是否接受由目标类型决定。</summary>
+    /// <summary>
+    /// 标量文本 → 目标元素类型字节（写回 GenericValue）。数值允许 0x 前缀/负号/小数/科学计数；m/f/d 后缀在转换前剥离，
+    /// 是否接受由目标类型决定（整型拒后缀、浮点接受）。**decimal 无 GenericValue 形态**（字段/栈值以对象值呈现，实测
+    /// System.Decimal 终端为 CorDebugObjectValue，见 spec §7）——故此处不设 Decimal case，整值写走末段对象值降级口。
+    /// </summary>
     private static void WriteScalarToGeneric(CorDebugGenericValue g, string text, string targetDesc)
     {
         byte[] bytes;
@@ -1313,7 +1318,9 @@ public sealed class DebugEngineCore : IAsyncDisposable
     private static byte[] ScalarIntBytes(string text, string targetDesc, string typeName, BigInteger min, BigInteger max, Func<BigInteger, byte[]> toBytes)
     {
         var t = text.Trim();
-        var isHex = t.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
+        // 0x 判定剥掉可选符号位（parser 文法只产无符号 0x，引擎防御性接受带符号；hex 数字位 a-f 永不当作 m/f/d 后缀）
+        var body = t.Length > 0 && (t[0] == '-' || t[0] == '+') ? t[1..] : t;
+        var isHex = body.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
         if (!isHex)
         {
             if (t.Length > 0 && "mMfFdD".Contains(t[^1]))
@@ -1343,25 +1350,29 @@ public sealed class DebugEngineCore : IAsyncDisposable
         return BitConverter.GetBytes(f);
     }
 
-    /// <summary>整型文本 → BigInteger：十进制（可带 +/-）或 0x 十六进制；非整型文本返回 false。</summary>
+    /// <summary>整型文本 → BigInteger：十进制（可带 +/-）或无符号/带符号 0x 十六进制；非整型文本返回 false。</summary>
     private static bool TryParseIntegral(string t, out BigInteger value)
     {
         value = default;
+        t = t.Trim();
         if (t.Length == 0) return false;
-        if (t.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        var negative = t[0] == '-';
+        var body = negative || t[0] == '+' ? t[1..] : t;
+        if (body.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
         {
-            var hex = t[2..];
+            var hex = body[2..];
             if (hex.Length == 0) return false;
             foreach (var c in hex) if (!Uri.IsHexDigit(c)) return false;
-            return BigInteger.TryParse(hex, System.Globalization.NumberStyles.AllowHexSpecifier,
-                System.Globalization.CultureInfo.InvariantCulture, out value);
+            if (!BigInteger.TryParse(hex, System.Globalization.NumberStyles.AllowHexSpecifier,
+                System.Globalization.CultureInfo.InvariantCulture, out var abs)) return false;
+            value = negative ? -abs : abs;
+            return true;
         }
-        var negative = t[0] == '-';
-        var digits = negative || t[0] == '+' ? t[1..] : t;
+        var digits = body;
         if (digits.Length == 0 || !digits.All(char.IsAsciiDigit)) return false;
         if (!BigInteger.TryParse(digits, System.Globalization.NumberStyles.None,
-            System.Globalization.CultureInfo.InvariantCulture, out var abs)) return false;
-        value = negative ? -abs : abs;
+            System.Globalization.CultureInfo.InvariantCulture, out var absD)) return false;
+        value = negative ? -absD : absD;
         return true;
     }
 

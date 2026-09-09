@@ -1038,6 +1038,13 @@ public sealed class DebugMcpToolsTests
         Assert.True(readOnly.IsError != true, readOnly.Text());
         Assert.Contains("readonly", readOnly.Text());
 
+        // 错误面⑤：decimal 对象字段整值写 v1 降级（如实返回中文，不静默接受后写坏内存）
+        var decWrite = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "h.Amount", ["value"] = "12.5" });
+        Assert.True(decWrite.IsError != true, decWrite.Text());
+        Assert.Contains("System.Decimal", decWrite.Text());
+        Assert.Contains("暂不支持写", decWrite.Text());
+
         // 引用置空 + 重定向（同帧路径文法）：h.Tag=null → h.Tag=alt.Tag
         var nullTag = await CallAsync(mcp, "debug_set",
             new Dictionary<string, object?> { ["path"] = "h.Tag", ["value"] = "null" });

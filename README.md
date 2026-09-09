@@ -123,7 +123,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_output` | 查看被调试进程的控制台输出（stdout/stderr，旧→新；仅 launch 会话捕获，运行中可随时拉取） |
 | `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时；异常停点额外返回 `$exception` 当前异常对象：类型/Message/一级字段）。`debug_stack` 每帧输出 `类型.方法 [token]`（解析失败降级为 `模块!token+ILoffset`；token 保留供下断点）；帧类型是编译器生成的 async 状态机（`Ns.X+<Foo>d__N`）时标注原方法：`Ns.X+<Foo>d__N (状态机 Foo).MoveNext` |
 | `dotnetdebugger_debug_evaluate` | 求值表达式读当前值（纯读、无副作用，进程停时）：成员访问 `a.b.c`、数组/字符串**任意下标** `a[i]`（引擎按路径直读，不受变量树一级 32 子项截断限制）、一元 `!`、单次比较（`== != < <= > >=`）、字面量 int/string/true/false/null。属性不可直接读——按 `X→_x→_X→<X>k__BackingField` 字段约定降级，未命中报错附可用字段清单；未知根名报错附可用变量清单。不支持算术/方法调用/赋值/链式比较/括号 |
-| `dotnetdebugger_debug_set` | **停点现场改写（W1）**：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显（防误判改写是否触及原因）。`path` 同 `debug_evaluate`（根=局部/参数名 + 字段/下标）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（整数/小数，按目标类型转换，枚举给底层整数值）/ 同帧另一条对象路径（引用重定向如 `cfg.Backup`）。不支持改 readonly/const/静态字段、构造新对象、改字符串内容。**风险：写目标进程内存可能使其崩溃——只改确认的变量，改完 `debug_continue` 观察行为** |
+| `dotnetdebugger_debug_set` | **停点现场改写（W1）**：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显（防误判改写是否触及原因）。`path` 同 `debug_evaluate`（根=局部/参数名 + 字段/下标）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（**无符号 `0x` 十六进制**，或**带符号十进制**整数/小数/科学计数，可带 `m/f/d` 后缀；小数/后缀按目标类型转换——浮点目标接受，整型拒小数/后缀，**decimal 目标 v1 不支持**（如 `order.Total`，中文降级提示）；枚举给底层整数值）/ 同帧另一条对象路径（引用重定向如 `cfg.Backup`）。不支持改 readonly/const/静态字段、构造新对象、字符串内容（双引号/单引号文本不在文法内，char 用整数码点写）。**风险：写目标进程内存可能使其崩溃——只改确认的变量；目标引用当前为 null 时的重定向不做类型校验（无 deref 对象可比），需自行保证同型；改完 `debug_continue` 观察行为** |
 | `dotnetdebugger_debug_exceptions` / `_clear` | first-chance 异常断点：按类型全名或短名（`.短名` 结尾，忽略大小写）过滤，不匹配的异常跳过并在 debug_wait/debug_state 提示跳过情况 / 清除 |
 | `dotnetdebugger_web_open` | 打开 Web 调试监视器（幂等：已启动返回现有地址不重复启动；首次自动拉起默认浏览器） |
 | `dotnetdebugger_debug_disconnect` | 断开调试会话 |
@@ -343,7 +343,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `debug_processes` | `filter` | 进程名子串过滤，忽略大小写；缺省空=全部。进程名排序，当前会话目标行标注「← 当前会话」，超 100 条截断提示用 filter |
 | `debug_breakpoint_set` | `moduleName`+`methodToken`+`ilOffset` / `typeName`+`memberName` / `typeName`+`line` / `sourcePath`+`line` | 四种定位方式；`typeName`+`memberName` 按类型内方法名子串定位（唯一命中即设断点，多方法匹配返回 `#MEMBER` 清单，属性/事件/字段成员提示）；`sourcePath`+`line` 模块未加载/未命中时登记延迟项（模块加载后自动按 PDB 解析绑定）；可选 `hitCount`、`mode`（stop/trace）、`condition`（P6 子集表达式，为真才停/记） |
 | `debug_run_to` | `typeName`+`line` / `typeName`+`memberName` | 运行到目标位置后停下（对标 VS Run to Cursor）：设一次性临时断点 + 继续运行，命中即停且**自动移除**临时断点。`typeName` 必填，`line`（decompile 输出行号）或 `memberName` 二选一，`moduleName` 可省；`timeoutSeconds` 等待命中上限（默认 30）。超时/命中其它断点/进程退出都返回提示并清理临时断点。只对「目标会被自然执行到」有效 |
-| `debug_set` | `path`（必填）+ `value`（必填）+ `threadId` | **停点现场改写**：`path` 同 `debug_evaluate`（如 `scores[2]`、`b.A`、`i`、`cfg.Current`，根=栈顶帧局部/参数名，缺省 `threadId=0` 用最近停点线程）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（整数/小数/可带 `m/f/d` 后缀，按目标类型转换）/ 同帧对象路径（引用重定向，如 `cfg.Backup`）。返回「原值 → 新值」回显。不支持改 readonly/const/静态字段、构造新对象、改字符串内容。**风险：写目标进程内存可能使其崩溃，只改确认的变量** |
+| `debug_set` | `path`（必填）+ `value`（必填）+ `threadId` | **停点现场改写**：`path` 同 `debug_evaluate`（如 `scores[2]`、`b.A`、`i`、`cfg.Current`，根=栈顶帧局部/参数名，缺省 `threadId=0` 用最近停点线程）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（**无符号 `0x` 十六进制**或**带符号十进制**整数/小数/科学计数，可带 `m/f/d` 后缀——按目标类型转换：浮点接受小数/后缀、整型拒后缀、**decimal 目标 v1 不支持**（中文降级提示））/ 同帧对象路径（引用重定向，如 `cfg.Backup`）。返回「原值 → 新值」回显。不支持改 readonly/const/静态字段、构造新对象、字符串内容（双引号/单引号文本不在文法内，char 用整数码点写）。**风险：写目标进程内存可能使其崩溃，只改确认的变量；目标引用为 null 时的重定向无类型校验，须保证同型** |
 | `debug_continue` / `debug_disconnect` | — | 继续执行（异步返回，停点后 `debug_state` 确认）/ 断开会话（目标继续独立运行） |
 
 > 输出捕获仅 `debug_launch` 会话可用（attach 已运行进程无法重定向）；缓冲保留最近 2000 行，被高频日志淹没时用 `filter` 筛关键行。
@@ -390,7 +390,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 **动态调试：停点改值闭环（W1 debug_set）**
 
 - > 启动 `DebugTarget.exe` 并断点停在某方法入口 → `dotnetdebugger_debug_set` `path=h.N` `value=99` → 返回「路径 h.N 已改：原值 5 → 新值 99」→ `debug_continue` 观察输出出现 `N=99`——「把 X 改成 Y 再跑，看是否复现/消失」的二分定位实验闭环
-- > 引用重定向：`debug_set path=cfg.Current value=cfg.Backup`（指向同帧另一对象）；引用置空：`debug_set path=cfg.Current value=null`。**改值有崩目标进程风险，先 `debug_evaluate` 复核当前值再改，改完 `debug_continue` 观察**
+- > 引用重定向：`debug_set path=cfg.Current value=cfg.Backup`（指向同帧另一对象）；引用置空：`debug_set path=cfg.Current value=null`。**改值有崩目标进程风险，先 `debug_evaluate` 复核当前值再改，改完 `debug_continue` 观察**。边界提醒：数字用无符号 `0x` 十六进制或带符号十进制；小数/后缀适用于 float/double 目标（整型拒小数/后缀）；**decimal 字段目标 v1 不支持写**（如 `order.Total`，引擎给中文降级提示）；目标引用当前为 null 时重定向无类型校验（无 deref 可比对），须保证源与目标同型
 
 ## 第三方组件
 

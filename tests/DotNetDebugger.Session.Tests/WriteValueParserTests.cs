@@ -43,6 +43,16 @@ public sealed class WriteValueParserTests
         Assert.Equal(text, v.Text); // 数值不做归一化，原样传引擎按目标类型转换
     }
 
+    [Fact]
+    public void Parse_UnsignedHexOnly_NoSignNoSuffix()
+    {
+        // 文法收敛（review round1）：0x 只收无符号、不带后缀；带符号前缀仅用于十进制。
+        // 0x 数字位（如 0x1F 的 F）属数字位，不是 m/f/d 后缀——不会被误当 Scalar 后缀文本。
+        Assert.IsType<DebugWriteValue.Scalar>(WriteValueParser.Parse("0x10"));
+        foreach (var bad in new[] { "+0x1F", "-0x1F", "0x1Fm", "0x", "0xG" })
+            Assert.Throws<ExpressionEvaluationException>(() => WriteValueParser.Parse(bad));
+    }
+
     // ---- 路径（CopyPath）----
 
     [Fact]
@@ -96,5 +106,22 @@ public sealed class WriteValueParserTests
     {
         var ex = Assert.Throws<ExpressionEvaluationException>(() => WriteValueParser.Parse(text));
         Assert.True(ex.Message.Length > 0);
+    }
+
+    [Fact]
+    public void Parse_DoubleQuotedString_ThrowsStringContentUnsupported()
+    {
+        // v1 不支持字符串内容写（func-eval 已关）——文法如实拒绝，不产 Scalar
+        var ex = Assert.Throws<ExpressionEvaluationException>(() => WriteValueParser.Parse("\"abc\""));
+        Assert.Contains("字符串内容不可改", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_SingleQuotedChar_ThrowsGrammarOutside()
+    {
+        // 单引号字符文本不在文法内：char 目标请给整数码点
+        var ex = Assert.Throws<ExpressionEvaluationException>(() => WriteValueParser.Parse("'x'"));
+        Assert.Contains("单引号字符文本不在文法内", ex.Message);
+        Assert.Contains("整数码点", ex.Message);
     }
 }

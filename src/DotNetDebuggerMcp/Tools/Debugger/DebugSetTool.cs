@@ -18,21 +18,23 @@ public static class DebugSetTool
     /// 改写停点现场的值后继续（进程需停在断点/异常）：把局部变量/参数/对象字段/数组元素改成给定值，
     /// 返回「原值 → 新值」回显（防误判改写是否触及原因）。
     /// path 为目标路径（根=栈顶帧局部/参数名，支持字段 .a 与数组下标 [n]，同 debug_evaluate）。
-    /// value 支持：null（引用置空）/ true|false / 数字（整数/小数，按目标类型转换，枚举给底层整数值）/
+    /// value 支持：null（引用置空）/ true|false / 数字（无符号 0x 十六进制，或带符号十进制整数/小数/科学计数，
+    /// 可带 m/f/d 后缀——浮点目标接受小数/后缀，整型拒后缀，枚举给底层整数值）/
     /// 或同帧另一条对象路径（引用重定向，如 cfg.Backup）。
-    /// 不支持：改 readonly/const/静态字段、构造新对象、改字符串内容、表达式/方法调用。
-    /// 注意风险：写目标进程内存可能使其崩溃，只改你确认的变量；改完用 debug_continue 观察行为是否变化。
+    /// 不支持：改 readonly/const/静态字段、构造新对象、改字符串内容（双引号/单引号文本不在文法内，char 用整数码点）、表达式/方法调用；
+    /// decimal 字段目标 v1 不支持整值写（中文降级提示）。
+    /// 注意风险：写目标进程内存可能使其崩溃，只改你确认的变量；目标引用为 null 时的重定向无类型校验，请保证源与目标同型；改完用 debug_continue 观察行为是否变化。
     /// </summary>
     /// <param name="path">目标路径（必填），如 scores[2]、b.A、i、cfg.Current（根为栈顶帧局部/参数名）。</param>
-    /// <param name="value">新值（必填）：null / true|false / 数字（可带小数或 m/f/d 后缀）/ 同帧对象路径（引用重定向）。</param>
+    /// <param name="value">新值（必填）：null / true|false / 数字（无符号 0x 或带符号十进制，可带小数/m/f/d 后缀）/ 同帧对象路径（引用重定向）。</param>
     /// <param name="threadId">线程 id；缺省 0 = 用最近停点线程。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果（含原值→新值回显）或中文提示。</returns>
     [McpServerTool]
-    [Description("改写停点现场的值后继续（进程需停在断点/异常）：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显。path 为目标路径（根=栈顶帧局部/参数名，支持字段 .a 与数组下标 [n]，同 debug_evaluate）。value 支持：null（引用置空）/ true|false / 数字（整数/小数，按目标类型转换，枚举给底层整数值）/ 或同帧另一条对象路径（引用重定向，如 cfg.Backup）。不支持：改 readonly/const/静态字段、构造新对象、改字符串内容、表达式/方法调用。注意风险：写目标进程内存可能使其崩溃，只改你确认的变量；改完用 debug_continue 观察行为是否变化。")]
+    [Description("改写停点现场的值后继续（进程需停在断点/异常）：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显。path 为目标路径（根=栈顶帧局部/参数名，支持字段 .a 与数组下标 [n]，同 debug_evaluate）。value 支持：null（引用置空）/ true|false / 数字（无符号 0x 十六进制，或带符号十进制整数/小数/科学计数，可带 m/f/d 后缀——浮点目标接受小数/后缀，整型拒后缀，枚举给底层整数值）/ 或同帧另一条对象路径（引用重定向，如 cfg.Backup）。不支持：改 readonly/const/静态字段、构造新对象、改字符串内容（双引号/单引号文本不在文法内，char 请用整数码点 0-65535）、表达式/方法调用；decimal 字段目标 v1 不支持整值写（引擎给中文降级提示）。注意风险：写目标进程内存可能使其崩溃，只改你确认的变量；目标引用为 null 时的重定向无类型校验，请保证源与目标同型；改完用 debug_continue 观察行为是否变化。")]
     public static async Task<string> DebugSet(
         [Description("目标路径（必填），如 scores[2]、b.A、i、cfg.Current（根为栈顶帧局部/参数名）。")] string path,
-        [Description("新值（必填）：null / true|false / 数字（可带小数或 m/f/d 后缀）/ 同帧对象路径（引用重定向）。")] string value,
+        [Description("新值（必填）：null / true|false / 数字（无符号 0x 十六进制，或带符号十进制整数/小数/科学计数，可带 m/f/d 后缀）/ 同帧对象路径（引用重定向）。")] string value,
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
         CancellationToken cancellationToken = default)
     {

@@ -93,10 +93,28 @@ public sealed class WritePathTests
             session.SetPathValueAsync(tid, "h", [new PathSegment.Field("Kind")], new DebugWriteValue.Scalar("2"), ct));
         Assert.Contains("暂不支持写", enumWrite.Message);
 
+        // decimal 对象字段整值写 = v1 降级（review round1 实测：终端为 CorDebugObjectValue（System.Decimal）非 GenericValue，
+        // GetBits 布局直写不可达）——如实断言中文拒绝文案 + 类型名，spec §7 已记录边界
+        var decWrite = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            session.SetPathValueAsync(tid, "h", [new PathSegment.Field("Amount")], new DebugWriteValue.Scalar("12.5"), ct));
+        Assert.Contains("System.Decimal", decWrite.Message);
+        Assert.Contains("暂不支持写", decWrite.Message);
+        var decWriteM = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            session.SetPathValueAsync(tid, "h", [new PathSegment.Field("Amount")], new DebugWriteValue.Scalar("12.5m"), ct));
+        Assert.Contains("System.Decimal", decWriteM.Message);
+
         // 无此线程 → 抛错同 EvaluatePath（线程定位守卫）
         var noThread = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             session.SetPathValueAsync(999999, "h", [new PathSegment.Field("N")], new DebugWriteValue.Scalar("1"), ct));
         Assert.Contains("找不到线程", noThread.Message);
+
+        // review round1：0x 十六进制写不被误当 m/f/d 后缀（0x1F 的 F 是数字位）→ 31；引擎防御性接受带符号 hex
+        var hexSet = await session.SetPathValueAsync(tid, "h", [new PathSegment.Field("N")], new DebugWriteValue.Scalar("0x1F"), ct);
+        Assert.StartsWith("99", hexSet.OldDisplay);
+        var hexBack = await session.EvaluatePathAsync(tid, "h", [new PathSegment.Field("N")], ct);
+        Assert.Equal("31", hexBack.Display);
+        var signHex = await session.SetPathValueAsync(tid, "h", [new PathSegment.Field("N")], new DebugWriteValue.Scalar("-0x1F"), ct);
+        Assert.Equal("-31", signHex.NewDisplay);
 
         // 恢复到退出，不留挂起进程（改 seed=6 后循环 j 从 6 起；h.N=99 应在输出可见）
         await session.ContinueAsync(TestContext.Current.CancellationToken);
