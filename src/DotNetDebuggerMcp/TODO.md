@@ -15,7 +15,7 @@
 | | **DB1 敏感脱敏层** | `2026-09-08-db1-sensitive-redaction.md` | **已完成**（2026-09-10 实施：宿主 `SensitiveValueRedactor`（DebugMCP 规则双模式全集，名归一化 exact-match + 内容正则）+ 读值出口挂接（RenderVariable 递归/debug_evaluate 标量+children/trace 变量行）+ 占位符+计数/单次提示 + DebugTarget Bag 增 Password/Token e2e 样本；Engine/Session 零改动；本地 commit 8485695/ac455bf） | — |
 | | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | **已完成**（2026-09-09 实施：DebugTarget DrillNode/drill 样本（链+环+null）+ Engine `ReadObjectAtPathAsync` 受控递归（depth/limit/沿路径防环 `<cyclic>`）+ 宿主 `debug_object` 工具（`$exception` 前缀特判）+ README/CHANGELOG；本地 commit 34dfa59/cfea258） | P6 求值链✅ |
 | | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已完成**（2026-09-09 实施：DebugTarget spawn/sleep 样本 + 宿主 Toolhelp 父子快照助手（kernel32 P/Invoke，零新包）→ `debug_processes` 标注当前会话目标的 .NET 子孙进程链 + 切换引导 + 修正无 CLR 进程误列；Engine 零改动；本地 commit 87a3488/6fc2e69） | — |
-| **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-db2-named-whitelist.md`） | debug_variables 面 |
+| **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已完成**（2026-09-10 实施：`debug_variables` 增 `names` 白名单参数——宿主渲染层过滤（SplitNames/MatchName/BuildVariablesLines），空=全量/≤50 拒绝/未知名零值反馈/同名跨作用域；与 DB1 脱敏叠加命中对象仍逐字段脱敏；Engine/Session 零改动；本地 commit da3df05） | — |
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-v4-copy-guard.md`） | 随新工具同批补 |
 | **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | **已拍板+计划就绪**（2026-09-09：不需会话/AgentActionLog 护栏/务实成员反查标注 v1/U1 先行；FlaUI 引用姿势线上核实；计划 `plans/2026-09-09-u1-ui-automation.md`） | — |
 | | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | **已拍板+计划就绪**（2026-09-09：可选 build+产物自动拿取/文件路径/fail-fast/纯断点版先行；计划 `plans/2026-09-09-v1-verify-loop.md`） | 执行按依赖排期 |
@@ -60,7 +60,7 @@
 ### 新独立待办
 
 - [x] **DB1 变量敏感脱敏层**（宿主｜小-中）——**已完成**（2026-09-10，见总览表 DB1 行）——**安全缺口**：agent 读到的 api_key/password/token/JWT/PEM 等敏感值会跨信任边界进 LLM 模型，现状无脱敏。参照 DebugMCP `secretRedaction.ts` 双模式（本地 `../../Externals/DebuggerExternals/DebugMCP/src/utils/secretRedaction.ts`）：按**变量名**（api_key/password/token/…）+ 按**内容模式**（JWT/PEM/AKIA…/ghp_…/Bearer …/Password=…）过滤，null 值不动（缺凭据 bug 仍可调）；`debug_evaluate` 一并覆盖（`os.environ` 是绕过变量级控制的平凡路径——DebugMCP 显式指出）。输出用占位符 + 提示「值已脱敏」。**方案**：Session/宿主渲染层统一走脱敏管线（引擎层不动，渲染时脱敏）。**难度**：小-中。**测试**：脱敏单测（名匹配/内容匹配/嵌套路径/求值绕过四类）。
-- [ ] **DB2 变量按名白名单读取**（宿主｜小）——DebugMCP `get_variables_values` 要求显式 `variableNames`（非空/无通配/≤50），配 `list_variable_names`（只列名与类型、零值泄露，参考 `../../Externals/DebuggerExternals/DebugMCP/src/debuggingHandler.ts` `normalizeRequestedNames`/`handleListVariableNames`）。对照：你们 `debug_variables` 全量+分页——加按名过滤模式（省 token、不泄露无关值；未知名反馈不静默）。**方案**：`debug_variables` 加 `names` 参数（逗号分隔白名单；空=现状全量）。**难度**：小。**关联**：与 DB1 脱敏天然配合（按名白名单缩小暴露面）。
+- [x] **DB2 变量按名白名单读取**（宿主｜小）——**已完成**（2026-09-10，见总览表 DB2 行）——DebugMCP `get_variables_values` 要求显式 `variableNames`（非空/无通配/≤50），配 `list_variable_names`（只列名与类型、零值泄露，参考 `../../Externals/DebuggerExternals/DebugMCP/src/debuggingHandler.ts` `normalizeRequestedNames`/`handleListVariableNames`）。对照：你们 `debug_variables` 全量+分页——加按名过滤模式（省 token、不泄露无关值；未知名反馈不静默）。**方案**：`debug_variables` 加 `names` 参数（逗号分隔白名单；空=现状全量）。**难度**：小。**关联**：与 DB1 脱敏天然配合（按名白名单缩小暴露面）。
 
 ### 增强参考（并入已有项，不单独立项）
 
