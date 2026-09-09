@@ -85,15 +85,18 @@ public static class DebugInspectTool
     }
 
     /// <summary>
-    /// 读取栈顶帧的局部变量与参数（进程需停）。输出每个局部变量/参数的值（v1 标量）。
+    /// 读取栈顶帧的局部变量与参数（进程需停）。names 白名单（逗号分隔，空=全量）按展示名精确忽略大小写过滤；
+    /// 输出每个局部变量/参数的值（v1 标量），异常停点额外返回 $exception 节（当前异常对象：类型/Message/一级字段）。
     /// </summary>
     /// <param name="threadId">线程 id；缺省 0 = 用最近停点线程。</param>
+    /// <param name="names">按名白名单（逗号分隔，空=全量）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>变量文本或错误提示。</returns>
     [McpServerTool]
     [Description("读取栈顶帧的局部变量与参数（进程需停）；异常停点额外返回 $exception 节（当前异常对象：类型/Message/一级字段）。")]
     public static async Task<string> DebugVariables(
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
+        [Description("按名白名单（逗号分隔，空=全量）。精确忽略大小写匹配 局部/参数名（无符号名用 slotN）与 $exception；最多 50 项；未知名会在返回中列出可用名。")] string names = "",
         CancellationToken cancellationToken = default)
     {
         if (!TryRequireStopped(out var active, out var error)) return error;
@@ -101,11 +104,73 @@ public static class DebugInspectTool
         var tid = threadId > 0 ? threadId : active.Buffer.StoppedThreadId;
         if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";
 
+        var requested = SplitNames(names);
+        if (requested is { Count: > MaxNamesWhitelist })
+            return $"names 项数 {requested.Count} 超上限 {MaxNamesWhitelist}——请缩小白名单或用空 names 取全量。";
+
         try
         {
             var vars = await active.Session.GetVariablesAsync(tid, cancellationToken);
-            var lines = new List<string>();
-            var redacted = 0;
+            var (lines, hits, redacted) = BuildVariablesLines(vars, requested);
+            var detail = requested is not null ? $"thread={tid}，names={requested.Count}" : $"thread={tid}";
+            DebugSessionService.Manager.Actions.Log("debug_variables", detail, "ok");
+            var header = $"局部变量/参数（thread={tid}";
+            if (requested is not null) header += $"，白名单 {requested.Count} 项 → 命中 {hits} 项";
+            if (redacted > 0) header += $"，{redacted} 个值{SensitiveValueRedactor.Notice}";
+            header += "）";
+            return $"{header}:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
+        }
+        catch (Exception ex)
+        {
+            return $"读变量失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>DB2 names 白名单项数上限（防 agent 传整帧当白名单，逼其用空 names 取全量）。</summary>
+    internal const int MaxNamesWhitelist = 50;
+
+    /// <summary>
+    /// 解析 names 白名单：空/空白=null（全量模式）；否则按逗号 split、trim、忽略空项、忽略大小写去重。
+    /// </summary>
+    internal static List<string>? SplitNames(string names)
+    {
+        if (string.IsNullOrWhiteSpace(names)) return null;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+        foreach (var raw in names.Split(','))
+        {
+            var t = raw.Trim();
+            if (t.Length > 0 && seen.Add(t)) result.Add(t);
+        }
+        return result;
+    }
+
+    /// <summary>按展示名匹配（DB2）：有符号名按名、无符号名按 slot{Slot}，精确忽略大小写。
+    /// $exception 伪变量 Name="$exception" 即其展示名，按名命中无需特判。</summary>
+    internal static bool MatchName(DotNetDebugger.Engine.Models.DebugVariable v, List<string> requested)
+    {
+        var display = v.Name ?? $"slot{v.Slot}";
+        foreach (var r in requested)
+            if (string.Equals(r, display, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// DB2 渲染层：requested null=现状全量渲染；否则按名白名单——每作用域独立匹配展示名（同名跨作用域都返回），
+    /// 只渲染命中项（脱敏计数只覆盖可见命中，与 DB1「只计可见」语义一致）；未知名（不在任何作用域顶层展示名中）
+    /// 追加零值反馈行（附当前帧可用名清单，不含值）。返回（渲染行、白名单命中数、脱敏值计数）。
+    /// </summary>
+    internal static (List<string> Lines, int Hits, int Redacted) BuildVariablesLines(
+        IReadOnlyDictionary<string, IReadOnlyList<DotNetDebugger.Engine.Models.DebugVariable>> vars,
+        List<string>? requested)
+    {
+        var lines = new List<string>();
+        var hits = 0;
+        var redacted = 0;
+
+        if (requested is null)
+        {
+            // 全量模式：现状渲染（每节头 + 全量 RenderVariable + CountRedacted）
             foreach (var (scope, list) in vars)
             {
                 lines.Add($"[{scope}]");
@@ -115,16 +180,36 @@ public static class DebugInspectTool
                     lines.Add(RenderVariable(v, depth: 1));
                 }
             }
-            DebugSessionService.Manager.Actions.Log("debug_variables", $"thread={tid}", "ok");
-            var header = $"局部变量/参数（thread={tid}";
-            if (redacted > 0) header += $"，{redacted} 个值{SensitiveValueRedactor.Notice}";
-            header += "）";
-            return $"{header}:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
+            return (lines, hits, redacted);
         }
-        catch (Exception ex)
+
+        var available = new List<string>();                              // 各作用域顶层展示名（不含值）
+        var availableSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (scope, list) in vars)
         {
-            return $"读变量失败：{ex.Message}";
+            foreach (var v in list)
+            {
+                var display = v.Name ?? $"slot{v.Slot}";
+                if (availableSeen.Add(display)) available.Add(display);
+            }
+            var wanted = list.Where(v => MatchName(v, requested)).ToList();
+            if (wanted.Count == 0) continue;
+            lines.Add($"[{scope}]");
+            foreach (var v in wanted)
+            {
+                hits++;
+                redacted += CountRedacted(v);
+                lines.Add(RenderVariable(v, depth: 1));
+            }
         }
+
+        var missing = requested.Where(r => !availableSeen.Contains(r)).ToList();
+        if (missing.Count > 0)
+        {
+            var namesText = available.Count > 0 ? $"当前帧可用名：{string.Join("、", available)}——" : "当前帧无可用名——";
+            lines.Add($"未找到：{string.Join("、", missing)}（{namesText}白名单需精确匹配，忽略大小写）。");
+        }
+        return (lines, hits, redacted);
     }
 
     /// <summary>递归渲染变量（对象/数组 children 缩进展示；引擎已按一级展开 + 截断）。debug_evaluate 复用。

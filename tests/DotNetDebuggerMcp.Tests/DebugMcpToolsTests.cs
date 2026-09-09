@@ -14,7 +14,7 @@ namespace DotNetDebuggerMcp.Tests;
 /// </summary>
 public sealed class DebugMcpToolsTests
 {
-    private static string DebugTargetExe => Path.Combine(
+    internal static string DebugTargetExe => Path.Combine(
         Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, "DebugTarget.exe");
 
     [Fact]
@@ -1330,7 +1330,7 @@ public sealed class DebugMcpToolsTests
         return 0;
     }
 
-    private static async Task<CallToolResult> CallAsync(McpClient mcp, string tool, IReadOnlyDictionary<string, object?> args)
+    internal static async Task<CallToolResult> CallAsync(McpClient mcp, string tool, IReadOnlyDictionary<string, object?> args)
         => await mcp.CallToolAsync(tool, args, cancellationToken: TestContext.Current.CancellationToken);
 
     /// <summary>
@@ -1339,7 +1339,7 @@ public sealed class DebugMcpToolsTests
     /// TrackModule 自动补绑。产品语义 pending→自动补绑→命中是完备闭环，故断言绑定状态而非「set 即已设」。
     /// 模块在 delay 窗口内必然加载，轮询毫秒级返回；上限防模块永不加载（此时断言失败暴露真问题）。
     /// </summary>
-    private static async Task WaitBoundAsync(McpClient mcp, int bpId, int timeoutSeconds = 15)
+    internal static async Task WaitBoundAsync(McpClient mcp, int bpId, int timeoutSeconds = 15)
     {
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
         string last = "";
@@ -1378,14 +1378,14 @@ public sealed class DebugMcpToolsTests
     }
 
     /// <summary>从断点设置结果文本（"断点已设: id=N ..."）解析断点 id。</summary>
-    private static int ParseBreakpointId(string text)
+    internal static int ParseBreakpointId(string text)
     {
         var m = System.Text.RegularExpressions.Regex.Match(text, @"id=(\d+)");
         Assert.True(m.Success, $"结果文本中未找到断点 id: {text}");
         return int.Parse(m.Groups[1].Value);
     }
 
-    private static async Task<McpClient> ConnectAsync()
+    internal static async Task<McpClient> ConnectAsync()
     {
         var serverDll = Path.Combine(AppContext.BaseDirectory, "DotNetDebuggerMcp.dll");
         var transport = new StdioClientTransport(new()
@@ -1397,7 +1397,7 @@ public sealed class DebugMcpToolsTests
         return await McpClient.CreateAsync(transport).WaitAsync(TimeSpan.FromSeconds(30));
     }
 
-    private static int ReadMethodToken(string dllPath, string methodName)
+    internal static int ReadMethodToken(string dllPath, string methodName)
     {
         using var fs = File.OpenRead(dllPath);
         using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
@@ -1413,6 +1413,234 @@ public sealed class DebugMcpToolsTests
             }
         }
         return 0;
+    }
+}
+
+/// <summary>
+/// DB2 debug_variables names 按名白名单端到端：bag 模式停 WorkBag 循环体——白名单命中（忽略大小写）/
+/// 未知名零值反馈/超 50 拒绝/空=全量回归/与 DB1 脱敏叠加交叉；异常停点 names="$exception" 只返异常节。
+/// </summary>
+public sealed class DebugVariablesNamesWhitelistTests
+{
+    private const string RedactPh = "[已脱敏:疑似凭据]";
+
+    [Fact]
+    public async Task DebugVariablesNames_BagFrame_WhitelistHitCaseUnknownRejectRedactionCross()
+    {
+        var exe = DebugMcpToolsTests.DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workBagToken = DebugMcpToolsTests.ReadMethodToken(dll, "WorkBag");
+        Assert.True(workBagToken > 0);
+
+        // 停点坐标：WorkBag 循环体语句行（b/n/i 全存活；入口 IL0 局部未初始化不可靠）
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var bagFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workBagToken);
+        var entryTarget = DotNetDebugger.Decompiler.Document.DocumentService.GetBreakpointTargetAtLine(doc, bagFirstLine!.Value);
+        Assert.True(entryTarget is not null);
+        DotNetDebugger.Decompiler.Document.SourceLineResolver.SourceLineTarget? loopTarget = null;
+        for (var l = 1; l <= 80 && loopTarget is null; l++)
+        {
+            var t = DotNetDebugger.Decompiler.Document.SourceLineResolver.Resolve(dll, "DebugTarget.cs", l, out _);
+            if (t is not null && t.MethodToken == workBagToken && t.IlOffset != entryTarget.Value.IlOffset) loopTarget = t;
+        }
+        Assert.True(loopTarget is not null, "未找到 WorkBag 循环体源码行");
+
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+
+        // bag 模式：WorkBag(new Bag { A=7, S="sx", Password="hunter2", Token="Bearer eyJ…" }, 5)，delay 8s 操作窗口
+        var launch = await DebugMcpToolsTests.CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} bag 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await DebugMcpToolsTests.CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        var set = await DebugMcpToolsTests.CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine });
+        Assert.True(set.IsError != true, set.Text());
+        await DebugMcpToolsTests.WaitBoundAsync(mcp, DebugMcpToolsTests.ParseBreakpointId(set.Text()));
+        var wait = await DebugMcpToolsTests.CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", wait.Text());
+
+        // 1. 空 names = 全量回归（头不带白名单；locals 与 arguments 节都在）
+        var full = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        Assert.True(full.IsError != true, full.Text());
+        Assert.Contains("局部变量/参数", full.Text());
+        Assert.DoesNotContain("白名单", full.Text());
+        Assert.Contains("[locals]", full.Text());
+        Assert.Contains("i = ", full.Text());
+        Assert.Contains("[arguments]", full.Text());
+        Assert.Contains("n = 5", full.Text());
+
+        // 2. names="b,n"：只渲染命中项（arguments 节），未请求的 local i 不出现
+        var two = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+            new Dictionary<string, object?> { ["names"] = "b,n" });
+        Assert.True(two.IsError != true, two.Text());
+        Assert.Contains("白名单 2 项 → 命中 2 项", two.Text());
+        Assert.Contains("[arguments]", two.Text());
+        Assert.DoesNotContain("[locals]", two.Text());
+        Assert.Contains("n = 5", two.Text());
+        Assert.DoesNotContain("i = ", two.Text());
+        Assert.DoesNotContain("hunter2", two.Text());
+
+        // 3. 忽略大小写：names="B,N" 同命中
+        var ci = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+            new Dictionary<string, object?> { ["names"] = "B,N" });
+        Assert.True(ci.IsError != true, ci.Text());
+        Assert.Contains("白名单 2 项 → 命中 2 项", ci.Text());
+        Assert.Contains("n = 5", ci.Text());
+
+        // 4. 未知名零值反馈：names="b,NoSuch" → b 命中 + 未找到 NoSuch + 可用名清单（不含值）
+        var unknown = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+            new Dictionary<string, object?> { ["names"] = "b,NoSuch" });
+        Assert.True(unknown.IsError != true, unknown.Text());
+        Assert.Contains("白名单 2 项 → 命中 1 项", unknown.Text());
+        Assert.Contains("未找到：NoSuch", unknown.Text());
+        var avail = ExtractAvailableNames(unknown.Text());
+        Assert.NotNull(avail);
+        Assert.Contains("b", avail!);
+        Assert.Contains("i", avail!);
+        Assert.Contains("n", avail!);
+        Assert.DoesNotContain("NoSuch =", unknown.Text());
+
+        // 5. 白名单项数 >50 → 中文拒绝（防整帧当白名单）
+        var many = string.Join(",", Enumerable.Range(1, 51).Select(i => "v" + i));
+        var over = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+            new Dictionary<string, object?> { ["names"] = many });
+        Assert.True(over.IsError != true, over.Text());
+        Assert.Contains("names 项数 51 超上限 50", over.Text());
+        Assert.DoesNotContain("命中", over.Text());
+
+        // 6. 白名单 + DB1 脱敏叠加：names="b" 命中的对象 children 敏感字段仍被脱敏（交叉断言）
+        var one = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+            new Dictionary<string, object?> { ["names"] = "b" });
+        Assert.True(one.IsError != true, one.Text());
+        Assert.Contains("白名单 1 项 → 命中 1 项", one.Text());
+        Assert.Contains($"Password = {RedactPh}", one.Text());
+        Assert.Contains($"Token = {RedactPh}", one.Text());
+        Assert.DoesNotContain("hunter2", one.Text());
+        Assert.DoesNotContain("eyJhbGciOiJIUzI1NiJ9", one.Text());
+        Assert.DoesNotContain("n = 5", one.Text()); // 白名单窄化：未请求 n 不得出现
+
+        var disc = await DebugMcpToolsTests.CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
+    public async Task DebugVariablesNames_ExceptionStop_PseudoVariableScopeOnly()
+    {
+        var exe = DebugMcpToolsTests.DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+
+        // throw 模式 + 8s delay：Work 后 ThrowIfZero 抛 DivideByZeroException("value is zero")
+        var launch = await DebugMcpToolsTests.CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 1 throw 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        var set = await DebugMcpToolsTests.CallAsync(mcp, "debug_exceptions",
+            new Dictionary<string, object?> { ["typeName"] = "DivideByZeroException" });
+        Assert.True(set.IsError != true, set.Text());
+        await DebugMcpToolsTests.CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var wait = await DebugMcpToolsTests.CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", wait.Text());
+
+        // names="$exception"：只返回异常节（$exception 伪变量命中），locals/arguments 节不渲染
+        var exc = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+            new Dictionary<string, object?> { ["names"] = "$exception" });
+        Assert.True(exc.IsError != true, exc.Text());
+        Assert.Contains("白名单 1 项 → 命中 1 项", exc.Text());
+        Assert.Contains("[exception]", exc.Text());
+        Assert.Contains("$exception", exc.Text());
+        Assert.Contains("System.DivideByZeroException", exc.Text());
+        Assert.Contains("value is zero", exc.Text());
+        Assert.DoesNotContain("[locals]", exc.Text());
+        Assert.DoesNotContain("[arguments]", exc.Text());
+
+        // 对照：空 names 全量仍含 exception 节头（白名单不破坏全量路径）
+        var full = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        Assert.True(full.IsError != true, full.Text());
+        Assert.Contains("[exception]", full.Text());
+        Assert.DoesNotContain("白名单", full.Text());
+
+        var disc = await DebugMcpToolsTests.CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
+    public void DebugVariablesNames_Helpers_SplitNames_NormalizeDedupAndBlank()
+    {
+        Assert.Null(DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.SplitNames(""));
+        Assert.Null(DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.SplitNames("   "));
+        Assert.Null(DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.SplitNames(null!));
+        var parsed = DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.SplitNames(" b,  b ,,n ,NoSuch,n ,");
+        Assert.NotNull(parsed);
+        Assert.Equal(new[] { "b", "n", "NoSuch" }, parsed!); // trim/去空/忽略大小写去重，保留首现大小写
+    }
+
+    [Fact]
+    public void DebugVariablesNames_Helpers_MatchName_ByNameSlotAndException_IgnoreCase()
+    {
+        var vName = new DotNetDebugger.Engine.Models.DebugVariable("Alpha", 0, DotNetDebugger.Engine.Models.DebugValue.Scalar("1"), false);
+        var vSlot = new DotNetDebugger.Engine.Models.DebugVariable(null, 3, DotNetDebugger.Engine.Models.DebugValue.Scalar("x"), false);
+        var vExc = new DotNetDebugger.Engine.Models.DebugVariable("$exception", -1, DotNetDebugger.Engine.Models.DebugValue.Scalar("e"), false);
+        Assert.True(DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.MatchName(vName, new List<string> { "alpha" }));
+        Assert.True(DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.MatchName(vSlot, new List<string> { "slot3" }));
+        Assert.True(DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.MatchName(vExc, new List<string> { "$EXCEPTION" }));
+        Assert.False(DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.MatchName(vName, new List<string> { "alphi" }));
+        Assert.False(DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.MatchName(vSlot, new List<string> { "slot03" })); // slotN 精确匹配无前导零
+    }
+
+    [Fact]
+    public void DebugVariablesNames_Helpers_Render_CrossScopeSameDisplayName_And_UnknownFeedbackZeroValue()
+    {
+        // locals 与 arguments 的 slot0 均为无名（Slot 索引从 0 各自编号）→ 展示名相同 → 同名跨作用域两节都返回
+        var vars = new Dictionary<string, IReadOnlyList<DotNetDebugger.Engine.Models.DebugVariable>>
+        {
+            ["locals"] = new List<DotNetDebugger.Engine.Models.DebugVariable>
+            {
+                new(null, 0, DotNetDebugger.Engine.Models.DebugValue.Scalar("loc"), false),
+            },
+            ["arguments"] = new List<DotNetDebugger.Engine.Models.DebugVariable>
+            {
+                new(null, 0, DotNetDebugger.Engine.Models.DebugValue.Scalar("arg"), true),
+                new("n", 1, DotNetDebugger.Engine.Models.DebugValue.Scalar("5"), true),
+            },
+        };
+
+        var (lines, hits, redacted) = DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.BuildVariablesLines(vars, new List<string> { "slot0" });
+        Assert.Equal(2, hits);
+        Assert.Equal(0, redacted);
+        Assert.Contains("[locals]", lines);
+        Assert.Contains(lines, l => l.Contains("slot0 = loc"));
+        Assert.Contains("[arguments]", lines);
+        Assert.Contains(lines, l => l.Contains("slot0 = arg"));
+        Assert.DoesNotContain("n = 5", string.Join('\n', lines)); // 未请求名不渲染
+
+        // 未知名 → 零值反馈：附当前帧可用名、不含任何值；命中项仍正常渲染并计数
+        var (lines2, hits2, _) = DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.BuildVariablesLines(vars, new List<string> { "slot0", "zzz" });
+        Assert.Equal(2, hits2);
+        Assert.Contains(lines2, l => l.Contains("slot0 = arg"));
+        var fb = lines2.First(l => l.StartsWith("未找到："));
+        Assert.StartsWith("未找到：zzz（", fb);
+        Assert.Contains("可用名：slot0、n——", fb);
+        Assert.DoesNotContain("=", fb);   // 未知名行不含值
+
+        // 全量模式（requested null）回归：节头 + 全量渲染，hits 恒 0（DebugVariables 头部不用）
+        var (linesFull, hitsFull, _) = DotNetDebuggerMcp.Tools.Debugger.DebugInspectTool.BuildVariablesLines(vars, null);
+        Assert.Equal(0, hitsFull);
+        Assert.Contains("n = 5", string.Join('\n', linesFull));
+        Assert.Equal(5, linesFull.Count); // 2 节头 + 3 变量行
+    }
+
+    /// <summary>从未知名反馈文本提取「当前帧可用名：…——」中的名清单（分号分隔）；未匹配返回 null。</summary>
+    private static string[]? ExtractAvailableNames(string text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text, "可用名：([^（—]*?)——");
+        if (!m.Success) return null;
+        return m.Groups[1].Value.Split('、', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }
 }
 
