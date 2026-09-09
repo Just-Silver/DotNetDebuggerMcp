@@ -962,6 +962,117 @@ public sealed class DebugMcpToolsTests
         await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
     }
 
+    [Fact]
+    public async Task DebugSet_StopSetValue_ReadbackAndBehaviorChange()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var dll = Path.ChangeExtension(exe, ".dll");
+        var runToken = ReadMethodToken(dll, "Run");
+        Assert.True(runToken > 0, "未找到 WriteProbe.Run token（请确认 generate-testdata.ps1 已生成 WriteProbe）");
+
+        await using var mcp = await ConnectAsync();
+
+        // probe 模式：delay 5s 提供操作窗口 → WriteProbe.Run(h{N=5,Tag=tagA}, alt, {3,1,4}, 0)
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} probe 5", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        // 错误面①：未 Stopped（launch 冻结在 Main 前）调 debug_set → 提示先到停点
+        var notStopped = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "h.N", ["value"] = "99" });
+        Assert.True(notStopped.IsError != true, notStopped.Text());
+        Assert.Contains("未停在断点/异常", notStopped.Text());
+
+        // 先 continue 再设断点（CI 实录：launch 返回时模块登记可能缺目标模块——attach 竞速窗口）
+        var cont = await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        Assert.True(cont.IsError != true, cont.Text());
+
+        var bp = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{runToken:x8}", ["ilOffset"] = 0 });
+        Assert.True(bp.IsError != true, bp.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(bp.Text()));
+
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("已停下", wait.Text());
+
+        // 写前 debug_variables 正常（写不影响读链路的前置确认）
+        var varsBefore = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        Assert.True(varsBefore.IsError != true, varsBefore.Text());
+        Assert.Contains("局部变量", varsBefore.Text());
+
+        // 正路径：h.N → 99，返回含 原值/新值 回显
+        var set = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "h.N", ["value"] = "99" });
+        Assert.True(set.IsError != true, set.Text());
+        Assert.Contains("已改", set.Text());
+        Assert.Contains("原值 5", set.Text());
+        Assert.Contains("新值 99", set.Text());
+
+        // 复核：debug_evaluate h.N 读回 99；debug_variables 停点后仍正常可读
+        var eval = await CallAsync(mcp, "debug_evaluate",
+            new Dictionary<string, object?> { ["expression"] = "h.N" });
+        Assert.True(eval.IsError != true, eval.Text());
+        Assert.Contains("99", eval.Text());
+        var varsAfter = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        Assert.True(varsAfter.IsError != true, varsAfter.Text());
+        Assert.Contains("局部变量", varsAfter.Text());
+
+        // 错误面②：path 非法（字面量非路径）
+        var badPath = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "1", ["value"] = "2" });
+        Assert.True(badPath.IsError != true, badPath.Text());
+        Assert.Contains("不是有效路径", badPath.Text());
+
+        // 错误面③：value 是路径形态但目标是值类型 → 引擎报「值类型请给字面量」（v1 语义：abc 被解析为对象路径）
+        var badValue = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "h.N", ["value"] = "abc" });
+        Assert.True(badValue.IsError != true, badValue.Text());
+        Assert.Contains("是值类型，请给字面量", badValue.Text());
+
+        // 错误面④：readonly 字段拒绝
+        var readOnly = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "h.FixedVal", ["value"] = "1" });
+        Assert.True(readOnly.IsError != true, readOnly.Text());
+        Assert.Contains("readonly", readOnly.Text());
+
+        // 引用置空 + 重定向（同帧路径文法）：h.Tag=null → h.Tag=alt.Tag
+        var nullTag = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "h.Tag", ["value"] = "null" });
+        Assert.True(nullTag.IsError != true, nullTag.Text());
+        Assert.Contains("新值 null", nullTag.Text());
+        var redirect = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "h.Tag", ["value"] = "alt.Tag" });
+        Assert.True(redirect.IsError != true, redirect.Text());
+        Assert.Contains("tagB", redirect.Text());
+
+        // continue → 行为生效（改 N=99 + Tag=tagB 后 ToString 输出 N=99…tagB…）→ 轮询输出
+        var cont2 = await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        Assert.True(cont2.IsError != true, cont2.Text());
+
+        var outputDeadline = DateTime.UtcNow.AddSeconds(15);
+        string outText = "";
+        while (DateTime.UtcNow < outputDeadline)
+        {
+            var o = await CallAsync(mcp, "debug_output", new Dictionary<string, object?> { ["lines"] = 100 });
+            Assert.True(o.IsError != true, o.Text());
+            outText = o.Text();
+            if (outText.Contains("N=99")) break;
+            await Task.Delay(300, TestContext.Current.CancellationToken);
+        }
+        Assert.Contains("N=99", outText); // 改值生效到行为（二分定位核心闭环）
+        Assert.Contains("tagB", outText); // 重定向后 Tag 渲染为 tagB
+
+        // 目标自然退出，断开清理
+        var waitExit = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("进程已退出", waitExit.Text());
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
     /// <summary>时间线文本的每一行行首时间戳须单调不减（格式 [HH:mm:ss.fff] tag 固定宽）。</summary>
     private static void AssertChronologicalRows(string text)
     {

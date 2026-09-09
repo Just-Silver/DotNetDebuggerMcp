@@ -123,12 +123,13 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_output` | 查看被调试进程的控制台输出（stdout/stderr，旧→新；仅 launch 会话捕获，运行中可随时拉取） |
 | `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时；异常停点额外返回 `$exception` 当前异常对象：类型/Message/一级字段）。`debug_stack` 每帧输出 `类型.方法 [token]`（解析失败降级为 `模块!token+ILoffset`；token 保留供下断点）；帧类型是编译器生成的 async 状态机（`Ns.X+<Foo>d__N`）时标注原方法：`Ns.X+<Foo>d__N (状态机 Foo).MoveNext` |
 | `dotnetdebugger_debug_evaluate` | 求值表达式读当前值（纯读、无副作用，进程停时）：成员访问 `a.b.c`、数组/字符串**任意下标** `a[i]`（引擎按路径直读，不受变量树一级 32 子项截断限制）、一元 `!`、单次比较（`== != < <= > >=`）、字面量 int/string/true/false/null。属性不可直接读——按 `X→_x→_X→<X>k__BackingField` 字段约定降级，未命中报错附可用字段清单；未知根名报错附可用变量清单。不支持算术/方法调用/赋值/链式比较/括号 |
+| `dotnetdebugger_debug_set` | **停点现场改写（W1）**：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显（防误判改写是否触及原因）。`path` 同 `debug_evaluate`（根=局部/参数名 + 字段/下标）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（整数/小数，按目标类型转换，枚举给底层整数值）/ 同帧另一条对象路径（引用重定向如 `cfg.Backup`）。不支持改 readonly/const/静态字段、构造新对象、改字符串内容。**风险：写目标进程内存可能使其崩溃——只改确认的变量，改完 `debug_continue` 观察行为** |
 | `dotnetdebugger_debug_exceptions` / `_clear` | first-chance 异常断点：按类型全名或短名（`.短名` 结尾，忽略大小写）过滤，不匹配的异常跳过并在 debug_wait/debug_state 提示跳过情况 / 清除 |
 | `dotnetdebugger_web_open` | 打开 Web 调试监视器（幂等：已启动返回现有地址不重复启动；首次自动拉起默认浏览器） |
 | `dotnetdebugger_debug_disconnect` | 断开调试会话 |
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
-> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。**复盘整段调试经过（目标日志 ↔ 断点/异常/trace 事件 ↔ agent 动作按时间对齐）用 `debug_timeline`**。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。
+> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、**「改值验证假设再继续」用 `debug_set`**（把现场变量改成新值，返回 原值→新值 回显，改完 `debug_continue` 观察行为是否变化——二分定位因果实验；注意写进程内存有崩目标风险，只改确认的变量）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。**复盘整段调试经过（目标日志 ↔ 断点/异常/trace 事件 ↔ agent 动作按时间对齐）用 `debug_timeline`**。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。
 
 ## 命令行调试
 
@@ -342,6 +343,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `debug_processes` | `filter` | 进程名子串过滤，忽略大小写；缺省空=全部。进程名排序，当前会话目标行标注「← 当前会话」，超 100 条截断提示用 filter |
 | `debug_breakpoint_set` | `moduleName`+`methodToken`+`ilOffset` / `typeName`+`memberName` / `typeName`+`line` / `sourcePath`+`line` | 四种定位方式；`typeName`+`memberName` 按类型内方法名子串定位（唯一命中即设断点，多方法匹配返回 `#MEMBER` 清单，属性/事件/字段成员提示）；`sourcePath`+`line` 模块未加载/未命中时登记延迟项（模块加载后自动按 PDB 解析绑定）；可选 `hitCount`、`mode`（stop/trace）、`condition`（P6 子集表达式，为真才停/记） |
 | `debug_run_to` | `typeName`+`line` / `typeName`+`memberName` | 运行到目标位置后停下（对标 VS Run to Cursor）：设一次性临时断点 + 继续运行，命中即停且**自动移除**临时断点。`typeName` 必填，`line`（decompile 输出行号）或 `memberName` 二选一，`moduleName` 可省；`timeoutSeconds` 等待命中上限（默认 30）。超时/命中其它断点/进程退出都返回提示并清理临时断点。只对「目标会被自然执行到」有效 |
+| `debug_set` | `path`（必填）+ `value`（必填）+ `threadId` | **停点现场改写**：`path` 同 `debug_evaluate`（如 `scores[2]`、`b.A`、`i`、`cfg.Current`，根=栈顶帧局部/参数名，缺省 `threadId=0` 用最近停点线程）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（整数/小数/可带 `m/f/d` 后缀，按目标类型转换）/ 同帧对象路径（引用重定向，如 `cfg.Backup`）。返回「原值 → 新值」回显。不支持改 readonly/const/静态字段、构造新对象、改字符串内容。**风险：写目标进程内存可能使其崩溃，只改确认的变量** |
 | `debug_continue` / `debug_disconnect` | — | 继续执行（异步返回，停点后 `debug_state` 确认）/ 断开会话（目标继续独立运行） |
 
 > 输出捕获仅 `debug_launch` 会话可用（attach 已运行进程无法重定向）；缓冲保留最近 2000 行，被高频日志淹没时用 `filter` 筛关键行。
@@ -384,6 +386,11 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 
 - > 反编译 `bin/Debug/MyApp.dll` 到 `src`（全量 / 指定多类型 / 项目形式嵌套目录）
 - > 查看缓存占用与命中率（`dotnetdebugger_cache_stats`）
+
+**动态调试：停点改值闭环（W1 debug_set）**
+
+- > 启动 `DebugTarget.exe` 并断点停在某方法入口 → `dotnetdebugger_debug_set` `path=h.N` `value=99` → 返回「路径 h.N 已改：原值 5 → 新值 99」→ `debug_continue` 观察输出出现 `N=99`——「把 X 改成 Y 再跑，看是否复现/消失」的二分定位实验闭环
+- > 引用重定向：`debug_set path=cfg.Current value=cfg.Backup`（指向同帧另一对象）；引用置空：`debug_set path=cfg.Current value=null`。**改值有崩目标进程风险，先 `debug_evaluate` 复核当前值再改，改完 `debug_continue` 观察**
 
 ## 第三方组件
 
