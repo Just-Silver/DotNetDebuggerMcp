@@ -446,6 +446,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 ```
 
 - 步骤类型：`breakpoint`（typeName+memberName 成员级定位方法入口，`hit` 第 N 次起）/ `continue`（`waitSeconds`）/ `assert`（kind：breakpointHit/evaluate/output/state/noException）/ `ui`·`set`（预留：依赖 U1/W1 未实现，运行时报「步骤类型依赖未就绪」）。
+  - 注：早期 spec 草案示例曾用顶层 `{"output": …}`/`{"wait": …}` 作步骤——现统一 canonical：顶层步骤只有 `breakpoint`/`continue`/`assert`/`ui`/`set` 五种，输出/状态/表达式断言一律写成 `assert` 步骤（`kind` 分派）。
 - `build` 分支：只重编场景指定工程、**不设置 OutputPath**，产物用项目默认输出路径经 `-getProperty:TargetPath` 自动拿取（SDK 现算，agent 不写路径/TFM）；`commandLine` 首段写**工程入口文件名**（如 `CoreMes.exe`，须与编译产物同名，忽略扩展名/大小写）+ 参数——不一致或 build 失败即 FAIL（绝不启动旧产物）。
 - 无 `build`：`commandLine` 用完整路径或相对 server 工作目录（不搜 PATH，同 `debug_launch`）；目标文件不存在 → 中文提示。
 - 断言语义：`breakpointHit` 看最近停点是否命中该断点；`evaluate` equals=精确（字符串比字面值，数字/布尔比展示文本，大小写敏感）、contains=展示文本含子串（忽略大小写，也适用于日志串）；`output` **只支持 contains**（`stream`=out/err，缺省全部）；`state` `expect` 可逗号分隔（任一命中即过）；`noException` 场景期间无异常停点。

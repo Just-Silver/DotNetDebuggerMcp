@@ -221,6 +221,39 @@ public sealed class DebugVerifyToolTests
     }
 
     [Fact]
+    public async Task DebugVerify_TwoBreakpoints_SecondContinueWaitsForNewStopNotStaleSnapshot()
+    {
+        var exe = DebugMcpToolsTests.DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        // 双断点先后命中：bag 模式 WorkBag 入口先停 → continue（WorkBag 跑完 5 轮）→ WorkScores 入口再停。
+        // 第二次 continue 的 breakpointHit(1) 必须对应新停点 WorkScores——陈旧停点快照（旧 WorkBag 停点）会被引用比较丢弃，防 assert 假 FAIL。
+        var scenario = WriteScenario(
+            """
+            {
+              "name": "双断点陈旧快照回归",
+              "target": { "commandLine": "<EXE> bag" },
+              "steps": [
+                { "breakpoint": { "typeName": "DebugTarget.Program", "memberName": "WorkBag" } },
+                { "breakpoint": { "typeName": "DebugTarget.Program", "memberName": "WorkScores" } },
+                { "continue": { "waitSeconds": 60 } },
+                { "assert": { "kind": "breakpointHit", "breakpointIndex": 0 } },
+                { "assert": { "kind": "state", "expect": "Stopped" } },
+                { "continue": { "waitSeconds": 60 } },
+                { "assert": { "kind": "breakpointHit", "breakpointIndex": 1 } },
+                { "assert": { "kind": "state", "expect": "Stopped" } }
+              ]
+            }
+            """.Replace("<EXE>", EscapeJson(exe)));
+
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var r = await VerifyCallAsync(mcp, scenario);
+        Assert.True(r.IsError != true, r.Text());
+        Assert.Contains("PASS", r.Text());
+        Assert.Contains("断言 4/4 通过", r.Text());
+        Assert.Contains("步骤 8/8 完成", r.Text());
+    }
+
+    [Fact]
     public async Task DebugVerify_MissingOrEmptyScenarioPath_ChineseHints()
     {
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();

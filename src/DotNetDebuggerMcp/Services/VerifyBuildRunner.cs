@@ -9,6 +9,7 @@ internal sealed record BuildOutcome(bool Ok, string Summary, int ExitCode);
 /// V1 debug_verify 重编译器：dotnet build（项目默认输出，不设置 OutputPath）+ 产物自动定位
 /// （dotnet msbuild -getProperty:TargetPath）。子进程 stdout/stderr 持续排空（ReadToEndAsync，防管道阻塞卡死），
 /// 超时 Kill 整棵进程树。失败统一中文摘要（保留尾部行供 agent 定位）。
+/// 注：`dotnet` 经 PATH 解析（与仓库 build/test/开发流一致，需本机装有 .NET SDK）。
 /// </summary>
 internal static class VerifyBuildRunner
 {

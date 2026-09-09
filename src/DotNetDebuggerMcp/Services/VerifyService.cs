@@ -179,29 +179,53 @@ internal static class VerifyService
                     var state = active.Buffer.CurrentState;
                     if (state != DebugSessionState.Exited && state != DebugSessionState.Detached)
                     {
-                        StopContext? stop = null;
+                        StopContext? newStop = null;
+                        var processExited = false;
                         try
                         {
                             // debug_continue 同语义：无论当前 Stopped/Attaching/None 都放行（launch 冻结在 Main 前的初始同步点也是停）
                             await active.Session.ContinueAsync(ct);
-                            stop = await active.Buffer.WaitForStopAsync(TimeSpan.FromSeconds(step.WaitSeconds), ct);
+                            // 等「新停点」deadline 循环（DebugRunToTool 同款陈旧快照保护）：ContinueAsync 返回时事件缓冲
+                            // 未必已消费 Running 事件——单次 WaitForStopAsync 会立刻返回 continue 前的旧 Stopped 快照，
+                            // 多断点/二次 continue 下 assert 会对旧快照假 FAIL。捕获 preStop 引用，返回仍是同一引用则丢弃继续等；
+                            // 进程 Exited 时 WaitForStopAsync 返回的 LastStop 也可能是 preStop——退出按状态判定，不引旧停点。
+                            var preStop = active.Buffer.LastStop; // continue 前停点快照（引用比较）
+                            var deadline = DateTime.UtcNow.AddSeconds(step.WaitSeconds);
+                            while (true)
+                            {
+                                var remaining = deadline - DateTime.UtcNow;
+                                if (remaining <= TimeSpan.Zero) break; // 到期 = 超时（newStop 保持 null）
+                                var waitStop = await active.Buffer.WaitForStopAsync(remaining, ct);
+                                if (active.Buffer.CurrentState == DebugSessionState.Exited)
+                                {
+                                    processExited = true;
+                                    break;
+                                }
+                                if (waitStop is not null && !ReferenceEquals(waitStop, preStop))
+                                {
+                                    newStop = waitStop;
+                                    break;
+                                }
+                                // 陈旧快照：丢弃继续等真正的新停点（缓冲翻到 Running→下个停点）
+                            }
                         }
                         catch (Exception ex)
                         {
                             return FailAt(header, step, $"continue 失败：{ex.Message}", active);
                         }
+
                         var after = active.Buffer.CurrentState;
-                        if (stop is null && after == DebugSessionState.Exited)
+                        if (processExited || after == DebugSessionState.Exited)
                         {
-                            managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", "进程已退出");
+                            managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", "进程已退出（目标自然结束，非停点）");
                             stepsExecuted++;
                             break;
                         }
-                        if (stop is null)
+                        if (newStop is null)
                             return FailAt(header, step,
                                 $"等待 {step.WaitSeconds} 秒未停（当前状态 {StateText(after)}）——断点未命中或代码路径未走到。", active);
-                        if (stop.Kind == DebugEventKind.ExceptionHit) exceptionHitCount++;
-                        managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", $"stop={DescribeStop(stop)}");
+                        if (newStop.Kind == DebugEventKind.ExceptionHit) exceptionHitCount++;
+                        managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", $"stop={DescribeStop(newStop)}");
                         stepsExecuted++;
                     }
                     else
