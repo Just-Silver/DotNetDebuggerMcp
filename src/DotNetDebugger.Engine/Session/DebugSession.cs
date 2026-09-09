@@ -121,6 +121,15 @@ public sealed class DebugSession : IAsyncDisposable
     public Task<DebugWriteResult> SetPathValueAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, DebugWriteValue value, CancellationToken ct = default)
         => _core.SetPathValueAsync(threadId, rootName, segments, value, ct);
 
+    /// <summary>
+    /// 按路径定位对象/数组并做受控递归展开（D1 debug_object 引擎底座，停顿时有效）：路径复用 P6 文法
+    /// （rootName 为栈顶帧局部/参数名 + $exception 伪根），终值必须是对象/数组——null 引用/标量/字符串抛中文
+    /// 「不是对象/数组」提示；children 沿引用递归展开到 depth 层（1-MaxDrillDepth 钳制），每层字段/元素上限
+    /// limit（1-128 钳制），同路径环输出 &lt;cyclic&gt; 占位。
+    /// </summary>
+    public Task<DebugValue> ReadObjectAtPathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, int depth, int limit = 32, CancellationToken ct = default)
+        => _core.ReadObjectAtPathAsync(threadId, rootName, segments, depth, limit, ct);
+
     // ---- 异常断点 ----
 
     /// <summary>设置 first-chance 异常断点（typeName 空 = 全部异常停下）。</summary>
