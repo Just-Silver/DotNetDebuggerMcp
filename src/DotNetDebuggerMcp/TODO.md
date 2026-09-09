@@ -11,7 +11,7 @@
 | 批次 | 项 | spec | 状态 | 依赖 |
 |---|---|---|---|---|
 | **P1**（独立/低成本，先做） | **W1 现场改写** | `2026-09-08-w1-set-value.md` | **已拍板+计划就绪**（2026-09-09：三层覆盖+重定向+按类型转换；计划 `plans/2026-09-09-w1-set-value.md`） | — |
-| | **V3 统一时间线** | `2026-09-08-v3-timeline.md` | **已拍板+计划就绪**（2026-09-09：500 含 EngineLog+动作入+双轨+顺手项；计划 `plans/2026-09-09-v3-timeline.md`） | P1 时间戳✅ |
+| | **V3 统一时间线** | `2026-09-08-v3-timeline.md` | **已完成**（2026-09-09 实施：事件历史环形 500 + DebugTimeline 三源归并 + debug_timeline 工具 + 退出码/attach 顺手项；本地 commit 12456d8/d10ade5/eff9c29/a695658） | P1 时间戳✅ |
 | | **DB1 敏感脱敏层** | `2026-09-08-db1-sensitive-redaction.md` | **已拍板+计划就绪**（2026-09-09：读值出口+表达式级、宿主层；计划 `plans/2026-09-09-db1-sensitive-redaction.md`） | — |
 | | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | **已拍板+计划就绪**（2026-09-09：受控递归 v1 depth=2/防环 `<cyclic>`；计划 `plans/2026-09-09-d1-object-drill.md`） | P6 求值链✅ |
 | | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已拍板+计划就绪**（2026-09-09：Toolhelp 宿主+debug_processes 全链标注；计划 `plans/2026-09-09-d2-child-process.md`） | — |
@@ -44,7 +44,6 @@
 
 - [ ] **V1 一键复验闭环**（宿主｜中-大，ROADMAP reverse-skill 闭环落地）——**能力**：agent 改完代码自证修复：重编译→重启（可复现快照）→重跑场景→断言 pass/fail。**spec 草案**：`docs/planning/specs/2026-09-08-v1-verify-loop.md`。**核心设计**：结构化手写场景 JSON（target 启动快照 + 可选 build + steps 数组）+ 断言原语（breakpointHit/evaluate/output/state/noException）+ 宿主 `debug_verify` 编排（同进程直调 Session 不走 MCP 往返）。**关键取舍**：不做录制回放（v1 手写场景，录制 v2 从 AgentActionLog 生成）；fail-fast；编译步建议 v1 含（闭环缺"改码"半环）。**依赖**：debug_launch 可复现 ✅；W1/U1/V3 为增强断言源（纯断点版可先行）。
 - [ ] **V2 崩溃现场自动保留（dump + 轨迹）**（Engine+Session+宿主｜中）——**转远期（2026-09-08 决策）**：dump 自动抓取对 agent 代价大（依赖注入 `DOTNET_DbgEnableMiniDump` 环境变量改变目标运行环境；路径 A 抓取时机 spike 不确定），收益边际低（V3 时间线 + 退出码判定已覆盖大部分复盘）。保留事项：① **第一增量「退出码 + 崩溃判定」随 V3 顺手做（已写入 V3 条目顺手项）**（ExitProcess 只发 Exited 无退出码，补 code 到 Reason 成本极小）；② 完整 dump 转 `docs/ROADMAP.md` 远期。spec 草案保留：`docs/planning/specs/2026-09-08-v2-crash-dump.md`（dump 路径查证结论仍有效：.NET 崩溃默认不生成 dump；WER LocalDumps 对 .NET 无效已否决；正解 = 会话内异常停点抓 + `DOTNET_DbgEnableMiniDump=1` 注入）。
-- [ ] **V3 日志+事件统一时间线**（Session+宿主｜小-中）——**能力**：目标日志行 + 断点/异常/trace 事件 + agent 动作合并成统一时间轴，解决「先 A 日志后 B 断点再崩溃」因果拼图。**spec 草案**：`docs/planning/specs/2026-09-08-v3-timeline.md`（三源结构已查证）。**技术信息**：三源都带时间戳且同钟（`ProcessOutputCapture` 行时间戳、`DebugEvent.UtcTimestamp`、`AgentAction.UtcTimestamp`）；**隐藏缺口**：`SessionEventBuffer` 只折叠成最新快照、不保留事件历史——需新增事件历史环形缓冲（建议 500 条）存关键事件；TraceHit 现有独立轨迹缓冲（100 条消费式）保留、timeline 另存历史。**方案**：新工具 `debug_timeline(filter, lines, kind?)`——Session 缓冲聚合按 UTC 时间排序输出（同毫秒用各源自增 Sequence 打平）。**难度**：小-中（纯内存归并 + 事件历史缓冲，Engine 零改动）。**依赖**：P1 输出时间戳已完成。**顺手项（V2 保留增量①，随本项做防丢失）**：Exited 状态 Reason 补退出码/崩溃判定——现状注记：launch 会话输出缓冲已带 `[进程已退出 exitCode=N]`（`DebugSessionManager` 的 `process.Exited`，`debug_output`/`debug_wait` 已可见），真正缺口 = Engine Exited Reason 硬编码 `"process exited"`（`CallbackHandler.cs:55`）+ attach 会话无 Process 对象拿退出码（ICorDebug 不提供；需 Win32 `GetExitCodeProcess` 或立项时明确不覆盖 attach）。
 - [ ] **V4 修复回归护栏（语料断言）**（宿主测试｜小，ROADMAP reverse-skill 候选）——**能力**：把关键文案/行为契约固化为断言测试防回归。**spec 草案**：`docs/planning/specs/2026-09-08-v4-copy-guard.md`。**技术要点**：只测关键片段（非全匹配，防脆）；断言源直接引 `AppText`/`ToolParameterText` 常量（改文案不同步改测试即红，与常量纪律互补）；新工具落地强制同批补 V4。已有先例：McpSessionConcurrencyTests 等行为级护栏。**建议**：debug_set/debug_object/debug_verify/ui_* 落地时同批补断言；语料可吸收 DebugMCP 停点返回常驻「你找到的是症状还是根因」+ 下一步建议的文案形态（v4 spec 关联行已注，立项时拍板）。
 
 ### 现场纵深/环境 环节
