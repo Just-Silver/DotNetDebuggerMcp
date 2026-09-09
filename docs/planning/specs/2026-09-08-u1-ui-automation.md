@@ -1,6 +1,6 @@
 # Spec · U1 UI 自动化主动触发业务操作（FlaUI）
 
-> 状态：**已立项**（2026-09-09 拍板）——① ui_* **不需活动 debug 会话**（支持先操作 UI 再 attach）；② 副作用护栏 = AgentActionLog + Description 明示（Consent 列 v2）；③ 自动语义标注 **v1 做 = 务实成员反查**（不解析 XAML/BAML，ui_find 命中后用现有 Decompiler 元数据反查与 Name/Text 同名成员候选，无候选提示手动 decompile）；④ U1 先行（V1 复验闭环待 W1/U1/V3 落地后再计划）。实施计划见 `docs/planning/plans/2026-09-09-u1-ui-automation.md`，规格冻结。
+> 状态：**已立项**（2026-09-09 拍板）——① ui_* **不需活动 debug 会话**（支持先操作 UI 再 attach）；② 副作用护栏 = AgentActionLog + Description 明示（Consent 列 v2）；③ 自动语义标注 **v1 做 = 务实成员反查**（不解析 XAML/BAML，ui_find 命中后用现有 Decompiler 元数据反查与 Name/Text 同名成员候选，无候选提示手动 decompile）；④ U1 先行（V1 复验闭环待 W1/U1/V3 落地后再计划）。**2026-09-09 追加：v1 = ui_find + ui_invoke(action=click/rightClick/doubleClick) + ui_wait + ui_scroll(滚轮) 四件套**（FlaUI main 源码已核实 Mouse.RightClick/DoubleClick/Scroll）。实施计划见 `docs/planning/plans/2026-09-09-u1-ui-automation.md`，规格冻结。
 > 关联：宿主 TODO U1/UI 自动化条目；调试侧联动依赖 W1/V1（复验闭环是 U1 的验收载体）；会话模型复用现有 `DebugSessionManager` 单活动会话。
 > 参考实现（已实读源码）：`ChrisPulman/UIInspect.MCP`（MIT）——`FlaUiAutomationBackend.cs`/`FlaUiAutomationSession.cs`；`sbroenne/mcp-windows`（MIT，91★，工具面命名参照）。
 
@@ -50,6 +50,12 @@ element.AsToggleButton()?.Toggle();
 
 // 能力探测（ui_find 输出 "可操作类型" 的依据）
 bool canInvoke = element.Patterns.Invoke.IsSupported;
+
+// 多键/滚轮（v1 已按 FlaUI main 源码核实）：右键/双击无 UIA pattern，走物理鼠标
+element.RightClick(); element.DoubleClick();
+Mouse.RightClick(point); Mouse.DoubleClick(point);
+Mouse.Scroll(lines);          // 物理滚轮（WheelDelta*lines，上/下由正负号定）
+Mouse.HorizontalScroll(lines);
 ```
 
 ### 2.3 控件属性（ui_find 清单字段来源）
@@ -78,17 +84,18 @@ bool canInvoke = element.Patterns.Invoke.IsSupported;
 
 ## 4. 工具契约与分层设计
 
-### 4.1 工具面（2026-09-08 定案：5 个，v1 做 3 个）
+### 4.1 工具面（2026-09-08 定案 5 个；2026-09-09 扩展：v1 = find/invoke(action)/wait/scroll 四件套）
 
 | 工具 | 参数 | 返回 | 对标 |
 |---|---|---|---|
 | `ui_find` | 进程名/pid 或窗口标题；text/automationId/type（可组合）；limit | 控件文本清单（index/Name/Type/AutoId/Rect/可操作类型），**附带反编译语义标注**（若命中模块可反编译） | sbroenne UIFind + 我们独有语义 |
-| `ui_invoke` | index 或 name+type；目标窗口 | 操作结果 + 可选的"状态已变"二次确认 | UIInspect Invoke/Click |
+| `ui_invoke` | index 或 name+type；**action=click(默认)/rightClick/doubleClick**；目标窗口 | 操作结果 + 可选的"状态已变"二次确认 | UIInspect Invoke/Click + Mouse |
 | `ui_wait` | text=期望出现的控件文本；type；textChangedFrom/To；timeoutSeconds | 命中（控件已出现/文本已变）或超时提示 | UIInspect/DebugMCP wait 语义 |
+| `ui_scroll`（v1） | 容器 index/name/type（缺省=窗口内首个可滚区）；direction=up/down；lines=3 | 滚动结果（v1 物理滚轮 `Mouse.Scroll`；ScrollPattern 自动滚动 v1.5） | 自定义 |
 | `ui_input`（v1.5） | index/name；text | 输入结果 | ValuePattern.Enter |
 | `ui_pick`（v1.5） | 无（进入拾取模式，人类 hover+快捷键） | 命中元素文本清单 | Snipaste/FlaUInspect；**无视觉 agent 兜底锚定**（找不到时人类指认一次） |
 
-> **v1 最小闭环 = `ui_find` + `ui_invoke` + `ui_wait`**（定位→点击→状态确认跑通 CoreMes 切换）；`ui_input`/`ui_pick` 列 v1.5（压到最少，pick 引入人类介入面）。
+> **v1 最小闭环 = `ui_find` + `ui_invoke`(action) + `ui_wait` + `ui_scroll` 四件套**——右键菜单/双击树项/长列表滚动定位是自动化场景必需（2026-09-09 拍板）；`ui_input`/`ui_pick` 列 v1.5（压到最少，pick 引入人类介入面）。横向滚动与「滚到某控件可见」（ScrollItemPattern）列 v1.5。
 > **V4 衔接**：ui_* 新工具落地时同批补语料断言（见 `2026-09-08-v4-copy-guard.md`）。
 > **README 同步**：ui_* 属新增 MCP 工具，落地同 commit 改根 README。
 
@@ -99,13 +106,15 @@ bool canInvoke = element.Patterns.Invoke.IsSupported;
 ### 4.3 关键实现注意（防坑）
 - **UIA 超时护栏**：所有跨进程 UIA 调用包 5s 超时（UIInspect `UiaOperationGuard` 模式）；目标无响应时不能挂死 MCP 工具。
 - **线程**：FlaUI UIA3 需 COM 初始化（MTA/STA 均可，但**单自动化实例单线程访问**）；宿主现 MCP 工具是 async——ui_* 内需确保 UIA 调用不并发（复用/类比 Engine"单线程泵"纪律或简单 lock）。
-- **窗口激活**：`ui_invoke` 的 Click 兜底前 `SetForegroundWindow`；最小化窗口先还原。
-- **坐标兜底**：InvokePattern 不可用（自绘控件）→ `BoundingRectangle` 中心 + `Click()`（FlaUI 内部 SendInput 类）。
-- **副作用护栏**：产线软件点击有真实后果——`ui_invoke` 返回前**要求 agent 在参数/确认里声明动作类别**？还是仅文档提示？见 §6 取舍。
+- **窗口激活**：`ui_invoke`/`ui_scroll` 操作前 `SetForegroundWindow`；最小化窗口先还原。
+- **点击分派（action 语义）**：`click` = InvokePattern 优先（语义点击）、坐标 `element.Click()` 兜底；`rightClick`/`doubleClick` **无 UIA pattern，一律物理鼠标**（`Mouse.RightClick/DoubleClick(clickablePoint)`）——返回文案注明「物理右键/双击，可能触发系统级行为（如系统上下文菜单）」，agent 据此判断是否接受副作用。
+- **坐标兜底**：InvokePattern 不可用（自绘控件）→ `GetClickablePoint()`/`BoundingRectangle` 中心 + 对应 Mouse 动作。
+- **滚动语义**：`ui_scroll` v1 = 物理滚轮，作用于**定位到的容器元素中心**（无目标元素时用窗口工作区内可滚区域中心）；滚动后元素树不变——agent 应再 `ui_find` 确认目标控件文本/可见性（`IsOffscreen` 属性可辅助判断）。
+- **副作用护栏**：产线软件点击/滚轮有真实后果——全部操作打 AgentActionLog + Description 明示；见 §6 拍板。
 
 ### 4.4 Consent/安全（借鉴 UIInspect.MCP，v1 从简）
 UIInspect.MCP 有完整安全层（Consent 用户授权 + Audit 审计 + RateLimit）。本仓库定位 agent 主导，建议 v1 简化：
-- `ui_invoke`/`ui_input` 属于"会改变目标状态"的操作——至少打 `AgentActionLog`（已有轨迹，Web/复盘可查）；
+- `ui_invoke`/`ui_scroll`（`ui_input` v1.5）属于"会改变目标状态"的操作——至少打 `AgentActionLog`（已有轨迹，Web/复盘可查）；
 - 完整用户确认弹窗（Consent）列 v2（与产品"agent 主导、人类不开 Web 也能用"定位需权衡）；
 - Audit/RateLimit 视需要后置。
 
@@ -122,6 +131,9 @@ UIInspect.MCP 有完整安全层（Consent 用户授权 + Audit 审计 + RateLim
 4. **自动语义标注**：v1 **做 = 务实成员反查**（见 §3 注与 §5）——不解析 XAML/BAML，反查 Name/Text 同名成员候选；XAML 绑定还原 v1.5。
 5. **ui_pick v1.5**（已定案）；v1 全自动定位失败兜底 = ui_find 宽松条件 + 输出可辨识清单供 agent 调参。
 6. **与 V1 顺序**：U1 先行（本 spec 冻结 + 实施计划）；V1 复验闭环待 W1/U1/V3 落地后再计划。
+7. **点击操作维度（2026-09-09 追加拍板）**：只左键无法覆盖自动化场景（右键菜单/双击树项/列表）。`ui_invoke` 加 **action = click(默认)/rightClick/doubleClick**——click 仍 Invoke 优先；rightClick/doubleClick 无 UIA pattern，**一律物理鼠标**并明示副作用。
+8. **滚动（2026-09-09 追加拍板）**：新 `ui_scroll(容器定位, direction=up/down, lines=3)`，v1 **物理滚轮 `Mouse.Scroll`**（覆盖自绘/无 ScrollPattern 场景；FlaUI main 源码已核实）；ScrollPattern 自动滚动/横向/「滚到控件可见」列 v1.5。
+9. **v1 范围（2026-09-09 确认）**：`ui_find + ui_invoke(action) + ui_wait + ui_scroll` **四件套**；v1.5 = ui_input/ui_pick/横向滚动/自动滚动。
 
 ## 7. 验证方案
 - **对 CoreMes 实测**（真实 WPF）：ui_find 找到切换按钮 → ui_invoke → 进程行为变化（配合/不配合 debug 会话两种）。

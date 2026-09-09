@@ -2,6 +2,13 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D23 · U1 ui_invoke action 扩展 + ui_scroll（用户 2026-09-09 追加拍板）
+- 决策：只左键点击无法覆盖自动化场景（右键菜单/双击树项/长列表滚动定位）——v1 由三件套扩为**四件套**：
+  - `ui_invoke` 加 `action = click(默认)/rightClick/doubleClick`：click 仍 InvokePattern 优先、坐标兜底；rightClick/doubleClick 无 UIA pattern，**一律物理鼠标**（`Mouse.RightClick/DoubleClick`，FlaUI main 源码已核实），返回明示「物理右键/双击可能触发系统级行为」。
+  - 新 `ui_scroll(容器 index/name/type 或缺省窗口首可滚区, direction=up/down, lines=3)`：v1 **物理滚轮 `Mouse.Scroll(lines)`**（覆盖自绘/无 ScrollPattern）；ScrollPattern 自动滚动、横向、滚到控件可见（ScrollItemPattern）列 v1.5。
+  - v1.5 维持：ui_input / ui_pick / 横向滚动 / 自动滚动。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-u1-ui-automation.md` §4.1/§6（已转正冻结，D22 追加）。
+
 ## D22 · U1 UI 自动化 ui_* 工具拍板（用户 2026-09-09）
 - 决策①（会话依赖）：ui_find/ui_invoke/ui_wait **不需活动 debug 会话**（支持先操作 UI 再 attach）；与 debug_* 编排为宿主侧纯串联。
 - 决策②（副作用护栏）：v1 = 全 ui_* 操作打 AgentActionLog + Description 明示产线副作用风险 + ui_wait 二次确认引导；不做强制动作类别声明；Consent 列 v2。

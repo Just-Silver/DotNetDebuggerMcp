@@ -1,14 +1,14 @@
-# 实施计划 · U1 UI 自动化主动触发业务操作（ui_find/ui_invoke/ui_wait）
+# 实施计划 · U1 UI 自动化主动触发业务操作（ui_find/ui_invoke/ui_wait/ui_scroll）
 
 > **For agentic workers:** REQUIRED SUB-SKILL: 用 superpowers:executing-plans 逐 Task 实施（或 subagent-driven-development 逐 Task 派发）。Step 用 `- [ ]` 追踪。
 
-**Goal:** 新增宿主 `UiAutomationService`（FlaUI 封装）+ `ui_find`/`ui_invoke`/`ui_wait` 三工具，agent 驱动任意 .NET UI 目标（WPF/WinForms/…）的控件定位与语义点击，并与 debug_* 编排成「点按钮→断点命中→看现场」闭环。ui_find 命中元素附**务实语义标注**（反查 Name/Text 同名成员候选）。
+**Goal:** 新增宿主 `UiAutomationService`（FlaUI 封装）+ `ui_find`/`ui_invoke(action)`/`ui_wait`/`ui_scroll` 四工具，agent 驱动任意 .NET UI 目标（WPF/WinForms/…）的控件定位与**多键操作**（左键/右键/双击）与**滚动**，并与 debug_* 编排成「点按钮→断点命中→看现场」闭环。ui_find 命中元素附**务实语义标注**（反查 Name/Text 同名成员候选）。
 
-**Architecture:** 全部在宿主层：FlaUI 引用姿势照抄 UIInspect.MCP（PackageDownload+HintPath——PackAsTool 拒绝 platform-qualified TFM）；`UiAutomationService` 单自动化实例 + 跨进程 UIA 5s 超时护栏 + 全操作串行锁 + Find 结果缓存（index 复用）；`UiSemanticResolver` 用 PEReader 对主模块做成员名反查（缓存倒排索引）；三工具薄包装。Engine/Session 零改动。
+**Architecture:** 全部在宿主层：FlaUI 引用姿势照抄 UIInspect.MCP（PackageDownload+HintPath——PackAsTool 拒绝 platform-qualified TFM）；`UiAutomationService` 单自动化实例 + 跨进程 UIA 5s 超时护栏 + 全操作串行锁 + Find 结果缓存（index 复用）+ 点击分派（Invoke/物理左/右/双击）+ `Mouse.Scroll` 滚轮；`UiSemanticResolver` 用 PEReader 对主模块做成员名反查（缓存倒排索引）；四工具薄包装。Engine/Session 零改动。
 
-**Tech Stack:** C# net10.0、FlaUI.Core/UIA3 5.0.0（net8.0-windows7.0 二进制）、kernel32 SetForegroundWindow、ModelContextProtocol.Server。
+**Tech Stack:** C# net10.0、FlaUI.Core/UIA3 5.0.0（net8.0-windows7.0 二进制）、FlaUI `Mouse.RightClick/DoubleClick/Scroll`（main 源码已核实）、kernel32 SetForegroundWindow、ModelContextProtocol.Server。
 
-**Spec:** `docs/planning/specs/2026-09-08-u1-ui-automation.md`（2026-09-09 拍板：不需会话 / AgentActionLog+文档护栏 / 务实成员反查自动标注 v1 / U1 先行）。
+**Spec:** `docs/planning/specs/2026-09-08-u1-ui-automation.md`（2026-09-09 拍板：不需会话 / AgentActionLog+文档护栏 / 务实成员反查自动标注 v1 / U1 先行 / 追加：action 左·右·双击 + ui_scroll 滚轮 = 四件套）。
 **参考源码（动手前必读）：** `../../Externals/DebuggerExternals/UIInspect.MCP/`（`FlaUiAutomationBackend.cs`、`FlaUiAutomationSession.cs`、`UIInspect.MCP.Windows.csproj` 的 FlaUI 引用段）。
 
 ## Global Constraints（根 AGENTS.md + 宿主 AGENTS.md 铁律）
@@ -17,7 +17,7 @@
 - 新工具落地必须：同 commit 改根 `README.md`（工具表+参数+用法+风险）+ `CHANGELOG.md` 新开/补 `[Unreleased]` + **同批补 V4 语料断言**（D21 政策）。
 - 宿主 TFM 保持 net10.0（PackAsTool）；FlaUI 引用用 PackageDownload+HintPath，不引入 platform-qualified TFM。
 - UIA 跨进程调用一律带超时护栏（Connection/Transaction 5s + 外层 WaitAsync 兜底）；UiAutomationService 内部对全部操作串行化（SemaphoreSlim(1,1)）——MCP server 工具可能并发调用，FlaUI 自动化实例不并发访问。
-- 副作用护栏：ui_invoke/ui_wait 全程打 `AgentActionLog`；Description 明示产线副作用；不做 Consent（v2）。
+- 副作用护栏：ui_invoke/ui_scroll（ui_wait 只读轮询）全程打 `AgentActionLog`；Description 明示产线副作用与「物理右键/双击/滚轮可能触发系统级行为」；不做 Consent（v2）。
 - 测试目标（新 WinForms sample）为 net10.0-windows 小工程，由 `generate-testdata.ps1` 构建产出到 `tests/TestData/UiSampleApp/`；**UiSampleApp 不进 git**（与 DebugTarget 同 gitignore 模式）。
 
 ---
@@ -61,9 +61,10 @@
 **Interfaces:**
 - Produces（`UiAutomationService`，internal，单例 `Instance` 或经宿主 Services 静态挂）：
   - `Task<IReadOnlyList<UiElementInfo>> FindAsync(string process, string title, string text, string type, string automationId, int limit, CancellationToken ct)`
-  - `Task<UiActionResult> InvokeAsync(string process, int index, string name, string type, string text, CancellationToken ct)`
+  - `Task<UiActionResult> InvokeAsync(string process, int index, string name, string type, string action, CancellationToken ct)`（action ∈ click/rightClick/doubleClick）
+  - `Task<UiActionResult> ScrollAsync(string process, int index, string name, string type, string direction, int lines, CancellationToken ct)`
   - `Task<UiWaitResult> WaitAsync(string process, string text, string type, string textChangedFrom, string textChangedTo, int timeoutSeconds, CancellationToken ct)`
-  - 模型（同文件）：`UiElementInfo(int Index, string Name, string Type, string AutoId, string Rect, string CanInvoke, string? Semantic)`、`UiActionResult(bool Ok, string Message)`、`UiWaitResult(string Outcome, string Message)`（Outcome ∈ 出现/已变化/超时/失败）
+  - 模型（同文件）：`UiElementInfo(int Index, string Name, string Type, string AutoId, string Rect, string CanInvoke, string? Semantic)`、`UiActionResult(bool Ok, string Message)`（Message 注明**实际动作**：Invoke/物理左键/物理右键/双击/滚轮方向·行数）、`UiWaitResult(string Outcome, string Message)`（Outcome ∈ 出现/已变化/超时/失败）
 - `UiSemanticResolver`（internal）：
   - `IReadOnlyList<string>? Lookup(string assemblyPath, string elementName)`（返回 `类型全名.成员` 候选；assemblyPath 无/不可读/无匹配 → null）
 
@@ -91,17 +92,27 @@ internal sealed class UiAutomationService
         };
         return _automation;
     }
-    // FindAsync/InvokeAsync/WaitAsync 均在 _gate 内串行；全部 UIA 调用外层包
+    // FindAsync/InvokeAsync/ScrollAsync/WaitAsync 均在 _gate 内串行；全部 UIA 调用外层包
     // await Task.WhenAny(op, Task.Delay(5s)) 兜底 + WaitAsync(ct)（OperationCanceled 转中文提示）
 }
 ```
-窗口定位：按 `process`（pid 或进程名子串）`automation.GetDesktop().FindAllDescendants(cf => cf.ByControlType(ControlType.Window).And(cf.ByProcessId(pid)))`；`title` 非空再 `ByName(title)` 精确过滤；命中多窗口取第一个 + 提示。元素查找：窗口 `FindAllDescendants(ChainableCondition)`，type/text/automationId 组合 `And`；输出清单字段见 spec §2.3（`element.Name`、`Properties.AutomationId`、`ControlType`、`ClassName`、`FrameworkId`、`BoundingRectangle`、`IsEnabled`、`ProcessId`、`NativeWindowHandle`、`Patterns.Invoke.IsSupported`）。find 缓存 `_lastFind`（pid、元素 + `UiElementInfo`），供 `ui_invoke index`。
+窗口定位：按 `process`（pid 或进程名子串）`automation.GetDesktop().FindAllDescendants(cf => cf.ByControlType(ControlType.Window).And(cf.ByProcessId(pid)))`；`title` 非空再 `ByName(title)` 精确过滤；命中多窗口取第一个 + 提示。元素查找：窗口 `FindAllDescendants(ChainableCondition)`，type/text/automationId 组合 `And`；输出清单字段见 spec §2.3（`element.Name`、`Properties.AutomationId`、`ControlType`、`ClassName`、`FrameworkId`、`BoundingRectangle`、`IsEnabled`、`ProcessId`、`NativeWindowHandle`、`Patterns.Invoke.IsSupported`）。find 缓存 `_lastFind`（pid、元素 + `UiElementInfo`），供 `ui_invoke index`/`ui_scroll index`。
 
 语义标注：find 收集到元素后，对每个元素 Name/AutomationId 去重 → `UiSemanticResolver.Lookup(主模块路径, name)`；主模块路径 = `System.Diagnostics.Process.GetProcessById(pid).MainModule?.FileName`（异常降级 null）；命中候选取首个附到 `Semantic` 字段（候选 >3 时附前 3 + “…”）。
 
-- [ ] **Step 3: InvokeAsync / WaitAsync**
+- [ ] **Step 3: InvokeAsync（action 分派）/ ScrollAsync / WaitAsync**
 
-`InvokeAsync`：index>=0 时取 `_lastFind[index]`（pid 不匹配则清缓存重新查并提示）；否则按 name/type/text 即时唯一命中（歧义 → 返回候选清单提示用 index）。操作优先级：`Patterns.Invoke.PatternOrDefault?.Invoke()` → 兜底 `SetForegroundWindow(窗口句柄)` + `element.Click()`（FlaUI SendInput 类；最小化先还原 `ShowWindow(SW_RESTORE)`）。返回含「已 Invoke/已坐标点击」。全部失败回滚提示。
+`InvokeAsync`：index>=0 时取 `_lastFind[index]`（pid 不匹配则清缓存重新查并提示）；否则按 name/type 即时唯一命中（歧义 → 返回候选清单提示用 index）。**action 分派**（FlaUI main 源码已核实）：
+```csharp
+static void ActOn(UiElement el, string action) => action switch
+{
+    "click" when el.Patterns.Invoke.IsSupported => el.Patterns.Invoke.PatternOrDefault?.Invoke(), // Invoke 语义优先
+    _ => PerformPhysicalMouse(el, action), // 统一物理鼠标：先 SetForegroundWindow/还原最小化，再 GetClickablePoint（失败取 BoundingRectangle 中心）
+};
+// click 兜底 = Mouse.LeftClick(pt)；rightClick = Mouse.RightClick(pt)；doubleClick = Mouse.DoubleClick(pt)
+```
+返回 Message 注明实际动作：`已 Invoke` / `已物理左键点击` / `已物理右键点击（可能弹系统菜单）` / `已物理双击`。失败回滚提示（无 clickable point/窗口不可激活等中文原因）。
+`ScrollAsync`：目标元素解析同 InvokeAsync；**v1 物理滚轮** `Mouse.Scroll(direction=="up" ? -lines : lines)`（FlaUI 主源码：`WheelDelta*lines`，负=上）于元素中心（缺省=窗口内首个可滚动区/窗口工作区中心）；先 SetForegroundWindow；返回「已向下滚动 N 行 @ 控件 X（物理滚轮）」。滚动不改变元素树——提示 agent 用 `ui_find` 复查目标控件。
 `WaitAsync`：轮询间隔 200ms（仍属 UIA 查询带 5s/次护栏），到 `timeoutSeconds`（默认 30）止：`text` 模式 = 窗口内出现该 text 元素即命中；`textChangedFrom/To` = 首个匹配控件 `Name` 从 From 变 To；超时返回「超时未命中（当前仍:…）」不报错。
 
 - [ ] **Step 4: 单测 + 提交**
@@ -114,13 +125,13 @@ internal sealed class UiAutomationService
 
 **Files:**
 - Create: `tests/TestData/UiSampleApp/UiSampleApp.csproj`（net10.0-windows、UseWindowsForms、OutputType WinExe）
-- Create: `tests/TestData/UiSampleApp/Program.cs`（简单窗口：按钮 `手动`/`自动`（Text 随 State 变）、一个输入框、状态 TextBlock；进程自报窗口标题 `UiSample`）
+- Create: `tests/TestData/UiSampleApp/Program.cs`（主窗口 Title=`UiSample`：按钮 `手动`/`自动`（Text 随 State 切换）；按钮支持**右键**（右击切换另一状态 Label）；`ListBox` 100 项供**滚动**测试；一个输入框；进程自报窗口标题 `UiSample`）
 - Modify: `tests/TestData/generate-testdata.ps1`（DebugTarget 段后加 UiSampleApp 构建+拷贝；编码 UTF16LE 写回）
 - Modify: `.gitignore`（`tests/TestData/UiSampleApp/bin`、`obj`、产出 exe/dll——若不把源码目录全忽略则忽略产出）
 
 - [ ] **Step 1: 建工程**
 
-最小 WinForms（自绘/标准控件皆可）：主窗口 Title=`UiSample`；按钮 A 文本绑定 `_state`（初始「手动」点击切换为「自动」），按钮 B `计数`点击 +1 显示在 Label；TextBox + 按钮 `输入`。断点观察用：按钮 Click 处理程序 `private void OnToggleState(...)`。
+最小 WinForms（自绘/标准控件皆可）：主窗口 Title=`UiSample`；按钮 A 文本绑定 `_state`（初始「手动」点击切换为「自动」），按钮 A **右键**切换另一 Label 文本（验证右击）；`ListBox` 填充 100 项（`滚动`验证 ScrollPattern 容器命中后滚轮）；按钮 B `计数`点击 +1 显示在 Label；TextBox + 按钮 `输入`。断点观察用：按钮 Click 处理程序 `private void OnToggleState(...)`、`OnToggleStateRightClick(...)`。
 
 - [ ] **Step 2: generate-testdata.ps1 接入**
 
@@ -128,10 +139,10 @@ internal sealed class UiAutomationService
 
 ---
 
-### Task 4: ui_find / ui_invoke / ui_wait 工具 + README/CHANGELOG
+### Task 4: ui_find / ui_invoke(action) / ui_wait / ui_scroll 工具 + README/CHANGELOG
 
 **Files:**
-- Create: `src/DotNetDebuggerMcp/Tools/Debugger/UiTools.cs`（三个 `[McpServerTool]`）
+- Create: `src/DotNetDebuggerMcp/Tools/Debugger/UiTools.cs`（四个 `[McpServerTool]`）
 - Modify: `README.md`（工具表 + 参数 + 用法 + 副作用/无视觉定位说明）
 - Modify: `CHANGELOG.md`
 - Test: `tests/DotNetDebuggerMcp.Tests/DebugUiToolsTests.cs`（真实起 UiSampleApp 的 e2e）
@@ -153,40 +164,54 @@ public static async Task<string> UiFind(
     [Description("返回条数上限（默认 50）。")] int limit = 50,
     CancellationToken cancellationToken = default)
 
-[Description("语义点击 UI 控件（真实点击/Invoke，有产线副作用）。index=上次 ui_find 结果序号；或给 name/type/text 即时唯一定位（歧义返回候选请用 index）。")]
+[Description("对 UI 控件执行点击（真实操作，有产线副作用）。action：click（默认，Invoke 优先）/ rightClick / doubleClick（后两者物理鼠标——可能触发系统级行为如系统上下文菜单）。index=上次 ui_find 结果序号；或给 name/type 即时唯一定位（歧义返回候选请用 index）。")]
 public static async Task<string> UiInvoke(
     [Description("目标进程：pid 或进程名（必填）。")] string process,
     [Description("上次 ui_find 返回序号（>=0 优先于 name 定位）。")] int index = -1,
     [Description("控件名/文本（子串忽略大小写）。")] string name = "",
     [Description("控件类型。")] string type = "",
+    [Description("动作：click（默认）/ rightClick / doubleClick。")] string action = "click",
+    CancellationToken cancellationToken = default)
+
+[Description("滚动 UI 容器（长列表/文本定位；真实滚轮，有产线副作用）。目标=容器元素（List/DataGrid/TextBox 等，index 或 name/type 定位，缺省=窗口内首个可滚区）；v1 物理滚轮，direction=up/down，lines=行数。滚动后请用 ui_find 复查目标控件。")]
+public static async Task<string> UiScroll(
+    [Description("目标进程：pid 或进程名（必填）。")] string process,
+    [Description("上次 ui_find 返回序号（>=0 优先于 name 定位）；-1 = 窗口内首个可滚区。")] int index = -1,
+    [Description("容器名/文本（子串忽略大小写）。")] string name = "",
+    [Description("容器类型。")] string type = "",
+    [Description("滚动方向：up / down。")] string direction = "down",
+    [Description("滚动行数（默认 3）。")] int lines = 3,
     CancellationToken cancellationToken = default)
 
 [Description("等待 UI 状态变化/控件出现（轮询，超时返回当前状态不报错）。text=期望出现的控件文本；textChangedFrom/textChangedTo=控件文本从 X 变 Y（点击后的状态确认）。")]
 public static async Task<string> UiWait(/* process, text, type, textChangedFrom, textChangedTo, timeoutSeconds=30 */)
 ```
-每个工具成功/失败都 `Actions.Log("ui_find"/"ui_invoke"/"ui_wait", args, result)`。
+每个工具成功/失败都 `Actions.Log("ui_find"/"ui_invoke"/"ui_scroll"/"ui_wait", args, result)`；action/direction 非法值 → 中文提示（可选值列全）。
 
 - [ ] **Step 2: e2e 失败测试 → 验证**
 
 `DebugUiToolsTests`（真实起 UiSampleApp，进程独立——不依赖 debug 会话）：
 1. `ui_find process=UiSampleApp type=Button` → 返回含「手动」按钮行（含 index/Invoke✓）+ 语义候选（`UiSampleApp.*` 命中 `OnToggleState` 相关同名成员，若实现名匹配则标注，否则仅主窗口类型行）。
-2. `ui_invoke process=UiSampleApp index=0`（或 name=手动 type=Button）→ 成功；`ui_wait textChangedFrom=手动 textChangedTo=自动` → 命中（状态已切）。
-3. `ui_invoke` 对不存在的 name/歧义 → 候选清单/中文提示；process 不存在 → 中文提示；target 无响应（UiSampleApp 卡 5s 模式可后补）→ 超时护栏返回不挂死。
-4. 与 debug 编排冒烟：`debug_launch` UiSampleApp → 断点设 `OnToggleState` → `ui_invoke` 点按钮 → debug_wait 命中（可验证 UIA 与调试同进程协作；若时序不稳则该用例单列为可选，先保 1-3 绿）。
-Run 定向 + 宿主全量。README/CHANGELOG 同步。`git commit -m "feat: 新增 ui_find/ui_invoke/ui_wait UI 自动化工具（FlaUI + 语义反查，U1，同步 README/CHANGELOG）"`
+2. 左键闭环：`ui_invoke process=UiSampleApp index=0`（或 name=手动 type=Button）→ 返回含「已 Invoke/已物理左键」；`ui_wait textChangedFrom=手动 textChangedTo=自动` → 命中（状态已切）。
+3. 右键：`ui_invoke … action=rightClick` 目标右键按钮 → 返回含「物理右键」；`ui_wait` 验证右击 Label 文本变化。
+4. 双击：`ui_invoke … action=doubleClick` → 返回含「物理双击」（UiSampleApp 双击逻辑可用双击切换计数 Label 验证）。
+5. 滚动：`ui_scroll process=UiSampleApp name=listBox direction=down lines=5` → 返回含「向下滚动 5 行」；随后 `ui_find` 能看到 ListBox 末尾项文本（滚动生效）。
+6. 错误面：非法 action/direction 中文提示；不存在的 name/歧义 → 候选清单；process 不存在 → 中文提示；target 无响应（UiSampleApp 卡 5s 模式可后补）→ 超时护栏返回不挂死。
+7. 与 debug 编排冒烟：`debug_launch` UiSampleApp → 断点设 `OnToggleState` → `ui_invoke` 点按钮 → debug_wait 命中（可验证 UIA 与调试同进程协作；若时序不稳则该用例单列为可选，先保 1-6 绿）。
+Run 定向 + 宿主全量。README/CHANGELOG 同步。`git commit -m "feat: 新增 ui_find/ui_invoke(action)/ui_wait/ui_scroll UI 自动化工具（FlaUI + 语义反查，U1，同步 README/CHANGELOG）"`
 
 ---
 
 ## 收尾
 
 - [ ] Release build + 宿主全量 + Client + CoreMes 手测（可选外部验证：切手自动按钮闭环）。
-- [ ] **V4 同批补**：AgentCopyGuardTests ContractData 加 ui_find（「控件清单」/「无视觉」）、ui_invoke（「副作用」）、ui_wait（「超时返回当前状态」）Description 片段。
+- [ ] **V4 同批补**：AgentCopyGuardTests ContractData 加 ui_find（「控件清单」/「无视觉」）、ui_invoke（「副作用」/「rightClick」）、ui_wait（「超时返回当前状态」）、ui_scroll（「滚轮」）Description 片段。
 - [ ] 核对 `src/DotNetDebuggerMcp/TODO.md` U1 状态（拍板+计划→实施完成后再勾）；`docs/planning/specs/README.md` 收录 U1 spec 行（本次立项完成，实施后改状态）。
 - [ ] V1 复验闭环在 W1/U1/V3 落地后再计划（D22④）。
 
 ## Self-Review（writing-plans 内审）
 
-- **Spec 覆盖**：三件套工具（Task4）、不需会话（Task4 无会话前置）、副作用护栏 AgentActionLog（Task4 Step1 Log+Description）、务实成员反查自动标注（Task2 Step1+2）、超时护栏/串行锁（Task2 Step2/3）、FlaUI 打包（Task1）、测试目标（Task3）、V4 衔接（收尾）、README/CHANGELOG（Task4）。
-- **占位符**：无 TBD；UIInspect.MCP csproj/源码为实施期「先查再抄」明确入口（仓库铁律允许且要求）；FlaUI 运行时 dll 复制以实际跑通为准并给出回退姿势。
-- **类型一致**：`UiElementInfo`/`UiActionResult`/`UiWaitResult`/`FindAsync`/`InvokeAsync`/`WaitAsync` Task2 定义 Task4 用；`UiSemanticResolver.Lookup` Task2 定义 Task2 自用；`UiSampleApp` Task3 产出 Task4 e2e 起。
-- **风险点已标**：UIA 跨进程时序/超时（双层护栏）；MCP 并发 → 全操作串行锁；元素缓存 index 失效（pid 校验 + 歧义引导）；PackAsTool 与 platform TFM 冲突（保持 net10.0 + PackageDownload）；产线副作用（Description 明示 + AgentActionLog）。
+- **Spec 覆盖**：四件套工具（Task4 action + ui_scroll）、不需会话（Task4 无会话前置）、副作用护栏 AgentActionLog + 物理右键/双击/滚轮风险（Task2 Step3 + Task4 Description）、右键/双击/滚动分派与 Mouse API（Task2 Step3）、务实成员反查自动标注（Task2 Step1+2）、超时护栏/串行锁（Task2 Step2/3）、FlaUI 打包（Task1）、测试目标含右键/滚动元素（Task3）、V4 衔接（收尾）、README/CHANGELOG（Task4）。
+- **占位符**：无 TBD；UIInspect.MCP csproj/源码为实施期「先查再抄」明确入口；FlaUI `Mouse.RightClick/DoubleClick/Scroll` 方法签名已按 main 源码核实写入 Step3；ScrollPattern 自动滚动 v1.5 未实现不占位。
+- **类型一致**：`UiElementInfo`/`UiActionResult`/`UiWaitResult`/`FindAsync`/`InvokeAsync(action)`/`ScrollAsync`/`WaitAsync` Task2 定义 Task4 用；`UiSemanticResolver.Lookup` Task2 定义 Task2 自用；`UiSampleApp` Task3 产出 Task4 e2e 起。
+- **风险点已标**：UIA 跨进程时序/超时（双层护栏）；MCP 并发 → 全操作串行锁；元素缓存 index 失效（pid 校验 + 歧义引导）；PackAsTool 与 platform TFM 冲突（保持 net10.0 + PackageDownload）；产线副作用与物理右键/双击/滚轮的系统级行为（Description 明示 + AgentActionLog）；滚动不改变元素树（提示 ui_find 复查）。
