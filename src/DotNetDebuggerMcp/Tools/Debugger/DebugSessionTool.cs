@@ -166,17 +166,29 @@ public static class DebugSessionTool
     {
         var traces = buffer.ConsumeTraces(out var dropped);
         if (traces.Count == 0) return null;
+        return RenderTraceBlock(traces, dropped);
+    }
+
+    /// <summary>渲染 trace 轨迹块（纯函数：DB1 变量行按 名+内容 脱敏，命中在段头附「（含已脱敏值）」）。</summary>
+    internal static string RenderTraceBlock(IReadOnlyList<DotNetDebugger.Engine.Models.TraceHitPayload> traces, int dropped)
+    {
         var sb = new System.Text.StringBuilder();
-        sb.Append($"trace 轨迹（{traces.Count} 条，旧→新{(dropped > 0 ? $"；因环形上限已丢弃最早 {dropped} 条" : "")}）:");
+        var redacted = false;
         var index = 0;
         foreach (var t in traces)
         {
             index++;
             sb.Append($"{Environment.NewLine}  [{index}] {t.UtcTimestamp.LocalDateTime:HH:mm:ss.fff} id={t.BreakpointId} top={t.TopFrame?.ToString() ?? "?"}");
             foreach (var v in t.Variables)
-                sb.Append($"{Environment.NewLine}      [{v.Scope}] {v.Name ?? $"slot{v.Slot}"} = {v.Display}");
+            {
+                var (valueText, hit) = SensitiveValueRedactor.Redact(v.Name, v.Display);
+                if (hit) redacted = true;
+                sb.Append($"{Environment.NewLine}      [{v.Scope}] {v.Name ?? $"slot{v.Slot}"} = {valueText}");
+            }
         }
-        return sb.ToString();
+        var header = $"trace 轨迹（{traces.Count} 条，旧→新{(dropped > 0 ? $"；因环形上限已丢弃最早 {dropped} 条" : "")}）";
+        if (redacted) header += "（含已脱敏值）";
+        return header + ":" + sb;
     }
 
     internal static string StateText(DotNetDebugger.Engine.Models.DebugSessionState state) => state switch

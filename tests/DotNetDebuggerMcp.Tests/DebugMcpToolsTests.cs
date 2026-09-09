@@ -231,7 +231,7 @@ public sealed class DebugMcpToolsTests
         var exe = DebugTargetExe;
         var dll = Path.ChangeExtension(exe, ".dll");
         Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
-        // E 测试素材：Program 的方法 Compute/Work/WorkBag/WorkScores + Bag 的字段 A
+        // E 测试素材：Program 的方法 Compute/Work/WorkBag/WorkScores + Bag 的字段（A/S/Password/Token）
         var computeToken = ReadMethodToken(dll, "Compute");
         var workToken = ReadMethodToken(dll, "Work");
         var workBagToken = ReadMethodToken(dll, "WorkBag");
@@ -275,11 +275,13 @@ public sealed class DebugMcpToolsTests
         var listAfterMulti = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
         Assert.Contains("断点列表（1 个）", listAfterMulti.Text());
 
-        // 3. 非方法成员：Bag.A 是字段（0x04）→ 不能设方法断点提示
+        // 3. 非方法成员：Bag 字段（0x04）→ 不能设方法断点提示。
+        //    DB1 后 Bag 含 A/S/Password/Token——单字母/常见词子串会命中多字段走「均非方法」分支，
+        //    取唯一命中的字段 Token 验证单命中字段提示。
         var field = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["typeName"] = "DebugTarget.Bag", ["memberName"] = "A" });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["typeName"] = "DebugTarget.Bag", ["memberName"] = "Token" });
         Assert.True(field.IsError != true, field.Text());
-        Assert.Contains("成员 A 是字段", field.Text());
+        Assert.Contains("成员 Token 是字段", field.Text());
         Assert.Contains("不能设方法断点", field.Text());
 
         // 4. 未找到 + 相近名：Program 内无 "Wrok"，相近成员 Work
@@ -1199,6 +1201,94 @@ public sealed class DebugMcpToolsTests
         var badPath = await CallAsync(mcp, "debug_object", new Dictionary<string, object?> { ["path"] = "1" });
         Assert.True(badPath.IsError != true, badPath.Text());
         Assert.Contains("不是有效路径", badPath.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
+    [Fact]
+    public async Task DebugVariablesEvaluate_SensitiveFieldsRedacted_PlaceholderAndNotice()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workBagToken = ReadMethodToken(dll, "WorkBag");
+        Assert.True(workBagToken > 0);
+
+        // 停点坐标：WorkBag 循环体语句行（b/n/i 全存活）
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var bagFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workBagToken);
+        var entryTarget = DotNetDebugger.Decompiler.Document.DocumentService.GetBreakpointTargetAtLine(doc, bagFirstLine!.Value);
+        Assert.True(entryTarget is not null);
+        DotNetDebugger.Decompiler.Document.SourceLineResolver.SourceLineTarget? loopTarget = null;
+        for (var l = 1; l <= 80 && loopTarget is null; l++)
+        {
+            var t = DotNetDebugger.Decompiler.Document.SourceLineResolver.Resolve(dll, "DebugTarget.cs", l, out _);
+            if (t is not null && t.MethodToken == workBagToken && t.IlOffset != entryTarget.Value.IlOffset) loopTarget = t;
+        }
+        Assert.True(loopTarget is not null, "未找到 WorkBag 循环体源码行");
+
+        const string notice = "疑似凭据已脱敏——用类型/长度/null 判断，勿读原始值";
+        const string ph = "[已脱敏:疑似凭据]";
+
+        await using var mcp = await ConnectAsync();
+
+        // bag 模式：WorkBag(new Bag { A = 7, S = "sx", Password = "hunter2", Token = "Bearer eyJhbGciOiJIUzI1NiJ9.e30.abc" }, 5)
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} bag 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        var set = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine });
+        Assert.True(set.IsError != true, set.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(set.Text()));
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", wait.Text());
+
+        // debug_variables：Password/Token 占位符 + 顶部计数提示；普通字段原样；原始凭据不出现在输出
+        var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        Assert.True(vars.IsError != true, vars.Text());
+        Assert.Contains("局部变量/参数", vars.Text());
+        Assert.Contains($"2 个值{notice}", vars.Text());
+        Assert.Contains($"Password = {ph}", vars.Text());
+        Assert.Contains($"Token = {ph}", vars.Text());
+        Assert.Contains("A = 7", vars.Text());
+        Assert.Contains("S = \"sx\"", vars.Text());
+        Assert.DoesNotContain("hunter2", vars.Text());
+        Assert.DoesNotContain("eyJhbGciOiJIUzI1NiJ9", vars.Text());
+
+        // debug_evaluate 表达式级：b.Password / b.Token 末段名敏感 → 整值占位符 + 行内单次提示（类型保留供判读）
+        var pw = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.Password" });
+        Assert.True(pw.IsError != true, pw.Text());
+        Assert.Contains($"b.Password = {ph}", pw.Text());
+        Assert.Contains("（System.String）", pw.Text());
+        Assert.Contains($"（{notice}）", pw.Text());
+        Assert.DoesNotContain("hunter2", pw.Text());
+
+        var tk = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.Token" });
+        Assert.True(tk.IsError != true, tk.Text());
+        Assert.Contains($"b.Token = {ph}", tk.Text());
+        Assert.DoesNotContain("eyJhbGciOiJIUzI1NiJ9", tk.Text());
+        Assert.DoesNotContain("Bearer ", tk.Text());
+
+        // 普通字段/表达式不受影响
+        var a = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.A" });
+        Assert.Contains("表达式: b.A = 7（System.Int32）", a.Text());
+        Assert.DoesNotContain(notice, a.Text());
+        var s = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.S" });
+        Assert.Contains("= \"sx\"（System.String）", s.Text());
+
+        // 整对象求值：children 逐字段名脱敏（Password/Token 行占位符，父对象行不敏感不动）
+        var whole = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b" });
+        Assert.True(whole.IsError != true, whole.Text());
+        Assert.Contains($"Password = {ph}", whole.Text());
+        Assert.Contains($"Token = {ph}", whole.Text());
+        Assert.Contains("A = 7", whole.Text());
+        Assert.Contains("S = \"sx\"", whole.Text());
+        Assert.DoesNotContain("hunter2", whole.Text());
 
         var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
         Assert.True(disc.IsError != true, disc.Text());

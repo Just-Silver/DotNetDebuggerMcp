@@ -105,14 +105,21 @@ public static class DebugInspectTool
         {
             var vars = await active.Session.GetVariablesAsync(tid, cancellationToken);
             var lines = new List<string>();
+            var redacted = 0;
             foreach (var (scope, list) in vars)
             {
                 lines.Add($"[{scope}]");
                 foreach (var v in list)
+                {
+                    redacted += CountRedacted(v);
                     lines.Add(RenderVariable(v, depth: 1));
+                }
             }
             DebugSessionService.Manager.Actions.Log("debug_variables", $"thread={tid}", "ok");
-            return $"局部变量/参数（thread={tid}）:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
+            var header = $"局部变量/参数（thread={tid}";
+            if (redacted > 0) header += $"，{redacted} 个值{SensitiveValueRedactor.Notice}";
+            header += "）";
+            return $"{header}:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
         }
         catch (Exception ex)
         {
@@ -120,15 +127,26 @@ public static class DebugInspectTool
         }
     }
 
-    /// <summary>递归渲染变量（对象/数组 children 缩进展示；引擎已按一级展开 + 截断）。debug_evaluate 复用。</summary>
+    /// <summary>递归渲染变量（对象/数组 children 缩进展示；引擎已按一级展开 + 截断）。debug_evaluate 复用。
+    /// DB1：每层按变量自身名 + 值内容形态脱敏（父对象名不敏感不整体脱敏，children 逐字段行各自判定）。</summary>
     internal static string RenderVariable(DotNetDebugger.Engine.Models.DebugVariable v, int depth)
     {
         var indent = new string(' ', depth * 2);
-        var line = $"{indent}{v.Name ?? $"slot{v.Slot}"} = {v.Value.Display}";
+        var (valueText, _) = SensitiveValueRedactor.Redact(v.Name, v.Value.Display);
+        var line = $"{indent}{v.Name ?? $"slot{v.Slot}"} = {valueText}";
         if (v.Value.Children is not { } children) return line;
         foreach (var c in children)
             line += Environment.NewLine + RenderVariable(c, depth + 1);
         return line;
+    }
+
+    /// <summary>统计子树中脱敏命中的值个数（DB1 顶部计数提示；纯函数与 RenderVariable 各判一次，无副作用）。</summary>
+    private static int CountRedacted(DotNetDebugger.Engine.Models.DebugVariable v)
+    {
+        var count = SensitiveValueRedactor.Redact(v.Name, v.Value.Display).Redacted ? 1 : 0;
+        if (v.Value.Children is { } children)
+            foreach (var c in children) count += CountRedacted(c);
+        return count;
     }
 
     /// <summary>

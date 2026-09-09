@@ -41,8 +41,11 @@ public static class DebugEvaluateTool
             var result = await ExpressionEvaluator.EvaluateAsync(active.Session, tid, expression, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_evaluate", expression, "ok");
 
-            var sb = new StringBuilder($"表达式: {expression} = {result.Display}");
+            // DB1：表达式级判定优先（末段标识符敏感即脱敏，防换名绕过），再按值内容形态；命中给占位符 + 单次提示
+            var (valueText, redacted) = SensitiveValueRedactor.RedactExpression(expression, result.Display);
+            var sb = new StringBuilder($"表达式: {expression} = {valueText}");
             if (result.TypeName is not null) sb.Append($"（{result.TypeName}）");
+            if (redacted) sb.Append($"（{SensitiveValueRedactor.Notice}）");
             if (result.Children is { Count: > 0 })
             {
                 foreach (var child in result.Children)
