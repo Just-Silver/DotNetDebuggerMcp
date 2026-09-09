@@ -36,7 +36,7 @@
 - Test: `tests/DotNetDebugger.Engine.Tests/ReadObjectDrillTests.cs`
 
 **Interfaces:**
-- Consumes: `DebugEngineCore.ResolvePathValue`/`ReadPathValue`（既有私有，P6 路径定位）；`EnumerateInstanceFields`/`ReadFieldTokens`；`DebugValue`/`DebugVariable`（Engine Models，`Children` 递归嵌套已支持）。
+- Consumes: `DebugEngineCore` 的 P6 路径定位（现为私有 `ReadPathValue`；**实施时经前置小重构抽出 `ResolvePathValue(thread, rootName, segments)` 与 `FindThread(threadId)`**，见 Step 3 注①）；`EnumerateInstanceFields`/`ReadFieldTokens`；`DebugValue`/`DebugVariable`（Engine Models，`Children` 递归嵌套已支持）。
 - Produces:
   - `Engine.DebugEngineCore` 常量 `public const int MaxDrillDepth = 6`；
   - `DebugSession.ReadObjectAtPathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, int depth, int limit = 32, CancellationToken ct = default)` → `Task<DebugValue>`（终值为对象/数组时含嵌套 children 树；标量/字符串/null 抛中文 `InvalidOperationException`「…不是对象/数组…」）。
@@ -61,16 +61,16 @@ if (args.Length > 0 && args[0] == "drill")
     var b = new DrillNode { Name = "B", Value = 2 };
     var c = new DrillNode { Name = "C", Value = 3 };
     a.Next = b; b.Next = c; c.Next = a; // 故意成环：验证 <cyclic> 而非死循环
-    Drill(a, new[] { 3, 1, 4 });
+    Drill(a, new[] { 3, 1, 4 }, ghost: null);   // ghost=null 参数供「null 非对象」错误语义测试
     return;
 }
-public static void Drill(DrillNode root, int[] arr)
+public static void Drill(DrillNode root, int[] arr, DrillNode? ghost = null)
 {
     Console.WriteLine("[DebugTarget] drill " + root.Name + " arr0=" + arr[0]);
     Thread.Sleep(2000); // 让调试器从容设断点/观察
 }
 ```
-重跑脚本（UTF16LE 写回同前）。确认 `Generated DebugTarget.exe`。
+重跑脚本（UTF16LE 写回同前）。确认 `Generated DebugTarget.exe`。**不动既有方法体/逻辑**（`probe` 分支等保持原样；新增内容仅追加 `drill` 分支与类型）。
 
 - [ ] **Step 2: 写失败测试（Engine）**
 
@@ -101,13 +101,13 @@ var scalarErr = await Assert.ThrowsAsync<InvalidOperationException>(() =>
     session.ReadObjectAtPathAsync(tid, "root", [new PathSegment.Field("Value")], 1, ct));
 Assert.Contains("不是对象/数组", scalarErr.Message);
 var nullErr = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-    session.ReadObjectAtPathAsync(tid, "nullRoot", [], 1, ct)); // Drill 传入 null 的场景见样本注释——或用环终点
+    session.ReadObjectAtPathAsync(tid, "ghost", [], 1, ct)); // Drill(..., ghost: null) 参数：null 非对象
 Assert.Contains("不是对象/数组", nullErr.Message);
 
 static bool ContainsCyclic(DebugValue v) =>
     v.Display == "<cyclic>" || (v.Children?.Any(c => ContainsCyclic(c.Value)) ?? false);
 ```
-Run，Expected: FAIL（类型/方法不存在）。注：DebugTarget 链成环后 `Next.Next.Next` 回到 a，expander 遇已访问地址返回 `<cyclic>`；null 场景样本若不便造则删 nullErr 用例、以字符串/标量错误覆盖 spec 语义。
+Run，Expected: FAIL（类型/方法不存在）。注：DebugTarget 链成环后 `Next.Next.Next` 回到 a，expander 遇已访问地址返回 `<cyclic>`；null 语义由 `ghost` 参数覆盖。
 
 - [ ] **Step 3: 实现受控递归展开器**
 
@@ -140,13 +140,13 @@ private DebugValue ReadObjectAtPath(int threadId, string rootName, IReadOnlyList
 private static CorDebugValue ValidateExpandable(CorDebugValue target, string rootName, IReadOnlyList<PathSegment> segments)
 {
     if (target is CorDebugReferenceValue rr && rr.IsNull)
-        throw new InvalidOperationException($"路径 {Describe(rootName, segments)} 为 null——请给对象或数组路径。");
+        throw new InvalidOperationException($"路径 {Describe(rootName, segments)} 为 null（不是对象/数组）——请给对象或数组路径。");
     var deref = target is CorDebugReferenceValue r2 ? r2.Dereference() : target;
     return deref switch
     {
         CorDebugObjectValue or CorDebugArrayValue => deref!,
         CorDebugStringValue => throw new InvalidOperationException(
-            $"路径 {Describe(rootName, segments)} 是字符串——请给对象或数组路径（或取其字段/索引）。"),
+            $"路径 {Describe(rootName, segments)} 是字符串（不是对象/数组）——请给对象或数组路径（或取其字段/索引）。"),
         _ => throw new InvalidOperationException(
             $"路径 {Describe(rootName, segments)} 不是对象/数组（当前为标量）——请给对象或数组路径。"),
     };

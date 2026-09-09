@@ -117,7 +117,7 @@ Run 定向测试过 + 宿主既有编译。`git commit -m "feat: SensitiveValueR
 
 - [ ] **Step 0: 测试数据（generate-testdata.ps1，2026-09-09 审查修正补步）**
 
-`$dbgSrc` 的 `class Bag`（脚本内最后一个类型——字段表末尾追加不位移既有字段/方法 token）**尾部**追加敏感字段；`Main` 的 `bag` 分支初始化器赋真实凭据形值。**勿在 `A`/`S` 之间插字段**（既有 `Assert.Contains("A, S")` 可用字段清单断言不破）；**不动既有方法体**。重跑脚本。
+`$dbgSrc` 的 `class Bag`（脚本内最后一个类型——字段表末尾追加不位移既有字段/方法 token）**尾部**追加敏感字段；`Main` 的 `bag` 分支初始化器赋真实凭据形值。**勿在 `A`/`S` 之间插字段**（既有 `Assert.Contains("A, S")` 可用字段清单断言不破）；**不改其它方法体/逻辑，仅 bag 分支初始化器增补两字段赋值**（`Password`/`Token` 不赋值则空串属 trivial、不会触发脱敏，e2e 失效）。重跑脚本。
 ```csharp
 public class Bag
 {
