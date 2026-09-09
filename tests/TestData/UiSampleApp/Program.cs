@@ -40,6 +40,7 @@ internal sealed class MainForm : Form
         Font = new Font("Microsoft YaHei UI", 9F);
 
         // 状态切换按钮（左键切换 手动↔自动；右键切换另一 Label 状态）
+        _toggleState.Name = "toggleState";
         _toggleState.Text = _state;
         _toggleState.SetBounds(14, 14, 100, 32);
         _toggleState.Click += OnToggleState;
@@ -49,6 +50,7 @@ internal sealed class MainForm : Form
         _rightClickLabel.SetBounds(126, 22, 140, 20);
 
         // 计数按钮
+        _countButton.Name = "countButton";
         _countButton.Text = "计数";
         _countButton.SetBounds(14, 56, 100, 32);
         _countButton.Click += OnCountClick;
@@ -56,8 +58,10 @@ internal sealed class MainForm : Form
         _countLabel.SetBounds(126, 64, 140, 20);
 
         // 输入框 + 输入按钮（ui_input v1.5 之前的占位控件；同时验证 TextBox/Edit 类型可被定位）
+        _inputBox.Name = "inputBox";
         _inputBox.Text = "sample text";
         _inputBox.SetBounds(14, 98, 150, 26);
+        _inputButton.Name = "inputButton";
         _inputButton.Text = "输入";
         _inputButton.SetBounds(170, 95, 70, 30);
         _inputButton.Click += OnInputClick;
@@ -65,6 +69,7 @@ internal sealed class MainForm : Form
         _echoLabel.SetBounds(250, 101, 230, 20);
 
         // 100 项列表：滚动（ui_scroll）与双击计数（ui_invoke doubleClick）锚点
+        _listBox.Name = "listBox";
         _listBox.SetBounds(14, 134, 330, 280);
         _listBox.HorizontalScrollbar = false;
         for (var i = 0; i < 100; i++) _listBox.Items.Add($"Item {i}");

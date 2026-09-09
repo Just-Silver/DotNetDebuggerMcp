@@ -186,7 +186,7 @@ internal sealed class UiAutomationService
     {
         var (pid, _) = ResolveProcess(process);
         var actionNorm = action.Trim().ToLowerInvariant();
-        if (actionNorm is not ("click" or "rightClick" or "doubleClick"))
+        if (actionNorm is not ("click" or "rightclick" or "doubleclick"))
             throw new UiException($"action 无效：{action}（可选 click / rightClick / doubleClick）。");
 
         var (element, window, label) = ResolveTarget(pid, index, name, type, invoke: true);
@@ -209,7 +209,7 @@ internal sealed class UiAutomationService
         return new UiActionResult(true, done);
     }
 
-    /// <summary>物理鼠标动作（右键/双击无 UIA pattern 一律走这里；左键在 Invoke 不可用时兜底）。</summary>
+    /// <summary>物理鼠标动作（右键/双击无 UIA pattern 一律走这里；左键在 Invoke 不可用时兜底）。action 已归一为小写。</summary>
     private static string PerformPhysicalMouse(AutomationElement window, AutomationElement element, string label, string action)
     {
         ActivateWindow(window);
@@ -221,7 +221,7 @@ internal sealed class UiAutomationService
             case "click":
                 try { Mouse.LeftClick(point); return $"已物理左键点击 {label}（Invoke 不可用，坐标兜底）"; }
                 catch (Exception ex) { throw new UiException($"物理左键点击失败：{ex.Message}"); }
-            case "rightClick":
+            case "rightclick":
                 try { Mouse.RightClick(point); return $"已物理右键点击 {label}（可能弹系统菜单——注意副作用）"; }
                 catch (Exception ex) { throw new UiException($"物理右键点击失败：{ex.Message}"); }
             default:

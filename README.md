@@ -18,6 +18,7 @@
 ## 环境要求
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- Windows（反编译/静态分析跨平台可用；`debug_*` 动态调试与 `ui_*` UI 自动化需 Windows——ui_* 还需交互桌面会话，远程/服务会话可能读不到目标窗口且物理输入（SendInput）被系统拒绝）
 
 ## 安装
 
@@ -131,6 +132,17 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
 > 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察（帧变量多/只想看某几个时 `debug_variables names="i,order"` 按名白名单读取——逗号分隔、忽略大小写、空=全量；命中对象照常逐字段脱敏，未知名会列出当前帧可用名）、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、**想知道对象里有什么再逐级下钻用 `debug_object`**（`debug_object "order.Customer" depth=3`——把对象/数组按 depth 层展开 children 树，同路径环自动标 `<cyclic>`、`limit` 控每层宽度；与 `debug_evaluate` 分工：它取标量值，本工具看结构）、**「改值验证假设再继续」用 `debug_set`**（把现场变量改成新值，返回 原值→新值 回显，改完 `debug_continue` 观察行为是否变化——二分定位因果实验；注意写进程内存有崩目标风险，只改确认的变量）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。**复盘整段调试经过（目标日志 ↔ 断点/异常/trace 事件 ↔ agent 动作按时间对齐）用 `debug_timeline`**。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。**读值输出对疑似凭据自动脱敏**：`debug_variables`/`debug_evaluate`/trace 轨迹的变量值若按变量名（api key/password/token/credential/auth/连接串等，归一化 exact-match）或按值内容形态（JWT/PEM/Bearer/`Key=…` 等）判定像凭据，输出替换为 `[已脱敏:疑似凭据]` 占位符并附提示——用类型/长度/null 判断，勿读原始值；null/平凡值不动（「token 是 null」照常可调），子串不误伤（`tokenCount` 等照常可读）。**目标自起子进程（Web/服务类目标把业务代码跑在子进程，如 dotnet run 起的 app 再 spawn worker/testhost）时**：`debug_processes` 会把当前会话目标的 .NET 子孙进程链标注出来（行尾「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」+ 尾部切换引导）——单活动会话下需先停当前会话（`debug_disconnect`/停断点）再 `debug_attach <childPid>` 单独调试子进程；子进程自己的控制台输出不在 launch 的 `debug_output` 捕获范围。
+
+### UI 自动化（`ui_find` / `ui_invoke` / `ui_wait` / `ui_scroll`——真实操作运行中的 .NET UI 应用）
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `dotnetdebugger_ui_find` | 按 **进程（pid 或进程名）+ 窗口/控件条件**列出 UI 控件（**无视觉**——文本清单：`index/Name/Type/AutoId/Rect/Invoke✓` + **同名成员语义候选**）。`text`=控件 Name 子串忽略大小写（同时匹配 AutomationId）、`automationId` 精确、`type`=UIA 类型名（Button/Text/Edit/List/ListItem/CheckBox/Window…，TextBlock→Text、TextBox→Edit、ListBox→List 别名自动归一）；`title`=窗口标题精确匹配，空=该进程首个顶层窗口；`limit`=条数上限。返回的 **index 供 `ui_invoke`/`ui_scroll` 复用**；语义候选可用 `decompile_member` 看成员实现 |
+| `dotnetdebugger_ui_invoke` | 对控件执行点击（**真实操作，有产线副作用**）：`action=click`（默认，**InvokePattern 语义优先**、不可用时物理左键坐标兜底）/ `rightClick` / `doubleClick`（后两者**无 UIA pattern 一律物理鼠标**——可能触发系统级行为如系统上下文菜单）。`index`=上次 ui_find 返回序号（优先，pid 不匹配/越界会提示重新 ui_find）；或 `name`/`type` 即时唯一定位（歧义返回候选清单请用 index）。返回注明**实际动作**（已 Invoke / 已物理左键 / 已物理右键 / 已物理双击），操作写入 AgentActionLog |
+| `dotnetdebugger_ui_wait` | 只读轮询等待 UI 状态变化/控件出现（不操作、无副作用）：`text`=期望出现的控件文本（Name 子串忽略大小写）；或 `textChangedFrom`+`textChangedTo` **成对**等控件文本从 X 变 Y（点击后的状态确认，如 手动→自动、双击:0→双击:1）。每 200ms 一次到 `timeoutSeconds`（默认 30，1-300）止；**超时返回当前状态提示、不报错** |
+| `dotnetdebugger_ui_scroll` | 在容器（List/ListBox/DataGrid/TextBox…，`index` 或 `name`/`type` 定位，都缺省=窗口中心）上滚动：v1 **物理滚轮**（真实滚动，有产线副作用）`direction=up/down`（默认 down）+ `lines` 行数（默认 3）。目标需可见、窗口尽量在前台；**滚动不改变元素树**——滚完请用 `ui_find` 复查目标控件。操作写入 AgentActionLog |
+
+> UI 自动化用法（**不需活动 debug 会话**，可先操作 UI 到某状态再 attach；需目标进程已运行且是 .NET UI 应用，Windows 桌面会话）：`ui_find`（按进程/类型/文本定位控件，拿 index/语义候选）→ 预埋断点：`debug_breakpoint_set`（想断的成员如切换处理函数 `typeName`+`memberName`，语义候选可直接用）→ `ui_invoke index=N`（点按钮，业务代码自然执行）→ `debug_wait`（断点命中看现场：`debug_stack`/`debug_variables`/`debug_evaluate`）→ `ui_wait textChangedFrom=X textChangedTo=Y`（状态变更二次确认）→ `ui_scroll` 长列表滚动后 `ui_find` 复查。**语义标注**：ui_find 命中控件时对 Name/AutomationId 做**同名成员反查**（类型全名.成员候选，如按钮 AutoId=toggleState → `MainForm.OnToggleState`——反查的是反编译元数据同名成员，非 XAML 绑定还原）；无候选请手动 `decompile_member` 查。**副作用与风险**：ui_invoke/ui_scroll 对产线应用是真实操作（改状态/点按钮/滚动），全部写入 AgentActionLog 供复盘；物理右键/双击/滚轮会把系统级行为带给目标（如系统上下文菜单）；UIA 只在本 Windows 桌面会话可见——远程/服务会话可能读不到目标窗口，物理输入（SendInput）在断开/非交互桌面会被系统拒绝。
 
 ## 命令行调试
 
@@ -349,6 +361,15 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `debug_variables` | `names` + `threadId` | **按名白名单读取（DB2）**：`names` 逗号分隔白名单（空=全量），精确忽略大小写匹配局部/参数展示名——含 PDB 局部名、元数据参数名、无符号名的 `slotN`、异常停点 `$exception` 伪变量；同名跨作用域（locals/arguments 分节）都返回。**最多 50 项**，超限中文拒绝；白名单未知名在返回尾段列出当前帧可用名（零值反馈不静默）。头部注明白名单命中数；命中值照常走 DB1 敏感脱敏。缺省 `threadId=0` 用最近停点线程 |
 | `debug_continue` / `debug_disconnect` | — | 继续执行（异步返回，停点后 `debug_state` 确认）/ 断开会话（目标继续独立运行） |
 
+### UI 自动化工具参数（`ui_find` / `ui_invoke` / `ui_wait` / `ui_scroll`）
+
+| 工具 | 参数 | 说明 |
+| ---- | ---- | ---- |
+| `ui_find` | `process`（必填）+ `title` + `text` + `type` + `automationId` + `limit` | `process`=pid 或进程名子串（空返回提示）；`title`=窗口标题精确匹配，空=该进程首个顶层窗口；`text`=控件 Name 子串忽略大小写（也匹配 AutomationId）；`type`=UIA 类型名（TextBlock→Text 等别名自动归一）；`automationId`=精确匹配；`limit` 返回上限（默认 50，1-500）。返回 `[index] Type Name=… AutoId=… Invoke✓ Rect=(x,y w x h)` 行 + 同名成员语义候选 |
+| `ui_invoke` | `process`（必填）+ `index` + `name` + `type` + `action` | `index`=上次 ui_find 序号（默认 -1=用 name/type）；`name`=控件名/文本子串忽略大小写；`type`=UIA 类型名；`action`=click（默认）/ rightClick / doubleClick。返回注明实际动作；点完用 `ui_wait` 确认状态变化 |
+| `ui_wait` | `process`（必填）+ `text` + `type` + `textChangedFrom` + `textChangedTo` + `timeoutSeconds` | `text` 与 `textChangedFrom/To` 二选一（前者等控件文本出现，后者等文本从 X 变 Y，可配 `type` 限定）；`timeoutSeconds` 最长等待（默认 30，1-300）。命中返回 出现/已变化；超时返回当前状态提示、不报错 |
+| `ui_scroll` | `process`（必填）+ `index` + `name` + `type` + `direction` + `lines` | 容器定位同 ui_invoke（`index` 优先；都缺省=窗口中心）；`direction`=down（默认）/ up；`lines` 行数（默认 3，1-100）。返回注明方向与行数（物理滚轮） |
+
 > 输出捕获仅 `debug_launch` 会话可用（attach 已运行进程无法重定向）；缓冲保留最近 2000 行，被高频日志淹没时用 `filter` 筛关键行。
 
 ## 使用示例
@@ -395,6 +416,11 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 - > 启动 `DebugTarget.exe` 并断点停在某方法入口 → `dotnetdebugger_debug_set` `path=h.N` `value=99` → 返回「路径 h.N 已改：原值 5 → 新值 99」→ `debug_continue` 观察输出出现 `N=99`——「把 X 改成 Y 再跑，看是否复现/消失」的二分定位实验闭环
 - > 引用重定向：`debug_set path=cfg.Current value=cfg.Backup`（指向同帧另一对象）；引用置空：`debug_set path=cfg.Current value=null`。**改值有崩目标进程风险，先 `debug_evaluate` 复核当前值再改，改完 `debug_continue` 观察**。边界提醒：数字用无符号 `0x` 十六进制或带符号十进制；小数/后缀适用于 float/double 目标（整型拒小数/后缀）；**decimal 字段目标 v1 不支持写**（如 `order.Total`，引擎给中文降级提示）；目标引用当前为 null 时重定向无类型校验（无 deref 可比对），须保证源与目标同型
 
+**UI 自动化驱动业务操作（U1 ui_*）**
+
+- > 目标程序（如 CoreMes/被测 WinForms）已开着，先在切换按钮 `ui_find process=CoreMes text=手动 type=Button` → 拿到行 `[3] Button Name=手动 … Invoke✓` 与语义候选（如 `MainViewModel.SwitchAutoStateCommand` 相关同名成员，可用 `decompile_member` 看实现）→ 想断点停在切换代码里：`debug_attach` 附加后用 `debug_breakpoint_set typeName=… memberName=…` 预埋断点 → `ui_invoke process=CoreMes index=3`（真实点击；产线副作用，打 AgentActionLog）→ `debug_wait` 等断点命中看 `debug_stack`/`debug_variables` 现场 → `ui_wait process=CoreMes textChangedFrom=手动 textChangedTo=自动` 确认状态已切（业务闭环）。
+- > 右键/双击/滚动：右键弹菜单目标用 `ui_invoke index=N action=rightClick`（物理右键，可能弹系统上下文菜单）；双击列表项 `action=doubleClick`；长列表滚到底看后面的项用 `ui_scroll process=… name=listBox direction=down lines=5` 后 `ui_find` 复查。物理动作在断开/非交互桌面（远程、服务）会被系统拒绝——需交互桌面会话。
+
 ## 第三方组件
 
 本项目直接依赖的上游开源项目（完整传递依赖见各包的 NuGet Dependencies 一栏）：
@@ -402,6 +428,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | 组件 | 用途 | 来源 / 许可证 |
 |---|---|---|
 | ICSharpCode.Decompiler | 反编译引擎 | [ILSpy](https://github.com/icsharpcode/ilspy)（MIT） |
+| FlaUI.Core / FlaUI.UIA3 | UI 自动化（ui_* 工具，UIA3） | [FlaUI](https://github.com/FlaUI/FlaUI)（MIT） |
 | ClrDebug | ICorDebug 调试封装 | [NuGet: ClrDebug](https://www.nuget.org/packages/ClrDebug) |
 | Microsoft.Diagnostics.DbgShim.win-x64 | 调试启动器（dbgshim） | [dotnet/diagnostics](https://github.com/dotnet/diagnostics)（MIT） |
 | ModelContextProtocol | MCP C# SDK | [csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk)（MIT → Apache-2.0 过渡） |

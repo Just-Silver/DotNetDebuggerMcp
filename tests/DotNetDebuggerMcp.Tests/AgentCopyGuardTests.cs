@@ -29,6 +29,13 @@ public sealed class AgentCopyGuardTests
         { nameof(DebugSetTool.DebugSet), "风险" },                      // 改值副作用风险提示（写内存可能崩溃）
         { nameof(DebugTimelineTool.DebugTimeline), "时间线" },          // 统一时间线语义
         { nameof(DebugObjectTool.DebugObject), "depth" },               // 受控递归下钻参数
+        // U1 ui_* 工具补录（四件套契约：无视觉清单 / 副作用与多键 / 等待超时语义 / 物理滚轮）
+        { nameof(UiTools.UiFind), "控件清单" },                         // ui_find 返回文本控件清单（无视觉）
+        { nameof(UiTools.UiFind), "无视觉" },
+        { nameof(UiTools.UiInvoke), "副作用" },                         // ui_invoke 真实操作副作用提示
+        { nameof(UiTools.UiInvoke), "rightClick" },                     // action 多键（右键/双击物理鼠标）
+        { nameof(UiTools.UiWait), "超时返回当前状态" },                 // ui_wait 超时不报错
+        { nameof(UiTools.UiScroll), "滚轮" },                           // ui_scroll 物理滚轮语义
     };
 
     [Theory]
