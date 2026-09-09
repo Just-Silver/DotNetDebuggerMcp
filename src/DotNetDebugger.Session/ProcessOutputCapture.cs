@@ -42,6 +42,12 @@ public sealed class ProcessOutputCapture
     /// <summary>追加系统标记行（如进程退出），按 stdout 流别记录。</summary>
     public void AppendSystem(string text) => Append(ProcessOutputStream.Stdout, text);
 
+    /// <summary>全量快照（旧→新；debug_timeline 归并用，Tail 保留给既有语义）。</summary>
+    public IReadOnlyList<ProcessOutputLine> Snapshot()
+    {
+        lock (_gate) return _lines.ToArray();
+    }
+
     /// <summary>取尾部至多 maxLines 行（旧→新排序）。filter 非空时只保留文本含该子串（忽略大小写）的行，
     /// 仍从尾部向上取够 maxLines 条命中行——高频噪声日志场景下可筛出关键行（R8①）。</summary>
     public IReadOnlyList<ProcessOutputLine> Tail(int maxLines, string? filter = null)
