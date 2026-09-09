@@ -8,6 +8,13 @@ tests/.dotnetdebugger-client-out/
 tests/TestData/*.dll
 tests/TestData/*.exe
 tests/TestData/*.runtimeconfig.json
+# U1 UiSampleApp（WinForms 测试目标）：只忽略构建产物与拷贝回源码目录的 exe/dll——源码 UiSampleApp.csproj/Program.cs 受版本控制
+tests/TestData/UiSampleApp/bin/
+tests/TestData/UiSampleApp/obj/
+tests/TestData/UiSampleApp/UiSampleApp.exe
+tests/TestData/UiSampleApp/UiSampleApp.dll
+tests/TestData/UiSampleApp/UiSampleApp.runtimeconfig.json
+tests/TestData/UiSampleApp/UiSampleApp.pdb
 
 # superpowers 规划/执行过程产物（计划文档、SDD 工作区），不进版本库
 docs/superpowers/

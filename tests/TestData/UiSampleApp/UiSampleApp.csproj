@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- U1 UI 自动化测试目标：WinForms 最小应用（由 tests/TestData/generate-testdata.ps1 构建并拷贝产物到本目录）。
+       控件名/文本/处理器方法名即 UIA 测试锚点，改动前先看 tests/DotNetDebuggerMcp.Tests/DebugUiToolsTests.cs 的契约。 -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>UiSampleApp</AssemblyName>
+    <RootNamespace>UiSampleApp</RootNamespace>
+  </PropertyGroup>
+
+</Project>
