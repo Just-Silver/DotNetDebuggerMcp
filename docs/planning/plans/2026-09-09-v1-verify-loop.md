@@ -23,8 +23,8 @@
 
 ### Task 0: 工作区/分支准备
 
-- [ ] **Step 1**: 与用户确认实施分支策略。
-- [ ] **Step 2**: `generate-testdata.ps1` 就绪 + Release build 基线绿。
+- [x] **Step 1**: 与用户确认实施分支策略。（控制器已定：本地 master 顺序提交不 push）
+- [x] **Step 2**: `generate-testdata.ps1` 就绪 + Release build 基线绿。
 
 ---
 
@@ -37,15 +37,15 @@
 **Interfaces:**
 - Produces: `VerifyScenario`（`Name`/`Target(CommandLine, WorkingDirectory, Environment)`/`Build?(Project, Configuration, TimeoutSeconds?)`/`Steps: IReadOnlyList<VerifyStep>`）；`VerifyStep` = `BreakpointStep(TypeName, MemberName, Hit=1)` / `ContinueStep(WaitSeconds)` / `AssertStep(AssertKind, 参数)` / `UiStep`(预留) / `SetStep`(预留)；`AssertKind ∈ breakpointHit/evaluate/output/state/noException`。解析失败抛中文 `VerifyFormatException`（含路径/字段名/行号线索）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 合法场景解析（含 build、全部步骤类型、evaluate 参数 path/equals 或 output 参数 contains/stream、assert 引用断点 index）→ 字段断言；非法：文件不存在/JSON 语法错/未知步骤 kind/未知 assert kind/evaluate 缺 equals 或 contains/output 同/断点 step 缺 memberName+typeName → 中文错误含具体字段。Run，Expected: FAIL（类型不存在）。
 
-- [ ] **Step 2: 实现**
+- [x] **Step 2: 实现**
 
 `VerifyScenario.Parse(string path)`（System.Text.Json，`JsonDocument` 手解析以给中文错误/避免多态反序列化复杂度）；校验互斥：`AssertStep.evaluate` 的 `equals` 与 `contains` 二选一（都空或都有报错）；`assert.breakpointHit` 的 `breakpointIndex` 引用场景内断点步骤序号（越界报错）。`UiStep/SetStep` 解析通过但标记 `Requires = "U1"/"W1"`。
 
-- [ ] **Step 3: 运行测试 + 提交**。`git commit -m "feat: VerifyScenario 场景 JSON 模型与解析（V1）"`
+- [x] **Step 3: 运行测试 + 提交**。`git commit 72f9a0a`
 
 ---
 
@@ -58,15 +58,15 @@
 **Interfaces:**
 - Produces: `static Task<BuildOutcome> RunAsync(string project, string configuration, int timeoutSeconds, CancellationToken ct)`；`BuildOutcome(bool Ok, string Summary, int ExitCode)`（Summary 失败含 stderr 尾部，成功含「编译成功」）。`static Task<string?> GetTargetPathAsync(string project, string configuration, CancellationToken ct)`（`dotnet msbuild <project> -p:Configuration=<cfg> -getProperty:TargetPath` → 产物绝对路径；失败返回 null）。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 对一份已知临时 csproj（测试内 `dotnet new console` 到临时目录）RunAsync：成功路径 ExitCode 0 + Summary 含「编译成功」；坏工程（故意语法错源文件）→ Ok=false + Summary 含错误；`GetTargetPathAsync` 成功后返回**以 .exe/.dll 结尾的绝对路径**且 `File.Exists` true；不存在的 csproj → RunAsync Ok=false 中文提示「工程文件不存在」、GetTargetPathAsync 返回 null。Run，Expected: FAIL（类型不存在）。
 
-- [ ] **Step 2: 实现**
+- [x] **Step 2: 实现**
 
 `ProcessStartInfo`（`dotnet build <project> -c <config> --nologo -v m`，WorkingDirectory=工程目录，重定向输出）→ 持续排空到 StringBuilder（保留尾部 max 40 行）+ `WaitForExitAsync(timeout)`；超时 Kill + Ok=false「编译超时」；ExitCode!=0 → 尾部行拼接摘要。`GetTargetPathAsync` = 同款子进程 `dotnet msbuild <project> -p:Configuration=<config> -getProperty:TargetPath` 捕获 stdout 首行非空 trimmed。错误统一中文。
 
-- [ ] **Step 3: 运行测试 + 提交**。`git commit -m "feat: VerifyBuildRunner（默认输出 dotnet build + 排空/超时/轻校验，V1）"`
+- [x] **Step 3: 运行测试 + 提交**。`git commit 0e9b3e5`
 
 ---
 
@@ -80,7 +80,7 @@
 - Consumes: `DebugSessionService.Manager`（`LaunchAndAttachAsync`、`Active`）；`ExpressionEvaluator.EvaluateAsync`（Session，evaluate 断言）；`DebugBreakpointTool` 的成员级定位解析（`ResolveBreakpointTargetAsync`，若 internal 可复用；否则 VerifyService 内自含同款 typeName+memberName → token 解析，走 `active.Session.SetBreakpointAsync`）。
 - Produces: `static Task<string> VerifyAsync(string scenarioPath, CancellationToken ct)`（结果文本）；内部逐步记录进 `Manager.Actions.Log("debug_verify", step, outcome)`。
 
-- [ ] **Step 1: 断言判定（纯内存先测）**
+- [x] **Step 1: 断言判定（纯内存先测）**
 
 每断言 kind 的判定函数（输入 = 场景上下文：命中断点 id 集/`Buffer.LastStop`/evaluate 结果/`Output.Tail`/当前 state/异常计数）返回 bool + 失败理由中文：
 - `breakpointHit(index)`：对应断点步骤在最近停点命中（`LastStop.BreakpointId == bp.Id`）
@@ -90,7 +90,7 @@
 - `noException`：场景期间无 `ExceptionHit` 事件（执行器累计）
 单测用桩上下文直接调判定函数（不碰真实会话）。
 
-- [ ] **Step 2: 执行器（编排序列）**
+- [x] **Step 2: 执行器（编排序列）**
 
 ```
 解析场景 → 无会话则 debug_launch(target)；有会话则先 Close/断开重开（复现快照语义）
@@ -109,7 +109,7 @@ for step in steps:
 结束：目标继续跑或 disconnect？——v1 结束即 Close（disconnect 目标独立运行），返回 PASS/FAIL 汇总
 ```
 
-- [ ] **Step 3: 验证 + 提交**：Task1/2 单测绿 + 桩断言单测。`git commit -m "feat: VerifyService 执行器（步骤翻译+断言+ fail-fast，V1）"`
+- [x] **Step 3: 验证 + 提交**：Task1/2 单测绿 + 桩断言单测。`git commit e281a4e`
 
 ---
 
@@ -120,7 +120,7 @@ for step in steps:
 - Modify: `README.md`、`CHANGELOG.md`
 - Test: `tests/DotNetDebuggerMcp.Tests/DebugVerifyToolTests.cs`
 
-- [ ] **Step 1: 工具**
+- [x] **Step 1: 工具**
 
 ```csharp
 [McpServerTool]
@@ -131,7 +131,7 @@ public static async Task<string> DebugVerify(
 ```
 空/文件不存在/解析错 → 中文；执行结果原样返回 VerifyService。Actions.Log 在 VerifyService 内逐步打。
 
-- [ ] **Step 2: e2e（真实闭环）**
+- [x] **Step 2: e2e（真实闭环）**
 
 `DebugVerifyToolTests`：用 DebugTarget 造可复现场景（不需要改 DebugTarget 源码也能跑纯断点+output+evaluate 版：场景 = breakpoint Work 入口 → continue → assert evaluate `n`==传入值 → output contains `[DebugTarget] done`）；场景文件写临时目录，`debug_verify` → PASS；再写一个必然 FAIL 场景（evaluate 期望错值/断点永不命中+超时）→ FAIL 文案含失败步骤。build 自动拿产物冒烟：临时 console 工程（`dotnet new console`）→ 场景含 build + commandLine 写 `MyApp.exe`（只文件名）→ verify build→自动拿 TargetPath 启动→ output 断言 PASS；错误源码 → FAIL 含编译摘要；commandLine 文件名与产物不一致 → 中文提示。Run 定向 + 宿主全量 + Client。
 README：工具表 + 场景 JSON 示例（§3.1 样例简化版）+ 风险/边界（build 需本机 SDK、产物自动定位说明、无源码场景不写 build）。CHANGELOG 记 debug_verify。V4：ContractData 加 `debug_verify`（「场景」/「PASS」）片段。
@@ -141,8 +141,8 @@ README：工具表 + 场景 JSON 示例（§3.1 样例简化版）+ 风险/边�
 
 ## 收尾
 
-- [ ] Release build + 宿主全量 + Client。
-- [ ] 核对 `src/DotNetDebuggerMcp/TODO.md` V1 状态；`docs/planning/specs/README.md` 收录 V1 spec 行。
+- [x] Release build + 宿主全量（611 通过/3 环境跳过）+ Client（全部场景通过）。
+- [x] 核对 `src/DotNetDebuggerMcp/TODO.md` V1 状态（标记已完成）；`docs/planning/specs/README.md` 收录 V1 spec 行（状态已实施）。
 - [ ] ui.*/set 步骤在 U1/W1 落地后按预留契约补充实现（后续批次）。
 
 ## Self-Review
@@ -151,3 +151,4 @@ README：工具表 + 场景 JSON 示例（§3.1 样例简化版）+ 风险/边�
 - **占位符**：无 TBD；步骤翻译所需内部定位解析若 `ResolveBreakpointTargetAsync` 不可复用则以自含解析补足（Task3 注明双路径）。
 - **类型一致**：`VerifyScenario`/`VerifyStep` Task1 定义 Task3/4 用；`BuildOutcome`/`GetTargetPathAsync` Task2 定义 Task3 用；`VerifyAsync` Task3 定义 Task4 用。
 - **风险点已标**：build/msbuild 与 debug_launch 子进程排空（防管道阻塞）；build 失败绝不启动旧产物；commandLine 文件名与产物不一致提示；场景 fail-fast 停止后目标断开（disconnect 语义）；多轮复验每次重开快照会话。
+

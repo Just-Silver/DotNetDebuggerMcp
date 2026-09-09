@@ -449,7 +449,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 - `build` 分支：只重编场景指定工程、**不设置 OutputPath**，产物用项目默认输出路径经 `-getProperty:TargetPath` 自动拿取（SDK 现算，agent 不写路径/TFM）；`commandLine` 首段写**工程入口文件名**（如 `CoreMes.exe`，须与编译产物同名，忽略扩展名/大小写）+ 参数——不一致或 build 失败即 FAIL（绝不启动旧产物）。
 - 无 `build`：`commandLine` 用完整路径或相对 server 工作目录（不搜 PATH，同 `debug_launch`）；目标文件不存在 → 中文提示。
 - 断言语义：`breakpointHit` 看最近停点是否命中该断点；`evaluate` equals=精确（字符串比字面值，数字/布尔比展示文本，大小写敏感）、contains=展示文本含子串（忽略大小写，也适用于日志串）；`output` **只支持 contains**（`stream`=out/err，缺省全部）；`state` `expect` 可逗号分隔（任一命中即过）；`noException` 场景期间无异常停点。
-- 边界与风险：build 需本机 SDK；每轮复验重新编译/重启目标（有 build 时是唯一真实闭环）；`ui`/`set` 步骤在 U1/W1 落地前报告未就绪；**目标 exe/产物路径含空格 v1 不支持**（启动器按空格切分命令——build 产物落在含空格目录会返回中文边界提示，请用无空格输出目录）；目标输出断言基于 launch 捕获缓冲，进程自然退出后立即断言可能有极短竞态（输出行刚送达）——日志密集应用建议先断点停住再断输出。
+- 边界与风险：build 需本机 SDK；**无源码的目标（黑盒 dll/exe）不写 build 字段**——直接 `commandLine` 启动，build 只适用于你有源码可改的工程（产物自动定位基于项目默认输出）；每轮复验重新编译/重启目标（有 build 时是唯一真实闭环）；`ui`/`set` 步骤在 U1/W1 落地前报告未就绪；**目标 exe/产物路径含空格 v1 不支持**（启动器按空格切分命令——build 产物落在含空格目录会返回中文边界提示，请用无空格输出目录）；目标输出断言基于 launch 捕获缓冲，进程自然退出后立即断言可能有极短竞态（输出行刚送达）——日志密集应用建议先断点停住再断输出。
 
 ## 第三方组件
 
