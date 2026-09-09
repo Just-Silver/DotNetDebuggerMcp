@@ -1,4 +1,5 @@
 using DotNetDebugger.Engine.Models;
+using DotNetDebuggerMcp.Services;
 using DotNetDebuggerMcp.Tools.Debugger;
 using Xunit;
 
@@ -90,3 +91,4 @@ public sealed class DebugRedactionOutletTests
         Assert.Contains("[arguments] n = 5", text);
     }
 }
+

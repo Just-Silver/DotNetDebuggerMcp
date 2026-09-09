@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace DotNetDebuggerMcp.Tools.Debugger;
+namespace DotNetDebuggerMcp.Services;
 
 /// <summary>
 /// DB1 变量敏感脱敏助手（宿主渲染层，纯函数）：读值出口展示文本按 变量/字段名（归一化 exact-match）+

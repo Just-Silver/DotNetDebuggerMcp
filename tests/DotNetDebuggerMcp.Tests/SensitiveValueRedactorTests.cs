@@ -1,4 +1,4 @@
-using DotNetDebuggerMcp.Tools.Debugger;
+using DotNetDebuggerMcp.Services;
 using Xunit;
 
 namespace DotNetDebuggerMcp.Tests;
@@ -209,3 +209,4 @@ public sealed class SensitiveValueRedactorTests
         Assert.False(redacted);
     }
 }
+

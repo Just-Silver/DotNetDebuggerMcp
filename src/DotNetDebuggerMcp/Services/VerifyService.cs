@@ -456,13 +456,16 @@ internal static class VerifyAssertions
                     var actual = raw ?? display;
                     if (string.Equals(actual, step.EqualsText, StringComparison.Ordinal))
                         return (true, "");
-                    return (false, $"表达式 \"{step.Path}\" 实际值 {Quote(actual)}，期望 equals {Quote(step.EqualsText)}。");
+                    // DB1：失败理由中的实际值走脱敏（表达式末段标识符敏感/内容形态敏感都不外泄原始值）
+                    var (safeActual, _) = SensitiveValueRedactor.RedactExpression(step.Path, actual);
+                    return (false, $"表达式 \"{step.Path}\" 实际值 {Quote(safeActual)}，期望 equals {Quote(step.EqualsText)}。");
                 }
                 // contains：对 evaluate 展示文本做子串（字符串值的展示带引号也能命中内容子串）
                 var haystack = eval.Display ?? "";
                 if (haystack.Contains(step.ContainsText, StringComparison.OrdinalIgnoreCase))
                     return (true, "");
-                return (false, $"表达式 \"{step.Path}\" 求值展示 {Quote(haystack)} 不含 contains {Quote(step.ContainsText)}。");
+                var (safeHaystack, _) = SensitiveValueRedactor.RedactExpression(step.Path, haystack);
+                return (false, $"表达式 \"{step.Path}\" 求值展示 {Quote(safeHaystack)} 不含 contains {Quote(step.ContainsText)}。");
             }
             case VerifyAssertKind.Output:
             {
