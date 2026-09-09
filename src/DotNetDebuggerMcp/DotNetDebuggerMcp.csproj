@@ -20,6 +20,8 @@
     <PackageId>DotNetDebuggerMcp</PackageId>
     <Version>1.7.0</Version>
     <ToolCommandName>DotNetDebuggerMcp</ToolCommandName>
+    <!-- U1 UI 自动化：FlaUI 5.0（版本号集中一处；见下方 FlaUI 引用段注释的原理说明） -->
+    <FlaUIVersion>5.0.0</FlaUIVersion>
     <Authors>Just-Silver</Authors>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Just-Silver/DotNetDebuggerMcp.git</RepositoryUrl>
@@ -41,6 +43,22 @@
     <PackageReference Include="McMaster.Extensions.Hosting.CommandLine" Version="5.1.0" />
     <!-- Microsoft.Extensions.Hosting 不直引：Web SDK 已带 AspNetCore.App 框架引用（内含 Hosting，NU1510） -->
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+  </ItemGroup>
+
+  <!-- U1 UI 自动化（FlaUI）：PackAsTool 拒绝 platform-qualified TFM，宿主必须保持 net10.0；
+       FlaUI 5.0 只发布 net8.0-windows7.0 现代档，net10.0 无法经 PackageReference 消费该资产
+       （平台不匹配，只能靠 AssetTargetFallback/压制 NU1701）→ PackageDownload 把 FlaUI 当 path-only
+       输入、HintPath 显式绑定兼容程序集（Private=true 保证 dll 随 tool 输出）。
+       另显式引用 FlaUI.UIA3 依赖的 Interop.UIAutomationClient 与 System.Management（本仓库无中央包管理，故带版本）。 -->
+  <ItemGroup>
+    <PackageDownload Include="FlaUI.Core" Version="[$(FlaUIVersion)]" />
+    <PackageDownload Include="FlaUI.UIA3" Version="[$(FlaUIVersion)]" />
+    <PackageReference Include="Interop.UIAutomationClient" Version="10.19041.0" />
+    <PackageReference Include="System.Management" Version="10.0.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="FlaUI.Core" HintPath="$(NuGetPackageRoot)flaui.core\$(FlaUIVersion)\lib\net8.0-windows7.0\FlaUI.Core.dll" Private="true" />
+    <Reference Include="FlaUI.UIA3" HintPath="$(NuGetPackageRoot)flaui.uia3\$(FlaUIVersion)\lib\net8.0-windows7.0\FlaUI.UIA3.dll" Private="true" />
   </ItemGroup>
 
   <ItemGroup>
