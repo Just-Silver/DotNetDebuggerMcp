@@ -22,26 +22,29 @@
 
 ### Task 0: 工作区准备 + spike 实测（三分支决策门）
 
-- [ ] **Step 1**: 与用户确认实施分支策略 + 说明本计划执行会先跑 spike（真实 attach DebugTarget，耗时秒级）。
-- [ ] **Step 2**: `generate-testdata.ps1` 就绪；给 DebugTarget 追加写场景锚点（append 不改既有）：`ValueProbe.Run(ValueHolder h, int[] arr)`——线程/回调里 `h.Counter++`、`arr[2]=999`，Main 加 `probe-value` 分支。
+- [x] **Step 1**: 与用户确认实施分支策略 + 说明本计划执行会先跑 spike（真实 attach DebugTarget，耗时秒级）。（宿主会话为断开桌面无交互 UI，spike 不涉及物理输入，可正常跑 Engine attach 测试——subagent 执行已确认。）
+- [x] **Step 2**: `generate-testdata.ps1` 就绪；给 DebugTarget 追加写场景锚点（append 不改既有）：`ValueProbe.Run(ValueHolder h, int[] arr)`——`h.Counter++`、`arr[2]=999`，Main 加 `probe-value` 分支（单行紧凑风格，UTF-16LE 保编码；**走降级后已回退该样本**——Task0 Step4 规定样本仅在 A/B 分支提交）。
 
-- [ ] **Step 3: 写 spike 测试（临时 `tests/DotNetDebugger.Engine.Tests/DataBreakpointSpikeTests.cs`）**
+- [x] **Step 3: spike 实测**（2026-09-10 真机跑通，临时 `DataBreakpointSpikeTests` 已删；证据文件留档 `C:\Users\13178\AppData\Local\Temp\opencode\sdd\w3-data-breakpoint\spike-evidence.txt`）：
 
-骨架复刻 `EvaluatePathTests`（attach → 断点 `ValueProbe.Run` 入口 → 停）。spike 三问各自一测（不 assert 硬结论，打印 `[spike]` 行收集）：
-```csharp
-// 问1 A-局部：停点 GetLocalVariable 拿 int 局部 → CreateBreakpoint() → continue → 改值 → 是否触发/触发条件是什么
-// 问2 A-字段：停点 ReadPathValue 定位 h.Counter → CreateBreakpoint() → continue → 回调改值 → 是否触发（字段值对象是否活引用）
-// 问3 B-创建端：查 ICorDebugProcess/ICorDebugProcess5/新接口是否暴露数据断点创建（ClrDebug 封装 grep）；回调节点是否只在 A 触发后出现
+```text
+问1 A-局部（入口停点 GetLocalVariable 拿活 I4 局部，地址 0xD9EABFE7A0）
+   CreateBreakpoint() → DebugException HRESULT=0x80004001 (E_NOTIMPL)
+问2 A-字段（入口停点 GetFieldValue 拿活 h.Counter I4 字段值，真实地址）
+   CreateBreakpoint() → DebugException HRESULT=0x80004001 (E_NOTIMPL)
+问3 B-创建端（attach+继续+写入窗口全程观察）
+   OnDataBreakpoint 回调零触发；ClrDebug 全 ICorDebugProcess*（1-11）grep 无数据断点创建方法
 ```
-Run `dotnet test --project tests/DotNetDebugger.Engine.Tests/... --filter DataBreakpointSpike -- --output Detailed`。
 
-- [ ] **Step 4: 记录决策，走对应分支**
+- [x] **Step 4: 记录决策，走对应分支**
 
-按实测输出更新本计划/`spec` 决策注：**A 可行** → Task A；**B 可行且创建端找到** → Task B；**A/B 均不可行** → Task D（降级收尾）。删除临时 spike 测试（结论断言并入正式测试）。提交 spike 结论 + DebugTarget 样本（若走 A/B）。
+**决策（2026-09-10）**：A 恒 E_NOTIMPL（与 .NET 源码 `src/coreclr/debug/di/divalue.cpp` `CordbValue::CreateBreakpoint => return E_NOTIMPL` 一致）、B 无创建端且 OnDataBreakpoint 配套硬件寄存器机制（VS 自有）——**A/B 均不可行 → 走 Task D 降级**。临时 spike 测试已删除，实测结论写入 spec §2「结论」；DebugTarget 样本与 generate-testdata.ps1 改动已回退（Task0 Step4：样本仅在 A/B 分支提交）。
 
 ---
 
 ### Task A（A 分支：ValueBreakpoint 版）
+
+> **未走此分支**（2026-09-10 spike：A `CreateBreakpoint()` 运行时恒 E_NOTIMPL，不可行）。以下为计划写死的预案，留档不实施。
 
 **Files:**
 - Modify: `src/DotNetDebugger.Engine/Engine/BreakpointManager.cs`（数据断点登记表：dataPath→值对象、失效清理）
@@ -63,6 +66,8 @@ Run `dotnet test --project tests/DotNetDebugger.Engine.Tests/... --filter DataBr
 
 ### Task B（B 分支：现代 DataBreakpoint 创建端）
 
+> **未走此分支**（2026-09-10 spike：B 无 ICorDebug 创建端，OnDataBreakpoint 为硬件寄存器通知非创建口，归入降级）。以下为计划写死的预案，留档不实施。
+
 **Files:** 同 A（创建/登记路径换成 spike 找到的创建端 API）。
 
 - [ ] **Step 1**: 按 spike 问3结论实现创建端封装（ClrDebug 有封装则用；无封装则 P/Invoke/COM 新接口手封装——以 spike 查证为准；**若最终确认无可用创建端 → 归入降级 Task D**）。
@@ -72,16 +77,16 @@ Run `dotnet test --project tests/DotNetDebugger.Engine.Tests/... --filter DataBr
 
 ### Task D（降级分支：说明 + 转 ROADMAP，零 Engine 代码）
 
-- [ ] **Step 1**: 把 spike 实测结论（A 为何不可行：值对象存活/触发语义局限；B 为何无创建端）写入 spec §2「结论」与根 README（数据断点暂不支持 + 局限 + 「已知写入点用条件断点比较（如 evaluate i==期望 → 停）」指引）。
-- [ ] **Step 2**: `docs/ROADMAP.md` 记「W3 数据断点——不可行结论 + 触发条件（若未来 ICorDebug 暴露创建端再评估）」；宿主 TODO W3 状态 → 已评估转 ROADMAP。
-- [ ] **Step 3**: 提交（文档），无代码。计划完成。
+- [x] **Step 1**: spike 实测结论写入 spec §2「结论」与根 README（数据断点暂不支持 + 局限 + 「已知写入点用条件断点比较（如 evaluate i==期望 → 停）」指引）。
+- [x] **Step 2**: `docs/ROADMAP.md` 记「W3 数据断点——不可行结论 + 触发条件（若未来 ICorDebug 暴露创建端再评估）」；宿主 TODO W3 状态 → 已评估转 ROADMAP。
+- [x] **Step 3**: 提交（文档），无代码。计划完成。
 
 ---
 
 ## 收尾（任意分支）
 
-- [ ] 若 A/B：Engine 全量 + 宿主全量 + Client + README/CHANGELOG/V4 同步；若 D：文档收尾即可。
-- [ ] 核对 `src/DotNetDebuggerMcp/TODO.md` W3 状态（实施完成 或 转 ROADMAP）；`docs/planning/specs/README.md` 收录 W3 spec 行。
+- [x] 若 A/B：Engine 全量 + 宿主全量 + Client + README/CHANGELOG/V4 同步；若 D：文档收尾即可。**2026-09-10 走 Task D**：spec §2 结论 + 根 README 指引 + ROADMAP 条目 + 宿主 TODO W3 状态=已评估转 ROADMAP（零代码，无需引擎/宿主测试；spike 期间 DebugTarget 样本已回退，generate-testdata.ps1 复原）。
+- [x] 核对 `src/DotNetDebuggerMcp/TODO.md` W3 状态（已评估转 ROADMAP）；`docs/planning/specs/README.md` 收录 W3 spec 行（已收录，状态列更新为降级定案）。
 
 ## Self-Review
 

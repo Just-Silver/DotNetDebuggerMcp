@@ -6,7 +6,7 @@
 
 ## 执行推进顺序总览（2026-09-08 排定，按批推进）
 
-> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并补 CHANGELOG `[Unreleased]` 段（下一批工具落地时同步）。**2026-09-09：全部待办（W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3）已逐项拍板转正 spec + 实施计划就绪**（`docs/planning/plans/2026-09-09-*.md`），按批次审查后实施；W2/V2 已转 ROADMAP 不在待办。**2026-09-10：W1/V3/DB1/D1/D2/DB2/V4/U1/V1 已实施**（见下表状态），W3 待后续批次。
+> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并补 CHANGELOG `[Unreleased]` 段（下一批工具落地时同步）。**2026-09-09：全部待办（W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3）已逐项拍板转正 spec + 实施计划就绪**（`docs/planning/plans/2026-09-09-*.md`），按批次审查后实施；W2/V2 已转 ROADMAP 不在待办。**2026-09-10：W1/V3/DB1/D1/D2/DB2/V4/U1/V1 已实施**（见下表状态）；**W3 数据断点 spike 实测定案不可行（A `CreateBreakpoint` 恒 E_NOTIMPL / B 无创建端）→ 按计划降级转 ROADMAP（2026-09-10，零 Engine 代码，见下表 P4 行）**。
 
 | 批次 | 项 | spec | 状态 | 依赖 |
 |---|---|---|---|---|
@@ -19,7 +19,7 @@
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已完成**（2026-09-10 实施：宿主测试 `AgentCopyGuardTests` 反射读 debug_* 工具 `[Description]` 断言关键引导片段（7 计划对 + W1/V3/D1 已落地工具补录 4 行），只断片段 Contains 不挂 AppServices 串行；`DebugMcpToolsTests` 既有 e2e 补 wait「最近停点」/step「debug_wait」返回文案断言（launch「工作目录」/异常 `$exception` 断言先前批次已带）；负向验证：人为删 DebugStep 描述「debug_wait」→ 断言即红。Engine/Session/宿主零代码改动，纯测试护栏） | 随新工具同批补 |
 | **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | **已完成**（2026-09-10 实施：宿主 `UiAutomationService`（FlaUI UIA3 单实例 + 5s 双层超时护栏/串行锁/index 缓存/Invoke 优先+物理左键兜底/rightClick·doubleClick·Scroll 物理鼠标）+ `UiSemanticResolver`（PEReader 成员反查，apphost 同名 dll 兜底）+ `ui_find`/`ui_invoke(action)`/`ui_wait`/`ui_scroll` 四工具 + WinForms `UiSampleApp` 测试目标（generate-testdata.ps1 产出，源码入库）+ README/CHANGELOG/V4 语料补录；Engine/Session 零改动；本地 commit 539a3fb/99e0b41/7a5bf0d/3289fb6） | — |
 | | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | **已完成**（2026-09-10 实施：宿主 `VerifyScenario`（JSON 模型+中文解析）+ `VerifyBuildRunner`（dotnet build 默认输出 + `-getProperty:TargetPath` 产物自动拿取）+ `VerifyService`（步骤翻译=同进程直调 Session、断言原语、fail-fast、AgentActionLog）+ `debug_verify` 工具；e2e：DebugTarget 纯断点+evaluate+output+state PASS / 期望错值·断点永不命中 FAIL / build 自动拿产物 PASS·坏工程编译摘要 FAIL·文件名不一致中文；README/CHANGELOG/V4 语料补录；SensitiveValueRedactor 移入 Services 共享层；Engine/Session 零改动；本地 commit 72f9a0a/0e9b3e5/e281a4e 等） | — |
-| **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | **已拍板+计划就绪**（2026-09-09：spike Task0 三分支写死/breakpoint_set dataPath/降级=说明+ROADMAP；计划 `plans/2026-09-09-w3-data-breakpoint.md`） | spike 在 Task0 |
+| **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | **已评估转 ROADMAP**（2026-09-10 spike 实测定案：A `CreateBreakpoint()` 恒 E_NOTIMPL（运行时未实现）、B 无创建端 → A/B 均不可行，按计划 TaskD 降级零 Engine 代码；spec §2 结论 + 根 README 指引 + ROADMAP 条目；计划 `plans/2026-09-09-w3-data-breakpoint.md` Task0/TaskD） | spike 已实测 |
 | **远期** | **W2 SetIP** | `2026-09-08-w2-set-ip.md` | **已转 ROADMAP（2026-09-08）** | — |
 | | **V2 崩溃 dump** | `2026-09-08-v2-crash-dump.md` | **转远期（2026-09-08 决策，见 ROADMAP）**；退出码增量①随 V3 | V3 |
 
@@ -37,7 +37,7 @@
 
 ### 观察/假设/验证 环节
 
-- [ ] **W3 数据断点（值变化即停）**（Engine+Session｜大，spike 前置）——**能力**：字段/局部变量值变化时停下。**spec 草案**：`docs/planning/specs/2026-09-08-w3-data-breakpoint.md`。**已查证**：ClrDebug 有两条相关路径——A `CorDebugValue.CreateBreakpoint()`（ValueBreakpoint，挂值对象，受值对象存活/GC/帧约束）+ B `OnDataBreakpoint` 回调（Callback4 已封装）但**未搜到创建端 API**。**spike 必答**：A 对栈上局部是否可行/对对象字段是否有效；B 的创建入口是否在 ICorDebug 新接口或诊断口；两者是否 A 触发→B 通知。**结论三选一**：A 可行（ValueBreakpoint 版）/B 可行（现代版）/不可行→降级条件断点+转 ROADMAP。**立项前置 = spike**。
+- [ ] **W3 数据断点（值变化即停）**（Engine+Session｜大，spike 前置）——**能力**：字段/局部变量值变化时停下。**spec 草案**：`docs/planning/specs/2026-09-08-w3-data-breakpoint.md`。**已查证**：ClrDebug 有两条相关路径——A `CorDebugValue.CreateBreakpoint()`（ValueBreakpoint，挂值对象）+ B `OnDataBreakpoint` 回调（Callback4 已封装）但**未搜到创建端 API**。**已评估转 ROADMAP（2026-09-10 spike 实测定案）**：真实 attach 停点对活局部/活字段值对象调 `CreateBreakpoint()` 恒抛 `E_NOTIMPL`（.NET 源码 `divalue.cpp CordbValue::CreateBreakpoint => return E_NOTIMPL`，非值对象存活问题）；B 无创建端、回调全程零触发（配套硬件寄存器机制，VS 自有非公开口）。**结论**：A/B 均不可行 → 按计划 TaskD 降级，**不写 Engine/宿主代码**；spec §2 结论 + 根 README 指引 + ROADMAP 条目；「字段被莫名改错」场景用已知写入点条件断点替代。**触发条件（若未来再评估）**：ICorDebug/诊断口暴露数据断点创建 API。
 
 ### 修复/复验 环节（agent「改完 bug 确认修好」的最后一跳）
 
@@ -51,7 +51,7 @@
 
 ### 已评估关闭/远期（防重复立项，一行结论）
 
-- **func-eval 主动调用业务方法** = **关闭**（I 项结论：async/UI/外设方法 func-eval 必死锁；纯函数触发需求未见）。**完整 SetIP/强制返回** = 远期（W2，已转 ROADMAP 2026-09-08，查证结论/触发条件随条目移入）。**崩溃自动 dump** = **远期（2026-09-08 决策）**：agent 代价大（注入 `DOTNET_DbgEnableMiniDump` 改环境）+ spike 不确定，保留退出码/崩溃判定小增量（随 V3），完整 dump 见 ROADMAP。**ClrMD live 内存分析** = ROADMAP 已有（dump 事后分析，live 会话内与 ICorDebug 冲突）。**多调试会话并行** = ROADMAP 已有（Engine 实测干扰）。
+- **func-eval 主动调用业务方法** = **关闭**（I 项结论：async/UI/外设方法 func-eval 必死锁；纯函数触发需求未见）。**完整 SetIP/强制返回** = 远期（W2，已转 ROADMAP 2026-09-08，查证结论/触发条件随条目移入）。**崩溃自动 dump** = **远期（2026-09-08 决策）**：agent 代价大（注入 `DOTNET_DbgEnableMiniDump` 改环境）+ spike 不确定，保留退出码/崩溃判定小增量（随 V3），完整 dump 见 ROADMAP。**数据断点（W3）** = **远期（2026-09-10 spike 实测转 ROADMAP）**：A `CorDebugValue.CreateBreakpoint` 恒 E_NOTIMPL、B 无 ICorDebug 创建端——A/B 均不可行，用已知写入点条件断点替代，详见 ROADMAP「近期评估转远期」节。**ClrMD live 内存分析** = ROADMAP 已有（dump 事后分析，live 会话内与 ICorDebug 冲突）。**多调试会话并行** = ROADMAP 已有（Engine 实测干扰）。
 
 ## DebugMCP 调研可借鉴点（2026-09-08，源码实读 microsoft/DebugMCP）
 
