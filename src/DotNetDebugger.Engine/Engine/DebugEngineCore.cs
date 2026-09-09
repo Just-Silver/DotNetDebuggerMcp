@@ -1,3 +1,4 @@
+using System.Numerics;
 using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
@@ -458,6 +459,15 @@ public sealed class DebugEngineCore : IAsyncDisposable
     public Task<DebugEvalResult> EvaluatePathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, CancellationToken ct = default)
         => PostAsyncResult(() => ReadPathValue(threadId, rootName, segments), ct);
 
+    /// <summary>
+    /// 按路径写值（W1 debug_set 引擎底座，停顿时有效，命令泵内同步执行）：与 EvaluatePathAsync 同款路径解析，
+    /// 定位到末段值对象后按 DebugWriteValue 分派——Null=引用置空 / Scalar=值类型目标按目标元素类型转换写 /
+    /// CopyPath=引用重定向到源路径对象。返回写前/写后回显；失败抛中文提示异常（含 readonly/类型/降级）。
+    /// 写目标进程内存有崩目标风险（宿主工具面明示），只写读链路已证明可定位的目标。
+    /// </summary>
+    public Task<DebugWriteResult> SetPathValueAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, DebugWriteValue value, CancellationToken ct = default)
+        => PostAsyncResult(() => WritePathValue(threadId, rootName, segments, value), ct);
+
     /// <summary>GetVariablesAsync 的同步实现（命令泵 MTA 线程内调用；P5 trace 快照路径复用）。</summary>
     private IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>> ReadVariablesForThread(int threadId)
     {
@@ -767,16 +777,30 @@ public sealed class DebugEngineCore : IAsyncDisposable
         public sealed record ScalarObj(object Value, string Display, string TypeName) : EvalValue;
     }
 
-    /// <summary>路径求值主体：根解析 + 逐段解引用（段号从 1 计，报错定位到段）。</summary>
+    /// <summary>路径求值主体：线程查找 + 解析到末段 + 转结果。</summary>
     private DebugEvalResult ReadPathValue(int threadId, string rootName, IReadOnlyList<PathSegment> segments)
     {
         if (_process is null) throw new InvalidOperationException("无被调试进程。");
+        var thread = FindThread(threadId) ?? throw new InvalidOperationException($"找不到线程 threadId={threadId}。");
+        return ToEvalResult(ResolvePathValue(thread, rootName, segments));
+    }
+
+    /// <summary>按线程 id 找线程（命令泵/回调线程共用；读/写路径复用的线程定位）。</summary>
+    private CorDebugThread? FindThread(int threadId)
+    {
+        if (_process is null) return null;
+        foreach (var t in _process.Threads) { if (t.Id == threadId) return t; }
+        return null;
+    }
+
+    /// <summary>
+    /// 路径解析到末段求值中间态（读/写共用底座，不含 ToEvalResult 转换）：根解析 + 逐段解引用
+    /// （段号从 1 计，报错定位到段）。进程须已停住（调用方保证：停点态 / 泵内同一停住现场）。
+    /// </summary>
+    private EvalValue ResolvePathValue(CorDebugThread thread, string rootName, IReadOnlyList<PathSegment> segments)
+    {
         if (segments.Count > PathSegment.MaxSegments)
             throw new InvalidOperationException($"路径段数 {segments.Count} 超上限 {PathSegment.MaxSegments}（防失控长链）。");
-        CorDebugThread? thread = null;
-        foreach (var t in _process.Threads) { if (t.Id == threadId) { thread = t; break; } }
-        if (thread is null) throw new InvalidOperationException($"找不到线程 threadId={threadId}。");
-
         EvalValue current = new EvalValue.Raw(FindRootValue(thread, rootName));
         for (var i = 0; i < segments.Count; i++)
         {
@@ -787,7 +811,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
                 _ => throw new InvalidOperationException("不支持的路径段类型。"),
             };
         }
-        return ToEvalResult(current);
+        return current;
     }
 
     /// <summary>根解析：$exception 伪根 → locals/arguments 按名匹配（与 GetVariablesAsync 同源）→ slotN 回退。</summary>
@@ -1083,6 +1107,263 @@ public sealed class DebugEngineCore : IAsyncDisposable
         CorElementType.R8 => "System.Double",
         _ => null,
     };
+
+    // ---- 路径写值（W1 debug_set；命令泵内同步写，进程停住态。写进程内存有崩目标风险——调用方明示，只写读链路已证明可定位的目标） ----
+
+    /// <summary>写路径主体：线程查找 → readonly 前置拒绝 → 解析到末段（读语义）→ 写前原值回显 → 分派写 → 写后重读回显。</summary>
+    private DebugWriteResult WritePathValue(int threadId, string rootName, IReadOnlyList<PathSegment> segments, DebugWriteValue value)
+    {
+        if (_process is null) throw new InvalidOperationException("无被调试进程。");
+        if (segments.Count > PathSegment.MaxSegments)
+            throw new InvalidOperationException($"路径段数 {segments.Count} 超上限 {PathSegment.MaxSegments}（防失控长链）。");
+        var thread = FindThread(threadId) ?? throw new InvalidOperationException($"找不到线程 threadId={threadId}。");
+
+        // 字段段末段先查 readonly/const（局部/参数/数组元素无 readonly 概念，不查）
+        EnforceFieldWritable(thread, rootName, segments);
+
+        var target = ResolvePathValue(thread, rootName, segments); // 定位到末段（读语义）
+        var old = ToEvalResult(target);                            // 写前原值回显
+        var raw = target switch
+        {
+            EvalValue.Raw r => r.Value,
+            EvalValue.ScalarObj s => throw new InvalidOperationException(
+                $"路径 {Describe(rootName, segments)} 末段是引擎合成标量（字符串索引单字符），不可写；请改写到数组元素或字段目标。"),
+            _ => throw new InvalidOperationException("不支持的写目标。"),
+        };
+        WriteTerminal(thread, raw, value, rootName, segments);     // 末段分派
+        var after = ToEvalResult(ResolvePathValue(thread, rootName, segments)); // 写后重读（校验 + 新值回显）
+        return new DebugWriteResult(old.Display, after.Display, old.TypeName);
+    }
+
+    /// <summary>路径展示（报错/回显用）：root.field[0]…</summary>
+    private static string Describe(string root, IReadOnlyList<PathSegment> segments)
+        => root + string.Concat(segments.Select(s => s switch
+        {
+            PathSegment.Field f => "." + f.Name,
+            PathSegment.Index i => $"[{i.Position}]",
+            _ => "",
+        }));
+
+    /// <summary>
+    /// readonly/const 拒绝：末段为字段时，重解析字段声明者并从模块元数据读 FieldAttributes.InitOnly。
+    /// 命中 → 抛中文拒绝（v1 不做 EnC 式忽略只读写）。
+    /// </summary>
+    private void EnforceFieldWritable(CorDebugThread thread, string rootName, IReadOnlyList<PathSegment> segments)
+    {
+        if (segments.Count == 0 || segments[^1] is not PathSegment.Field f) return;
+        var segNo = segments.Count;
+        var segText = $".{f.Name}";
+        EvalValue current = new EvalValue.Raw(FindRootValue(thread, rootName));
+        for (var i = 0; i < segments.Count - 1; i++)
+        {
+            current = segments[i] switch
+            {
+                PathSegment.Field p => ReadFieldSegment(current, i + 1, p.Name),
+                PathSegment.Index idx => ReadIndexSegment(current, i + 1, idx.Position),
+                _ => throw new InvalidOperationException("不支持的路径段类型。"),
+            };
+        }
+        var obj = DerefToObject(current is EvalValue.Raw r ? r.Value
+            : throw new InvalidOperationException($"第 {segNo} 段 {segText}：标量值无字段可取。"), segNo, segText);
+        // 与 ReadFieldSegment 同款候选匹配（属性约定降级），命中同一字段即查其声明模块
+        foreach (var candidate in FieldCandidateNames(f.Name))
+        {
+            var hit = EnumerateInstanceFields(obj).FirstOrDefault(x => string.Equals(x.Name, candidate, StringComparison.Ordinal));
+            if (hit.Name is null) continue;
+            var modulePath = hit.DeclaringClass.Module?.Name;
+            if (!string.IsNullOrEmpty(modulePath) && IsFieldInitOnly(modulePath, hit.Token))
+                throw new InvalidOperationException($"字段 {Describe(rootName, segments)} 是 readonly/const，不可改写（v1 拒绝）。");
+            return;
+        }
+        // 未命中：不重复报「无此字段」——ResolvePathValue 会给出带可用字段清单的错误
+    }
+
+    /// <summary>模块元数据 FieldAttributes.InitOnly（readonly 实例字段 / const）；读失败按可写处理（不误伤）。</summary>
+    private static bool IsFieldInitOnly(string modulePath, int fieldToken)
+    {
+        try
+        {
+            using var fs = File.OpenRead(modulePath);
+            using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
+            var mr = pe.GetMetadataReader();
+            var fh = System.Reflection.Metadata.Ecma335.MetadataTokens.FieldDefinitionHandle(fieldToken);
+            var f = mr.GetFieldDefinition(fh);
+            return f.Attributes.HasFlag(System.Reflection.FieldAttributes.InitOnly);
+        }
+        catch { return false; }
+    }
+
+    /// <summary>末段分派（支持矩阵 = spec §7 spike 定案）。线程经参数传入（重定向源须在同一停点/线程解析）。</summary>
+    private void WriteTerminal(CorDebugThread thread, CorDebugValue target, DebugWriteValue value, string rootName, IReadOnlyList<PathSegment> segments)
+    {
+        switch (target)
+        {
+            case CorDebugReferenceValue r:                              // 引用目标（对象字段/局部/数组引用槽）
+                switch (value)
+                {
+                    case DebugWriteValue.Null:
+                        r.Value = 0;                                    // 置 null（CORDB_ADDRESS 0）
+                        break;
+                    case DebugWriteValue.CopyPath p:
+                        WriteReferenceRedirect(thread, r, p, rootName, segments);
+                        break;
+                    default:
+                        throw new InvalidOperationException(
+                            $"目标 {Describe(rootName, segments)} 是引用类型，不能写标量字面量——请置 null 或给同帧对象路径（重定向）。");
+                }
+                break;
+            case CorDebugGenericValue g:                                // 值类型目标（局部/参数/字段/数组元素/enum 底层）
+                if (value is not DebugWriteValue.Scalar s)
+                    throw new InvalidOperationException(
+                        $"目标 {Describe(rootName, segments)} 是值类型，请给字面量数字/bool（枚举给底层整数值）。");
+                WriteScalarToGeneric(g, s.Text, Describe(rootName, segments));
+                break;
+            case CorDebugStringValue:
+                throw new InvalidOperationException(
+                    "字符串内容不可改（构造新字符串需 func-eval，已关）；请置 null 或重定向到已有字符串对象。");
+            default:
+                // spike 定案：enum 等带元数据类型的值字段终端为对象值（非 GenericValue）→ v1 降级提示
+                throw new InvalidOperationException($"目标类型暂不支持写（{ResolveValueTypeName(target) ?? "<未知>"}）。");
+        }
+    }
+
+    /// <summary>
+    /// 引用重定向：源路径在「同一停点、同一线程」解析为引用值，取源引用地址回写（spec 拍板：重定向进 v1）。
+    /// 类型兼容保守校验：两端 deref 后 ExactType 全名一致才放行（目标当前为 null 时只校验源为非 null）。
+    /// </summary>
+    private void WriteReferenceRedirect(CorDebugThread thread, CorDebugReferenceValue target, DebugWriteValue.CopyPath p, string rootName, IReadOnlyList<PathSegment> segments)
+    {
+        var srcDesc = Describe(p.Root, p.Segments);
+        var src = ResolvePathValue(thread, p.Root, p.Segments);
+        if (src is not EvalValue.Raw { Value: CorDebugReferenceValue srcRef })
+            throw new InvalidOperationException($"重定向源 {srcDesc} 不是指向对象的引用（目标仍在原值，未改动）。");
+        if (srcRef.IsNull)
+            throw new InvalidOperationException($"重定向源 {srcDesc} 是 null 引用（目标仍在原值，未改动）；置空请用 value=null。");
+
+        // 类型兼容保守校验：两端 deref 对象全名一致才放行（v1 宁缺毋滥）；解析失败按放行（诚实降级为不校验）
+        try
+        {
+            var targetDeref = target.IsNull ? null : target.Dereference();
+            var srcDeref = srcRef.Dereference();
+            if (targetDeref is not null && srcDeref is not null)
+            {
+                var targetType = ResolveValueTypeName(targetDeref);
+                var srcType = ResolveValueTypeName(srcDeref);
+                if (targetType is not null && srcType is not null
+                    && !string.Equals(targetType, srcType, StringComparison.Ordinal))
+                    throw new InvalidOperationException(
+                        $"重定向源 {srcDesc} 类型 {srcType} 与目标 {Describe(rootName, segments)} 类型 {targetType} 不一致（v1 要求同型）；目标仍在原值，未改动。");
+            }
+        }
+        catch (InvalidOperationException) { throw; }
+        catch { /* deref/类型解析失败：诚实降级为不校验 */ }
+
+        target.Value = srcRef.Value; // CorDebugReferenceValue.Value = 被引用对象地址
+    }
+
+    /// <summary>标量文本 → 目标元素类型字节（写回 GenericValue）。数值允许 0x 前缀/负号/小数/科学计数；m/f/d 后缀在转换前剥离，是否接受由目标类型决定。</summary>
+    private static void WriteScalarToGeneric(CorDebugGenericValue g, string text, string targetDesc)
+    {
+        byte[] bytes;
+        var kind = g.Type;
+        try
+        {
+            bytes = kind switch
+            {
+                CorElementType.Boolean => text.Trim().ToLowerInvariant() switch
+                {
+                    "true" or "1" => [1],
+                    "false" or "0" => [0],
+                    _ => throw new InvalidOperationException($"目标 {targetDesc} 是 bool，新值须 true/false/1/0（当前「{text}」）。"),
+                },
+                CorElementType.Char => ParseCharBytes(text, targetDesc),
+                CorElementType.I1 => ScalarIntBytes(text, targetDesc, "SByte", sbyte.MinValue, sbyte.MaxValue, v => new[] { (byte)checked((sbyte)v) }),
+                CorElementType.U1 => ScalarIntBytes(text, targetDesc, "Byte", byte.MinValue, byte.MaxValue, v => [(byte)v]),
+                CorElementType.I2 => ScalarIntBytes(text, targetDesc, "Int16", short.MinValue, short.MaxValue, v => BitConverter.GetBytes(checked((short)v))),
+                CorElementType.U2 => ScalarIntBytes(text, targetDesc, "UInt16", ushort.MinValue, ushort.MaxValue, v => BitConverter.GetBytes(checked((ushort)v))),
+                CorElementType.I4 => ScalarIntBytes(text, targetDesc, "Int32", int.MinValue, int.MaxValue, v => BitConverter.GetBytes(checked((int)v))),
+                CorElementType.U4 => ScalarIntBytes(text, targetDesc, "UInt32", uint.MinValue, uint.MaxValue, v => BitConverter.GetBytes(checked((uint)v))),
+                CorElementType.I8 => ScalarIntBytes(text, targetDesc, "Int64", long.MinValue, long.MaxValue, v => BitConverter.GetBytes(checked((long)v))),
+                CorElementType.U8 => ScalarIntBytes(text, targetDesc, "UInt64", ulong.MinValue, ulong.MaxValue, v => BitConverter.GetBytes(checked((ulong)v))),
+                CorElementType.R4 or CorElementType.R8 => ParseFloatBytes(text, targetDesc, kind),
+                _ => throw new InvalidOperationException($"目标 {targetDesc} 类型 {MapElementTypeName(kind) ?? kind.ToString()} v1 不支持写（该目标为非标量值类型，请改写到其标量字段或对象外层字段）。"),
+            };
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (FormatException) { throw new InvalidOperationException($"目标 {targetDesc}：文本「{text}」不是合法的 {MapElementTypeName(kind) ?? kind.ToString()} 值。"); }
+        catch (OverflowException) { throw new InvalidOperationException($"目标 {targetDesc}：文本「{text}」超出 {MapElementTypeName(kind) ?? kind.ToString()} 取值范围。"); }
+
+        var buf = Marshal.AllocHGlobal(bytes.Length);
+        try { Marshal.Copy(bytes, 0, buf, bytes.Length); g.SetValue(buf); }
+        finally { Marshal.FreeHGlobal(buf); }
+    }
+
+    /// <summary>char：单引号字符 'x' 或 0-65535 码点。</summary>
+    private static byte[] ParseCharBytes(string text, string targetDesc)
+    {
+        var t = text.Trim();
+        if (t.Length == 3 && t[0] == '\'' && t[2] == '\'')
+            return BitConverter.GetBytes((ushort)t[1]);
+        if (TryParseIntegral(t, out var v) && v >= 0 && v <= ushort.MaxValue)
+            return BitConverter.GetBytes((ushort)v);
+        throw new InvalidOperationException($"目标 {targetDesc} 是 char，新值须单引号字符（'x'）或 0-65535 整数码点（当前「{text}」）。");
+    }
+
+    /// <summary>整型目标：拒绝小数/科学计数/带后缀文本（拍板：是否接受后缀由目标类型决定——整型不收；0x 十六进制不受此限）。</summary>
+    private static byte[] ScalarIntBytes(string text, string targetDesc, string typeName, BigInteger min, BigInteger max, Func<BigInteger, byte[]> toBytes)
+    {
+        var t = text.Trim();
+        var isHex = t.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
+        if (!isHex)
+        {
+            if (t.Length > 0 && "mMfFdD".Contains(t[^1]))
+                throw new InvalidOperationException($"目标 {targetDesc} 是整型 {typeName}，不能写带 {t[^1]} 后缀的文本「{text}」；请给整数。");
+            if (t.Contains('.') || t.Contains('e') || t.Contains('E'))
+                throw new InvalidOperationException($"目标 {targetDesc} 是整型 {typeName}，不能写小数/科学计数文本「{text}」；请给整数。");
+        }
+        if (!TryParseIntegral(t, out var v))
+            throw new InvalidOperationException($"目标 {targetDesc}：文本「{text}」不是合法的 {typeName} 整数值。");
+        if (v < min || v > max)
+            throw new InvalidOperationException($"目标 {targetDesc}：文本「{text}」超出 {typeName} 取值范围（{min}~{max}）。");
+        return toBytes(v);
+    }
+
+    /// <summary>浮点目标：允许 m/f/d 后缀剥离；m 后缀文本虽是 decimal 标记，按浮点解析其数字部分。</summary>
+    private static byte[] ParseFloatBytes(string text, string targetDesc, CorElementType kind)
+    {
+        var t = text.Trim();
+        if (t.Length > 0 && "fFdDmM".Contains(t[^1])) t = t[..^1];
+        var isDouble = kind == CorElementType.R8;
+        if (isDouble)
+        {
+            var d = double.Parse(t, System.Globalization.CultureInfo.InvariantCulture);
+            return BitConverter.GetBytes(d);
+        }
+        var f = float.Parse(t, System.Globalization.CultureInfo.InvariantCulture);
+        return BitConverter.GetBytes(f);
+    }
+
+    /// <summary>整型文本 → BigInteger：十进制（可带 +/-）或 0x 十六进制；非整型文本返回 false。</summary>
+    private static bool TryParseIntegral(string t, out BigInteger value)
+    {
+        value = default;
+        if (t.Length == 0) return false;
+        if (t.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+        {
+            var hex = t[2..];
+            if (hex.Length == 0) return false;
+            foreach (var c in hex) if (!Uri.IsHexDigit(c)) return false;
+            return BigInteger.TryParse(hex, System.Globalization.NumberStyles.AllowHexSpecifier,
+                System.Globalization.CultureInfo.InvariantCulture, out value);
+        }
+        var negative = t[0] == '-';
+        var digits = negative || t[0] == '+' ? t[1..] : t;
+        if (digits.Length == 0 || !digits.All(char.IsAsciiDigit)) return false;
+        if (!BigInteger.TryParse(digits, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var abs)) return false;
+        value = negative ? -abs : abs;
+        return true;
+    }
 
     // ---- 事件发布（CallbackHandler 调，回调线程） ----
 

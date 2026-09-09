@@ -112,6 +112,15 @@ public sealed class DebugSession : IAsyncDisposable
     public Task<DebugEvalResult> EvaluatePathAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, CancellationToken ct = default)
         => _core.EvaluatePathAsync(threadId, rootName, segments, ct);
 
+    /// <summary>
+    /// 按路径写值（W1 debug_set 引擎底座，停顿时有效）：与 EvaluatePathAsync 同款路径解析，
+    /// 末段按 DebugWriteValue 分派——Null=引用置空 / Scalar=值类型按目标元素类型转换写 /
+    /// CopyPath=引用重定向到源路径对象。返回写前/写后回显；失败抛中文提示异常。
+    /// 写进程内存有崩目标风险（调用方明示），只写读链路已证明可定位的目标。
+    /// </summary>
+    public Task<DebugWriteResult> SetPathValueAsync(int threadId, string rootName, IReadOnlyList<PathSegment> segments, DebugWriteValue value, CancellationToken ct = default)
+        => _core.SetPathValueAsync(threadId, rootName, segments, value, ct);
+
     // ---- 异常断点 ----
 
     /// <summary>设置 first-chance 异常断点（typeName 空 = 全部异常停下）。</summary>
