@@ -2,6 +2,20 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D25 · W3 数据断点立项拍板（用户 2026-09-09）
+- 决策①（节奏）：现在出实施计划，**spike 为 Task0**（A ValueBreakpoint / B OnDataBreakpoint 现代创建端 / 降级 三问实测），后续按三选一分支走（分支在计划写死），本会话不实跑 spike。
+- 决策②（入口）：`debug_breakpoint_set` 加 `dataPath` 参数（A/B 任一可行时），复用 hitCount/condition/断点清单/移除体系。
+- 决策③（降级）：A/B 均不可行 → 只写结论说明（局限 + 已知写入点用条件断点比较指引）进 spec/README 并转 ROADMAP；**不写新 Engine 代码**。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-w3-data-breakpoint.md`（已转正冻结）。
+
+## D24 · V1 一键复验闭环 debug_verify 拍板（用户 2026-09-09）
+- 决策①（编译步）：v1 含**可选 build**；编译产物**自动定位**——build 成功后 verify 用 `dotnet msbuild <project> -p:Configuration=<config> -getProperty:TargetPath` 拿产物绝对路径并启动，**agent 不写路径/不查 TFM**（用户明确：编译后产物路径直接可得，不需要 agent 去查）；`target.commandLine` 写「exe 文件名+参数」（无 build 字段时支持完整路径/PATH 命令）；文件名与产物不一致中文提示；build 失败即停返错误摘要（绝不启动旧产物）。
+- 决策②（场景载体）：**文件路径** `debug_verify(scenarioPath)`（.json 文件，可仓库复用；V2 录制承接同格式）。
+- 决策③（失败策略）：**fail-fast**。
+- 决策④（依赖）：ui.*/改值步骤**类型预留**（依赖 U1/W1，运行时未就绪明确报「依赖未就绪」）；v1 验收/先行 = 纯断点+output+evaluate 断言版（evaluate 走 P6 读值，不依赖 W1/U1）。
+- **顺序变更**：原 D22④「V1 待 W1/U1/V3 落地后再计划」按用户 2026-09-09「先继续计划、都计划完成后再审查」指令调整为**本次即出实施计划**（执行仍按依赖就绪度排期）。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-v1-verify-loop.md`（已转正冻结）。
+
 ## D23 · U1 ui_invoke action 扩展 + ui_scroll（用户 2026-09-09 追加拍板）
 - 决策：只左键点击无法覆盖自动化场景（右键菜单/双击树项/长列表滚动定位）——v1 由三件套扩为**四件套**：
   - `ui_invoke` 加 `action = click(默认)/rightClick/doubleClick`：click 仍 InvokePattern 优先、坐标兜底；rightClick/doubleClick 无 UIA pattern，**一律物理鼠标**（`Mouse.RightClick/DoubleClick`，FlaUI main 源码已核实），返回明示「物理右键/双击可能触发系统级行为」。

@@ -16,7 +16,9 @@
 | `2026-09-08-d2-child-process.md` | **D2 子进程跟随 spec**（宿主 TODO P1）：debug_processes 标注当前会话目标的 .NET 子孙进程链 + 切换引导（Toolhelp 零依赖路径，Engine 零改动） | **已立项/冻结**（2026-09-09 用户拍板：Toolhelp 宿主 + debug_processes 全链 + 不主动提示；实施计划 `plans/2026-09-09-d2-child-process.md`） |
 | `2026-09-08-db2-named-whitelist.md` | **DB2 按名白名单 spec**（宿主 TODO P2）：debug_variables 加 names 白名单（空=全量、≤50、未知名零值反馈） | **已立项/冻结**（2026-09-09 用户拍板：推荐默认语义；实施计划 `plans/2026-09-09-db2-named-whitelist.md`） |
 | `2026-09-08-v4-copy-guard.md` | **V4 语料护栏 spec**（宿主 TODO P2）：关键文案/行为契约固化为片段断言；新工具强制同批补 V4 | **已立项/冻结**（2026-09-09 用户拍板：片段 Contains + 强制随新工具 + 只宿主层；实施计划 `plans/2026-09-09-v4-copy-guard.md`） |
-| `2026-09-08-u1-ui-automation.md` | **U1 UI 自动化 spec**（宿主 TODO P3）：FlaUI 5.0 + ui_find/ui_invoke/ui_wait 三件套，无视觉文本清单 + 务实成员反查语义标注，与 debug_* 编排 UI 业务流闭环 | **已立项/冻结**（2026-09-09 用户拍板 4 项 + FlaUI 引用姿势线上核实；实施计划 `plans/2026-09-09-u1-ui-automation.md`） |
+| `2026-09-08-u1-ui-automation.md` | **U1 UI 自动化 spec**（宿主 TODO P3）：FlaUI 5.0 + ui_find/ui_invoke(action)/ui_wait/ui_scroll 四件套，无视觉文本清单 + 务实成员反查语义标注，与 debug_* 编排 UI 业务流闭环 | **已立项/冻结**（2026-09-09 用户拍板 4 项 + 追加 action/scroll 四件套 + FlaUI 引用姿势线上核实；实施计划 `plans/2026-09-09-u1-ui-automation.md`） |
+| `2026-09-08-v1-verify-loop.md` | **V1 复验闭环 spec**（宿主 TODO P3）：debug_verify 场景文件→重编译(可选,产物自动拿取)→重跑→断言 PASS/FAIL，agent 自证修复 | **已立项/冻结**（2026-09-09 用户拍板：可选 build+产物自动拿取/文件路径/fail-fast/纯断点版先行；实施计划 `plans/2026-09-09-v1-verify-loop.md`） |
+| `2026-09-08-w3-data-breakpoint.md` | **W3 数据断点 spec**（宿主 TODO P4）：字段/局部值变化即停；ClrDebug A/B 两路径 + spike 三问 | **已立项/冻结**（2026-09-09 用户拍板：spike Task0 三分支、breakpoint_set dataPath 入口、降级=说明+ROADMAP；实施计划 `plans/2026-09-09-w3-data-breakpoint.md`） |
 
 ## 阶段对应关系（decisions D7）
 

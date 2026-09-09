@@ -1,7 +1,7 @@
 # Spec · V1 一键复验闭环（debug_verify）
 
-> 状态：**计划中（草案）**——编排层设计，复用设施已查证。实施前置：宿主 TODO V1 立项 + **依赖 W1/U1/V3 至少一项就绪**（V1 的断言用 W1 改值、触发用 U1 点击、复盘用 V3 时间线才完整；纯断点版可先行）。
-> 关联：宿主 TODO V1；ROADMAP reverse-skill「调试-修复-重验证闭环」候选（本 spec 是其落地方案）；U1（触发源）/W1（实验改值）是其能力前提。
+> 状态：**已立项**（2026-09-09 拍板）——① build 为**可选字段**，编译产物**自动定位**（build 成功后 `dotnet msbuild -getProperty:TargetPath` 拿产物启动，agent 不写路径；`target.commandLine` 写 exe 文件名+参数，无 build 时支持完整路径/PATH）；② 场景载体=**文件路径**（scenarioPath）；③ **fail-fast**（断言失败即停）；④ 依赖策略=**ui.*/改值步骤类型预留**、v1 e2e 用纯断点+输出+evaluate 断言版先行（evaluate 走 P6 读值，不依赖 W1/U1）。实施计划见 `docs/planning/plans/2026-09-09-v1-verify-loop.md`，规格冻结。
+> 关联：宿主 TODO V1；ROADMAP reverse-skill「调试-修复-重验证闭环」候选（本 spec 是其落地方案）；U1（触发源）/W1（实验改值）是其能力前提——步骤类型预留、执行按依赖就绪度排期。
 
 ## 1. 背景与目标
 
@@ -43,6 +43,7 @@ debug_verify <场景文件> → 自动：重编译(可选) → debug_launch(快�
   "build": {                           // 可选：先重编译（agent 有源码时）
     "project": "D:\\proj\\CoreMes.csproj",
     "configuration": "Debug"
+    // 产物由 verify 自动拿：dotnet msbuild -getProperty:TargetPath（bin\<配置>\<TFM>\<AssemblyName>.exe），agent 不写路径
   },
   "steps": [
     { "breakpoint": { "typeName": "CoreMes.Core.ApplicationContext", "memberName": "SwitchState", "hit": 1 } },
@@ -81,15 +82,16 @@ FAIL: 步骤 3 continue 超时（10s 无停点）——断点未命中或代码�
 ## 4. 分层设计
 - **宿主新增 `Services/VerifyService`**（或 `ToolExecutor` 扩展）：场景解析 + 步骤翻译 + 断言执行 + 结果汇总。
 - 步骤执行**复用现有 DebugSessionService/Session 方法**（同进程直调，非 MCP 往返）——断言需要"过程内等停点"细节，MCP 工具粒度太粗。
-- 重编译：宿主起 `dotnet build <project> -c <config>` 子进程（**排空 stdout/stderr 纪律已有**，防管道阻塞）；失败返回编译错误摘要。
+- 重编译：宿主起 `dotnet build <project> -c <config>` 子进程（**排空 stdout/stderr 纪律已有**，防管道阻塞）；**产物自动定位**：build 成功后 `dotnet msbuild <project> -p:Configuration=<config> -getProperty:TargetPath` 取产物绝对路径（SDK 现算，agent 不查路径/TFM）；`target.commandLine` 写「exe 文件名 + 参数」（不写路径），文件名与产物不一致 → 中文提示；build 失败返回编译错误摘要（stderr 尾部+退出码）即停，**绝不启动旧产物**；**无 build 字段**时 commandLine 支持完整路径或 PATH 内命令（维持现语义）。
 - 新工具 `debug_verify`：参数 `scenarioPath`（场景 JSON 文件路径，必填）。
 - README 同步（新工具+场景格式示例）。
 
-## 5. 待拍板（立项时决策）
-1. **编译步是否 v1 含**：含 = 覆盖"agent 改源码→复验"主场景（但需目标有源码+本机 SDK）；不含 = 只做"重启+重跑+断言"（agent 自己先编译好）。**建议 v1 含**（否则闭环缺"改码"半环）。
-2. **场景文件 vs 场景 JSON 字符串参数**：文件（可复用/可存仓库）vs 参数内联（MCP 参数过大）。倾向文件路径。
-3. **断言失败后是否继续后续步骤**：fail-fast（推荐）vs 全跑完汇总。
-4. **依赖 W1/U1 的程度**：纯断点+输出断言版可先行（不依赖 W1/U1）；改值断言（W1）与 UI 触发（U1）是增强断言源。
+## 5. 拍板记录（2026-09-09 用户拍板）
+
+1. **编译步**：v1 含 **可选 build**（场景写 build 字段才编译）；**产物自动定位**——build 成功后 verify 用 `dotnet msbuild <project> -p:Configuration=<config> -getProperty:TargetPath` 拿产物绝对路径并启动（agent 不写路径/不查 TFM）；`target.commandLine` 写「exe 文件名+参数」（无 build 字段时支持完整路径/PATH 命令）；文件名与产物不一致中文提示；build 失败即停返错误摘要（绝不启动旧产物）。
+2. **场景载体**：**文件路径**（`debug_verify(scenarioPath)`，.json 文件可存仓库复用；V2 录制产出同格式文件承接）。
+3. **失败策略**：**fail-fast**——断言失败即停，返回失败步骤与实际输出。
+4. **依赖策略**：场景步骤类型**预留** ui.*（触发，依赖 U1）/改值（前置条件，依赖 W1）/复盘（v3 debug_timeline 关联）——运行时依赖未就绪则明确报「步骤类型依赖未就绪」；v1 验收与先行 = 纯断点+output+evaluate 断言（evaluate 走 P6 读值，不依赖 W1/U1）。
 
 ## 6. 验证方案
 - **宿主单测**：场景解析（合法/非法穷尽）+ 断言执行器（各 kind 桩数据 pass/fail）。

@@ -6,7 +6,7 @@
 
 ## 执行推进顺序总览（2026-09-08 排定，按批推进）
 
-> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并新开 CHANGELOG `[Unreleased]` 段（1.7.0 已发布，当前无该段，下一批工具落地时新开）；小型项先补方案段。spec 均为草案（未立项）——按批次立项时逐条确认。
+> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并新开 CHANGELOG `[Unreleased]` 段（1.7.0 已发布，当前无该段，下一批工具落地时新开）；小型项先补方案段。**2026-09-09：全部待办（W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3）已逐项拍板转正 spec + 实施计划就绪**（`docs/planning/plans/2026-09-09-*.md`），待统一审查后实施；W2/V2 已转 ROADMAP 不在待办。
 
 | 批次 | 项 | spec | 状态 | 依赖 |
 |---|---|---|---|---|
@@ -18,8 +18,8 @@
 | **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-db2-named-whitelist.md`） | debug_variables 面 |
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-v4-copy-guard.md`） | 随新工具同批补 |
 | **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | **已拍板+计划就绪**（2026-09-09：不需会话/AgentActionLog 护栏/务实成员反查标注 v1/U1 先行；FlaUI 引用姿势线上核实；计划 `plans/2026-09-09-u1-ui-automation.md`） | — |
-| | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | spec 草案（D22④：待 W1/U1/V3 落地后再计划） | W1/U1/V3 |
-| **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | spike 前置 | — |
+| | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | **已拍板+计划就绪**（2026-09-09：可选 build+产物自动拿取/文件路径/fail-fast/纯断点版先行；计划 `plans/2026-09-09-v1-verify-loop.md`） | 执行按依赖排期 |
+| **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | **已拍板+计划就绪**（2026-09-09：spike Task0 三分支写死/breakpoint_set dataPath/降级=说明+ROADMAP；计划 `plans/2026-09-09-w3-data-breakpoint.md`） | spike 在 Task0 |
 | **远期** | **W2 SetIP** | `2026-09-08-w2-set-ip.md` | **已转 ROADMAP（2026-09-08）** | — |
 | | **V2 崩溃 dump** | `2026-09-08-v2-crash-dump.md` | **转远期（2026-09-08 决策，见 ROADMAP）**；退出码增量①随 V3 | V3 |
 

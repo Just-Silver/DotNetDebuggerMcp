@@ -1,7 +1,7 @@
 # Spec · W3 数据断点（值变化即停）
 
-> 状态：**计划中（草案）；关键技术已查证但需 spike 定路线**。立项前置 = spike 结论（本 spec §4）。
-> 关联：宿主 TODO W3；复用 BreakpointManager/命令泵/CallbackHandler 停点体系。
+> 状态：**已立项**（2026-09-09 拍板）——现在出实施计划（`plans/2026-09-09-w3-data-breakpoint.md`），**spike 为计划 Task0**（A/B 可行性 + 现代创建端查证三问），后续按 **A 可行 / B 可行 / 降级** 三分支走（分支均在计划写死）；入口定案 = **`debug_breakpoint_set` 加 `dataPath` 参数**（A/B 任一可行时，复用 hitCount/condition/list/remove 体系）；**若 A/B 均不可行 → 降级** = 结论说明（含局限与「已知写入点用条件断点比较」指引）写入 spec/README 并转 ROADMAP，**不写新 Engine 代码**（现有条件断点/求值已覆盖）。spec 主体方案待 spike 结论在实施中细化（计划分支已定义），本 spec 冻结。
+> 关联：宿主 TODO W3；复用 BreakpointManager/命令泵/CallbackHandler 停点体系 + P6 `ReadPathValue` 定位（值对象定位）。
 
 ## 1. 背景与目标
 
@@ -31,7 +31,7 @@ ClrDebug 有**两条**相关能力，必须区分：
 - 若 B 可行且有创建端：按地址/变量注册数据断点。
 
 ### 3.2 宿主
-`debug_breakpoint_set` 扩展 or 新参数：`dataPath`（定位数据断点目标）+ 复用 hitCount/condition。
+`debug_breakpoint_set` 扩展 `dataPath` 参数（2026-09-09 定案入口）——定位数据断点目标（复用 P6 路径文法/`ReadPathValue` 定位），命中/计数/条件/清单/移除复用既有断点体系；返回描述注明「数据断点 @ 路径 X」。
 
 ## 4. Spike 计划（立项前置）
 1. 写最小验证：attach DebugTarget → GetLocalVariable 拿 int 局部 → CreateBreakpoint → continue → 改该变量 → 是否停？（A 可行性）
