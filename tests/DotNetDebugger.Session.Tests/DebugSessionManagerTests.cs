@@ -210,6 +210,35 @@ public sealed class DebugSessionManagerTests
         await manager.CloseAsync(TestContext.Current.CancellationToken);
     }
 
+    [Fact]
+    public async Task LaunchAndAttach_ExitCodeCapturedOnExited()
+    {
+        Assert.True(File.Exists(TestTarget.DebugTargetExe));
+
+        await using var manager = new DebugSessionManager();
+        var active = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 1 0", ct: TestContext.Current.CancellationToken);
+        Assert.False(active.IsAttach);
+        await active.Session.ContinueAsync(TestContext.Current.CancellationToken); // launch 返回时冻结在 Main 前——不放行进程永不退出，ExitCode 恒 null
+        // 等进程退出（输出缓冲有 [进程已退出 exitCode=N] 标记）；active.ExitCode 由 process.Exited 捕获
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < deadline && active.ExitCode is null) await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.NotNull(active.ExitCode);
+    }
+
+    [Fact]
+    public async Task Attach_MarksIsAttachAndNoExitCode()
+    {
+        using var target = TestTarget.StartDebugTarget("2 4");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+        Assert.False(target.HasExited);
+
+        await using var manager = new DebugSessionManager();
+        var active = await manager.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        Assert.True(active.IsAttach);        // attach 标记
+        Assert.Null(active.ExitCode);        // attach 无 Process 对象拿退出码
+        await manager.CloseAsync(TestContext.Current.CancellationToken); // 断开（目标继续独立运行）
+    }
+
     /// <summary>用 System.Reflection.Metadata 读 dll 中指定名方法的 mdMethodDef token。</summary>
     private static int ReadMethodToken(string dllPath, string methodName)
     {

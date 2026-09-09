@@ -25,9 +25,15 @@ public sealed class ActiveDebugSession : IAsyncDisposable
     /// <summary>目标进程实际生效的工作目录（launch 会话：启动时解析的 wd，空默认=exe 所在目录；attach 会话无此概念=null）。供宿主报告。</summary>
     public string? WorkingDirectory { get; }
 
+    /// <summary>是否 attach 建立（attach 会话拿不到退出码、无输出捕获）。</summary>
+    public bool IsAttach { get; }
+
+    /// <summary>launch 会话的目标退出码（进程退出后由 process.Exited 捕获）；attach 会话恒 null。</summary>
+    public int? ExitCode { get; internal set; }
+
     internal ActiveDebugSession(DebugSession session, SessionEventBuffer buffer, AgentActionLog actions,
         ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null, int processId = 0,
-        string? workingDirectory = null)
+        string? workingDirectory = null, bool isAttach = false)
     {
         Session = session;
         Buffer = buffer;
@@ -36,6 +42,7 @@ public sealed class ActiveDebugSession : IAsyncDisposable
         _process = process;
         ProcessId = processId > 0 ? processId : (process?.Id ?? 0);
         WorkingDirectory = workingDirectory;
+        IsAttach = isAttach;
     }
 
     public async ValueTask DisposeAsync()
@@ -79,7 +86,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
     {
         var session = await DebugSession.AttachAsync(processId, ExpressionConditionEvaluator.Instance, ct: ct,
             sourceLineResolver: SourceLineBreakpointResolver.Instance).ConfigureAwait(false);
-        return Activate(session, $"attach pid={processId}", processId: processId);
+        return Activate(session, $"attach pid={processId}", processId: processId, isAttach: true);
     }
 
     /// <summary>
@@ -123,10 +130,6 @@ public sealed class DebugSessionManager : IAsyncDisposable
         process.OutputDataReceived += (_, e) => { if (e.Data is not null) output.Append(ProcessOutputStream.Stdout, e.Data); };
         process.ErrorDataReceived += (_, e) => { if (e.Data is not null) output.Append(ProcessOutputStream.Stderr, e.Data); };
         process.EnableRaisingEvents = true;
-        process.Exited += (_, _) =>
-        {
-            try { output.AppendSystem($"[进程已退出 exitCode={process.ExitCode}]"); } catch { /* 会话已释放等场景忽略 */ }
-        };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
@@ -165,7 +168,16 @@ public sealed class DebugSessionManager : IAsyncDisposable
             process.Dispose();
             throw;
         }
-        return Activate(engineSession, $"launch+attach {commandLine}", output, process, workingDirectory: effectiveWd);
+        // 退出码捕获（2026-09-09 审查修正）：Activate 返回后（目标冻结在 Main 前，进程不可能已退出）注册处理器，
+        // 闭包捕获 active——不在早注册的处理器里经 Manager.Active（会话被替换后会把旧进程退出码写到新会话，竞态且语义错）。
+        // 原 [进程已退出 exitCode=N] 标记逻辑随之下移此处（避免双写重复行）；输出读取排空保持原处。
+        var active = Activate(engineSession, $"launch+attach {commandLine}", output, process, workingDirectory: effectiveWd);
+        process.Exited += (_, _) =>
+        {
+            try { if (active.ExitCode is null) active.ExitCode = process.ExitCode; } catch { /* 会话已释放忽略 */ }
+            try { output.AppendSystem($"[进程已退出 exitCode={process.ExitCode}]"); } catch { }
+        };
+        return active;
     }
 
     /// <summary>关闭活动会话（断开调试，进程继续独立运行）。</summary>
@@ -199,11 +211,11 @@ public sealed class DebugSessionManager : IAsyncDisposable
 
     private ActiveDebugSession Activate(DebugSession session, string target,
         ProcessOutputCapture? output = null, System.Diagnostics.Process? process = null, int processId = 0,
-        string? workingDirectory = null)
+        string? workingDirectory = null, bool isAttach = false)
     {
         var buffer = new SessionEventBuffer();
         buffer.Start(session);
-        var active = new ActiveDebugSession(session, buffer, Actions, output, process, processId, workingDirectory);
+        var active = new ActiveDebugSession(session, buffer, Actions, output, process, processId, workingDirectory, isAttach);
         ActiveDebugSession? old;
         lock (_gate) { old = _active; _active = active; }
         // 替换旧活动会话：后台断开+释放，不阻塞新会话建立
