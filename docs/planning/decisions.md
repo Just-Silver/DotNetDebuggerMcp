@@ -2,11 +2,21 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D21 · V4 语料护栏取舍（用户 2026-09-09 拍板）
+- 决策①（粒度）：只测**关键片段 Contains**（正向契约，低脆）；不用全文精确匹配。
+- 决策②（强制随新工具）：debug_set/debug_object/debug_verify/ui_* 落地**强制同批补 V4 断言**（写入各实施计划收尾核对项）。
+- 决策③（范围）：v1 只宿主渲染层文案（AppText/ToolParameterText 常量 + 渲染结果片段）；Engine 中文错误文案不抽常量不覆盖（ROADMAP 观察）。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-v4-copy-guard.md`（已转正冻结）。
+
 ## D19 · D2 子进程/多进程跟随 debug_processes 增强（用户 2026-09-09 拍板）
 - 决策①（查询机制/落点）：父子查询用 **Toolhelp P/Invoke 落宿主**（kernel32 `CreateToolhelp32Snapshot` + `PROCESSENTRY32.th32ParentProcessID`，单次快照全表，零新包、免 WMI、免逐 pid 句柄）；spec 原「Engine 已依赖 System.Management」**查证有误**（Engine.csproj 仅 ClrDebug+DbgShim），CIM/ntdll 两路径淘汰；**Engine 零改动**。
 - 决策②（入口/链深）：增强 `debug_processes`——有当前会话目标时其 .NET 子孙进程行多层缩进标注父链 + 附切换引导（停会话后 debug_attach <childPid>）；不新增 debug_children。
 - 决策③（launch 提示）：v1 不主动提示（只在 debug_processes 标注）；「子进程 stdout 不在 ProcessOutputCapture 范围」边界写 README/工具描述。
 - 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-d2-child-process.md`（已转正冻结）。
+
+## D20 · DB2 变量按名白名单读取（用户 2026-09-09 拍板）
+- 决策：`debug_variables` 加 `names` 参数——逗号分隔白名单（空=全量）；精确忽略大小写匹配 局部/参数名 + `slotN` + `$exception`；>50 项拒绝；未知名反馈可用名（零值）不静默；同名跨作用域都返回。宿主渲染层过滤（Engine/Session 零改动），先白名单命中再走 DB1 脱敏。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-db2-named-whitelist.md`（已转正冻结）。
 
 ## D17 · DB1 变量敏感脱敏层边界（用户 2026-09-09 拍板）
 - 决策①（覆盖范围）：v1 脱敏所有**读值渲染出口**——debug_variables 全量/children、debug_evaluate 标量+children、带变量渲染的 trace/停点上下文，外加**表达式级**绕过（debug_evaluate 表达式末段标识符敏感即脱敏）；**不脱敏**目标自身控制台输出（debug_output/timeline log）与异常 Message。

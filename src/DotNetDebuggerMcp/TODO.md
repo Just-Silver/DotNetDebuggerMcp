@@ -15,8 +15,8 @@
 | | **DB1 敏感脱敏层** | `2026-09-08-db1-sensitive-redaction.md` | **已拍板+计划就绪**（2026-09-09：读值出口+表达式级、宿主层；计划 `plans/2026-09-09-db1-sensitive-redaction.md`） | — |
 | | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | **已拍板+计划就绪**（2026-09-09：受控递归 v1 depth=2/防环 `<cyclic>`；计划 `plans/2026-09-09-d1-object-drill.md`） | P6 求值链✅ |
 | | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已拍板+计划就绪**（2026-09-09：Toolhelp 宿主+debug_processes 全链标注；计划 `plans/2026-09-09-d2-child-process.md`） | — |
-| **P2** | **DB2 按名白名单** | （TODO 方案段够，小项） | 待立项 | debug_variables 面 |
-| | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | spec 草案 | 随新工具同批补 |
+| **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-db2-named-whitelist.md`） | debug_variables 面 |
+| | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-v4-copy-guard.md`） | 随新工具同批补 |
 | **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | spec 草案；FlaUI 引用定 | — |
 | | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | spec 草案 | W1/U1/V3 |
 | **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | spike 前置 | — |
