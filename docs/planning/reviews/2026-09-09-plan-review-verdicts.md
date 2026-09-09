@@ -1,7 +1,6 @@
 # 2026-09-09 实施前计划审查裁定（Plan Review Verdicts & Binding Corrections）
 
-> 对 10 份实施计划的独立 reviewer 结论。实施时以本文件为**约束性修正**（覆盖计划正文冲突处）；任务级 reviewer 复核时对照本文件 + 计划 + spec。
-> **修正状态（2026-09-09）**：必修项已逐条写回计划正文（W1/V3：commit `4dcb3d8`；DB1/D1：commit `081a1e3`；U1：commit 待）；已派 re-reviewer 复核 5 份必修计划确认通过后才允许进入实施。
+> **审查状态（2026-09-09 完成）**：10 份计划全部通过 plan review 循环——DB2/D2/V4/V1/W3 首轮 Approve；W1/DB1/U1 re-review Approve；D1 round2 Approve（含 round1 修复）；V3 round3 Approve（含 round1/round2 修复）。修正已全部写回计划正文（commits `4dcb3d8`/`081a1e3`/`5df1da2`/`a3f87e0`/`d2400e0`/`待`）。**可进入实施**（按 subagent-driven-development，实施中任务级 reviewer 复核代码 diff）。
 > 每份计划实施收尾后，控制器把对应修正回写进计划正文（保持计划文件真实）。
 
 ## 结论摘要
