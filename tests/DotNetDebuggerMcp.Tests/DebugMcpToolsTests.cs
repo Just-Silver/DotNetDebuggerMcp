@@ -83,6 +83,8 @@ public sealed class DebugMcpToolsTests
             new Dictionary<string, object?> { ["waitSeconds"] = 20 });
         Assert.True(wait.IsError != true, wait.Text());
         Assert.Contains("已停下", wait.Text());
+        // V4 文案契约：wait 返回须报告「最近停点」现场（agent 据此直接接 stack/variables 观察）
+        Assert.Contains("最近停点", wait.Text());
         Assert.Contains("breakpoint", wait.Text());
         Assert.Contains("目标输出", wait.Text());
         Assert.Contains("[DebugTarget] start", wait.Text());
@@ -109,6 +111,8 @@ public sealed class DebugMcpToolsTests
         var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["stepType"] = "into" });
         Assert.True(step.IsError != true, step.Text());
         Assert.Contains("已提交 step into", step.Text());
+        // V4 文案契约：step 提交后返回须含 debug_wait 引导（agent 知道用 debug_wait 等单步停下的新停点）
+        Assert.Contains("debug_wait", step.Text());
         Assert.DoesNotContain("async 状态机帧", step.Text());
 
         // 8. debug_variables：读局部变量（step 后仍处停点——wait 等 step 完成的新停点）
