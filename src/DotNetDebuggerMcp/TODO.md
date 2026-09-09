@@ -13,7 +13,7 @@
 | **P1**（独立/低成本，先做） | **W1 现场改写** | `2026-09-08-w1-set-value.md` | **已完成**（2026-09-09 实施：DebugTarget WriteProbe + spike 支持矩阵定案 spec §7 → Engine `SetPathValueAsync`/readonly 拒绝 → Session `WriteValueParser` → 宿主 `debug_set` 工具 + README/CHANGELOG；本地 commit 1a80a09/1c206f5/3c956bd/3775627） | — |
 | | **V3 统一时间线** | `2026-09-08-v3-timeline.md` | **已完成**（2026-09-09 实施：事件历史环形 500 + DebugTimeline 三源归并 + debug_timeline 工具 + 退出码/attach 顺手项；本地 commit 12456d8/d10ade5/eff9c29/a695658） | P1 时间戳✅ |
 | | **DB1 敏感脱敏层** | `2026-09-08-db1-sensitive-redaction.md` | **已拍板+计划就绪**（2026-09-09：读值出口+表达式级、宿主层；计划 `plans/2026-09-09-db1-sensitive-redaction.md`） | — |
-| | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | **已拍板+计划就绪**（2026-09-09：受控递归 v1 depth=2/防环 `<cyclic>`；计划 `plans/2026-09-09-d1-object-drill.md`） | P6 求值链✅ |
+| | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | **已完成**（2026-09-09 实施：DebugTarget DrillNode/drill 样本（链+环+null）+ Engine `ReadObjectAtPathAsync` 受控递归（depth/limit/沿路径防环 `<cyclic>`）+ 宿主 `debug_object` 工具（`$exception` 前缀特判）+ README/CHANGELOG；本地 commit 34dfa59/cfea258） | P6 求值链✅ |
 | | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已拍板+计划就绪**（2026-09-09：Toolhelp 宿主+debug_processes 全链标注；计划 `plans/2026-09-09-d2-child-process.md`） | — |
 | **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-db2-named-whitelist.md`） | debug_variables 面 |
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-v4-copy-guard.md`） | 随新工具同批补 |
@@ -47,7 +47,6 @@
 
 ### 现场纵深/环境 环节
 
-- [ ] **D1 对象树深读（受控递归）**（Engine+Session+宿主｜小-中）——**能力**：给定对象路径在其上展开下一级 children（agent 逐层下钻，替代盲猜路径/反复 evaluate）。**spec 草案**：`docs/planning/specs/2026-09-08-d1-object-drill.md`（现有双机制已查证）。**技术要点**：现有 `ReadObjectValue`/`ReadArrayValue`/`ReadFieldTokens` 已封装"给定对象读 children"但**无递归且快照不带活引用**；P6 `ReadPathValue` 能沿路径定位任意对象——**v1 = 拼装**：新工具 `debug_object path`（路径定位对象 → 复用展开逻辑读一层），增量最小（Engine 组合方法 ~30 行 + 工具，无模型/渲染改动）。**不做**：多级递归/refId 缓存（路径即锚；多级需防环 maxDepth/字段预算，参照 DebugMCP——v1.5）。**待拍板**：独立 `debug_object` vs `debug_variables` 加 path；limit 语义。
 - [ ] **D2 子进程/多进程跟随**（Engine+宿主｜小-中）——**能力**：发现"当前会话目标的 .NET 子进程链"并引导切换（Web/服务目标业务代码常跑子进程）。**spec 草案**：`docs/planning/specs/2026-09-08-d2-child-process.md`。**技术要点**：`Process` 无 Parent API——用 CIM/WMI `Win32_Process.ParentProcessId` 一次全表查（Engine 依赖面已有 System.Management 邻近；备选 ntdll P/Invoke）；`ClrProcessFinder` 扩展 ParentProcessId + `FindChildren(pid)`（复用 DbgShim 探测 CLR，只列可 attach 的 .NET 子进程）。宿主 `debug_processes` 加父子标注 + 切换引导文案。**边界**：单活动会话不做自动跟随/并行（ROADMAP 已记干扰）；launch 捕获不到子进程 stdout（ProcessOutputCapture 只覆盖父进程）。**待拍板**：CIM 包 vs P/Invoke；`debug_processes` 标注 vs 新 `debug_children`；链深度。
 
 ### 已评估关闭/远期（防重复立项，一行结论）
