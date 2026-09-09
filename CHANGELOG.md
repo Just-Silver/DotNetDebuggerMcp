@@ -6,6 +6,16 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Added
+
+- **`debug_timeline` 新工具（V3 统一时间线）**：把目标进程日志（`log`，仅 launch 会话有）、调试事件（`bp`/`step`/`exc`/`skip`/`trc`/`state`/`engine`，含引擎日志）与 agent 动作（`act`）三源按时间合并成一条统一时间线——按 `[HH:mm:ss.fff] tag 内容` 逐行对齐复盘「先 A 日志 → 命中 B 断点 → agent 改值 → 再 C 异常」的完整因果链（三源各自保留内存环形缓冲：输出 2000 行 / 事件 500 条 / 动作 1000 条；同毫秒按源内序号稳定排序）。`lines` 取最近 N 条（默认 100）、`filter` 子串过滤（忽略大小写）、`kind` 按源筛选（all/log/act/bp/step/exc/skip/trc/state/engine）；头部报告三源总量与时间范围
+
+### Changed
+
+- **`debug_state` 退出码与 attach 反馈（V3 顺手项）**：launch 会话进程已退出时状态行附 `（目标已退出：exitCode=N）`（退出码由进程退出事件捕获；attach 会话 ICorDebug 不提供退出码，提示「退出码不可得」）；attach 到长活目标且进程运行中时提示「已附加成功，进程继续独立运行（无停点不会自行停下），设断点后 debug_continue/debug_wait 等待命中」——不再看起来像卡住
+
 ## [1.7.0] - 2026-09-08
 
 ### Added

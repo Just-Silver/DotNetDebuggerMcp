@@ -118,7 +118,8 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_breakpoint_set` / `_remove` / `_clear` / `_list` | 下/删/清/列断点，四种定位：模块+方法 token+IL offset（signature 行尾取 token，未加载模块登记待绑定）；`typeName`+`memberName` 按类型内方法名子串定位（命中唯一方法即设断点；属性/事件/字段成员提示改用访问器 token；多方法匹配返回 `#MEMBER` 清单用 `methodToken` 精确重设）；`typeName`+`line` 按反编译视图行（需模块已加载）；`sourcePath`+`line` 按 PDB 源码行（模块未加载/未命中时登记延迟项，模块加载后自动按 PDB 解析绑定——launch 冻结 Main 前可直接设源行断点）。可选 `hitCount`（第 N 次命中起生效）与 `mode`（stop=命中停 / trace=命中不停记轨迹，`debug_wait` 批量取回）；可选 `condition`（P6 子集表达式如 `i == 3`，为真才停/记——语法错当场拒绝，命中时求值失败放行并在 debug_state/debug_wait 反馈「条件未通过」防静默空等） |
 | `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（into/over/out，进程需停在断点）/ 等待进程停下（默认 10s，直接返回停点现场，默认附停点上下文与目标最近控制台输出）。`debug_step` 停在编译器生成的 async 状态机帧（类型形如 `<Foo>d__N`）时返回附行断点引导（建议断还原源码的 await 行，勿 step into 状态机 MoveNext） |
 | `dotnetdebugger_debug_run_to` | 运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、**临时断点自动移除**。目标定位同 `debug_breakpoint_set` 的 `typeName`+`line`（decompile 输出行号）或 `typeName`+`memberName`（方法名子串，命中唯一方法）。超时 / 命中其它断点 / 进程退出均返回对应提示且临时断点一并自动清理。边界：只对「目标会被进程自然执行到」有效——停住不自己走的路径请改用普通断点 + `debug_continue` |
-| `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处；停点时附反编译视图上下文——停点类型是编译器生成的 async 状态机 `<Foo>d__N` 时头部附备注：对应 async 方法 Foo、业务代码见外壳方法还原源码、建议用行断点断 await 行） |
+| `dotnetdebugger_debug_state` | 查询会话状态与最近停点（进程是否停下/停在何处；停点时附反编译视图上下文——停点类型是编译器生成的 async 状态机 `<Foo>d__N` 时头部附备注：对应 async 方法 Foo、业务代码见外壳方法还原源码、建议用行断点断 await 行；已退出时显示退出码（launch 会话）；attach 到长活目标且进程在跑时提示「已附加成功、进程独立运行」） |
+| `dotnetdebugger_debug_timeline` | 查看当前会话的日志+事件+agent 动作统一时间线（按时间对齐复盘：先 A 日志→命中 B 断点→agent 改值→再 C 异常）。三源：目标进程输出（`log`，仅 launch 会话有）、调试事件（`bp`/`step`/`exc`/`skip`/`trc`/`state`/`engine`）、agent 动作（`act`）。`lines` 取最近 N 条（默认 100），`filter` 子串过滤（忽略大小写），`kind` 按源筛选；头部报告三源总量与显示行数、时间范围 |
 | `dotnetdebugger_debug_output` | 查看被调试进程的控制台输出（stdout/stderr，旧→新；仅 launch 会话捕获，运行中可随时拉取） |
 | `dotnetdebugger_debug_stack` / `dotnetdebugger_debug_variables` / `dotnetdebugger_debug_threads` | 读调用栈 / 局部变量 / 线程（进程停时；异常停点额外返回 `$exception` 当前异常对象：类型/Message/一级字段）。`debug_stack` 每帧输出 `类型.方法 [token]`（解析失败降级为 `模块!token+ILoffset`；token 保留供下断点）；帧类型是编译器生成的 async 状态机（`Ns.X+<Foo>d__N`）时标注原方法：`Ns.X+<Foo>d__N (状态机 Foo).MoveNext` |
 | `dotnetdebugger_debug_evaluate` | 求值表达式读当前值（纯读、无副作用，进程停时）：成员访问 `a.b.c`、数组/字符串**任意下标** `a[i]`（引擎按路径直读，不受变量树一级 32 子项截断限制）、一元 `!`、单次比较（`== != < <= > >=`）、字面量 int/string/true/false/null。属性不可直接读——按 `X→_x→_X→<X>k__BackingField` 字段约定降级，未命中报错附可用字段清单；未知根名报错附可用变量清单。不支持算术/方法调用/赋值/链式比较/括号 |
@@ -127,7 +128,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_disconnect` | 断开调试会话 |
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
-> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。
+> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。**复盘整段调试经过（目标日志 ↔ 断点/异常/trace 事件 ↔ agent 动作按时间对齐）用 `debug_timeline`**。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。
 
 ## 命令行调试
 
@@ -332,7 +333,8 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | | `workingDirectory` | 目标进程工作目录，默认空=目标 exe 所在目录（对齐手动启动 exe，目标产物写自己目录）。可显式传目录覆盖；Web 应用等以工作目录定位 appsettings/静态资源的目标应传其 bin 或 publish 目录 |
 | | `environment` | 附加环境变量，KEY=VALUE 多行或分号分隔（如 `ASPNETCORE_ENVIRONMENT=Development;MY_KEY=1`），默认空=继承 server 环境 |
 | `debug_attach` | `processId`（必填） | 目标进程 id（用 `debug_processes` 查） |
-| `debug_state` | `contextLines` | 停点上下文行数预算，默认 100，0=不附。返回含目标 pid、会话状态（Attaching=进程冻结在 Main 前可设断点后 continue 放行）、最近停点 |
+| `debug_state` | `contextLines` | 停点上下文行数预算，默认 100，0=不附。返回含目标 pid、会话状态（Attaching=进程冻结在 Main 前可设断点后 continue 放行）、最近停点；进程已退出时附退出码（launch 会话）；attach 会话且进程在跑时提示「已附加成功、进程独立运行」 |
+| `debug_timeline` | `lines` / `filter` / `kind` | 取最近 N 条（默认 100，范围 1-1000）/ 子串过滤（忽略大小写）/ 按源筛选：all/log/act/bp/step/exc/skip/trc/state/engine。返回三源统一时间行（`[HH:mm:ss.fff] tag 内容`）与头部总量/时间范围 |
 | `debug_step` | `stepType` | into/over/out，默认 over。返回「已提交 step 命令」——用 `debug_wait` 等停（通常瞬时）或 `debug_state` 确认 Stopped。停在编译器生成的 async 状态机帧时返回附行断点引导（断还原源码的 await 行） |
 | `debug_output` | `lines` | 返回最近行数，默认 50，范围 1-2000 |
 | | `filter` | 只返回含该子串的行（忽略大小写），默认空=全部。高频日志下筛关键行（如 `filter=Now listening` / `filter=error`） |

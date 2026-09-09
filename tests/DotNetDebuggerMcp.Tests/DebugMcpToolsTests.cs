@@ -809,6 +809,175 @@ public sealed class DebugMcpToolsTests
         Assert.True(disc.IsError != true, disc.Text());
     }
 
+    [Fact]
+    public async Task DebugTimeline_LaunchExit_LogStateRowsChronological()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 2 0", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        // 等进程退出（wait 返回「进程已退出」）
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("进程已退出", wait.Text());
+
+        // 退出标记行由 server 侧 process.Exited 异步追加——轮询 timeline 直到落齐
+        string tl = "";
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            var r = await CallAsync(mcp, "debug_timeline", new Dictionary<string, object?> { ["lines"] = 200 });
+            Assert.True(r.IsError != true, r.Text());
+            tl = r.Text();
+            if (tl.Contains("[进程已退出 exitCode=0]")) break;
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+        Assert.Contains("[进程已退出 exitCode=0]", tl); // log 行现成标记
+        Assert.Contains("时间线 目标 pid=", tl);
+        Assert.Contains("共 ", tl);
+        Assert.Contains("日志", tl);
+        Assert.Contains("显示 ", tl);
+        Assert.Contains("log ", tl);    // 目标输出（log）行
+        Assert.Contains("state ", tl);  // 会话状态（state）事件行
+        AssertChronologicalRows(tl);    // 时间升序
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    [Fact]
+    public async Task DebugTimeline_TraceAndException_TrcAndExcRows()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var computeToken = ReadMethodToken(dll, "Compute");
+        Assert.True(computeToken > 0);
+
+        await using var mcp = await ConnectAsync();
+        // throw 模式 + 8s delay（操作窗口）：Work(1) 后 ThrowIfZero(0) 抛 DivideByZeroException
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 1 throw 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        // trace 断点：Work(1) 内 Compute 命中 1 次（不停，记轨迹入时间线 trc 行）
+        var set = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{computeToken:x8}", ["ilOffset"] = 0, ["mode"] = "trace" });
+        Assert.True(set.IsError != true, set.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(set.Text()));
+
+        // 异常断点：类型匹配 → ThrowIfZero 的异常命中停住
+        var exc = await CallAsync(mcp, "debug_exceptions",
+            new Dictionary<string, object?> { ["typeName"] = "DivideByZeroException" });
+        Assert.True(exc.IsError != true, exc.Text());
+
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("System.DivideByZeroException", wait.Text());
+
+        // 时间线应含 trc（trace 命中）与 exc（异常命中）行
+        string tl = "";
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            var r = await CallAsync(mcp, "debug_timeline", new Dictionary<string, object?> { ["lines"] = 200 });
+            Assert.True(r.IsError != true, r.Text());
+            tl = r.Text();
+            if (tl.Contains(" trc ") && tl.Contains(" exc ")) break;
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+        Assert.Contains(" trc ", tl);
+        Assert.Contains(" exc ", tl);
+        Assert.Contains("DivideByZeroException", tl);
+        AssertChronologicalRows(tl);
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    [Fact]
+    public async Task DebugState_Exited_ShowsExitCode()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 1 0", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("进程已退出", wait.Text());
+
+        // exitCode 由 server 侧 process.Exited 捕获——轮询 debug_state 直到 Exited 行显示 exitCode=0
+        string st = "";
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            var r = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+            Assert.True(r.IsError != true, r.Text());
+            st = r.Text();
+            if (st.Contains("exitCode=0")) break;
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+        Assert.Contains("（目标已退出：exitCode=0）", st);
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    [Fact]
+    public async Task DebugTimeline_NoSessionAndBadKind_ReturnHints()
+    {
+        await using var mcp = await ConnectAsync();
+
+        // 无会话：提示建立会话
+        var noSession = await CallAsync(mcp, "debug_timeline", new Dictionary<string, object?>());
+        Assert.True(noSession.IsError != true, noSession.Text());
+        Assert.Contains("无活动调试会话", noSession.Text());
+
+        // 建会话后 kind 非法：返回可选清单提示（kind 校验在有会话时执行）
+        var exe = DebugTargetExe;
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 2 0", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        var bad = await CallAsync(mcp, "debug_timeline", new Dictionary<string, object?> { ["kind"] = "bogus" });
+        Assert.True(bad.IsError != true, bad.Text());
+        Assert.Contains("kind 无效", bad.Text());
+        Assert.Contains("all/log/act/bp", bad.Text());
+
+        // kind=log 合法：冻结在 Main 前无输出 → 空时间线也正常返回（头部总量 0 行）
+        var onlyLog = await CallAsync(mcp, "debug_timeline", new Dictionary<string, object?> { ["kind"] = "log" });
+        Assert.True(onlyLog.IsError != true, onlyLog.Text());
+        Assert.Contains("时间线 目标 pid=", onlyLog.Text());
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    /// <summary>时间线文本的每一行行首时间戳须单调不减（格式 [HH:mm:ss.fff] tag 固定宽）。</summary>
+    private static void AssertChronologicalRows(string text)
+    {
+        var rows = text.Split('\n')
+            .Select(l => l.TrimEnd('\r'))
+            .Where(l => System.Text.RegularExpressions.Regex.IsMatch(l, @"^\[\d{2}:\d{2}:\d{2}\.\d{3}\]\s+[a-z]+\s+"))
+            .ToArray();
+        Assert.True(rows.Length > 0, $"时间线无行可校验:\n{text}");
+        for (var i = 1; i < rows.Length; i++)
+        {
+            var t0 = rows[i - 1].Substring(1, 12); // HH:mm:ss.fff（固定宽度，字典序=时间序）
+            var t1 = rows[i].Substring(1, 12);
+            Assert.True(string.CompareOrdinal(t1, t0) >= 0, $"时间线行未按时间升序:\n{rows[i - 1]}\n{rows[i]}");
+        }
+    }
+
     /// <summary>读指定名称子串的嵌套类型内某方法 token（状态机等编译器生成类型是嵌套 TypeDef）。</summary>
     private static int ReadMethodTokenInType(string dllPath, string typeNameSubstring, string methodName)
     {

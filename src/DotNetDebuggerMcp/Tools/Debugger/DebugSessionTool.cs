@@ -133,6 +133,14 @@ public static class DebugSessionTool
         if (conditionFailures is not null) lines.Add(conditionFailures);
         var skipped = SkippedExceptionsText(buffer);
         if (skipped is not null) lines.Add(skipped);
+        // V3 顺手项：Exited 退出码直达（launch 输出缓冲的 [进程已退出 exitCode=N] 标记仍在 debug_output/debug_wait 可见）
+        if (buffer.CurrentState == DotNetDebugger.Engine.Models.DebugSessionState.Exited)
+            lines.Add(active.IsAttach
+                ? "（attach 会话：退出码不可得——ICorDebug 不提供，目标独立于调试器退出）"
+                : active.ExitCode is { } ec ? $"（目标已退出：exitCode={ec}）" : "（目标已退出）");
+        // attach 即成功提示：attach 到长活目标且进程在跑——不看起来像卡住（对照 DebugMCP waitForDebugSessionReady 五态）
+        if (active.IsAttach && buffer.CurrentState == DotNetDebugger.Engine.Models.DebugSessionState.Running)
+            lines.Add("attach 会话：已附加成功，进程继续独立运行（无停点不会自行停下）；设断点后 debug_continue/debug_wait 等待命中。");
         DebugSessionService.Manager.Actions.Log("debug_state", "", string.Join("; ", lines));
         return string.Join(Environment.NewLine, lines);
     }
