@@ -72,3 +72,9 @@
 - **logpoint = 你们的 trace 模式**（P5 已完成）——DebugMCP `add_logpoint` 等价，验证 trace 方向正确。
 - **递归展开限深/环检测/预算** → D1 设计已被同款验证（DebugMCP maxDepth=6/maxFields=100/cyclic-reference 占位）——D1 spec 环检测+预算方案可定稿。
 - **MCP instructions + skill 分离**（工具 terse 行为、方法学进 SKILL.md 装 `~/.agents/skills/`）→ 印证 ROADMAP 语料/HandshakeFeatureIntro 思路与微软一致。
+
+## 实施后 follow-up（2026-09-10，review 循环收集，低优先）
+
+- [ ] **D2 根因下沉 Engine**：dbgshim `EnumerateCLRs` 对无 CLR 进程返回 S_OK+空枚举，`ClrProcessFinder` 把本机全部非 .NET 进程记为 `CLR <unknown>`（Engine 注释语义与实测不符）；D2 在宿主按 `ClrVersion != "<unknown>"` 过滤绕过（review Ruling Accept + CHANGELOG Fixed）。**正确修法**：Engine `ClrProcessFinder.List` 改判「枚举 0 项跳过」而非返回 `<unknown>` 哨兵，补 Engine 单测；宿主过滤随之可去。
+- [ ] **W1 收口（review deferred minors）**：README/DebugSetTool Description「枚举给底层整数值」口径与 enum 对象字段 v1 实测降级不一致，统一为「仅底层 GenericValue 形态可写」或降级口径；`WritePathTests` 陈旧注释；引擎 `ParseCharBytes` 单引号路径经工具不可达（内部口径注记）。
+- [ ] **D1 措辞小项**：合成标量/数组目标返回头「对象」、空 children 兜底文案与 Display 重复等（reviewer Minor）。
