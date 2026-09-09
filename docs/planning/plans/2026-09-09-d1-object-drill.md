@@ -4,7 +4,7 @@
 
 **Goal:** 新增 `debug_object(path, depth=2, limit=32, threadId=0)`：P6 路径定位对象/数组 → 受控递归展开 children 树（depth 预算 + `<cyclic>` 环占位 + 每层 limit），让 agent 逐级/多级下钻对象结构，不盲猜路径。
 
-**Architecture:** Engine `DebugEngineCore` 新增泵内 `ExpandNode` 受控递归展开器（路径定位复用 P6 `ResolvePathValue`；递归在值对象/数组上按 depth 层展开 children，`HashSet<long>` 沿路径记引用地址防环），`DebugSession` 暴露 `ReadObjectAtPathAsync`；宿主 `debug_object` 复用 `ExpressionParser` 解析 path 后调用并渲染。Session 层零改动（文法/渲染均在现成层）。
+**Architecture:** Engine `DebugEngineCore` 新增泵内 `ExpandNode` 受控递归展开器（路径定位复用 P6 路径链——现私有 `ReadPathValue`，实施时**前置小重构抽出 `ResolvePathValue`/`FindThread`** 后复用；递归在值对象/数组上按 depth 层展开 children，`HashSet<long>` 沿路径记引用地址防环），`DebugSession` 暴露 `ReadObjectAtPathAsync`；宿主 `debug_object` 复用 `ExpressionParser` 解析 path（`$exception` 前缀特判）后调用并渲染。Session 层零改动（文法/渲染均在现成层）。
 
 **Tech Stack:** C# net10.0、ClrDebug（`CorDebugReferenceValue`/`CorDebugObjectValue`/`CorDebugArrayValue`）。
 
