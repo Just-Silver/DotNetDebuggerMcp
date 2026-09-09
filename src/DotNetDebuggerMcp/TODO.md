@@ -6,7 +6,7 @@
 
 ## 执行推进顺序总览（2026-09-08 排定，按批推进）
 
-> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并新开 CHANGELOG `[Unreleased]` 段（1.7.0 已发布，当前无该段，下一批工具落地时新开）；小型项先补方案段。**2026-09-09：全部待办（W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3）已逐项拍板转正 spec + 实施计划就绪**（`docs/planning/plans/2026-09-09-*.md`），待统一审查后实施；W2/V2 已转 ROADMAP 不在待办。
+> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并补 CHANGELOG `[Unreleased]` 段（下一批工具落地时同步）。**2026-09-09：全部待办（W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3）已逐项拍板转正 spec + 实施计划就绪**（`docs/planning/plans/2026-09-09-*.md`），按批次审查后实施；W2/V2 已转 ROADMAP 不在待办。**2026-09-10：W1/V3/DB1/D1/D2/DB2/V4/U1 已实施**（见下表状态），V1/W3 待后续批次。
 
 | 批次 | 项 | spec | 状态 | 依赖 |
 |---|---|---|---|---|
@@ -17,7 +17,7 @@
 | | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已完成**（2026-09-09 实施：DebugTarget spawn/sleep 样本 + 宿主 Toolhelp 父子快照助手（kernel32 P/Invoke，零新包）→ `debug_processes` 标注当前会话目标的 .NET 子孙进程链 + 切换引导 + 修正无 CLR 进程误列；Engine 零改动；本地 commit 87a3488/6fc2e69） | — |
 | **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已完成**（2026-09-10 实施：`debug_variables` 增 `names` 白名单参数——宿主渲染层过滤（SplitNames/MatchName/BuildVariablesLines），空=全量/≤50 拒绝/未知名零值反馈/同名跨作用域；与 DB1 脱敏叠加命中对象仍逐字段脱敏；Engine/Session 零改动；本地 commit da3df05） | — |
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已完成**（2026-09-10 实施：宿主测试 `AgentCopyGuardTests` 反射读 debug_* 工具 `[Description]` 断言关键引导片段（7 计划对 + W1/V3/D1 已落地工具补录 4 行），只断片段 Contains 不挂 AppServices 串行；`DebugMcpToolsTests` 既有 e2e 补 wait「最近停点」/step「debug_wait」返回文案断言（launch「工作目录」/异常 `$exception` 断言先前批次已带）；负向验证：人为删 DebugStep 描述「debug_wait」→ 断言即红。Engine/Session/宿主零代码改动，纯测试护栏） | 随新工具同批补 |
-| **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | **已拍板+计划就绪**（2026-09-09：不需会话/AgentActionLog 护栏/务实成员反查标注 v1/U1 先行；FlaUI 引用姿势线上核实；计划 `plans/2026-09-09-u1-ui-automation.md`） | — |
+| **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | **已完成**（2026-09-10 实施：宿主 `UiAutomationService`（FlaUI UIA3 单实例 + 5s 双层超时护栏/串行锁/index 缓存/Invoke 优先+物理左键兜底/rightClick·doubleClick·Scroll 物理鼠标）+ `UiSemanticResolver`（PEReader 成员反查，apphost 同名 dll 兜底）+ `ui_find`/`ui_invoke(action)`/`ui_wait`/`ui_scroll` 四工具 + WinForms `UiSampleApp` 测试目标（generate-testdata.ps1 产出，源码入库）+ README/CHANGELOG/V4 语料补录；Engine/Session 零改动；本地 commit 539a3fb/99e0b41/7a5bf0d/3289fb6） | — |
 | | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | **已拍板+计划就绪**（2026-09-09：可选 build+产物自动拿取/文件路径/fail-fast/纯断点版先行；计划 `plans/2026-09-09-v1-verify-loop.md`） | 执行按依赖排期 |
 | **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | **已拍板+计划就绪**（2026-09-09：spike Task0 三分支写死/breakpoint_set dataPath/降级=说明+ROADMAP；计划 `plans/2026-09-09-w3-data-breakpoint.md`） | spike 在 Task0 |
 | **远期** | **W2 SetIP** | `2026-09-08-w2-set-ip.md` | **已转 ROADMAP（2026-09-08）** | — |
@@ -25,11 +25,11 @@
 
 > 注：UI 自动化条目（上方独立 section）对应总览 U1，两者同源；执行以本总览批次为准。
 
-## UI 自动化主动触发业务操作（2026-09-08 调研，立项前）
+## UI 自动化主动触发业务操作（U1，**已完成** 2026-09-10，移总览批次历史）
 
-> 来源：CoreMes（WPF 产线软件）实证 + 跨框架通用性探讨（agent 主导触发 UI 业务流，对标截图工具/Snipaste「圈选内部元素」能力）。**状态：调研完成；实现技术已定（FlaUI 引用包）；spec 草案已立 `docs/planning/specs/2026-09-08-u1-ui-automation.md`（含 FlaUI API 实查 + UIInspect.MCP 蓝本实读 + 语义闭环设计 + 6 项待拍板）**——立项时按 spec 拍板取舍。
+> 来源：CoreMes（WPF 产线软件）实证 + 跨框架通用性探讨（agent 主导触发 UI 业务流，对标截图工具/Snipaste「圈选内部元素」能力）。实现已完成（spec `2026-09-08-u1-ui-automation.md` + 计划 `plans/2026-09-09-u1-ui-automation.md`）：四工具落地 + UiSampleApp 测试目标 + README/CHANGELOG/V4 补录，提交见总览表 P3/U1 行；`ui_input`/`ui_pick`/横向与自动滚动列 v1.5。
 
-- [ ] **UI 自动化触发（UIA 通用层）**（宿主新组件｜中-大）——**完整技术方案见 spec**（`docs/planning/specs/2026-09-08-u1-ui-automation.md`，工具面 §4.1 已定案）。要点：FlaUI 5.0.0（NuGet stable，net8.0-windows7.0 二进制，net10 向上兼容；net10.0-windows 目标在 main 未发 release——包分发照抄 UIInspect.MCP 的 PackageDownload+HintPath）；目标=整个 .NET 生态 UI 技术栈（.NET Framework 4.x→10 的 WPF/WinForms/WinUI/MAUI、Avalonia 11+），UIA 与被控目标 .NET 版本无关。**工具面（2026-09-08 定案：5 个，v1 做 3 个）**：`ui_find`（窗口/进程+text/type/autoId 条件 → 控件清单，无视觉"眼睛"）+ `ui_invoke`（语义点击，Invoke 优先坐标兜底）+ `ui_wait`（等控件出现/文本变化，点击后状态确认）为 **v1 最小闭环**；`ui_input`（文本框输入）/`ui_pick`（人类 hover 指认兜底）列 v1.5。**语义闭环（差异化）**：反编译读 Command 绑定 → UIA 元素标注语义 → run_to/断点设好 → ui_invoke 点击 → 命中观察 → ui_wait 确认状态变更。**待拍板**（见 spec §6）：ui_* 是否需活动 debug 会话（倾向不需要）、副作用护栏形态、自动语义标注 v1 做不做（倾向不做）。**V4 衔接**：ui_* 落地同批补语料断言。**README 同步**：ui_* 属新增 MCP 工具，落地同 commit 改根 README。
+- [x] **UI 自动化触发（UIA 通用层）**（宿主新组件｜中-大）——实施于 2026-09-10（详总览 P3/U1 行）。遗留（spec §4.1 排期）：`ui_input`（ValuePattern 输入）/`ui_pick`（人类指认）/横向滚动/ScrollPattern 自动滚动列 **v1.5**。
 
 ## agent 自动化调试闭环缺口清单（2026-09-08 盘点，按环节立项评估）
 
