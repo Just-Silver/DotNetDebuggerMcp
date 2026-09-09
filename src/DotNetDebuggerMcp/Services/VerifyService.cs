@@ -182,8 +182,8 @@ internal static class VerifyService
                         StopContext? stop = null;
                         try
                         {
-                            if (state == DebugSessionState.Stopped)
-                                await active.Session.ContinueAsync(ct);
+                            // debug_continue 同语义：无论当前 Stopped/Attaching/None 都放行（launch 冻结在 Main 前的初始同步点也是停）
+                            await active.Session.ContinueAsync(ct);
                             stop = await active.Buffer.WaitForStopAsync(TimeSpan.FromSeconds(step.WaitSeconds), ct);
                         }
                         catch (Exception ex)

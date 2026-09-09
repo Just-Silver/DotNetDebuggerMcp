@@ -29,6 +29,10 @@ public sealed class AgentCopyGuardTests
         { nameof(DebugSetTool.DebugSet), "风险" },                      // 改值副作用风险提示（写内存可能崩溃）
         { nameof(DebugTimelineTool.DebugTimeline), "时间线" },          // 统一时间线语义
         { nameof(DebugObjectTool.DebugObject), "depth" },               // 受控递归下钻参数
+        // V1 debug_verify 一键复验（场景文件 + PASS/FAIL 结果语义）
+        { nameof(DebugVerifyTool.DebugVerify), "场景" },                // 场景 JSON 文件输入
+        { nameof(DebugVerifyTool.DebugVerify), "PASS" },                // 执行到 PASS/FAIL 结果
+        { nameof(DebugVerifyTool.DebugVerify), "fail-fast" },           // 断言失败即停语义
         // U1 ui_* 工具补录（四件套契约：无视觉清单 / 副作用与多键 / 等待超时语义 / 物理滚轮）
         { nameof(UiTools.UiFind), "控件清单" },                         // ui_find 返回文本控件清单（无视觉）
         { nameof(UiTools.UiFind), "无视觉" },

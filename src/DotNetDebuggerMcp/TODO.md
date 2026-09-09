@@ -6,7 +6,7 @@
 
 ## 执行推进顺序总览（2026-09-08 排定，按批推进）
 
-> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并补 CHANGELOG `[Unreleased]` 段（下一批工具落地时同步）。**2026-09-09：全部待办（W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3）已逐项拍板转正 spec + 实施计划就绪**（`docs/planning/plans/2026-09-09-*.md`），按批次审查后实施；W2/V2 已转 ROADMAP 不在待办。**2026-09-10：W1/V3/DB1/D1/D2/DB2/V4/U1 已实施**（见下表状态），V1/W3 待后续批次。
+> 每条 TODO 含完整实现所需关键信息 + spec 路径；**中-大项先按 spec 拍板待办项再动码**；新工具落地须同步根 README 并补 CHANGELOG `[Unreleased]` 段（下一批工具落地时同步）。**2026-09-09：全部待办（W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3）已逐项拍板转正 spec + 实施计划就绪**（`docs/planning/plans/2026-09-09-*.md`），按批次审查后实施；W2/V2 已转 ROADMAP 不在待办。**2026-09-10：W1/V3/DB1/D1/D2/DB2/V4/U1/V1 已实施**（见下表状态），W3 待后续批次。
 
 | 批次 | 项 | spec | 状态 | 依赖 |
 |---|---|---|---|---|
@@ -18,7 +18,7 @@
 | **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已完成**（2026-09-10 实施：`debug_variables` 增 `names` 白名单参数——宿主渲染层过滤（SplitNames/MatchName/BuildVariablesLines），空=全量/≤50 拒绝/未知名零值反馈/同名跨作用域；与 DB1 脱敏叠加命中对象仍逐字段脱敏；Engine/Session 零改动；本地 commit da3df05） | — |
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已完成**（2026-09-10 实施：宿主测试 `AgentCopyGuardTests` 反射读 debug_* 工具 `[Description]` 断言关键引导片段（7 计划对 + W1/V3/D1 已落地工具补录 4 行），只断片段 Contains 不挂 AppServices 串行；`DebugMcpToolsTests` 既有 e2e 补 wait「最近停点」/step「debug_wait」返回文案断言（launch「工作目录」/异常 `$exception` 断言先前批次已带）；负向验证：人为删 DebugStep 描述「debug_wait」→ 断言即红。Engine/Session/宿主零代码改动，纯测试护栏） | 随新工具同批补 |
 | **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | **已完成**（2026-09-10 实施：宿主 `UiAutomationService`（FlaUI UIA3 单实例 + 5s 双层超时护栏/串行锁/index 缓存/Invoke 优先+物理左键兜底/rightClick·doubleClick·Scroll 物理鼠标）+ `UiSemanticResolver`（PEReader 成员反查，apphost 同名 dll 兜底）+ `ui_find`/`ui_invoke(action)`/`ui_wait`/`ui_scroll` 四工具 + WinForms `UiSampleApp` 测试目标（generate-testdata.ps1 产出，源码入库）+ README/CHANGELOG/V4 语料补录；Engine/Session 零改动；本地 commit 539a3fb/99e0b41/7a5bf0d/3289fb6） | — |
-| | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | **已拍板+计划就绪**（2026-09-09：可选 build+产物自动拿取/文件路径/fail-fast/纯断点版先行；计划 `plans/2026-09-09-v1-verify-loop.md`） | 执行按依赖排期 |
+| | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | **已完成**（2026-09-10 实施：宿主 `VerifyScenario`（JSON 模型+中文解析）+ `VerifyBuildRunner`（dotnet build 默认输出 + `-getProperty:TargetPath` 产物自动拿取）+ `VerifyService`（步骤翻译=同进程直调 Session、断言原语、fail-fast、AgentActionLog）+ `debug_verify` 工具；e2e：DebugTarget 纯断点+evaluate+output+state PASS / 期望错值·断点永不命中 FAIL / build 自动拿产物 PASS·坏工程编译摘要 FAIL·文件名不一致中文；README/CHANGELOG/V4 语料补录；SensitiveValueRedactor 移入 Services 共享层；Engine/Session 零改动；本地 commit 72f9a0a/0e9b3e5/e281a4e 等） | — |
 | **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | **已拍板+计划就绪**（2026-09-09：spike Task0 三分支写死/breakpoint_set dataPath/降级=说明+ROADMAP；计划 `plans/2026-09-09-w3-data-breakpoint.md`） | spike 在 Task0 |
 | **远期** | **W2 SetIP** | `2026-09-08-w2-set-ip.md` | **已转 ROADMAP（2026-09-08）** | — |
 | | **V2 崩溃 dump** | `2026-09-08-v2-crash-dump.md` | **转远期（2026-09-08 决策，见 ROADMAP）**；退出码增量①随 V3 | V3 |
@@ -41,7 +41,7 @@
 
 ### 修复/复验 环节（agent「改完 bug 确认修好」的最后一跳）
 
-- [ ] **V1 一键复验闭环**（宿主｜中-大，ROADMAP reverse-skill 闭环落地）——**能力**：agent 改完代码自证修复：重编译→重启（可复现快照）→重跑场景→断言 pass/fail。**spec 草案**：`docs/planning/specs/2026-09-08-v1-verify-loop.md`。**核心设计**：结构化手写场景 JSON（target 启动快照 + 可选 build + steps 数组）+ 断言原语（breakpointHit/evaluate/output/state/noException）+ 宿主 `debug_verify` 编排（同进程直调 Session 不走 MCP 往返）。**关键取舍**：不做录制回放（v1 手写场景，录制 v2 从 AgentActionLog 生成）；fail-fast；编译步建议 v1 含（闭环缺"改码"半环）。**依赖**：debug_launch 可复现 ✅；W1/U1/V3 为增强断言源（纯断点版可先行）。
+- [x] **V1 一键复验闭环**（宿主｜中-大，ROADMAP reverse-skill 闭环落地）——**已完成**（2026-09-10，见上方总览表 V1 行）——**能力**：agent 改完代码自证修复：重编译（可选）→重启（可复现快照）→重跑场景→断言 pass/fail。**核心设计**：结构化手写场景 JSON（target 启动快照 + 可选 build + steps 数组）+ 断言原语（breakpointHit/evaluate/output/state/noException）+ 宿主 `debug_verify` 编排（同进程直调 Session 不走 MCP 往返）。**关键取舍**：不做录制回放（v1 手写场景，录制 v2 从 AgentActionLog 生成）；fail-fast；编译步 v1 含（闭环缺"改码"半环已补）。遗留：ui.*/set 步骤类型在 U1/W1 能力就绪后按预留契约补实现。
 - [ ] **V2 崩溃现场自动保留（dump + 轨迹）**（Engine+Session+宿主｜中）——**转远期（2026-09-08 决策）**：dump 自动抓取对 agent 代价大（依赖注入 `DOTNET_DbgEnableMiniDump` 环境变量改变目标运行环境；路径 A 抓取时机 spike 不确定），收益边际低（V3 时间线 + 退出码判定已覆盖大部分复盘）。保留事项：① **第一增量「退出码 + 崩溃判定」随 V3 顺手做（已写入 V3 条目顺手项）**（ExitProcess 只发 Exited 无退出码，补 code 到 Reason 成本极小）；② 完整 dump 转 `docs/ROADMAP.md` 远期。spec 草案保留：`docs/planning/specs/2026-09-08-v2-crash-dump.md`（dump 路径查证结论仍有效：.NET 崩溃默认不生成 dump；WER LocalDumps 对 .NET 无效已否决；正解 = 会话内异常停点抓 + `DOTNET_DbgEnableMiniDump=1` 注入）。
 - [x] **V4 修复回归护栏（语料断言）**（宿主测试｜小，ROADMAP reverse-skill 候选）——**已完成**（2026-09-10，见上方总览表 V4 行）——**能力**：把关键文案/行为契约固化为断言测试防回归。**spec 草案**：`docs/planning/specs/2026-09-08-v4-copy-guard.md`。**技术要点**：只测关键片段（非全匹配，防脆）；断言源直接引 `AppText`/`ToolParameterText` 常量（改文案不同步改测试即红，与常量纪律互补）；新工具落地强制同批补 V4。已有先例：McpSessionConcurrencyTests 等行为级护栏。**建议**：debug_set/debug_object/debug_verify/ui_* 落地时同批补断言；语料可吸收 DebugMCP 停点返回常驻「你找到的是症状还是根因」+ 下一步建议的文案形态（v4 spec 关联行已注，立项时拍板）。
 

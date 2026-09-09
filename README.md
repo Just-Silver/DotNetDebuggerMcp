@@ -127,11 +127,12 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_object` | **对象结构受控递归下钻（D1）**：把已定位的对象/数组按 `depth` 层展开 children（默认 2，上限 6），每层字段/元素上限 `limit`（默认 32，范围 1-128），同路径环输出 `<cyclic>` 占位不再下钻——探索「对象里有什么」逐级展开，不盲猜路径。`path` 同 `debug_evaluate`（根=栈顶帧局部/参数名 + 字段/下标，支持 `$exception` 伪根如 `$exception.InnerException`）；标量/字符串/null 终值返回中文「不是对象/数组」提示。**与 `debug_evaluate` 分工：它取标量值，本工具看结构** |
 | `dotnetdebugger_debug_set` | **停点现场改写（W1）**：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显（防误判改写是否触及原因）。`path` 同 `debug_evaluate`（根=局部/参数名 + 字段/下标）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（**无符号 `0x` 十六进制**，或**带符号十进制**整数/小数/科学计数，可带 `m/f/d` 后缀；小数/后缀按目标类型转换——浮点目标接受，整型拒小数/后缀，**decimal 目标 v1 不支持**（如 `order.Total`，中文降级提示）；枚举给底层整数值）/ 同帧另一条对象路径（引用重定向如 `cfg.Backup`）。不支持改 readonly/const/静态字段、构造新对象、字符串内容（双引号/单引号文本不在文法内，char 用整数码点写）。**风险：写目标进程内存可能使其崩溃——只改确认的变量；目标引用当前为 null 时的重定向不做类型校验（无 deref 对象可比），需自行保证同型；改完 `debug_continue` 观察行为** |
 | `dotnetdebugger_debug_exceptions` / `_clear` | first-chance 异常断点：按类型全名或短名（`.短名` 结尾，忽略大小写）过滤，不匹配的异常跳过并在 debug_wait/debug_state 提示跳过情况 / 清除 |
+| `dotnetdebugger_debug_verify` | **一键复验（V1）**：读场景 JSON 文件（`target` 启动快照 + 可选 `build` 重编译 + `steps` 断言序列）自动执行到 **PASS/FAIL**——改完 bug 后自证修复的最后一跳。可选 `build` 先重编译工程（**产物自动拿取**：build 成功后按项目默认输出路径定位，不设置 OutputPath；`target.commandLine` 写工程入口 exe 文件名+参数，首段文件名须与编译产物同名），再启动并执行断点/continue/断言步骤（`breakpointHit`/`evaluate`/`output`/`state`/`noException`），断言失败即停（fail-fast）并返回失败步骤+目标输出尾部。无 `build` 时 `commandLine` 用完整路径/相对路径。场景格式与边界见 §使用示例「一键复验」 |
 | `dotnetdebugger_web_open` | 打开 Web 调试监视器（幂等：已启动返回现有地址不重复启动；首次自动拉起默认浏览器） |
 | `dotnetdebugger_debug_disconnect` | 断开调试会话 |
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
-> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察（帧变量多/只想看某几个时 `debug_variables names="i,order"` 按名白名单读取——逗号分隔、忽略大小写、空=全量；命中对象照常逐字段脱敏，未知名会列出当前帧可用名）、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、**想知道对象里有什么再逐级下钻用 `debug_object`**（`debug_object "order.Customer" depth=3`——把对象/数组按 depth 层展开 children 树，同路径环自动标 `<cyclic>`、`limit` 控每层宽度；与 `debug_evaluate` 分工：它取标量值，本工具看结构）、**「改值验证假设再继续」用 `debug_set`**（把现场变量改成新值，返回 原值→新值 回显，改完 `debug_continue` 观察行为是否变化——二分定位因果实验；注意写进程内存有崩目标风险，只改确认的变量）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。**复盘整段调试经过（目标日志 ↔ 断点/异常/trace 事件 ↔ agent 动作按时间对齐）用 `debug_timeline`**。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。**读值输出对疑似凭据自动脱敏**：`debug_variables`/`debug_evaluate`/trace 轨迹的变量值若按变量名（api key/password/token/credential/auth/连接串等，归一化 exact-match）或按值内容形态（JWT/PEM/Bearer/`Key=…` 等）判定像凭据，输出替换为 `[已脱敏:疑似凭据]` 占位符并附提示——用类型/长度/null 判断，勿读原始值；null/平凡值不动（「token 是 null」照常可调），子串不误伤（`tokenCount` 等照常可读）。**目标自起子进程（Web/服务类目标把业务代码跑在子进程，如 dotnet run 起的 app 再 spawn worker/testhost）时**：`debug_processes` 会把当前会话目标的 .NET 子孙进程链标注出来（行尾「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」+ 尾部切换引导）——单活动会话下需先停当前会话（`debug_disconnect`/停断点）再 `debug_attach <childPid>` 单独调试子进程；子进程自己的控制台输出不在 launch 的 `debug_output` 捕获范围。
+> 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察（帧变量多/只想看某几个时 `debug_variables names="i,order"` 按名白名单读取——逗号分隔、忽略大小写、空=全量；命中对象照常逐字段脱敏，未知名会列出当前帧可用名）、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、**想知道对象里有什么再逐级下钻用 `debug_object`**（`debug_object "order.Customer" depth=3`——把对象/数组按 depth 层展开 children 树，同路径环自动标 `<cyclic>`、`limit` 控每层宽度；与 `debug_evaluate` 分工：它取标量值，本工具看结构）、**「改值验证假设再继续」用 `debug_set`**（把现场变量改成新值，返回 原值→新值 回显，改完 `debug_continue` 观察行为是否变化——二分定位因果实验；注意写进程内存有崩目标风险，只改确认的变量）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。**复盘整段调试经过（目标日志 ↔ 断点/异常/trace 事件 ↔ agent 动作按时间对齐）用 `debug_timeline`**。**改完源码想「重编译→重启→重跑关键路径→断言结果」一次自证修复，用 `debug_verify`**（读场景 JSON 文件：`target` 启动快照 + 可选 `build` 重编译（产物自动拿取）+ `steps` 断言序列，执行到 PASS/FAIL、断言失败即停——见使用示例「一键复验闭环」）。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。**读值输出对疑似凭据自动脱敏**：`debug_variables`/`debug_evaluate`/trace 轨迹的变量值若按变量名（api key/password/token/credential/auth/连接串等，归一化 exact-match）或按值内容形态（JWT/PEM/Bearer/`Key=…` 等）判定像凭据，输出替换为 `[已脱敏:疑似凭据]` 占位符并附提示——用类型/长度/null 判断，勿读原始值；null/平凡值不动（「token 是 null」照常可调），子串不误伤（`tokenCount` 等照常可读）。**目标自起子进程（Web/服务类目标把业务代码跑在子进程，如 dotnet run 起的 app 再 spawn worker/testhost）时**：`debug_processes` 会把当前会话目标的 .NET 子孙进程链标注出来（行尾「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」+ 尾部切换引导）——单活动会话下需先停当前会话（`debug_disconnect`/停断点）再 `debug_attach <childPid>` 单独调试子进程；子进程自己的控制台输出不在 launch 的 `debug_output` 捕获范围。
 
 ### UI 自动化（`ui_find` / `ui_invoke` / `ui_wait` / `ui_scroll`——真实操作运行中的 .NET UI 应用）
 
@@ -360,6 +361,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `debug_set` | `path`（必填）+ `value`（必填）+ `threadId` | **停点现场改写**：`path` 同 `debug_evaluate`（如 `scores[2]`、`b.A`、`i`、`cfg.Current`，根=栈顶帧局部/参数名，缺省 `threadId=0` 用最近停点线程）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（**无符号 `0x` 十六进制**或**带符号十进制**整数/小数/科学计数，可带 `m/f/d` 后缀——按目标类型转换：浮点接受小数/后缀、整型拒后缀、**decimal 目标 v1 不支持**（中文降级提示））/ 同帧对象路径（引用重定向，如 `cfg.Backup`）。返回「原值 → 新值」回显。不支持改 readonly/const/静态字段、构造新对象、字符串内容（双引号/单引号文本不在文法内，char 用整数码点写）。**风险：写目标进程内存可能使其崩溃，只改确认的变量；目标引用为 null 时的重定向无类型校验，须保证同型** |
 | `debug_variables` | `names` + `threadId` | **按名白名单读取（DB2）**：`names` 逗号分隔白名单（空=全量），精确忽略大小写匹配局部/参数展示名——含 PDB 局部名、元数据参数名、无符号名的 `slotN`、异常停点 `$exception` 伪变量；同名跨作用域（locals/arguments 分节）都返回。**最多 50 项**，超限中文拒绝；白名单未知名在返回尾段列出当前帧可用名（零值反馈不静默）。头部注明白名单命中数；命中值照常走 DB1 敏感脱敏。缺省 `threadId=0` 用最近停点线程 |
 | `debug_continue` / `debug_disconnect` | — | 继续执行（异步返回，停点后 `debug_state` 确认）/ 断开会话（目标继续独立运行） |
+| `debug_verify` | `scenarioPath`（必填） | **一键复验（V1）**：场景 JSON 文件路径——含 `target`（启动快照）+ 可选 `build` + `steps`。build 分支自动 `dotnet build`（默认输出、失败绝不启动旧产物）并 `-getProperty:TargetPath` 拿产物启动；断言原语 kind：`breakpointHit`（`breakpointIndex` 0-based 引场景内第 N 个 breakpoint 步骤）/`evaluate`（`path`+`equals`/`contains` 互斥）/`output`（`contains`，`stream`=out/err）/`state`（`expect`）/`noException`；`ui`/`set` 步骤预留（依赖 U1/W1，运行时报未就绪）。返回 PASS/FAIL 与失败步骤上下文 |
 
 ### UI 自动化工具参数（`ui_find` / `ui_invoke` / `ui_wait` / `ui_scroll`）
 
@@ -420,6 +422,34 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 
 - > 目标程序（如 CoreMes/被测 WinForms）已开着，先在切换按钮 `ui_find process=CoreMes text=手动 type=Button` → 拿到行 `[3] Button Name=手动 … Invoke✓` 与语义候选（如 `MainViewModel.SwitchAutoStateCommand` 相关同名成员，可用 `decompile_member` 看实现）→ 想断点停在切换代码里：`debug_attach` 附加后用 `debug_breakpoint_set typeName=… memberName=…` 预埋断点 → `ui_invoke process=CoreMes index=3`（真实点击；产线副作用，打 AgentActionLog）→ `debug_wait` 等断点命中看 `debug_stack`/`debug_variables` 现场 → `ui_wait process=CoreMes textChangedFrom=手动 textChangedTo=自动` 确认状态已切（业务闭环）。
 - > 右键/双击/滚动：右键弹菜单目标用 `ui_invoke index=N action=rightClick`（物理右键，可能弹系统上下文菜单）；双击列表项 `action=doubleClick`；长列表滚到底看后面的项用 `ui_scroll process=… name=listBox direction=down lines=5` 后 `ui_find` 复查。物理动作在断开/非交互桌面（远程、服务）会被系统拒绝——需交互桌面会话。
+
+**一键复验闭环（V1 debug_verify）——改完 bug 自证修复**
+
+> 把「启动参数快照 + 场景动作 + 期望断言」写成场景 JSON 文件，`debug_verify <文件>` 一条命令跑成 PASS/FAIL：可选先重编译（产物自动拿取），再启动目标、下断点、continue、断言（断点命中/表达式值/输出/状态/无异常），断言失败即停。场景格式（完整示例）：
+
+```jsonc
+{
+  "name": "Work 计算复验",
+  "target": { "commandLine": "CoreMes.exe 3 0" },           // 启动快照（debug_launch 同参）
+  "build": { "project": "D:\\proj\\CoreMes\\CoreMes.csproj", "configuration": "Debug" },  // 可选：先重编译
+  "steps": [
+    { "breakpoint": { "typeName": "CoreMes.Core.Worker", "memberName": "Run", "hit": 1 } },
+    { "continue": { "waitSeconds": 30 } },
+    { "assert": { "kind": "breakpointHit", "breakpointIndex": 0 } },   // 0-based 引场景内第 1 个 breakpoint 步骤
+    { "assert": { "kind": "evaluate", "path": "count", "equals": "3" } },   // equals=精确（字符串按字面值不带引号）
+    { "assert": { "kind": "output", "contains": "[CoreMes] done" } },        // output 当前只支持 contains
+    { "continue": { "waitSeconds": 30 } },
+    { "assert": { "kind": "state", "expect": "Exited" } },
+    { "assert": { "kind": "noException" } }
+  ]
+}
+```
+
+- 步骤类型：`breakpoint`（typeName+memberName 成员级定位方法入口，`hit` 第 N 次起）/ `continue`（`waitSeconds`）/ `assert`（kind：breakpointHit/evaluate/output/state/noException）/ `ui`·`set`（预留：依赖 U1/W1 未实现，运行时报「步骤类型依赖未就绪」）。
+- `build` 分支：只重编场景指定工程、**不设置 OutputPath**，产物用项目默认输出路径经 `-getProperty:TargetPath` 自动拿取（SDK 现算，agent 不写路径/TFM）；`commandLine` 首段写**工程入口文件名**（如 `CoreMes.exe`，须与编译产物同名，忽略扩展名/大小写）+ 参数——不一致或 build 失败即 FAIL（绝不启动旧产物）。
+- 无 `build`：`commandLine` 用完整路径或相对 server 工作目录（不搜 PATH，同 `debug_launch`）；目标文件不存在 → 中文提示。
+- 断言语义：`breakpointHit` 看最近停点是否命中该断点；`evaluate` equals=精确（字符串比字面值，数字/布尔比展示文本，大小写敏感）、contains=展示文本含子串（忽略大小写，也适用于日志串）；`output` **只支持 contains**（`stream`=out/err，缺省全部）；`state` `expect` 可逗号分隔（任一命中即过）；`noException` 场景期间无异常停点。
+- 边界与风险：build 需本机 SDK；每轮复验重新编译/重启目标（有 build 时是唯一真实闭环）；`ui`/`set` 步骤在 U1/W1 落地前报告未就绪；**目标 exe/产物路径含空格 v1 不支持**（启动器按空格切分命令——build 产物落在含空格目录会返回中文边界提示，请用无空格输出目录）；目标输出断言基于 launch 捕获缓冲，进程自然退出后立即断言可能有极短竞态（输出行刚送达）——日志密集应用建议先断点停住再断输出。
 
 ## 第三方组件
 
