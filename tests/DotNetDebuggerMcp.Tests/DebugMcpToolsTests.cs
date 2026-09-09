@@ -1080,6 +1080,69 @@ public sealed class DebugMcpToolsTests
         Assert.True(disc.IsError != true, disc.Text());
     }
 
+    [Fact]
+    public async Task DebugObject_DrillTree_DepthRenderScalarErrorAndNotStopped()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var drillToken = ReadMethodToken(dll, "Drill");
+        Assert.True(drillToken > 0, "未找到 Drill token（请确认 generate-testdata.ps1 已生成 D1 drill 样本）");
+
+        await using var mcp = await ConnectAsync();
+
+        // drill 模式：delay 5s 提供操作窗口 → Drill(a, {3,1,4}, ghost:null)（a→b→c→a 成环）
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} drill 5", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        // 错误面①：未 Stopped（launch 冻结在 Main 前）调 debug_object → 提示先到停点
+        var notStopped = await CallAsync(mcp, "debug_object",
+            new Dictionary<string, object?> { ["path"] = "root" });
+        Assert.True(notStopped.IsError != true, notStopped.Text());
+        Assert.Contains("未停在断点/异常", notStopped.Text());
+
+        // 先 continue 再设 Drill 入口断点（CI 实录：launch 返回时模块登记可能缺目标模块）
+        var cont = await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        Assert.True(cont.IsError != true, cont.Text());
+
+        var bp = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{drillToken:x8}", ["ilOffset"] = 0 });
+        Assert.True(bp.IsError != true, bp.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(bp.Text()));
+
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.True(wait.IsError != true, wait.Text());
+        Assert.Contains("已停下", wait.Text());
+
+        // 正路径：默认 depth=2 → root 对象 children（含 Next）；环被 <cyclic> 截住不死循环
+        var d1 = await CallAsync(mcp, "debug_object", new Dictionary<string, object?> { ["path"] = "root" });
+        Assert.True(d1.IsError != true, d1.Text());
+        Assert.Contains("对象 root", d1.Text());
+        Assert.Contains("Next", d1.Text());
+
+        // 正路径：depth=3 → Name/Value 递归两层展开，正常返回
+        var d3 = await CallAsync(mcp, "debug_object", new Dictionary<string, object?> { ["path"] = "root", ["depth"] = 3 });
+        Assert.True(d3.IsError != true, d3.Text());
+        Assert.Contains("对象 root", d3.Text());
+        Assert.Contains("Name", d3.Text());
+        Assert.Contains("Value", d3.Text());
+
+        // 错误面②：标量终值（root.Value 是 int）→ 中文「不是对象/数组」
+        var scalar = await CallAsync(mcp, "debug_object", new Dictionary<string, object?> { ["path"] = "root.Value" });
+        Assert.True(scalar.IsError != true, scalar.Text());
+        Assert.Contains("不是对象/数组", scalar.Text());
+
+        // 错误面③：path 非法（非路径形态）→ 中文提示
+        var badPath = await CallAsync(mcp, "debug_object", new Dictionary<string, object?> { ["path"] = "1" });
+        Assert.True(badPath.IsError != true, badPath.Text());
+        Assert.Contains("不是有效路径", badPath.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
     /// <summary>时间线文本的每一行行首时间戳须单调不减（格式 [HH:mm:ss.fff] tag 固定宽）。</summary>
     private static void AssertChronologicalRows(string text)
     {
