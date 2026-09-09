@@ -14,7 +14,7 @@
 | | **V3 统一时间线** | `2026-09-08-v3-timeline.md` | **已完成**（2026-09-09 实施：事件历史环形 500 + DebugTimeline 三源归并 + debug_timeline 工具 + 退出码/attach 顺手项；本地 commit 12456d8/d10ade5/eff9c29/a695658） | P1 时间戳✅ |
 | | **DB1 敏感脱敏层** | `2026-09-08-db1-sensitive-redaction.md` | **已拍板+计划就绪**（2026-09-09：读值出口+表达式级、宿主层；计划 `plans/2026-09-09-db1-sensitive-redaction.md`） | — |
 | | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | **已完成**（2026-09-09 实施：DebugTarget DrillNode/drill 样本（链+环+null）+ Engine `ReadObjectAtPathAsync` 受控递归（depth/limit/沿路径防环 `<cyclic>`）+ 宿主 `debug_object` 工具（`$exception` 前缀特判）+ README/CHANGELOG；本地 commit 34dfa59/cfea258） | P6 求值链✅ |
-| | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已拍板+计划就绪**（2026-09-09：Toolhelp 宿主+debug_processes 全链标注；计划 `plans/2026-09-09-d2-child-process.md`） | — |
+| | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已完成**（2026-09-09 实施：DebugTarget spawn/sleep 样本 + 宿主 Toolhelp 父子快照助手（kernel32 P/Invoke，零新包）→ `debug_processes` 标注当前会话目标的 .NET 子孙进程链 + 切换引导 + 修正无 CLR 进程误列；Engine 零改动；本地 commit 87a3488/6fc2e69） | — |
 | **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-db2-named-whitelist.md`） | debug_variables 面 |
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-v4-copy-guard.md`） | 随新工具同批补 |
 | **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | **已拍板+计划就绪**（2026-09-09：不需会话/AgentActionLog 护栏/务实成员反查标注 v1/U1 先行；FlaUI 引用姿势线上核实；计划 `plans/2026-09-09-u1-ui-automation.md`） | — |
@@ -47,7 +47,7 @@
 
 ### 现场纵深/环境 环节
 
-- [ ] **D2 子进程/多进程跟随**（Engine+宿主｜小-中）——**能力**：发现"当前会话目标的 .NET 子进程链"并引导切换（Web/服务目标业务代码常跑子进程）。**spec 草案**：`docs/planning/specs/2026-09-08-d2-child-process.md`。**技术要点**：`Process` 无 Parent API——用 CIM/WMI `Win32_Process.ParentProcessId` 一次全表查（Engine 依赖面已有 System.Management 邻近；备选 ntdll P/Invoke）；`ClrProcessFinder` 扩展 ParentProcessId + `FindChildren(pid)`（复用 DbgShim 探测 CLR，只列可 attach 的 .NET 子进程）。宿主 `debug_processes` 加父子标注 + 切换引导文案。**边界**：单活动会话不做自动跟随/并行（ROADMAP 已记干扰）；launch 捕获不到子进程 stdout（ProcessOutputCapture 只覆盖父进程）。**待拍板**：CIM 包 vs P/Invoke；`debug_processes` 标注 vs 新 `debug_children`；链深度。
+- [ ] **D2 子进程/多进程跟随** = **已完成**（2026-09-09，见上方总览表 D2 行）——拍板落点：Toolhelp P/Invoke 落宿主 + 增强 `debug_processes` 全链标注与切换引导（不新增 debug_children、不主动提示）。
 
 ### 已评估关闭/远期（防重复立项，一行结论）
 
