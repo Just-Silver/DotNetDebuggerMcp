@@ -10,7 +10,7 @@
 
 | 批次 | 项 | spec | 状态 | 依赖 |
 |---|---|---|---|---|
-| **P1**（独立/低成本，先做） | **W1 现场改写** | `2026-09-08-w1-set-value.md` | **已拍板+计划就绪**（2026-09-09：三层覆盖+重定向+按类型转换；计划 `plans/2026-09-09-w1-set-value.md`） | — |
+| **P1**（独立/低成本，先做） | **W1 现场改写** | `2026-09-08-w1-set-value.md` | **已完成**（2026-09-09 实施：DebugTarget WriteProbe + spike 支持矩阵定案 spec §7 → Engine `SetPathValueAsync`/readonly 拒绝 → Session `WriteValueParser` → 宿主 `debug_set` 工具 + README/CHANGELOG；本地 commit 1a80a09/1c206f5/3c956bd/3775627） | — |
 | | **V3 统一时间线** | `2026-09-08-v3-timeline.md` | **已完成**（2026-09-09 实施：事件历史环形 500 + DebugTimeline 三源归并 + debug_timeline 工具 + 退出码/attach 顺手项；本地 commit 12456d8/d10ade5/eff9c29/a695658） | P1 时间戳✅ |
 | | **DB1 敏感脱敏层** | `2026-09-08-db1-sensitive-redaction.md` | **已拍板+计划就绪**（2026-09-09：读值出口+表达式级、宿主层；计划 `plans/2026-09-09-db1-sensitive-redaction.md`） | — |
 | | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | **已拍板+计划就绪**（2026-09-09：受控递归 v1 depth=2/防环 `<cyclic>`；计划 `plans/2026-09-09-d1-object-drill.md`） | P6 求值链✅ |
@@ -37,7 +37,6 @@
 
 ### 观察/假设/验证 环节
 
-- [ ] **W1 现场改写（SetValue）后继续**（Engine+Session+宿主｜中-大）——**能力**：停点把 locals/字段/数组元素改成指定值再 continue，支撑「改 X 再跑看是否复现/消失」的二分定位（agent 调试最常用实验）。**spec 草案**：`docs/planning/specs/2026-09-08-w1-set-value.md`（关键信息已沉淀）。**技术信息**：读值链路已有（`ReadPathValue`/`GetFieldValue` 只读）；写路径 = 读定位到值对象 → `As<CorDebugGenericValue>().SetValue(IntPtr)`（栈上值类型局部经 `GetLocalVariable` 读后可直接写——**VS 同款底层，已查证**）；引用重定向 `CorDebugReferenceValue.SetValue`。**方案**：新工具 `debug_set`（路径+新值，复用 P6 文法解析标量）；Engine 命令泵内新增同步写原语（与读同线程，天然安全）。**难度**：中（读已通，写只需在泵内补值写 + 标量解析）。**边界**：不改 readonly/常量；构造新对象/字符串不支持（func-eval 已关）；返回必须带原值回显防 agent 误判。**待 spike**：数组元素写、struct 字段、值类型局部活引用确认。
 - [ ] **W3 数据断点（值变化即停）**（Engine+Session｜大，spike 前置）——**能力**：字段/局部变量值变化时停下。**spec 草案**：`docs/planning/specs/2026-09-08-w3-data-breakpoint.md`。**已查证**：ClrDebug 有两条相关路径——A `CorDebugValue.CreateBreakpoint()`（ValueBreakpoint，挂值对象，受值对象存活/GC/帧约束）+ B `OnDataBreakpoint` 回调（Callback4 已封装）但**未搜到创建端 API**。**spike 必答**：A 对栈上局部是否可行/对对象字段是否有效；B 的创建入口是否在 ICorDebug 新接口或诊断口；两者是否 A 触发→B 通知。**结论三选一**：A 可行（ValueBreakpoint 版）/B 可行（现代版）/不可行→降级条件断点+转 ROADMAP。**立项前置 = spike**。
 
 ### 修复/复验 环节（agent「改完 bug 确认修好」的最后一跳）
