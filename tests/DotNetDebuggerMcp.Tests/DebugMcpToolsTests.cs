@@ -371,6 +371,67 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task DebugProcesses_ChildChainAnnotation_And_AttachSwitchesSession()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+
+        // spawn 模式：Main 自起同 exe 的 sleep 子进程（存活 ~16s：delay 8s + sleep 分支 8s），父等待子退出
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} spawn 0", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        Assert.Contains("已启动", launch.Text());
+        var parentMatch = System.Text.RegularExpressions.Regex.Match(launch.Text(), @"目标 pid=(\d+)");
+        Assert.True(parentMatch.Success, $"launch 返回未含目标 pid: {launch.Text()}");
+        var parentPid = int.Parse(parentMatch.Groups[1].Value);
+
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        // 轮询 debug_output 直到 spawn 行出现，解析子进程 pid（子进程窗口有限，尽早取到）
+        var childPid = 0;
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline)
+        {
+            var o = await CallAsync(mcp, "debug_output", new Dictionary<string, object?> { ["lines"] = 100 });
+            Assert.True(o.IsError != true, o.Text());
+            var m = System.Text.RegularExpressions.Regex.Match(o.Text(), @"spawned child pid=(\d+)");
+            if (m.Success) { childPid = int.Parse(m.Groups[1].Value); break; }
+            await Task.Delay(250, TestContext.Current.CancellationToken);
+        }
+        Assert.True(childPid > 0, "目标输出未出现 spawned child pid（spawn 分支未生效？）");
+
+        // debug_processes（D2）：当前会话目标的子进程行尾标注 + 返回尾部引导；会话目标行仍标 ← 当前会话
+        var proc = await CallAsync(mcp, "debug_processes",
+            new Dictionary<string, object?> { ["filter"] = "DebugTarget" });
+        Assert.True(proc.IsError != true, proc.Text());
+        Assert.True(proc.Text().Contains($"pid={childPid}"), proc.Text());
+        Assert.True(proc.Text().Contains($"pid={parentPid}"), proc.Text());
+        Assert.True(proc.Text().Contains($"← 会话目标({parentPid}) 的子进程（父 {parentPid}）"), proc.Text());
+        Assert.True(proc.Text().Contains("← 当前会话"), proc.Text());
+        Assert.True(proc.Text().Contains("发现 1 个会话目标的 .NET 子进程链"), proc.Text());
+        Assert.True(proc.Text().Contains("debug_attach <childPid> 单独调试"), proc.Text());
+        Assert.True(proc.Text().Contains("子进程输出不在 debug_output 范围"), proc.Text());
+
+        // 停当前会话（父进程继续独立运行等待子退出）→ attach 子进程 → 会话切换
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+        Assert.Contains("已断开", disc.Text());
+
+        var att = await CallAsync(mcp, "debug_attach", new Dictionary<string, object?> { ["processId"] = childPid });
+        Assert.True(att.IsError != true, att.Text());
+        Assert.Contains("已附加", att.Text());
+        Assert.Contains($"pid={childPid}", att.Text());
+
+        var state = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        Assert.True(state.IsError != true, state.Text());
+        Assert.Contains($"目标 pid: {childPid}", state.Text()); // 会话已切到子进程
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    [Fact]
     public async Task DebugState_ConcurrentQueries_AllReturn()
     {
         var exe = DebugTargetExe;

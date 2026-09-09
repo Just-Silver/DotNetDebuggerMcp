@@ -17,6 +17,11 @@
 ### Changed
 
 - **`debug_state` 退出码与 attach 反馈（V3 顺手项）**：launch 会话进程已退出时状态行附 `（目标已退出：exitCode=N）`（退出码由进程退出事件捕获；attach 会话 ICorDebug 不提供退出码，提示「退出码不可得」）；attach 到长活目标且进程运行中时提示「已附加成功，进程继续独立运行（无停点不会自行停下），设断点后 debug_continue/debug_wait 等待命中」——不再看起来像卡住
+- **`debug_processes` 子进程链标注 + 切换引导（D2）**：存在当前会话目标时，以 kernel32 Toolhelp 快照（pid→父 pid 全表）把目标的 .NET 子孙进程（子/孙/曾孙全链，多层深度）在行尾标注「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」，返回尾部附引导「业务代码在子进程时需停当前会话（debug_disconnect/停断点）后 debug_attach &lt;childPid&gt; 单独调试」——帮 agent 找到 dotnet run/worker/testhost 类目标自起子进程里的业务代码。边界：**单活动会话**（不支持同时调试多进程，只发现+引导切换）；子进程自身输出不在 `debug_output` 捕获范围（launch 只捕获父进程 stdout/stderr）
+
+### Fixed
+
+- **`debug_processes` 只列实际探测到 CLR 的进程**：dbgshim `EnumerateCLRs` 对无 CLR 进程返回成功但枚举数为 0（源码语义），此前这类进程被误列为 `CLR <unknown>`，导致列表混入大量无关进程（如 svchost/conhost），本项修正为仅保留带真实 CLR 版本的行——列表更贴近「可附加的 .NET 进程」，D2 子进程链标注也基于此精确枚举
 
 ## [1.7.0] - 2026-09-08
 
