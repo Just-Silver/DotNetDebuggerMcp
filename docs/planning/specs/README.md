@@ -16,6 +16,7 @@
 | `2026-09-08-d2-child-process.md` | **D2 子进程跟随 spec**（宿主 TODO P1）：debug_processes 标注当前会话目标的 .NET 子孙进程链 + 切换引导（Toolhelp 零依赖路径，Engine 零改动） | **已立项/冻结**（2026-09-09 用户拍板：Toolhelp 宿主 + debug_processes 全链 + 不主动提示；实施计划 `plans/2026-09-09-d2-child-process.md`） |
 | `2026-09-08-db2-named-whitelist.md` | **DB2 按名白名单 spec**（宿主 TODO P2）：debug_variables 加 names 白名单（空=全量、≤50、未知名零值反馈） | **已立项/冻结**（2026-09-09 用户拍板：推荐默认语义；实施计划 `plans/2026-09-09-db2-named-whitelist.md`） |
 | `2026-09-08-v4-copy-guard.md` | **V4 语料护栏 spec**（宿主 TODO P2）：关键文案/行为契约固化为片段断言；新工具强制同批补 V4 | **已立项/冻结**（2026-09-09 用户拍板：片段 Contains + 强制随新工具 + 只宿主层；实施计划 `plans/2026-09-09-v4-copy-guard.md`） |
+| `2026-09-08-u1-ui-automation.md` | **U1 UI 自动化 spec**（宿主 TODO P3）：FlaUI 5.0 + ui_find/ui_invoke/ui_wait 三件套，无视觉文本清单 + 务实成员反查语义标注，与 debug_* 编排 UI 业务流闭环 | **已立项/冻结**（2026-09-09 用户拍板 4 项 + FlaUI 引用姿势线上核实；实施计划 `plans/2026-09-09-u1-ui-automation.md`） |
 
 ## 阶段对应关系（decisions D7）
 

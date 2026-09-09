@@ -17,8 +17,8 @@
 | | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已拍板+计划就绪**（2026-09-09：Toolhelp 宿主+debug_processes 全链标注；计划 `plans/2026-09-09-d2-child-process.md`） | — |
 | **P2** | **DB2 按名白名单** | `2026-09-08-db2-named-whitelist.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-db2-named-whitelist.md`） | debug_variables 面 |
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | **已拍板+计划就绪**（2026-09-09；计划 `plans/2026-09-09-v4-copy-guard.md`） | 随新工具同批补 |
-| **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | spec 草案；FlaUI 引用定 | — |
-| | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | spec 草案 | W1/U1/V3 |
+| **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | **已拍板+计划就绪**（2026-09-09：不需会话/AgentActionLog 护栏/务实成员反查标注 v1/U1 先行；FlaUI 引用姿势线上核实；计划 `plans/2026-09-09-u1-ui-automation.md`） | — |
+| | **V1 复验闭环** | `2026-09-08-v1-verify-loop.md` | spec 草案（D22④：待 W1/U1/V3 落地后再计划） | W1/U1/V3 |
 | **P4**（spike 前置） | **W3 数据断点** | `2026-09-08-w3-data-breakpoint.md` | spike 前置 | — |
 | **远期** | **W2 SetIP** | `2026-09-08-w2-set-ip.md` | **已转 ROADMAP（2026-09-08）** | — |
 | | **V2 崩溃 dump** | `2026-09-08-v2-crash-dump.md` | **转远期（2026-09-08 决策，见 ROADMAP）**；退出码增量①随 V3 | V3 |

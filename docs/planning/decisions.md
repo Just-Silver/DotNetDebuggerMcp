@@ -2,6 +2,14 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D22 · U1 UI 自动化 ui_* 工具拍板（用户 2026-09-09）
+- 决策①（会话依赖）：ui_find/ui_invoke/ui_wait **不需活动 debug 会话**（支持先操作 UI 再 attach）；与 debug_* 编排为宿主侧纯串联。
+- 决策②（副作用护栏）：v1 = 全 ui_* 操作打 AgentActionLog + Description 明示产线副作用风险 + ui_wait 二次确认引导；不做强制动作类别声明；Consent 列 v2。
+- 决策③（自动语义标注 v1 做 = 务实成员反查）：ui_find 命中后不解析 XAML/BAML，用现有 Decompiler 元数据（MemberResolver 同款）按控件 Name/Text 反查同名成员候选（Command 属性/方法/事件处理器/字段），无候选提示手动 decompile；XAML 绑定还原留 v1.5。
+- 决策④（顺序）：U1 先行；V1 复验闭环待 W1/U1/V3 落地后再计划。
+- 工具面（2026-09-08 已定案）：5 个，v1 做 ui_find/ui_invoke/ui_wait 三件套；ui_input/ui_pick 列 v1.5。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-u1-ui-automation.md`（已转正冻结）。
+
 ## D21 · V4 语料护栏取舍（用户 2026-09-09 拍板）
 - 决策①（粒度）：只测**关键片段 Contains**（正向契约，低脆）；不用全文精确匹配。
 - 决策②（强制随新工具）：debug_set/debug_object/debug_verify/ui_* 落地**强制同批补 V4 断言**（写入各实施计划收尾核对项）。

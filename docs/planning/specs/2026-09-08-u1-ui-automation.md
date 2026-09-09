@@ -1,6 +1,6 @@
 # Spec · U1 UI 自动化主动触发业务操作（FlaUI）
 
-> 状态：**计划中（草案）**——FlaUI 用法与蓝本实现已查证（UIInspect.MCP 源码实读），供后续实施直接参照。实施前置：宿主 TODO「UI 自动化主动触发业务操作」立项 + 工具形态拍板。
+> 状态：**已立项**（2026-09-09 拍板）——① ui_* **不需活动 debug 会话**（支持先操作 UI 再 attach）；② 副作用护栏 = AgentActionLog + Description 明示（Consent 列 v2）；③ 自动语义标注 **v1 做 = 务实成员反查**（不解析 XAML/BAML，ui_find 命中后用现有 Decompiler 元数据反查与 Name/Text 同名成员候选，无候选提示手动 decompile）；④ U1 先行（V1 复验闭环待 W1/U1/V3 落地后再计划）。实施计划见 `docs/planning/plans/2026-09-09-u1-ui-automation.md`，规格冻结。
 > 关联：宿主 TODO U1/UI 自动化条目；调试侧联动依赖 W1/V1（复验闭环是 U1 的验收载体）；会话模型复用现有 `DebugSessionManager` 单活动会话。
 > 参考实现（已实读源码）：`ChrisPulman/UIInspect.MCP`（MIT）——`FlaUiAutomationBackend.cs`/`FlaUiAutomationSession.cs`；`sbroenne/mcp-windows`（MIT，91★，工具面命名参照）。
 
@@ -17,8 +17,8 @@
 ## 2. FlaUI 事实（已实读 UIInspect.MCP 源码 + FlaUI API 文档）
 
 ### 2.1 包与版本
-- NuGet：`FlaUI.Core` + `FlaUI.UIA3`。**当前 stable 5.0.0**（2025-02-25，二进制仅发 `net8.0-windows7.0`）；`net10.0-windows` 目标在 GitHub main（包版本 6.0.0）未发 release。
-- **引用姿势**：net10 工程引 net8 程序集向上兼容；**包分发照抄 UIInspect.MCP**——`PackageDownload` + `HintPath` 手动绑定 FlaUI 5.0 dll（其 `UIInspect.MCP.Windows.csproj` 注释写明了 PackAsTool 拒绝 platform-qualified TFM 的坑与解法）。
+- NuGet：`FlaUI.Core` + `FlaUI.UIA3`。**当前 stable 5.0.0**（2025-02 正式发布，打包完整）——nuspec 实读含三档 lib：`.NETFramework4.8` / `net6.0-windows7.0` / `net8.0-windows7.0`；**没有 `net10.0-windows` 档**（该档在 GitHub main / 6.0.0-dev 未发 release）。净影响：net10 宿主用 `net8.0-windows7.0` 的 dll 向上兼容跑，不必等 net10 档。
+- **引用姿势（为什么绕 PackageDownload+HintPath）**：本宿主是 **PackAsTool 的 dotnet tool，必须保持非 platform-qualified TFM（net10.0）**；而 net10.0 经普通 `PackageReference` 无法消费 `net8.0-windows7.0` 资产（平台不匹配，只能靠 AssetTargetFallback/压制 NU1701），又不能把宿主改成 `net10.0-windows`（PackAsTool 拒绝）。照抄 UIInspect.MCP：`PackageDownload` FlaUI.Core/FlaUI.UIA3 + `<Reference HintPath="$(NuGetPackageRoot)…\lib\net8.0-windows7.0\*.dll" Private="true" />`，另显式 `PackageReference Interop.UIAutomationClient` + `System.Management`（csproj 注释实读确认）。
 - 客户端 TFM 只决定"你的 server 跑在哪"，**不决定能控哪些目标**——UIA 与被控 App 的 .NET 版本无关。
 
 ### 2.2 核心 API 形态（从 UIInspect.MCP 源码提炼）
@@ -72,7 +72,9 @@ bool canInvoke = element.Patterns.Invoke.IsSupported;
 ⑥ （复验）再次 ui_find 验证按钮文本 手动→自动（状态变更确认，V1 闭环）
 ```
 
-**关键洞察**：U1 不是"裸 UIA"，而是把 **反编译读到的 Command 绑定/代码语义** 标到 UIA 元素上——UIA 树只告诉 agent"有按钮叫'手动'"，反编译告诉它"点了会切自动"。这是 DotNetDebuggerMcp 相对裸 UIA MCP 的差异点，spec 里必须写死。
+**关键洞察**：U1 不是"裸 UIA"，而是把 **反编译读到的代码语义** 标到 UIA 元素上——UIA 树只告诉 agent"有按钮叫'手动'"，反编译告诉它"点了会切自动"。这是 DotNetDebuggerMcp 相对裸 UIA MCP 的差异点。
+
+> **v1 自动语义标注形态（2026-09-09 拍板：务实成员反查）**：不解析 XAML/BAML 还原 Command 绑定（工作量上一个量级，留 v1.5）。ui_find 命中元素后，若被控进程主模块可反编译（磁盘 dll 存在），宿主用现有 Decompiler 元数据能力（`MemberResolver` 同款：类型全名 + 子串忽略大小写）按控件 Name/Text **反查同名成员候选**（Command 属性 / 方法 / 事件处理器 / 字段）——找到则在返回行附 `语义候选: {TypeName}.{member}（可用 decompile_member 看实现）`；无候选给「无线索，可用 decompile_member <Type> <Name> 手动查」。命中率弱于 XAML 绑定还原但零新反编译设施。
 
 ## 4. 工具契约与分层设计
 
@@ -91,7 +93,7 @@ bool canInvoke = element.Patterns.Invoke.IsSupported;
 > **README 同步**：ui_* 属新增 MCP 工具，落地同 commit 改根 README。
 
 ### 4.2 分层（对齐仓库边界纪律）
-- **新组件（宿主层）**：`UiAutomationService`——FlaUI 封装 + 窗口/元素缓存 + 与 `DebugSessionManager` 的联动。放宿主是因为 U1 强耦合"反编译语义标注"（Decompiler）+ "debug 会话编排"（Session），而它俩在宿主工具面交汇。若未来要独立库再抽。
+- **新组件（宿主层）**：`UiAutomationService`——FlaUI 封装 + 窗口/元素缓存 + **语义标注反查**（ui_find 命中后用宿主反编译元数据能力 `MemberResolver` 同款反查 Name/Text 同名成员）+ 与 `DebugSessionManager` 的联动。放宿主是因为 U1 强耦合"反编译语义标注"（Decompiler）+ "debug 会话编排"（Session），而它俩在宿主工具面交汇。若未来要独立库再抽。
 - Engine/Session **零改动**（U1 纯进程外 UIA，不碰 ICorDebug）。
 
 ### 4.3 关键实现注意（防坑）
@@ -108,17 +110,18 @@ UIInspect.MCP 有完整安全层（Consent 用户授权 + Audit 审计 + RateLim
 - Audit/RateLimit 视需要后置。
 
 ## 5. 复用与依赖
-- **反编译管道**（语义标注）：`decompile`/`decompile_member`/`call_chain` 已有——U1 反查 Command 绑定时 agent 已能手动做；工具内自动标注是增强项，可 v1 不做自动、靠 agent 两步查（先 decompile 再 ui_find）。**简化建议**：v1 的 ui_find 不带自动语义标注，靠 agent 工作流（文档引导）实现闭环——少一个 Decompiler 集成点。
+- **反编译管道（语义标注，v1 = 务实成员反查）**：ui_find 命中元素后，宿主对被控进程主模块做**旁路元数据反查**——复用 `MemberResolver.FindMembers`（类型全名 + 子串忽略大小写）按控件 Name/Text 找同名成员候选（Command 属性/方法/事件处理器/字段），找到即标注、无候选提示手动 decompile。**不解析 XAML/BAML**（绑定还原留 v1.5）；不占反编译缓存/不分页（旁路查询，量小）。agent 仍可先 decompile 再 ui_find 两步闭环，自动标注是增强不是依赖。
 - **调试会话**：与 debug_* 编排是宿主侧纯串联，无新会话模型。
 - 依赖 FlaUI 包（新 NuGet 引用）+ `System.Drawing` 矩形（FlaUI BoundingRectangle）。
 
-## 6. 待拍板（立项时决策；工具面已定案见 §4.1，以下为剩余取舍）
-1. ~~工具数量/命名~~（**已定案 2026-09-08**：5 个，v1 做 find/invoke/wait 三件套，见 §4.1）
-2. **ui_* 是否需要活动 debug 会话**：独立可用 vs 要求先 attach/launch（影响"先操作 UI 后 attach"场景）。**倾向不需要**（支持"先操作 UI 到某状态再 attach"）。
-3. **副作用护栏形态**：仅 AgentActionLog vs 需 agent 声明动作类别 vs v2 用户确认。
-4. **自动语义标注**：v1 不做（靠 agent 两步）还是做（ui_find 集成 Decompiler 反查 Command）？**倾向 v1 不做**（少一个 Decompiler 集成点）。
-5. **拾取（ui_pick）是否 v1.5**：已定案列 v1.5（引入人类介入面，压到最少）；v1 全自动定位失败的兜底策略另议。
-6. **与 V1 复验闭环的关系**：U1 是 V1 的触发源之一——立项顺序建议 U1 先于 V1。
+## 6. 拍板记录（2026-09-09 用户拍板）
+
+1. ~~工具数量/命名~~（已定案 2026-09-08：5 个，v1 做 find/invoke/wait 三件套，见 §4.1）
+2. **会话依赖**：ui_* **不需活动 debug 会话**——独立可用，支持「先操作 UI 到某状态再 attach」。
+3. **副作用护栏**：v1 = 全 ui_* 操作打 `AgentActionLog` + `[Description]` 明示产线副作用风险 + ui_wait 二次确认引导；不做强制动作类别声明；完整用户确认（Consent）列 v2。
+4. **自动语义标注**：v1 **做 = 务实成员反查**（见 §3 注与 §5）——不解析 XAML/BAML，反查 Name/Text 同名成员候选；XAML 绑定还原 v1.5。
+5. **ui_pick v1.5**（已定案）；v1 全自动定位失败兜底 = ui_find 宽松条件 + 输出可辨识清单供 agent 调参。
+6. **与 V1 顺序**：U1 先行（本 spec 冻结 + 实施计划）；V1 复验闭环待 W1/U1/V3 落地后再计划。
 
 ## 7. 验证方案
 - **对 CoreMes 实测**（真实 WPF）：ui_find 找到切换按钮 → ui_invoke → 进程行为变化（配合/不配合 debug 会话两种）。
