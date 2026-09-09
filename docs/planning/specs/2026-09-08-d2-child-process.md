@@ -1,6 +1,6 @@
 # Spec · D2 子进程/多进程跟随（发现 + 引导切换）
 
-> 状态：**计划中（草案）**——进程发现设施与父子关系获取技术已查证，供后续实施直接参照。
+> 状态：**已立项**（2026-09-09 拍板）——① 父子查询 = **Toolhelp P/Invoke 落宿主**（kernel32 `CreateToolhelp32Snapshot`，Engine 零新增依赖）；② 入口 = 增强 `debug_processes` 全链标注（多层缩进 + 切换引导），不新增 debug_children；③ launch 不主动提示（只标注，子进程输出边界写 README/描述）。实施计划见 `docs/planning/plans/2026-09-09-d2-child-process.md`，规格冻结。
 > 关联：宿主 TODO D2；复用 `ClrProcessFinder`（P8）/`debug_processes`（R2/R8 已做排序+会话标注）。
 
 ## 1. 背景与目标
@@ -19,54 +19,59 @@ Web/服务型目标常**自起子进程**（`dotnet run` 起 app、app 再 spawn
 | `debug_processes` 宿主工具 | `Tools/Debugger/DebugProcessTool.cs` | 已做 排序/当前会话标注/filter/100 截断；**无父子标注** |
 | `Process`（System.Diagnostics） | — | **无 Parent API**（.NET 标准库不提供父进程读取） |
 
-### 父子关系获取：技术路径对比（本地已具备 CIM 能力）
+### 父子关系获取：技术路径对比（2026-09-09 拍板版，含查证修正）
+
+> **查证修正（2026-09-09）**：原稿「Engine 已依赖 System.Management（ClrDebug 也引）」**有误**——实读 `DotNetDebugger.Engine.csproj` 仅 ClrDebug + DbgShim 两包；FlaUI 尚未引入。另发现 spec 未评的 **Toolhelp** 零依赖路径。
 
 | 路径 | 机制 | 优点 | 缺点 | 结论 |
 |---|---|---|---|---|
-| **CIM/WMI** `Win32_Process` | `Get-CimInstance Win32_Process`（PowerShell）或 `System.Management` NuGet 的 `ManagementObjectSearcher("SELECT ProcessId,ParentProcessId,... FROM Win32_Process")` | 一步拿全表（含 ParentProcessId/CommandLine/ExecutablePath）；语义清晰 | 慢（一次全表查询 ~百 ms 级）；需 WMI 服务可用 | **推荐**——Engine 已依赖 `System.Management`（FlaUI Core 引入的依赖链中有，ClrDebug 也引） |
-| `NtQueryInformationProcess(ProcessBasicInformation)` | P/Invoke ntdll | 快、单进程查询 | 每 pid 一次系统调用（全表要 N 次）；x86/x64 结构体差异 | 备选（如需免 WMI） |
-| 进程环境块（PEB 父链） | 读 PEB | 无 API 调用 | 复杂、易碎 | 不用 |
+| **Toolhelp（拍板）** | `kernel32 CreateToolhelp32Snapshot` + `PROCESSENTRY32.th32ParentProcessID`（P/Invoke，~30 行） | **零新包**、单次快照拿全表父子、无需 WMI 服务、无需逐 pid 开句柄 | 需 Windows 专属 P/Invoke（调试器本就 win-x64） | **采用**——落宿主（Engine 零新增依赖） |
+| CIM/WMI `Win32_Process` | `System.Management` 包的 `ManagementObjectSearcher` | 含 CommandLine 等富信息 | 需加包（宿主或 Engine）；依赖 WMI 服务可用；一次全表 ~百 ms | 不用（拍板淘汰） |
+| `NtQueryInformationProcess(ProcessBasicInformation)` | ntdll P/Invoke | 快 | 逐 pid 系统调用；x86/x64 结构体差异 | 不用（Toolhelp 更简） |
 
-> 注：`Win32_Process.ParentProcessId` 对**已退出父进程**会失效（PID 复用歧义），但对"父进程是当前调试会话目标（存活）"场景完全可靠。
+> 注：父子关系对**已退出父进程**会失效（PID 复用歧义），但对"父进程是当前调试会话目标（存活）"场景完全可靠。
 
-## 3. 分层设计
+## 3. 分层设计（2026-09-09 拍板：宿主 Toolhelp，Engine 零改动）
 
-### 3.1 Engine：进程信息扩展（新增只读发现，不动 ICorDebug）
+### 3.1 宿主：父子关系快照助手（新增只读，不碰 Engine/ICorDebug）
 
-`ClrProcessFinder` 新增（或并列新方法）：
+新内部助手（`Tools/Debugger/` 或 `Services/`，与 debug_processes 同层）：
 ```
-ClrProcessInfo 扩展：加 ParentProcessId(int?，可空——非 CIM 路径时为 null)
-FindChildren(pid) → IReadOnlyList<ClrProcessInfo>：CIM 查全表一次，过滤 ParentProcessId==pid 且为 .NET 进程
+ChildProcessSnapshot（internal）：
+  QueryAll() → IReadOnlyDictionary<int,int>（pid → parentPid）：kernel32 CreateToolhelp32Snapshot 一次性快照
+  ChildrenOf(pid, allProcesses) → 递归收集 .NET 子孙进程链（多层）：allProcesses=ClrProcessFinder.List() 交集
 ```
-- 只读、无会话关联（沿用 P8 纯发现定位）；CIM 失败降级：返回空 + 调用方提示"WMI 不可用，无法判定父子"。
-- 复用 DbgShim 探测 CLR（子进程必须是 .NET 才列——否则 attach 无意义）。
+- 只读、无会话关联；快照失败（权限/P/Invoke 异常）降级：返回空字典，调用方提示"无法判定父子关系"。
+- **子进程必须是 .NET**（dbgshim 探测交集）才标注——否则 attach 无意义。
+- Engine/`ClrProcessFinder`/`ClrProcessInfo` **零改动**（spec 原案「Engine 进程信息扩展」随拍板取消）。
 
 ### 3.2 宿主：debug_processes 增强
 
-现状输出行 `pid=28344 CoreMes (CLR 10.0.9) ← 当前会话`。增强（不动现有排序/过滤/截断）：
+现状输出行 `pid=28344 CoreMes (CLR 10.0.9) ← 当前会话`。增强（不动现有排序/过滤/截断/100 上限）：
 ```
-新增：当存在"当前会话目标"时，其子进程行追加父链标注：
-  pid=29102  Worker  (CLR 10.0.9)  ← 会话目标的子进程（父 28344 CoreMes），可停当前会话后 debug_attach 29102
-多级链（孙进程）：缩进或标注 父→子→孙
+新增：当存在"当前会话目标"时，其 .NET 子孙进程行追加父链标注（多层缩进）：
+  pid=29102  Worker  (CLR 10.0.9)  ← 会话目标 CoreMes(28344) 的子进程
+  pid=29110  WorkerChild (CLR 10.0.9)  ← 会话目标 CoreMes(28344) 的孙进程（父 29102 Worker）
 ```
-或独立新工具 `debug_children`（当前会话目标 → 列出其 .NET 子进程链）。**倾向增强 `debug_processes`**（少一个工具、发现入口集中；父子标注仅在有会话目标时有意义）。
+返回文案附引导（见 3.3）。**不新增 `debug_children`**（拍板：发现入口集中在 debug_processes）。
 
 ### 3.3 切换引导（工具返回文案）
 
 发现子进程时返回附引导：「子进程业务代码（如 testhost/worker）需停当前会话（debug_disconnect/停断点）后 debug_attach <childPid> 单独调试」——**明确单活动会话边界**，防 agent 误以为可同时调试。
 
-## 4. 待拍板（立项时决策）
-1. **CIM 依赖**：`System.Management` 包引入（FlaUI 生态同款，见 U1 spec 的 FlaUI.Core 依赖 System.Management 10.x）vs P/Invoke `NtQueryInformationProcess` 免包。倾向 System.Management（标准、Engine 依赖面已接近）。
-2. **入口形态**：`debug_processes` 加父子标注 vs 新 `debug_children`。倾向前者（见 §3.2）。
-3. **链深度**：只一层子进程 vs 全链（孙进程缩进）。倾向支持多层链标注（一次 CIM 全表已含，只是过滤+递归）。
-4. **launch 场景子进程**：`debug_launch` 目标自起子进程时，是否在会话信息里主动提示"发现子进程 X"（配合 debug_output 已捕获父进程输出，但子进程输出没捕获——**子进程 stdout 不在 ProcessOutputCapture 范围**，需说明边界）。
+## 4. 拍板记录（2026-09-09 用户拍板）
+
+1. **父子查询机制/落点**：**Toolhelp P/Invoke 落宿主**（kernel32 `CreateToolhelp32Snapshot` + `th32ParentProcessID`，~30 行，零新包、免 WMI、免逐 pid 句柄）；Engine 保持仅 ClrDebug + DbgShim。spec 原「Engine 已依赖 System.Management」查证有误，CIM/ntdll 两路径拍板淘汰。
+2. **入口形态**：增强 `debug_processes`（多层链缩进标注 + 引导文案）；不新增 `debug_children`。
+3. **链深度**：全链多层（递归收集子孙；一次 Toolhelp 快照已含父子全表，只是过滤+递归）。
+4. **launch 主动提示**：v1 不做（只在 debug_processes 标注 + 返回引导）；「子进程 stdout 不在 ProcessOutputCapture 范围」边界写 README/工具描述。
 
 ## 5. 验证方案
-- **Engine/宿主单测**：用能 spawn 子进程的测试目标（DebugTarget 加"spawn child"模式 或 宿主测试直接起 `dotnet <child>.dll`）→ FindChildren 断言父子链。
-- **宿主 e2e**：launch 一个会起子进程的 .NET 程序 → debug_processes 显示子进程标注 → 停会话 attach 子进程成功。
-- CIM 不可用降级路径单测。
+- **宿主单测**：能 spawn 子进程的测试目标（DebugTarget 加 `spawn` 模式：自起一个 `dotnet DebugTarget.dll <arg>` 子进程并等待）→ Toolhelp 快照断言父子链。
+- **宿主 e2e**：launch 会起子进程的目标 → `debug_processes` 显示子进程标注 → 停会话 attach 子进程成功。
+- 快照失败降级路径单测（P/Invoke 不可用提示）。
 
 ## 6. 依赖与工作量
-- 依赖：`System.Management`（新）或 ntdll P/Invoke；`ClrProcessFinder` 现有枚举。
-- 改动面：Engine（进程信息扩展 ~40 行）+ 宿主（debug_processes 标注逻辑）。无 ICorDebug/会话模型改动。
+- 依赖：无新包（kernel32 P/Invoke）；`ClrProcessFinder` 现有枚举原样复用。
+- 改动面：宿主（Toolhelp 助手 ~40 行 + debug_processes 标注逻辑）；**Engine/会话模型零改动**。
 - 难度：**小-中**。

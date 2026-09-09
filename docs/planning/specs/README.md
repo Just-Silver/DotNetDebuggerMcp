@@ -9,6 +9,11 @@
 | `2026-09-05-p4-webui.md` | **P4 WebUI 细化 spec**：运行形态双模式、页面布局 v1 核心面、文档模型/行映射、技术集成定稿（BB 10.10.0 + 自研 Monaco 互操作 + 宿主 --web 接线） | **已冻结**（用户 2026-09-05 review OK） |
 | `2026-09-07-r5-async-step.md` | **R5 async 状态机单步体验 spec**（agent 反馈 R5）：状态机帧识别 + step-over/out 自动连步滤帧 + step-into 诚实停住 + `debug_stack` 帧名真名化；参考 dnSpy DbgEngineStepperImpl | **Superseded 不实施**（2026-09-07 评审跳过，决策见 ROADMAP v2 候选） |
 | `2026-09-07-r6-line-breakpoint-deferred.md` | **R6 行断点延迟解析登记 spec**（agent 反馈 R6）：SourceLineResolver 迁引擎 + 源行延迟项表 + TrackModule 解析补设（sharpdbg 模型，引擎内闭环）；sourcePath 先行，typeName 排除 | **已完成**（2026-09-07 实施，方案 C；Engine 23/Session 90 全过） |
+| `2026-09-08-w1-set-value.md` | **W1 现场改写 spec**（宿主 TODO P1）：`debug_set` 停点改值后继续——对象字段/栈上值类型局部/数组元素/引用置 null + 对象重定向；返回原值回显；ClrDebug 写 API 已查证 | **已立项/冻结**（2026-09-09 用户拍板：三层覆盖+对象重定向+按目标类型转换；实施计划 `plans/2026-09-09-w1-set-value.md`） |
+| `2026-09-08-v3-timeline.md` | **V3 统一时间线 spec**（宿主 TODO P1）：`debug_timeline` 日志↔事件↔agent 动作按 UTC 归并；事件历史环形缓冲补齐 + 退出码/attach 提示顺手项 | **已立项/冻结**（2026-09-09 用户拍板：500 含 EngineLog+动作入+双轨+顺手项；实施计划 `plans/2026-09-09-v3-timeline.md`） |
+| `2026-09-08-db1-sensitive-redaction.md` | **DB1 敏感脱敏 spec**（宿主 TODO P1，参照 DebugMCP secretRedaction）：读值出口按变量名+内容形态双模式脱敏（宿主渲染层，Engine/Session 零改动） | **已立项/冻结**（2026-09-09 用户拍板：读值出口+表达式级、Web 不同步；实施计划 `plans/2026-09-09-db1-sensitive-redaction.md`） |
+| `2026-09-08-d1-object-drill.md` | **D1 对象深读 spec**（宿主 TODO P1）：`debug_object` 受控递归下钻对象树（depth/limit/`<cyclic>` 环占位）——原草案单层与 debug_evaluate 重叠，拍板改受控递归 | **已立项/冻结**（2026-09-09 用户拍板：受控递归 v1，depth 默认 2 上限 6；实施计划 `plans/2026-09-09-d1-object-drill.md`） |
+| `2026-09-08-d2-child-process.md` | **D2 子进程跟随 spec**（宿主 TODO P1）：debug_processes 标注当前会话目标的 .NET 子孙进程链 + 切换引导（Toolhelp 零依赖路径，Engine 零改动） | **已立项/冻结**（2026-09-09 用户拍板：Toolhelp 宿主 + debug_processes 全链 + 不主动提示；实施计划 `plans/2026-09-09-d2-child-process.md`） |
 
 ## 阶段对应关系（decisions D7）
 

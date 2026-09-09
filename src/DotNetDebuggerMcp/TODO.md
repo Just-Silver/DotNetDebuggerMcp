@@ -10,11 +10,11 @@
 
 | 批次 | 项 | spec | 状态 | 依赖 |
 |---|---|---|---|---|
-| **P1**（独立/低成本，先做） | **W1 现场改写** | `2026-09-08-w1-set-value.md` | spec 草案 | — |
-| | **V3 统一时间线** | `2026-09-08-v3-timeline.md` | spec 草案 | P1 时间戳✅ |
-| | **DB1 敏感脱敏层** | （TODO 方案段够，小项） | 待立项 | — |
-| | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | spec 草案 | P6 求值链✅ |
-| | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | spec 草案 | — |
+| **P1**（独立/低成本，先做） | **W1 现场改写** | `2026-09-08-w1-set-value.md` | **已拍板+计划就绪**（2026-09-09：三层覆盖+重定向+按类型转换；计划 `plans/2026-09-09-w1-set-value.md`） | — |
+| | **V3 统一时间线** | `2026-09-08-v3-timeline.md` | **已拍板+计划就绪**（2026-09-09：500 含 EngineLog+动作入+双轨+顺手项；计划 `plans/2026-09-09-v3-timeline.md`） | P1 时间戳✅ |
+| | **DB1 敏感脱敏层** | `2026-09-08-db1-sensitive-redaction.md` | **已拍板+计划就绪**（2026-09-09：读值出口+表达式级、宿主层；计划 `plans/2026-09-09-db1-sensitive-redaction.md`） | — |
+| | **D1 对象深读** | `2026-09-08-d1-object-drill.md` | **已拍板+计划就绪**（2026-09-09：受控递归 v1 depth=2/防环 `<cyclic>`；计划 `plans/2026-09-09-d1-object-drill.md`） | P6 求值链✅ |
+| | **D2 子进程跟随** | `2026-09-08-d2-child-process.md` | **已拍板+计划就绪**（2026-09-09：Toolhelp 宿主+debug_processes 全链标注；计划 `plans/2026-09-09-d2-child-process.md`） | — |
 | **P2** | **DB2 按名白名单** | （TODO 方案段够，小项） | 待立项 | debug_variables 面 |
 | | **V4 语料断言** | `2026-09-08-v4-copy-guard.md` | spec 草案 | 随新工具同批补 |
 | **P3**（中-大，等前置） | **U1 UI 自动化** | `2026-09-08-u1-ui-automation.md` | spec 草案；FlaUI 引用定 | — |

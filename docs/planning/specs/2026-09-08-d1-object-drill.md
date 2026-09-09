@@ -1,7 +1,8 @@
 # Spec · D1 对象树深读（受控递归展开）
 
-> 状态：**计划中（草案）**——现有展开/直读双机制已查证，供后续实施直接参照。实施前置：按宿主 TODO「agent 自动化调试闭环缺口清单」立项确认。
+> 状态：**已立项**（2026-09-09 拍板）——v1 = **受控递归**下钻（`debug_object(path, depth=2, limit=32, threadId=0)`，depth 上限 6、同路径环输出 `<cyclic>`、每层字段预算）；独立新工具；path 支持 `$exception` 伪根与 locals/args 根。实施计划见 `docs/planning/plans/2026-09-09-d1-object-drill.md`，规格冻结。
 > 关联：宿主 TODO D1；依赖 P6 路径求值链（`ReadPathValue`/`EvaluatePathAsync`）；设计已获 microsoft/DebugMCP 同款验证（maxDepth/cyclic-reference/field 预算，见宿主 TODO「DebugMCP 可借鉴点」）。
+> 拍板前修正（2026-09-09）：原草案 v1「路径→展开一层」与既有 `debug_evaluate`（终值对象已带 children）**高度重叠**——拍板改为默认 depth=2 的受控递归，单层重叠被递归增量覆盖。
 
 ## 1. 背景与目标
 
@@ -36,47 +37,54 @@
 - **b. 会话缓存对象 id**：引擎侧维护 `(会话内自增 id → CorDebugValue)` 映射，展开返回 children 带 `refId`，下钻按 refId 取。贴近 VS/DAP variablesReference 模型；但 id 生命周期/失效管理复杂（值变化、帧离开）。
 - **c. 纯文本路径复用（推荐 v1）**：不做模型扩展，agent 用**已有 P6 路径文法**表达下钻目标——`debug_evaluate "order.Customer"` 后想要它的 children 就 `debug_object "order.Customer"`（路径定位到对象 → 复用 ReadObjectValue 展开一层）。**增量最小：只加一个"路径→该对象 children"的入口**，复用全部现有设施。
 
-## 3. 目标工作流（agent 视角）
+## 3. 目标工作流（agent 视角，v1 拍板版）
 
 ```
 ① debug_variables（停点）
    locals:
-     order = object "N 字段" children:[Id, Customer=0x..→<object> …]   ← 只展开一级
-② debug_object "order.Customer"          ← 新工具：路径定位对象 → 展开其 children
-   → object "M 字段" children:[Name, Address=0x..→<object>, Phone …]
-③ debug_object "order.Customer.Address"  ← 沿路径继续下钻（P6 文法天然支持）
-   → object children:[City="苏州", Street=…]
-④ 或 debug_evaluate "order.Customer.Address.City" 直接取值（已有能力，两路并存）
+     order = object "N 字段" children:[Id, Customer=…]           ← 只展开一级
+② debug_object "order.Customer"                                   ← 新工具：定位对象 + 受控递归
+   → depth 默认 2：Customer 字段 Name/Phone + 其对象子级 Address 的字段（两层一次给出）
+③ debug_object "order" depth=3 limit=64                          ← 一次看更深/更宽，防环 <cyclic>
+④ debug_evaluate "order.Customer.Address.City"                   ← 直接取值仍可用（两路并存）
 ```
 
-要点：**`debug_object` = `ReadPathValue`（定位到对象）+ `ReadObjectValue`/`ReadArrayValue`（展开一层）**——两个现成机制拼装，新增量最小。
+要点：**`debug_object` = `ReadPathValue` 定位对象 + 在值对象上做受控递归展开（depth 层、每层字段/元素预算、路径环检测）**——定位复用 P6，递归复用 `ReadObjectValue`/`ReadArrayValue`/`ReadFieldTokens` 的字段清单机制，增量 = 递归展开器 + 环/预算护栏。
 
-## 4. 分层设计与关键决策
+## 4. 分层设计与关键决策（2026-09-09 拍板版）
 
-### 4.1 推荐 v1：路径 → 展开一层（选项 c）
+### 4.1 v1：受控递归（选项 c 演进——路径锚 + depth 预算）
 
-- **Engine**：新增 `ReadObjectAtPathAsync(threadId, expression)` → 用 P6 路径解析定位到 `CorDebugValue`（对象引用或数组）→ 复用 `ReadObjectValue`/`ReadArrayValue` 展开一层 → 返回 `DebugValue.Object`。环风险低：只展开**一层**，与 `debug_variables` 同级（不引入递归深度，天然无环）。
-- **Session**：复用 `ExpressionParser`（P6）解析路径表达式（不新增文法）。
-- **宿主**：新工具 `debug_object`：
+- **Engine**：新增 `ReadObjectAtPathAsync(threadId, expression, depth)` → P6 路径定位到 `CorDebugValue` → **受控递归展开**：
+  - 递归展开器（新增私有）：给定值对象/数组 + 剩余 depth + 当前路径对象栈 → 产出 `DebugValue` 树（`DebugValue.Object`/`Array` children 递归嵌套）。
+  - **环检测**：沿当前展开路径记录已访问对象（对象身份/地址集合），再次进入同对象输出 `<cyclic>` 占位，不再下钻——`DebugValue` 纯快照无环概念，占位符在展开器内显式生成。
+  - **预算**：每层 children 截断沿用 `MaxChildren`（32）逻辑（`ReadObjectValue` 现行为），超限提示「共 N 字段，前 M 个」；depth 上限 `PathSegment.MaxDepth?`——新增常量 `MaxDrillDepth = 6`（同 DebugMCP maxDepth），depth 参数钳制在 1-6。
+- **Session**：复用 `ExpressionParser`（P6）解析 path（不新增文法）；depth/limit 校验。
+- **宿主**：新工具 `debug_object(path, depth=2, limit=32, threadId=0)`：
   ```
-  参数：path（对象路径，P6 文法，如 "order.Customer" / "$exception.InnerException"）
-       limit（children 上限，默认 32）
-  返回：该对象的下一级 children 清单（渲染复用 debug_variables 格式）
+  参数：path（P6 文法，如 "order.Customer" / "$exception.InnerException"；根=栈顶帧局部/参数 + $exception 伪根）
+       depth（递归深度，默认 2，上限 6）
+       limit（每层 children 上限，默认 32）
+       threadId（默认 0 = 最近停点线程）
+  返回：对象/数组的 children 递归清单（渲染复用 debug_variables 格式），头部显示 depth/children 统计
   ```
+  路径终值为标量/字符串/null → 中文提示「该路径不是对象/数组（当前为标量/字符串/null），请给对象或数组路径」；引用自动解引用展开。
 
-### 4.2 深递归展开（v1 后可选，需防环）
+### 4.2 与 debug_evaluate 分工（拍板确认）
 
-若未来要 `depth=N` 参数一次多级展开：沿路径记录已访问对象（`CorDebugObjectValue` 引用比较或对象地址），遇环输出 `<cyclic>`（DebugMCP 同款占位）。**注意**：`DebugValue` 是纯快照无环感知——多级递归时 children 树要带环标记或限深度（maxDepth=6、字段预算=100 可参照 DebugMCP）。**v1 不做**，一层展开已覆盖"下钻"主场景（agent 逐级调 `debug_object`，token 可控）。
+- `debug_evaluate path` = 取**值**（标量比较/布尔判定主用；对象终值虽带 children 但单层）。
+- `debug_object path depth` = 取**结构**（多级下钻探索对象树主用）。两路并存，README 说明分工。
 
 ### 4.3 为什么不做 options a/b（模型扩展/refId 缓存）
 - a 会动 `DebugVariable`/`DebugValue` 公共模型 + Web 渲染（DebugVarRow 递归用）——波及面大。
 - b 的 id 生命周期管理（帧离开/值变化后失效）复杂度高，而 P6 文法已能表达任意路径——**路径即锚，无需 id**。
 
-## 5. 待拍板（立项时决策）
-1. **工具命名**：`debug_object`（路径→children）vs `debug_variables` 加 `path` 参数二合一。倾向独立工具（语义清晰、参数表不臃肿，与 W1 `debug_set` 并列）。
-2. **表达式根**：`debug_object` 的 path 是否支持 `$exception` 伪根（P6 已支持）与 locals/args 根——**应支持**（复用 P6 根解析）。
-3. **limit 语义**：每层 32 是否够；超出提示"共 N 字段前 M 个"（现状格式已有）。
-4. **一层 vs 多级**：v1 一层（推荐）；多级递归深度参数留 v1.5。
+## 5. 拍板记录（2026-09-09 用户拍板）
+
+1. **工具命名**：独立新工具 `debug_object`（不与 `debug_variables` 二合一）。
+2. **表达式根**：支持 `$exception` 伪根与 locals/args 根（复用 P6 根解析）。
+3. **形态**：**受控递归 v1**——`debug_object(path, depth=2, limit=32, threadId=0)`；depth 钳制 1-6（`MaxDrillDepth`），每层字段/元素预算沿用 32（超限提示「共 N，前 M」），同路径环输出 `<cyclic>`；`depth=1` 行为与 debug_evaluate 对象结果一致（重叠被默认 depth=2 覆盖）。
+4. **limit 语义**：每层上限（默认 32，参数可调 1-128）。
 
 ## 6. 验证方案
 - **Engine 单测**：DebugTarget 深嵌套对象（WorkBag→Model→Child→Value 链）→ `debug_object` 逐级下钻断言每层 children 正确；越界路径/非对象目标（标量/字符串）中文提示。

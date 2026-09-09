@@ -2,6 +2,37 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D19 · D2 子进程/多进程跟随 debug_processes 增强（用户 2026-09-09 拍板）
+- 决策①（查询机制/落点）：父子查询用 **Toolhelp P/Invoke 落宿主**（kernel32 `CreateToolhelp32Snapshot` + `PROCESSENTRY32.th32ParentProcessID`，单次快照全表，零新包、免 WMI、免逐 pid 句柄）；spec 原「Engine 已依赖 System.Management」**查证有误**（Engine.csproj 仅 ClrDebug+DbgShim），CIM/ntdll 两路径淘汰；**Engine 零改动**。
+- 决策②（入口/链深）：增强 `debug_processes`——有当前会话目标时其 .NET 子孙进程行多层缩进标注父链 + 附切换引导（停会话后 debug_attach <childPid>）；不新增 debug_children。
+- 决策③（launch 提示）：v1 不主动提示（只在 debug_processes 标注）；「子进程 stdout 不在 ProcessOutputCapture 范围」边界写 README/工具描述。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-d2-child-process.md`（已转正冻结）。
+
+## D17 · DB1 变量敏感脱敏层边界（用户 2026-09-09 拍板）
+- 决策①（覆盖范围）：v1 脱敏所有**读值渲染出口**——debug_variables 全量/children、debug_evaluate 标量+children、带变量渲染的 trace/停点上下文，外加**表达式级**绕过（debug_evaluate 表达式末段标识符敏感即脱敏）；**不脱敏**目标自身控制台输出（debug_output/timeline log）与异常 Message。
+- 决策②（Web）：脱敏只在宿主 MCP 渲染层；Web 监视器（本地人类观看席）不同步。
+- 决策③（规则）：移植 DebugMCP `secretRedaction.ts` 双模式全集——按名归一化 exact-match（小写去 `_`/`-`/空格，非子串）+ 按内容形态正则（PEM/JWT/AWS/GitHub/Bearer/连接串等）+ trivial/null 不动；占位符与单次提示用中文。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-db1-sensitive-redaction.md`（已转正冻结）。
+
+## D18 · D1 对象深读 debug_object 形态（用户 2026-09-09 拍板）
+- 决策①（形态）：v1 = **受控递归**下钻（修正原草案单层——与 debug_evaluate 终值对象带 children 高度重叠）：`debug_object(path, depth=2, limit=32, threadId=0)`，depth 钳制 1-6（新常量 `MaxDrillDepth`），同路径环输出 `<cyclic>`，每层 children 预算沿用 32 截断（可调 1-128，超限提示「共 N，前 M」）。
+- 决策②（工具面）：独立新工具 debug_object（不与 debug_variables 二合一）；path 复用 P6 文法并支持 `$exception` 伪根与 locals/args 根；终值为标量/字符串/null 给中文提示。
+- 决策③（分工）：debug_evaluate = 取值（标量主用），debug_object = 取结构（多级下钻主用），README 说明分工。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-d1-object-drill.md`（已转正冻结）。
+
+## D16 · V3 统一时间线 debug_timeline 取舍（用户 2026-09-09 拍板）
+- 决策①（事件历史容量/收录）：Session 事件历史环形 **500 条**，收录 BreakpointHit/StepCompleted/ExceptionHit/ExceptionSkipped/SessionStateChanged/EngineLog 原样 + TraceHit 轻量摘要；与既有日志 2000 / 动作 1000 / 轨迹 100 各自独立。
+- 决策②（动作/轨迹/折叠）：agent 动作**入** timeline（`act` 前缀 + `kind` 可排除）；TraceHit **双轨并存**（`_traces` 消费式供 debug_wait 语义保留 + 历史存轻量摘要）；v1 **不做**连续同类聚合折叠（lines 倒序 + filter 已够）。
+- 决策③（顺手项随 V3）：launch 会话 exitCode 由 `DebugSessionManager.process.Exited` 捕获存 `ActiveDebugSession`，`debug_state`/`debug_timeline` 的 Exited 行显示退出码；**attach 会话明确不覆盖**（ICorDebug 不提供退出码，提示「不可得」）。attach 到长活目标补「已附加但进程继续跑（无停点）」明确措辞（承接 R2/R3）。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-v3-timeline.md`（已转正冻结）。
+
+## D15 · W1 现场改写 debug_set v1 边界（用户 2026-09-09 拍板）
+- 决策①（覆盖承诺三档）：对象引用字段置 null、栈上值类型局部/参数、数组元素、对象内 struct 值类型字段**全进 v1**；其中数组元素写、struct 字段写、值类型局部活引用三项以实施计划首任务 spike 实测为承诺（通过即实现；失败则该目标类型降级「v1 不支持」提示，保持读链路可用）。
+- 决策②（引用赋值面）：引用型目标 v1 = 置 null + **对象重定向**（`debug_set "cfg.Current" "cfg.Backup"`，源 = 另一条路径解析得到的引用地址，同帧解析回写）；不做构造新对象（func-eval 已关）。
+- 决策③（新值文法）：value 文本**按目标运行时类型转换**——文法 = P6 字面量扩展小数数字（`1000m`/`0.5`/`-1` 按目标数值类型解析）+ true/false/null；字符串目标仅置 null（内容构造需 func-eval）；枚举按底层整数值。
+- 工具面：新工具 `debug_set(path, value, threadId=0)`（读写分离于 debug_evaluate），返回必带**原值回显**防 agent 误判；Description/README 明示「写进程内存可能崩目标、写后不校验」风险。
+- 日期：2026-09-09。来源：spec `docs/planning/specs/2026-09-08-w1-set-value.md`（已转正冻结）。
+
 ## D13 · P4 Web 定位澄清 + #2/#3 高层编排参考 PTC（用户 2026-09-05）
 - **产品定位澄清（用户）**：反编译与动态调试都是给 **agent** 用的，人类经对话与 agent 交互；**WebUI 主要目的是可视化 agent 在干什么**（监视器，非人工操作台）。因此 #2「Web 页内反编译+调试联动」应重新理解为 **agent 动作实时可视化**（agent 反编译了什么/断点设哪/停在哪，Web 同步画出），而非人工在 Web 上点按钮。
 - **#3 高层编排工具参考（用户点名，防忘）**：DeepSeek Harness 的 **PTC 模式**（Programmatic Tool Calling，即 Code Mode）与 Anthropic Advanced Tool Use / OpenAI Responses API 同款能力——**模型写一段程序（TS/Python）批量编排工具调用**（循环/分支/汇总/过滤），工具表折叠成一个 `run_code`，其余工具作为生成的 SDK。效果：N 次往返 → 1 次代码执行，token 降 17-37%（模型只返回自己 curate 的结果）。
