@@ -41,7 +41,7 @@
 - Modify: `src/DotNetDebuggerMcp/Services/UiAutomationService.cs`（**移动到** `src/DotNetDebuggerMcp/Services/Ui/UiAutomationService.cs`，命名空间改 `DotNetDebuggerMcp.Services.Ui`，重写为 facade；工具/verify 的 using 同步）
 - Modify: `src/DotNetDebuggerMcp/Services/UiSemanticResolver.cs`（**保留原位/原命名空间** `DotNetDebuggerMcp.Services`；UiElementLocator 引用之）
 - Delete（物理实现）: `ActivateWindow` / `PerformPhysicalMouse` / 所有 `FlaUI.Core.Input.Mouse`/`SetForegroundWindow` 调用。
-- Test: `tests/DotNetDebuggerMcp.Tests/UiAutomationServiceTests.cs`（扩纯单测：dispatcher/stateReader/locator 条件缓存与重试逻辑，用可注入桩/样例控件）
+- Test: `tests/DotNetDebuggerMcp.Tests/UiAutomationServiceTests.cs`（扩纯单测：dispatcher/stateReader 的纯 Choose 决策与失败文案；locator 纯逻辑若有；**不引入 WinForms**——条件缓存/失效重试/虚拟化走 Task3 跨进程 e2e）
 
 **Interfaces（facade 对外，供工具与 verify 复用）:**
 - `Task<IReadOnlyList<UiElementInfo>> FindAsync(string process, string title, string text, string type, string automationId, int limit, CancellationToken ct)`
@@ -62,7 +62,7 @@
 - `UiElementLocator` 的测试策略（2026-09-10 round2 修正）：**不在宿主测试工程引入 WinForms**（该工程为 `net10.0` 且无 `UseWindowsForms`，宿主须保 PackAsTool 的 net10.0）；其**纯逻辑**（条件构造/缓存键/重试计数判定，若可抽为不依赖 COM 的纯函数）走单测，**条件缓存/失效重试/虚拟化实体化**改由**跨进程 e2e**（UiSampleApp 真实控件）覆盖。
 - `facade.GetAsync` 返回**未脱敏原始值**（见 Global Constraints/模型说明）；脱敏发生在调用方（工具/verify 输出层）。
 
-- [ ] **Step 1: 失败单测（组件行为，可纯内存/桩）**：dispatcher 各 verb 对「支持/不支持」桩元素的分派与失败文案（§6 表逐行）；stateReader what 映射；locator 条件缓存命中/失效重试（stub provider/最小 WinForms 控件）；facade 不再含 `Mouse.` 引用（`git grep "FlaUI.Core.Input" src/DotNetDebuggerMcp` 为 0）。
+- [ ] **Step 1: 失败单测（组件行为，纯内存/桩；不引入 WinForms）**：dispatcher 各 verb 对「支持/不支持」caps 快照的 `Choose` 分派与失败文案（§6 表逐行）；stateReader what 的纯 `Choose` 映射；locator 纯逻辑（条件构造等）若有；**条件缓存/失效重试/虚拟化由 Task3 跨进程 e2e 覆盖**；facade 不再含 `Mouse.` 引用（`git grep "FlaUI.Core.Input" src/DotNetDebuggerMcp` 为 0）。
 - [ ] **Step 2: 实现拆分与 facade**：按上述接口；`UiActionResult.Message` = 「已 {verb}（{pattern}）」；`ui_input` 按 §6（ValuePattern→RangeValuePattern→LegacyIAccessible；`IsReadOnly` 报只读）；前台策略 §9；超时/串行沿用。
 - [ ] **Step 3: 跑定向单测 + Release build + 提交**（`feat: U1A 组件化 UiAutomationService（UIA-only 去物理输入）`）。
 
@@ -133,4 +133,4 @@
 - **占位符**：无 TBD；FlaUI API 细节以本地克隆 `../../Externals/DebuggerExternals/FlaUI` 为准（spec §4 已列签名，实施前可复核）。
 - **类型一致**：facade `FindAsync/ActionAsync/InputAsync/GetAsync/WaitAsync` Task1 定义、Task2/4 消费；`UiElementInfo.Patterns`（能力清单）替换 U1 `CanInvoke` 贯穿 Task2；verify 步骤 `uiAction/uiAssert` Task4 定义并执行。
 - **风险点已标**：provider 后台/最小化拒绝（报中文不抢前台）、虚拟化实体化失败、Invoke 阻塞（5s 兜底）、无 pattern 自绘控件（LegacyIAccessible 兜底后明确不支持）、能力探测跨进程开销（同次遍历）。
-- **2026-09-10 plan-review 修正已落实**：verify launch 窗口不可见的显式 Ruling（UiSampleApp 测试目标 `ShowWindow` 绕隐藏 + 退路如实记录）、前台强断言限定 verb（豁免 focus/windowstate）、脱敏归属（facade 原始值/输出层脱敏）、可测性接缝（纯 Choose + Execute 分离 / locator 真实最小控件）、U1 spec Superseded 标注入收尾、VerifyScenario 既有断言同步与旧 ui/set 保留决策、windowstate 目标解析、ScrollPattern 样例控件。
+- **2026-09-10 plan-review 修正已落实**：verify launch 窗口不可见的显式 Ruling（UiSampleApp 测试目标 `ShowWindow` 绕隐藏 + 退路如实记录）、前台强断言限定 verb（豁免 focus/windowstate）、脱敏归属（facade 原始值/输出层脱敏）、可测性接缝（纯 Choose + Execute 分离；locator 纯逻辑若有 / 缓存与失效重试走跨进程 e2e，宿主测试工程不引入 WinForms）、U1 spec Superseded 标注入收尾、VerifyScenario 既有断言同步与旧 ui/set 保留决策、windowstate 目标解析、ScrollPattern 样例控件、Task3 重跑 generate-testdata。
