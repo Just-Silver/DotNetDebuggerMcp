@@ -36,7 +36,7 @@ public sealed class VerifyScenarioTests
                 { "assert": { "kind": "noException" } },
                 { "uiAction": { "process": "CoreMes", "verb": "invoke", "index": 5, "name": "手动", "type": "Button" } },
                 { "uiAssert": { "process": "CoreMes", "what": "name", "name": "自动", "contains": "自动" } },
-                { "ui": { "tool": "ui_invoke", "args": { "index": 5 } } },
+                { "ui": { "tool": "ui_action", "args": { "index": 5 } } },
                 { "set": { "path": "x", "value": "1" } }
               ]
             }
