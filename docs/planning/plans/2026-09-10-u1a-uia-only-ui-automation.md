@@ -37,7 +37,7 @@
 - Create: `src/DotNetDebuggerMcp/Services/Ui/UiPatternDispatcher.cs`
 - Create: `src/DotNetDebuggerMcp/Services/Ui/UiStateReader.cs`
 - Create: `src/DotNetDebuggerMcp/Services/Ui/UiEventWaiter.cs`
-- Create: `src/DotNetDebuggerMcp/Services/Ui/UiModels.cs`（`UiElementInfo`/`UiActionResult`/`UiStateResult`/`UiWaitResult`/`UiPatternCapabilities`/`UiException` 集中定义，命名空间 `DotNetDebuggerMcp.Services.Ui`）
+- Create: `src/DotNetDebuggerMcp/Services/Ui/UiModels.cs`（`UiElementInfo`/`UiActionResult`/`UiStateResult`/`UiWaitResult`/`UiPatternCapabilities`/`UiException` 集中定义，命名空间 `DotNetDebuggerMcp.Services.Ui`；**UiException 不单独建文件**）
 - Modify: `src/DotNetDebuggerMcp/Services/UiAutomationService.cs`（**移动到** `src/DotNetDebuggerMcp/Services/Ui/UiAutomationService.cs`，命名空间改 `DotNetDebuggerMcp.Services.Ui`，重写为 facade；工具/verify 的 using 同步）
 - Modify: `src/DotNetDebuggerMcp/Services/UiSemanticResolver.cs`（**保留原位/原命名空间** `DotNetDebuggerMcp.Services`；UiElementLocator 引用之）
 - Delete（物理实现）: `ActivateWindow` / `PerformPhysicalMouse` / 所有 `FlaUI.Core.Input.Mouse`/`SetForegroundWindow` 调用。
@@ -51,7 +51,7 @@
 - `Task<UiWaitResult> WaitAsync(string process, string text, string type, string textChangedFrom, string textChangedTo, int timeoutSeconds, CancellationToken ct)`
 - 模型：`UiElementInfo(int Index, string Name, string Type, string AutoId, string Rect, string Patterns, string? Semantic)`（`Patterns` = 能力清单逗号串，替换 U1 `CanInvoke`）；`UiActionResult(bool Ok, string Message)`；`UiStateResult(string Value, string? Raw)`（**Value=原始显示值、Raw=原始值兜底；均不脱敏**——脱敏由工具/verify 输出层做）；`UiWaitResult(string Outcome, string Message)`；`UiPatternCapabilities`（bool 集合：Invoke/Toggle/SelectionItem/ExpandCollapse/Value/RangeValue/Scroll/ScrollItem/Window/Legacy）。
 - `UiElementLocator`：按 process（pid/名）→窗口（title 可选）→条件（text/type/automationId）FindAllDescendants；**缓存定位条件**（pid + AutomationId/Name/ControlType + 相对路径），`index` 映射到条件；`ResolveForActionAsync` 每动作前重解析 + 1-2 次重试（stale/ElementNotAvailable→中文「目标已变化，请重新 ui_find」）；虚拟化：`ItemContainerPattern.FindItemByProperty`→`VirtualizedItemPattern.Realize()`→`ScrollItemPattern.ScrollIntoView()`。
-- `UiPatternDispatcher.Dispatch(element, verb, direction, lines, windowstate)` → 命中 pattern 名或抛 internal `UiException`（中文 `Message`；`Services/Ui/UiException.cs` 新文件，工具 catch 转返回文本）。
+- `UiPatternDispatcher.Dispatch(element, verb, direction, lines, windowstate)` → 命中 pattern 名或抛 internal `UiException`（中文 `Message`；定义在 `Services/Ui/UiModels.cs`，工具 catch 转返回文本）。
 - `UiStateReader.Read(element, what)` → §6 ui_get 映射。
 - `UiEventWaiter.WaitAsync(window, predicate, timeout, ct)`：`RegisterStructureChangedEvent(TreeScope.Subtree)` + `RegisterPropertyChangedEvent(TreeScope.Subtree, …, Name/Value)`；命中 `TaskCompletionSource.TrySetResult`；X 秒无事件 → 回退 200ms 轮询；回调只判定+set，不重入大操作；退订纳入 gate。
 
@@ -59,7 +59,7 @@
 - `UiPatternDispatcher.Choose(string verb, UiPatternCapabilities caps, string direction, int lines, string windowstate)` **纯函数**（`UiPatternCapabilities` = 各 pattern `IsSupported` 布尔集合的快照），返回命中项或抛 `UiException`（中文）；单测直接喂 caps。
 - `UiPatternDispatcher.Execute(AutomationElement element, ChosenAction action)` 做真实 pattern 调用（e2e 覆盖）。
 - `UiStateReader.Read` 同样拆 `Choose(what, caps)` 纯 + `Execute(element, choice)`；纯决策单测无需 COM。
-- `UiElementLocator` 的单测用**最小真实 WinForms 控件**（集成式）覆盖条件缓存/失效重试，不用假 AutomationElement。
+- `UiElementLocator` 的测试策略（2026-09-10 round2 修正）：**不在宿主测试工程引入 WinForms**（该工程为 `net10.0` 且无 `UseWindowsForms`，宿主须保 PackAsTool 的 net10.0）；其**纯逻辑**（条件构造/缓存键/重试计数判定，若可抽为不依赖 COM 的纯函数）走单测，**条件缓存/失效重试/虚拟化实体化**改由**跨进程 e2e**（UiSampleApp 真实控件）覆盖。
 - `facade.GetAsync` 返回**未脱敏原始值**（见 Global Constraints/模型说明）；脱敏发生在调用方（工具/verify 输出层）。
 
 - [ ] **Step 1: 失败单测（组件行为，可纯内存/桩）**：dispatcher 各 verb 对「支持/不支持」桩元素的分派与失败文案（§6 表逐行）；stateReader what 映射；locator 条件缓存命中/失效重试（stub provider/最小 WinForms 控件）；facade 不再含 `Mouse.` 引用（`git grep "FlaUI.Core.Input" src/DotNetDebuggerMcp` 为 0）。
@@ -78,13 +78,13 @@
 - Test: `tests/DotNetDebuggerMcp.Tests/DebugUiToolsTests.cs`（Task 3 重写）
 
 **Interfaces（工具；参数默认值见 spec §5；错误中文不抛）:**
-- `ui_action(process="", verb="", index=-1, name="", type="", direction="", lines=0, windowstate="", ct)`：verb ∈ invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate；`rightclick`/`doubleclick` → 明确中文「UIA 无该语义入口，物理输入已移除；请改用等价菜单/命令的 ui_action verb=invoke」；返回「已 {verb}（{pattern}）」+ 写 AgentActionLog。**`verb=windowstate` 目标解析**：忽略 index/name/type，按 `process`（+可选 `title`）定位**顶层窗口**，取 `WindowPattern`（与元素定位规则显式区分，避免实现/测试各写一套）。
+- `ui_action(process="", verb="", index=-1, name="", type="", direction="", lines=0, windowstate="", ct)`：verb ∈ invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate；`rightclick`/`doubleclick` → 明确中文「UIA 无该语义入口，物理输入已移除；请改用等价菜单/命令的 ui_action verb=invoke」；返回「已 {verb}（{pattern}）」+ 写 AgentActionLog。**`verb=windowstate` 目标解析**：忽略 index/name/type，按 `process` 定位**顶层窗口**（`ui_action` 无 `title` 参数），取 `WindowPattern`（与元素定位规则显式区分，避免实现/测试各写一套）。
 - `ui_input(process="", value="", index=-1, name="", type="", ct)`：value 语义必填；按 §6 写值 + 只读/无 pattern 中文。
 - `ui_get(process="", what="", index=-1, name="", type="", ct)`：what 语义必填 ∈ `value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext`（对齐 spec §5）；读取**原始值**后，由**工具输出层**按控件 `Name`（无则 AutomationId）经 DB1 `SensitiveValueRedactor.Redact(name, text)` 脱敏再返回；facade `GetAsync` 本身不脱敏。
 - `ui_find`：`patterns=` 能力清单（只列 IsSupported：invoke/toggle/selectionitem/expandcollapse/value/rangevalue/scroll/scrollitem/window/legacy）。
 - `ui_wait`：事件化主路径 + 轮询兜底（§10）；行为/参数与 U1 兼容。
 
-- [ ] **Step 1: 失败 e2e 断言（Task 3 目标）先定契约**；实现三工具 + 改 ui_find/ui_wait + 删旧两工具；`git grep "UiInvoke|UiScroll"` 无残留。
+- [ ] **Step 1: 失败 e2e 断言（Task 3 目标）先定契约**；实现三工具 + 改 ui_find/ui_wait + 删旧两工具；`git grep -n "UiInvoke\|UiScroll" src/DotNetDebuggerMcp` 无残留（**仅 src**；测试内旧用例名在 Task3 重写，收尾再全仓核对）。
 - [ ] **Step 2: README/CHANGELOG/V4** 同步；`AgentCopyGuardTests` 更新并跑绿。
 - [ ] **Step 3: Release build + 定向 + 提交**（`feat: U1A 语义动词工具 ui_action/ui_input/ui_get（删 ui_invoke/ui_scroll，同步 README/CHANGELOG/V4）`）。
 
@@ -97,7 +97,7 @@
 - Modify: `tests/DotNetDebuggerMcp.Tests/DebugUiToolsTests.cs`（重写：删物理右键/双击/滚轮三例；改 UIA-only）
 - `generate-testdata.ps1` 不需改（整目录构建拷贝）
 
-- [ ] **Step 1: e2e（真实起 UiSampleApp）**：`ui_find` 能力清单；`ui_action verb=toggle/select/expand/collapse/scroll/scrollintoview/windowstate/focus` 各命中对应 pattern 或明确失败文案；`ui_input` Value/RangeValue + 只读拒绝；`ui_get what=value/toggle/selected/expandstate/rangevalue/…` 断言；`ui_wait` 事件命中（控件出现/文本变化）；错误面（unknown verb、rightclick/doubleclick 拒绝、无 pattern、进程不存在、超时）。
+- [ ] **Step 1: 先重跑 `generate-testdata.ps1`**（Task3 改了 `UiSampleApp/Program.cs` 源码——e2e 读的是脚本拷入 `tests/TestData/UiSampleApp/` 的 Release 产物，**必须重生成**，否则 e2e 静默跑到旧 exe），再写 e2e（真实起 UiSampleApp）：`ui_find` 能力清单；`ui_action verb=toggle/select/expand/collapse/scroll/scrollintoview/windowstate/focus` 各命中对应 pattern 或明确失败文案；`ui_input` Value/RangeValue + 只读拒绝；`ui_get what=value/toggle/selected/expandstate/rangevalue/…` 断言；`ui_wait` 事件命中（控件出现/文本变化）；错误面（unknown verb、rightclick/doubleclick 拒绝、无 pattern、进程不存在、超时）。
 - [ ] **Step 2: 不抢鼠标/前台强断言（限定 verb，2026-09-10 审查修正）**：对 **invoke/toggle/select/expand/collapse/scroll/scrollintoview/ui_input** 断言动作前后 `GetCursorPos()` 不变 + `GetForegroundWindow()` 不变；**豁免 `focus`/`windowstate`**（`AutomationElement.Focus` 对带 HWND 控件可能激活顶层窗口、`SetWindowVisualState(Normal)` 是否激活取决于目标应用——spec §9 已述，非物理输入）。
 - [ ] **Step 3: 非交互桌面/最小化**：语义动作可用（天然去桌面依赖）；最小化时 `windowstate=normal` 还原。
 - [ ] **Step 4: 保持 UIA×调试编排既有覆盖**：`DebugUiToolsTests` 里两条非物理用例（断点闭环 `…OnToggleState…HitsBreakpoint`、错误面 `…InvalidArgsAndMissingTargets…`）**改写为 `ui_action`**（不随物理三例一起删）；仅物理右键/双击/滚轮三例删除。
@@ -124,7 +124,7 @@
 ## 收尾
 
 - [ ] Release build 全解决方案 0 警告；Engine/Session/宿主全量测试；Client；`git grep` 确认无 `FlaUI.Core.Input`/`SetForegroundWindow`/`Mouse.` 残留与 `ui_invoke`/`ui_scroll` 残留（除历史 CHANGELOG/spec）。
-- [ ] 核对 `TODO.md` U1A 条目、`specs/README.md`（U1 已标 superseded、U1A 行）；**U1 spec 正文顶部加 Superseded 说明**（`docs/planning/specs/2026-09-08-u1-ui-automation.md` 置顶：工具面被 U1A 取代、正文保留，spec §14 要求）；CHANGELOG `[Unreleased]` Breaking 记录齐全。
+- [ ] 核对 `TODO.md` U1A 条目、`specs/README.md`（U1 已标 superseded、U1A 行）；**U1 spec 正文顶部加 Superseded 说明**（`docs/planning/specs/2026-09-08-u1-ui-automation.md` 置顶：工具面被 U1A 取代、正文保留，spec §14 要求）；**spec U1A §15 勘误注**：不抢前台强断言口径收窄为「invoke/toggle/select/expand/collapse/scroll/scrollintoview/ui_input，豁免 focus/windowstate」（依据 §9）——在 spec 加勘误行，避免后续按原 §15 无条件口径复核；CHANGELOG `[Unreleased]` Breaking 记录齐全。
 - [ ] 本地分支提交，不合并/不 push（用户 2026-09-10 决定）。
 
 ## Self-Review（writing-plans 内审）
