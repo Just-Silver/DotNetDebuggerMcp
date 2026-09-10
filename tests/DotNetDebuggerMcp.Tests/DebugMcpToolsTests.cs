@@ -162,6 +162,12 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("$exception", vars.Text());
         Assert.Contains("System.DivideByZeroException", vars.Text());
 
+        // $exception 伪根也可直接用于 debug_evaluate（此前仅 debug_variables/debug_object 支持）
+        var evalExc = await CallAsync(mcp, "debug_evaluate",
+            new Dictionary<string, object?> { ["expression"] = "$exception._message" });
+        Assert.True(evalExc.IsError != true, evalExc.Text());
+        Assert.Contains("value is zero", evalExc.Text());
+
         var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
         Assert.True(disc.IsError != true, disc.Text());
     }

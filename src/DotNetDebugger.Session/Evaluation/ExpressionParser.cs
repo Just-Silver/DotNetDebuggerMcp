@@ -29,7 +29,7 @@ public sealed record CompareNode(string Op, ExpressionNode Left, ExpressionNode 
 /// Comparison := Unary (('=='|'!='|'&lt;'|'&lt;='|'&gt;'|'&gt;=') Unary)?      // 单次比较，不链
 /// Unary      := '!' Unary | Path
 /// Path       := Primary ('.' Field | '[' Int ']')*                   // 段数 ≤ 8
-/// Primary    := Identifier | Literal
+/// Primary    := Identifier | '$exception' | Literal                  // $exception = 异常停点伪根
 /// Literal    := int | string | true | false | null
 /// </code>
 /// 不支持：算术、方法调用、赋值、负数字面量、括号、泛型/类型操作——tokenize/parse 报错附子集范围提示。
@@ -37,7 +37,7 @@ public sealed record CompareNode(string Op, ExpressionNode Left, ExpressionNode 
 public static class ExpressionParser
 {
     private const string SubsetHint =
-        "表达式子集：字面量（int/string/true/false/null）、成员访问 a.b、数组/字符串索引 a[i]（非负整数）、一元 !、单次比较（== != < <= > >=）；不支持算术、方法调用、赋值。";
+        "表达式子集：字面量（int/string/true/false/null）、成员访问 a.b、数组/字符串索引 a[i]（非负整数）、一元 !、单次比较（== != < <= > >=）、异常停点伪根 $exception；不支持算术、方法调用、赋值。";
 
     private enum TokKind { Ident, Int, Str, Op }
 
@@ -169,9 +169,10 @@ public static class ExpressionParser
         {
             var c = s[i];
             if (char.IsWhiteSpace(c)) { i++; continue; }
-            if (char.IsLetter(c) || c == '_')
+            if (char.IsLetter(c) || c == '_' || c == '$')
             {
                 var start = i;
+                i++;
                 while (i < s.Length && (char.IsLetterOrDigit(s[i]) || s[i] == '_')) i++;
                 tokens.Add(new Token(TokKind.Ident, s[start..i], start));
                 continue;

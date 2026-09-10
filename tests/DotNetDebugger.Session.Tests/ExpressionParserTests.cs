@@ -192,4 +192,23 @@ public sealed class ExpressionParserTests
         var ex = Assert.Throws<ExpressionEvaluationException>(() => ExpressionParser.Parse("a + b"));
         Assert.Contains("不支持", ex.Message);
     }
+
+    // ---- 合法：$exception 伪根（异常停点求值前置；词法允许 $ 起始标识符） ----
+
+    [Fact]
+    public void Parse_DollarExceptionRoot_IsAcceptedAsPathRoot()
+    {
+        var node = Assert.IsType<PathNode>(ExpressionParser.Parse("$exception.InnerException"));
+        Assert.Equal("$exception", node.Root);
+        var seg = Assert.IsType<PathSegment.Field>(Assert.Single(node.Segments));
+        Assert.Equal("InnerException", seg.Name);
+    }
+
+    [Fact]
+    public void Parse_BareDollarException_IsAccepted()
+    {
+        var path = Assert.IsType<PathNode>(ExpressionParser.Parse("$exception"));
+        Assert.Equal("$exception", path.Root);
+        Assert.Empty(path.Segments);
+    }
 }
