@@ -158,17 +158,23 @@ Services/Ui/
 - **debug_verify e2e**：场景文件含 `uiAction`+`uiAssert`，PASS；失败时实际值脱敏。
 - **回归**：宿主全量单测 + `McpSessionConcurrencyTests`。
 
-> **§15 勘误（2026-09-10，实施期修正；复核以本勘误为准）**：
-> ① **不抢前台强断言口径收窄**：仅对 `invoke`/`toggle`/`select`/`expand`/`collapse`/`scroll`/`scrollintoview`/`ui_input` 断言
+> **§15 勘误（2026-09-10 实施期修正；复核以本勘误为准）**：
+> ① **不抢前台强断言口径收窄（verb 限定）**：仅对 `invoke`/`toggle`/`select`/`expand`/`collapse`/`scroll`/`scrollintoview`/`ui_input` 断言
 > `GetCursorPos()`/`GetForegroundWindow()` 不变；**豁免 `focus`/`windowstate`**（`AutomationElement.Focus` 对带 HWND 控件
-> 可能激活顶层窗口、`SetWindowVisualState(Normal)` 是否激活取决于目标应用——依据 §9，非物理输入）。另：共享交互桌面
-> 上外部鼠标/前台活动会污染断言，实施改为「变化具备物理输入回归强特征（光标移入目标窗口 **且** 目标窗口被抢前台）才失败，
-> 否则跳过」。
-> ② **`UiElementLocator` 测试策略**：宿主测试工程为 `net10.0` 且不引入 WinForms（须保 PackAsTool 的 net10.0），故
-> locator 的**纯逻辑**（条件构造/缓存键/计数判定，若有）走单测；**条件缓存/失效重试/虚拟化实体化**改由**跨进程 e2e**
-> （UiSampleApp 真实控件）覆盖——原「locator 失效重解析/虚拟化实体化单测」不以宿主单测形式落地。
-> ③ **`continue.waitSeconds=0`**：为让 `uiAction` 在 `debug_verify` 的 launch 路径下驱动运行中目标，`continue` 步骤新增
-> `waitSeconds=0` = 放行不等停点（默认仍 10；0 不改变既有语义）。
+> 可能激活顶层窗口、`SetWindowVisualState(Normal)` 是否激活取决于目标应用——依据 §9，非物理输入）。
+> ② **外部活动处理 = 「基线静默才强判」**：动作前对光标/前台**连续采样**确认基线静默（连续多帧一致）后才执行动作；
+> 若动作前基线本就不稳定（检出外部活动）→ **跳过该断言并打印明确原因**（不做「强特征」启发式，也不静默降级为弱断言）；
+> 基线静默时动作后光标/前台**任一变化即失败**（目标窗口被抢前台或光标落入目标窗口为额外失败触发）。CI 非交互桌面
+> 应稳定取到静默基线，从而使该断言成为强断言。
+> ③ **确定性防回归兜底**：新增 `NoPhysicalInputGuardTests`——扫描宿主源码树 `src/DotNetDebuggerMcp/**/*.cs` 与构建产物
+> `DotNetDebuggerMcp.dll` 的 IL 元数据，禁止出现 `FlaUI.Core.Input`/`Mouse.`/`SetCursorPos`/`SendInput`/`SetForegroundWindow`/
+> `ActivateWindow`/`PerformPhysicalMouse` 引用；与桌面是否交互无关、CI 必过/必败（e2e 因桌面噪声跳过时仍有信号）。
+> ④ **`UiElementLocator` 测试策略（如实）**：宿主测试工程为 `net10.0` 且不引入 WinForms（须保 PackAsTool 的 net10.0）。
+> locator 的**纯逻辑**（身份匹配谓词/ordinal 计数键/同名跨类型 ordinal 定位）**以纯逻辑单测覆盖**（`UiElementLocatorPureTests`，
+> 不触 COM）；**index→条件重解析与 stale/失效重试**由跨进程 e2e（`DebugUiToolsTests` 使用 `index` 的用例）覆盖；
+> **虚拟化实体化**受 UiSampleApp 非虚拟化列表限制**未覆盖**（不虚称 e2e 已覆盖）。
+> ⑤ **`continue.waitSeconds=0`**：为让 `uiAction` 在 `debug_verify` 的 launch 路径下驱动运行中目标，`continue` 步骤新增
+> `waitSeconds=0` = 放行不等停点（默认仍 10；`>=1` 行为不变，0 为新增语义）。
 
 ## 16. 风险
 
