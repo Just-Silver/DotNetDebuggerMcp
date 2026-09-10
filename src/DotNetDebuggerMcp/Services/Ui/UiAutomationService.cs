@@ -182,27 +182,56 @@ internal sealed class UiAutomationService
 
         var caps = UiPatternCapabilities.Probe(element);
         var candidates = UiPatternDispatcher.ChooseInputCandidates(caps);
-        UiException? readOnly = null;
+        var sawReadOnly = false;
+        var attemptedWritable = false;
+
+        // 优先尝试**可读回校验**的 Value/RangeValue：写入后读回确认生效，无效果则退下一候选——
+        // 防 WinForms 滚动条经 MSAA-UIA 桥暴露的 ValuePattern.IsReadOnly 误报 false 而 SetValue 静默 no-op
+        //（返回假成功；2026-09-10 远程 CI 实证）。只读 pattern 视为终止信号，不退回 Legacy（否则只读控件被误写）。
         foreach (var choice in candidates)
         {
-            var before = TryReadInputValue(element, choice);
-            try { UiPatternDispatcher.ExecuteInput(element, choice, value); }
-            catch (UiException ex) when (ex.Message.Contains("只读", StringComparison.Ordinal))
+            if (choice.Kind == UiInputKind.LegacySetValue)
+                break; // Legacy 不可读回校验，单独在下方兜底处理
+
+            if (IsReadOnlyPattern(element, choice))
             {
-                readOnly ??= ex; // 该 pattern 只读：记下并尝试下一候选（如 Value 只读但 RangeValue 可写）
+                sawReadOnly = true;
                 continue;
             }
 
+            attemptedWritable = true;
+            var before = TryReadInputValue(element, choice);
+            UiPatternDispatcher.ExecuteInput(element, choice, value);
             var after = TryReadInputValue(element, choice);
-            // 无法读回（provider 不暴露读值）时信任写入；可读回则要求值确有反映，否则退下一候选——
-            // 防 WinForms 滚动条经 MSAA-UIA 桥暴露的 ValuePattern.IsReadOnly 误报 false 而 SetValue 静默 no-op
-            //（返回假成功；2026-09-10 远程 CI 实证）。
             if (before is null || after is null || Reflected(before, after, value))
                 return new UiActionResult(true, $"已 input（{choice.PatternName}）");
         }
 
-        if (readOnly is not null) throw readOnly;
-        throw new UiException("写入未生效：控件暴露的写值 pattern（Value/RangeValue/LegacyIAccessible）均未反映新值。");
+        // Legacy 兜底：仅当控件根本没有 Value/RangeValue 时使用（不可读回校验，若混用会在可校验却无效果的控件上假成功）。
+        if (!sawReadOnly && !attemptedWritable && caps.Legacy)
+        {
+            var legacy = candidates.First(c => c.Kind == UiInputKind.LegacySetValue);
+            UiPatternDispatcher.ExecuteInput(element, legacy, value);
+            return new UiActionResult(true, $"已 input（{legacy.PatternName}）");
+        }
+
+        if (sawReadOnly) throw new UiException("该控件为只读，无法写值。");
+        throw new UiException("写入未生效：控件暴露的写值 pattern（Value/RangeValue）均未反映新值。");
+    }
+
+    /// <summary>该候选 pattern 是否只读（Legacy 不判）。读取失败按「非只读」处理（交由 SetValue 暴露真实错误）。</summary>
+    private static bool IsReadOnlyPattern(AutomationElement element, ChosenInput choice)
+    {
+        try
+        {
+            return choice.Kind switch
+            {
+                UiInputKind.Value => element.Patterns.Value.PatternOrDefault?.IsReadOnly.ValueOrDefault ?? false,
+                UiInputKind.RangeValue => element.Patterns.RangeValue.PatternOrDefault?.IsReadOnly.ValueOrDefault ?? false,
+                _ => false,
+            };
+        }
+        catch { return false; }
     }
 
     /// <summary>读回当前值（Value/RangeValue；Legacy 不读值返回 null 表示不可校验）。读取失败返回 null（不可校验）。</summary>
@@ -214,7 +243,8 @@ internal sealed class UiAutomationService
             {
                 UiInputKind.Value => element.Patterns.Value.PatternOrDefault?.Value.ValueOrDefault,
                 UiInputKind.RangeValue => element.Patterns.RangeValue.PatternOrDefault?.Value.ValueOrDefault
-                    .ToString(System.Globalization.CultureInfo.InvariantCulture),                _ => null,
+                    .ToString(System.Globalization.CultureInfo.InvariantCulture),
+                _ => null,
             };
         }
         catch { return null; }
