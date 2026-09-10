@@ -18,7 +18,7 @@
 ## 环境要求
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- Windows（反编译/静态分析跨平台可用；`debug_*` 动态调试与 `ui_*` UI 自动化需 Windows——ui_* 还需交互桌面会话，远程/服务会话可能读不到目标窗口且物理输入（SendInput）被系统拒绝）
+- Windows（反编译/静态分析跨平台可用；`debug_*` 动态调试与 `ui_*` UI 自动化需 Windows——ui_* 全 UIA 语义 pattern，**不移动光标/不注入输入/不抢前台**，只要求目标窗口在 UIA 树里可见；远程/服务会话可能读不到目标窗口）
 
 ## 安装
 
@@ -127,23 +127,24 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_object` | **对象结构受控递归下钻（D1）**：把已定位的对象/数组按 `depth` 层展开 children（默认 2，上限 6），每层字段/元素上限 `limit`（默认 32，范围 1-128），同路径环输出 `<cyclic>` 占位不再下钻——探索「对象里有什么」逐级展开，不盲猜路径。`path` 同 `debug_evaluate`（根=栈顶帧局部/参数名 + 字段/下标，支持 `$exception` 伪根如 `$exception.InnerException`）；标量/字符串/null 终值返回中文「不是对象/数组」提示。**与 `debug_evaluate` 分工：它取标量值，本工具看结构** |
 | `dotnetdebugger_debug_set` | **停点现场改写（W1）**：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显（防误判改写是否触及原因）。`path` 同 `debug_evaluate`（根=局部/参数名 + 字段/下标）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（**无符号 `0x` 十六进制**，或**带符号十进制**整数/小数/科学计数，可带 `m/f/d` 后缀；小数/后缀按目标类型转换——浮点目标接受，整型拒小数/后缀，**decimal 目标 v1 不支持**（如 `order.Total`，中文降级提示）；**枚举仅底层 GenericValue 形态可写整数值，enum 对象字段 v1 降级**（如 `h.Kind`，中文降级提示））/ 同帧另一条对象路径（引用重定向如 `cfg.Backup`）。不支持改 readonly/const/静态字段、构造新对象、字符串内容（双引号/单引号文本不在文法内，char 用整数码点写）。改写敏感路径（如 `b.Password`）时「原值 → 新值」回显同样过 DB1 脱敏（原/新值替换为占位符）。**风险：写目标进程内存可能使其崩溃——只改确认的变量；目标引用当前为 null 时的重定向不做类型校验（无 deref 对象可比），需自行保证同型；改完 `debug_continue` 观察行为** |
 | `dotnetdebugger_debug_exceptions` / `_clear` | first-chance 异常断点：按类型全名或短名（`.短名` 结尾，忽略大小写）过滤，不匹配的异常跳过并在 debug_wait/debug_state 提示跳过情况 / 清除 |
-| `dotnetdebugger_debug_verify` | **一键复验（V1）**：读场景 JSON 文件（`target` 启动快照 + 可选 `build` 重编译 + `steps` 断言序列）自动执行到 **PASS/FAIL**——改完 bug 后自证修复的最后一跳。可选 `build` 先重编译工程（**产物自动拿取**：build 成功后按项目默认输出路径定位，不设置 OutputPath；`target.commandLine` 写工程入口 exe 文件名+参数，首段文件名须与编译产物同名），再启动并执行断点/continue/断言步骤（`breakpointHit`/`evaluate`/`output`/`state`/`noException`），断言失败即停（fail-fast）并返回失败步骤+目标输出尾部。无 `build` 时 `commandLine` 用完整路径/相对路径。场景格式与边界见 §使用示例「一键复验」 |
+| `dotnetdebugger_debug_verify` | **一键复验（V1）**：读场景 JSON 文件（`target` 启动快照 + 可选 `build` 重编译 + `steps` 断言序列）自动执行到 **PASS/FAIL**——改完 bug 后自证修复的最后一跳。可选 `build` 先重编译工程（**产物自动拿取**：build 成功后按项目默认输出路径定位，不设置 OutputPath；`target.commandLine` 写工程入口 exe 文件名+参数，首段文件名须与编译产物同名），再启动并执行断点/continue/断言步骤（`breakpointHit`/`evaluate`/`output`/`state`/`noException`；另含 **`uiAction` 驱动 UI + `uiAssert` 断言 UI 状态** 的 U1A 闭环），断言失败即停（fail-fast）并返回失败步骤+目标输出尾部。无 `build` 时 `commandLine` 用完整路径/相对路径。场景格式与边界见 §使用示例「一键复验」 |
 | `dotnetdebugger_web_open` | 打开 Web 调试监视器（幂等：已启动返回现有地址不重复启动；首次自动拉起默认浏览器） |
 | `dotnetdebugger_debug_disconnect` | 断开调试会话 |
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
 > 动态调试用法：`debug_launch`/`debug_attach` 建会话 → 断点四种下法：`debug_breakpoint_set`+token（`signature`/`decompile_member` 行尾取）、`typeName`+`memberName`（想断某类型里名字带 X 的方法，直接说方法名）、`typeName`+`line`（decompile 输出行号，看到哪行断哪行）、`sourcePath`+`line`（堆栈里的源文件行号，断案发现场）→ `debug_continue` 运行 → `debug_wait` 等停点（直接返回停点现场，免轮询，默认附目标最近控制台输出）；停后 `debug_stack`/`debug_variables` 观察（帧变量多/只想看某几个时 `debug_variables names="i,order"` 按名白名单读取——逗号分隔、忽略大小写、空=全量；命中对象照常逐字段脱敏，未知名会列出当前帧可用名）、`debug_evaluate` 求值深层表达式（`order.Customer.Name`、`list._items[50]`、`i == retryCount`，纯读无副作用）、**想知道对象里有什么再逐级下钻用 `debug_object`**（`debug_object "order.Customer" depth=3`——把对象/数组按 depth 层展开 children 树，同路径环自动标 `<cyclic>`、`limit` 控每层宽度；与 `debug_evaluate` 分工：它取标量值，本工具看结构）、**「改值验证假设再继续」用 `debug_set`**（把现场变量改成新值，返回 原值→新值 回显，改完 `debug_continue` 观察行为是否变化——二分定位因果实验；注意写进程内存有崩目标风险，只改确认的变量）、`debug_step` 单步、`debug_disconnect` 结束。**想「让进程直接跑到某处再停下看现场」用 `debug_run_to`**（目标定位同 `typeName`+`line` / `typeName`+`memberName`，命中自动移除临时断点——对标 VS 运行到光标处）。目标进程的控制台输出（stdout/stderr）随 launch 自动捕获，`debug_output` 随时拉取（attach 附加的会话不捕获）。**复盘整段调试经过（目标日志 ↔ 断点/异常/trace 事件 ↔ agent 动作按时间对齐）用 `debug_timeline`**。**改完源码想「重编译→重启→重跑关键路径→断言结果」一次自证修复，用 `debug_verify`**（读场景 JSON 文件：`target` 启动快照 + 可选 `build` 重编译（产物自动拿取）+ `steps` 断言序列，执行到 PASS/FAIL、断言失败即停——见使用示例「一键复验闭环」）。控制工具异步返回；等停点用 `debug_wait`（超时返回当前状态，不报错），停点快照也可随时经 `debug_state` 查询。**读值输出对疑似凭据自动脱敏**：`debug_variables`/`debug_evaluate`/trace 轨迹的变量值若按变量名（api key/password/token/credential/auth/连接串等，归一化 exact-match）或按值内容形态（JWT/PEM/Bearer/`Key=…` 等）判定像凭据，输出替换为 `[已脱敏:疑似凭据]` 占位符并附提示——请用该出口提供的类型/长度/null 等非敏感信息判断，勿读原始值；null/平凡值不动（「token 是 null」照常可调），子串不误伤（`tokenCount` 等照常可读）。**目标自起子进程（Web/服务类目标把业务代码跑在子进程，如 dotnet run 起的 app 再 spawn worker/testhost）时**：`debug_processes` 会把当前会话目标的 .NET 子孙进程链标注出来（行尾「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」+ 尾部切换引导）——单活动会话下需先停当前会话（`debug_disconnect`/停断点）再 `debug_attach <childPid>` 单独调试子进程；子进程自己的控制台输出不在 launch 的 `debug_output` 捕获范围。
 
-### UI 自动化（`ui_find` / `ui_invoke` / `ui_wait` / `ui_scroll`——真实操作运行中的 .NET UI 应用）
+### UI 自动化（`ui_find` / `ui_action` / `ui_input` / `ui_get` / `ui_wait`——全 UIA 语义，真实操作运行中的 .NET UI 应用）
 
 | 工具 | 用途 |
 | ---- | ---- |
-| `dotnetdebugger_ui_find` | 按 **进程（pid 或进程名）+ 窗口/控件条件**列出 UI 控件（**无视觉**——文本清单：`index/Name/Type/AutoId/Rect/Invoke✓` + **同名成员语义候选**）。`text`=控件 Name 子串忽略大小写（同时匹配 AutomationId）、`automationId` 精确、`type`=UIA 类型名（Button/Text/Edit/List/ListItem/CheckBox/Window…，TextBlock→Text、TextBox→Edit、ListBox→List 别名自动归一）；`title`=窗口标题精确匹配，空=该进程首个顶层窗口；`limit`=条数上限。返回的 **index 供 `ui_invoke`/`ui_scroll` 复用**；语义候选可用 `decompile_member` 看成员实现 |
-| `dotnetdebugger_ui_invoke` | 对控件执行点击（**真实操作，有产线副作用**）：`action=click`（默认，**InvokePattern 语义优先**、不可用时物理左键坐标兜底）/ `rightClick` / `doubleClick`（后两者**无 UIA pattern 一律物理鼠标**——可能触发系统级行为如系统上下文菜单）。`index`=上次 ui_find 返回序号（优先，pid 不匹配/越界会提示重新 ui_find）；或 `name`/`type` 即时唯一定位（歧义返回候选清单请用 index）。返回注明**实际动作**（已 Invoke / 已物理左键 / 已物理右键 / 已物理双击），操作写入 AgentActionLog |
-| `dotnetdebugger_ui_wait` | 只读轮询等待 UI 状态变化/控件出现（不操作、无副作用）：`text`=期望出现的控件文本（Name 子串忽略大小写）；或 `textChangedFrom`+`textChangedTo` **成对**等控件文本从 X 变 Y（点击后的状态确认，如 手动→自动、双击:0→双击:1）。每 200ms 一次到 `timeoutSeconds`（默认 30，1-300）止；**超时返回当前状态提示、不报错** |
-| `dotnetdebugger_ui_scroll` | 在容器（List/ListBox/DataGrid/TextBox…，`index` 或 `name`/`type` 定位，都缺省=窗口中心）上滚动：v1 **物理滚轮**（真实滚动，有产线副作用）`direction=up/down`（默认 down）+ `lines` 行数（默认 3）。目标需可见、窗口尽量在前台；**滚动不改变元素树**——滚完请用 `ui_find` 复查目标控件。操作写入 AgentActionLog |
+| `dotnetdebugger_ui_find` | 按 **进程（pid 或进程名）+ 窗口/控件条件**列出 UI 控件（**无视觉**——文本清单：`index/Name/Type/AutoId/patterns=能力清单/Rect` + **同名成员语义候选**）。`patterns=` 只列该控件真实支持的能力（invoke/toggle/selectionitem/expandcollapse/value/rangevalue/scroll/scrollitem/window/legacy），供选择 verb。`text`=控件 Name 子串忽略大小写（同时匹配 AutomationId）、`automationId` 精确、`type`=UIA 类型名（Button/Text/Edit/List/ListItem/CheckBox/Window…，TextBlock→Text、TextBox→Edit、ListBox→List 别名自动归一）；`title`=窗口标题精确匹配，空=该进程首个顶层窗口；`limit`=条数上限。返回的 **index 供 `ui_action`/`ui_input`/`ui_get` 复用**；语义候选可用 `decompile_member` 看成员实现 |
+| `dotnetdebugger_ui_action` | 对控件执行**语义动作**（真实操作，有产线副作用）：`verb` ∈ `invoke`（默认动作）/`toggle`（可勾选）/`select`（列表·树·页签项）/`expand`/`collapse`/`focus`（仅控件）/`scroll`（需 `direction=up/down`+`lines`）/`scrollintoview`/`windowstate`（`normal/maximized/minimized`，按进程定位顶层窗口、忽略 index/name/type）。**按控件能力分派 pattern，而非固定「点一下」**——复选框用 `toggle`、列表项用 `select`、下拉/树节点用 `expand`。**无右键/双击**：UIA 无该类入口、物理输入已移除，传 `rightclick`/`doubleclick` 返回明确中文拒绝并引导改用 `verb=invoke`。`index`=上次 ui_find 序号（优先，pid 不匹配/越界会提示重新 ui_find）；或 `name`/`type` 即时唯一定位（歧义返回候选清单）。返回注明实际命中的 pattern（如「已 select（SelectionItemPattern）」），操作写入 AgentActionLog |
+| `dotnetdebugger_ui_input` | 对控件**写值**（真实操作，有产线副作用）：按 `ValuePattern` → `RangeValuePattern` → `LegacyIAccessiblePattern` 分派（文本框写文本、滑块/数值框写数字）；只读控件或无写值能力返回中文提示。定位同 `ui_action`。操作写入 AgentActionLog |
+| `dotnetdebugger_ui_get` | **读取控件状态（只读、无副作用）**：`what` ∈ `value`（优先 ValuePattern，无则 LegacyIAccessible）/`name`/`toggle`/`selected`/`expandstate`/`rangevalue`/`enabled`/`offscreen`/`rect`/`helptext`；无对应 pattern 返回中文提示。定位同 `ui_action`。读出的值展示前按控件 Name/AutoId 走 DB1 敏感脱敏（命中凭据规则替换为 `[已脱敏:疑似凭据]`） |
+| `dotnetdebugger_ui_wait` | **事件化**等待 UI 状态变化/控件出现（只读、无副作用）：对目标窗口订阅结构/属性变化事件，命中即返回；无事件时每 200ms 轮询兜底。`text`=期望出现的控件文本（Name 子串忽略大小写）；或 `textChangedFrom`+`textChangedTo` **成对**等控件文本从 X 变 Y（动作后的状态确认，如 手动→自动）。`timeoutSeconds` 默认 30（1-300）；**超时返回当前状态提示、不报错** |
 
-> UI 自动化用法（**不需活动 debug 会话**，可先操作 UI 到某状态再 attach；需目标进程已运行且是 .NET UI 应用，Windows 桌面会话）：`ui_find`（按进程/类型/文本定位控件，拿 index/语义候选）→ 预埋断点：`debug_breakpoint_set`（想断的成员如切换处理函数 `typeName`+`memberName`，语义候选可直接用）→ `ui_invoke index=N`（点按钮，业务代码自然执行）→ `debug_wait`（断点命中看现场：`debug_stack`/`debug_variables`/`debug_evaluate`）→ `ui_wait textChangedFrom=X textChangedTo=Y`（状态变更二次确认）→ `ui_scroll` 长列表滚动后 `ui_find` 复查。**语义标注**：ui_find 命中控件时对 Name/AutomationId 做**同名成员反查**（类型全名.成员候选，如按钮 AutoId=toggleState → `MainForm.OnToggleState`——反查的是反编译元数据同名成员，非 XAML 绑定还原）；无候选请手动 `decompile_member` 查。**副作用与风险**：ui_invoke/ui_scroll 对产线应用是真实操作（改状态/点按钮/滚动），全部写入 AgentActionLog 供复盘；物理右键/双击/滚轮会把系统级行为带给目标（如系统上下文菜单）；UIA 只在本 Windows 桌面会话可见——远程/服务会话可能读不到目标窗口，物理输入（SendInput）在断开/非交互桌面会被系统拒绝。
+> UI 自动化用法（**不需活动 debug 会话**，可先操作 UI 到某状态再 attach；需目标进程已运行且是 .NET UI 应用）：`ui_find`（按进程/类型/文本定位控件，拿 index/patterns 能力清单/语义候选）→ 预埋断点：`debug_breakpoint_set`（想断的成员如切换处理函数 `typeName`+`memberName`，语义候选可直接用）→ `ui_action index=N verb=invoke`（按语义触发，业务代码自然执行）→ `debug_wait`（断点命中看现场：`debug_stack`/`debug_variables`/`debug_evaluate`）→ `ui_wait textChangedFrom=X textChangedTo=Y`（状态变更二次确认）。**语义标注**：ui_find 命中控件时对 Name/AutomationId 做**同名成员反查**（类型全名.成员候选，如按钮 AutoId=toggleState → `MainForm.OnToggleState`——反查的是反编译元数据同名成员，非 XAML 绑定还原）；无候选请手动 `decompile_member` 查。**全 UIA 语义、无物理输入**：不移动真实光标、不注入鼠标/键盘、不抢前台（仅窗口最小化时经 WindowPattern 还原；`focus` 对带 HWND 控件可能激活顶层窗口）。`ui_action`/`ui_input` 是**真实产线操作**（改状态/点按钮/写值），全部写入 AgentActionLog 供复盘；个别自绘控件无任何 pattern 时明确「不支持」（UIA-only 的硬边界）。
 
 ## 命令行调试
 
@@ -361,16 +362,17 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `debug_set` | `path`（必填）+ `value`（必填）+ `threadId` | **停点现场改写**：`path` 同 `debug_evaluate`（如 `scores[2]`、`b.A`、`i`、`cfg.Current`，根=栈顶帧局部/参数名，缺省 `threadId=0` 用最近停点线程）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（**无符号 `0x` 十六进制**或**带符号十进制**整数/小数/科学计数，可带 `m/f/d` 后缀——按目标类型转换：浮点接受小数/后缀、整型拒后缀、**decimal 目标 v1 不支持**（中文降级提示）；**枚举仅底层 GenericValue 形态可写整数值，enum 对象字段 v1 降级**）/ 同帧对象路径（引用重定向，如 `cfg.Backup`）。返回「原值 → 新值」回显（敏感路径的原值/新值同样经 DB1 脱敏为 `[已脱敏:疑似凭据]`）。不支持改 readonly/const/静态字段、构造新对象、字符串内容（双引号/单引号文本不在文法内，char 用整数码点写）。**风险：写目标进程内存可能使其崩溃，只改确认的变量；目标引用为 null 时的重定向无类型校验，须保证同型** |
 | `debug_variables` | `names` + `threadId` | **按名白名单读取（DB2）**：`names` 逗号分隔白名单（空=全量），精确忽略大小写匹配局部/参数展示名——含 PDB 局部名、元数据参数名、无符号名的 `slotN`、异常停点 `$exception` 伪变量；同名跨作用域（locals/arguments 分节）都返回。**最多 50 项**，超限中文拒绝；白名单未知名在返回尾段列出当前帧可用名（零值反馈不静默）。头部注明白名单命中数；命中值照常走 DB1 敏感脱敏。缺省 `threadId=0` 用最近停点线程 |
 | `debug_continue` / `debug_disconnect` | — | 继续执行（异步返回，停点后 `debug_state` 确认）/ 断开会话（目标继续独立运行） |
-| `debug_verify` | `scenarioPath`（必填） | **一键复验（V1）**：场景 JSON 文件路径——含 `target`（启动快照）+ 可选 `build` + `steps`。build 分支自动 `dotnet build`（默认输出、失败绝不启动旧产物）并 `-getProperty:TargetPath` 拿产物启动；断言原语 kind：`breakpointHit`（`breakpointIndex` 0-based 引场景内第 N 个 breakpoint 步骤）/`evaluate`（`path`+`equals`/`contains` 互斥）/`output`（`contains`，`stream`=out/err）/`state`（`expect`）/`noException`；`ui`/`set` 步骤预留（依赖 U1/W1，运行时报未就绪）。返回 PASS/FAIL 与失败步骤上下文 |
+| `debug_verify` | `scenarioPath`（必填） | **一键复验（V1）**：场景 JSON 文件路径——含 `target`（启动快照）+ 可选 `build` + `steps`。build 分支自动 `dotnet build`（默认输出、失败绝不启动旧产物）并 `-getProperty:TargetPath` 拿产物启动；断言原语 kind：`breakpointHit`（`breakpointIndex` 0-based 引场景内第 N 个 breakpoint 步骤）/`evaluate`（`path`+`equals`/`contains` 互斥）/`output`（`contains`，`stream`=out/err）/`state`（`expect`）/`noException`；U1A 步骤：`uiAction`（驱动 UI 语义动作/写值）、`uiAssert`（`what`+`equals`/`contains` 断言 UI 状态，失败附期望 vs 实际、实际值经 DB1 脱敏）；`ui`/`set` 步骤预留（依赖 U1/W1，运行时报未就绪）。返回 PASS/FAIL 与失败步骤上下文 |
 
-### UI 自动化工具参数（`ui_find` / `ui_invoke` / `ui_wait` / `ui_scroll`）
+### UI 自动化工具参数（`ui_find` / `ui_action` / `ui_input` / `ui_get` / `ui_wait`）
 
 | 工具 | 参数 | 说明 |
 | ---- | ---- | ---- |
-| `ui_find` | `process`（必填）+ `title` + `text` + `type` + `automationId` + `limit` | `process`=pid 或进程名子串（空返回提示）；`title`=窗口标题精确匹配，空=该进程首个顶层窗口；`text`=控件 Name 子串忽略大小写（也匹配 AutomationId）；`type`=UIA 类型名（TextBlock→Text 等别名自动归一）；`automationId`=精确匹配；`limit` 返回上限（默认 50，1-500）。返回 `[index] Type Name=… AutoId=… Invoke✓ Rect=(x,y w x h)` 行 + 同名成员语义候选 |
-| `ui_invoke` | `process`（必填）+ `index` + `name` + `type` + `action` | `index`=上次 ui_find 序号（默认 -1=用 name/type）；`name`=控件名/文本子串忽略大小写；`type`=UIA 类型名；`action`=click（默认）/ rightClick / doubleClick。返回注明实际动作；点完用 `ui_wait` 确认状态变化 |
-| `ui_wait` | `process`（必填）+ `text` + `type` + `textChangedFrom` + `textChangedTo` + `timeoutSeconds` | `text` 与 `textChangedFrom/To` 二选一（前者等控件文本出现，后者等文本从 X 变 Y，可配 `type` 限定）；`timeoutSeconds` 最长等待（默认 30，1-300）。命中返回 出现/已变化；超时返回当前状态提示、不报错 |
-| `ui_scroll` | `process`（必填）+ `index` + `name` + `type` + `direction` + `lines` | 容器定位同 ui_invoke（`index` 优先；都缺省=窗口中心）；`direction`=down（默认）/ up；`lines` 行数（默认 3，1-100）。返回注明方向与行数（物理滚轮） |
+| `ui_find` | `process`（必填）+ `title` + `text` + `type` + `automationId` + `limit` | `process`=pid 或进程名子串（空返回提示）；`title`=窗口标题精确匹配，空=该进程首个顶层窗口；`text`=控件 Name 子串忽略大小写（也匹配 AutomationId）；`type`=UIA 类型名（TextBlock→Text 等别名自动归一）；`automationId`=精确匹配；`limit` 返回上限（默认 50，1-500）。返回 `[index] Type Name=… AutoId=… patterns=… Rect=(x,y w x h)` 行 + 同名成员语义候选 |
+| `ui_action` | `process`（必填）+ `verb`（必填）+ `index` + `name` + `type` + `direction` + `lines` + `windowstate` | `verb`=invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate；`index`=上次 ui_find 序号（默认 -1=用 name/type）；`name`/`type`=即时唯一·歧义回候选；`direction`=up/down（scroll 用）；`lines` 行数（scroll 用，默认 3，1-100）；`windowstate`=normal/maximized/minimized（按进程定位顶层窗口，忽略 index/name/type）。**无右键/双击**（传 rightclick/doubleclick 明确中文拒绝）。返回注明命中的 pattern；写 AgentActionLog |
+| `ui_input` | `process`（必填）+ `value`（必填）+ `index` + `name` + `type` | 按 Value→RangeValue→LegacyIAccessible 写值；定位同 ui_action。只读/无 pattern 中文提示；写 AgentActionLog |
+| `ui_get` | `process`（必填）+ `what`（必填）+ `index` + `name` + `type` | `what`=value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext；定位同 ui_action。读值展示前经 DB1 敏感脱敏 |
+| `ui_wait` | `process`（必填）+ `text` + `type` + `textChangedFrom` + `textChangedTo` + `timeoutSeconds` | `text` 与 `textChangedFrom/To` 二选一（前者等控件文本出现，后者等文本从 X 变 Y，可配 `type` 限定）；事件化 + 200ms 轮询兜底；`timeoutSeconds` 最长等待（默认 30，1-300）。命中返回 出现/已变化；超时返回当前状态提示、不报错 |
 
 > 输出捕获仅 `debug_launch` 会话可用（attach 已运行进程无法重定向）；缓冲保留最近 2000 行，被高频日志淹没时用 `filter` 筛关键行。
 
@@ -418,10 +420,10 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 - > 启动 `DebugTarget.exe` 并断点停在某方法入口 → `dotnetdebugger_debug_set` `path=h.N` `value=99` → 返回「路径 h.N 已改：原值 5 → 新值 99」→ `debug_continue` 观察输出出现 `N=99`——「把 X 改成 Y 再跑，看是否复现/消失」的二分定位实验闭环
 - > 引用重定向：`debug_set path=cfg.Current value=cfg.Backup`（指向同帧另一对象）；引用置空：`debug_set path=cfg.Current value=null`。**改值有崩目标进程风险，先 `debug_evaluate` 复核当前值再改，改完 `debug_continue` 观察**。边界提醒：数字用无符号 `0x` 十六进制或带符号十进制；小数/后缀适用于 float/double 目标（整型拒小数/后缀）；**decimal 字段目标 v1 不支持写**（如 `order.Total`，引擎给中文降级提示）；枚举仅底层 GenericValue 形态可写整数值、enum 对象字段 v1 降级；敏感路径改写时「原值 → 新值」回显同受 DB1 脱敏（原/新值替换为 `[已脱敏:疑似凭据]`）；目标引用当前为 null 时重定向无类型校验（无 deref 可比对），须保证源与目标同型
 
-**UI 自动化驱动业务操作（U1 ui_*）**
+**UI 自动化驱动业务操作（U1A ui_*，全 UIA 语义、无物理输入）**
 
-- > 目标程序（如 CoreMes/被测 WinForms）已开着，先在切换按钮 `ui_find process=CoreMes text=手动 type=Button` → 拿到行 `[3] Button Name=手动 … Invoke✓` 与语义候选（如 `MainViewModel.SwitchAutoStateCommand` 相关同名成员，可用 `decompile_member` 看实现）→ 想断点停在切换代码里：`debug_attach` 附加后用 `debug_breakpoint_set typeName=… memberName=…` 预埋断点 → `ui_invoke process=CoreMes index=3`（真实点击；产线副作用，打 AgentActionLog）→ `debug_wait` 等断点命中看 `debug_stack`/`debug_variables` 现场 → `ui_wait process=CoreMes textChangedFrom=手动 textChangedTo=自动` 确认状态已切（业务闭环）。
-- > 右键/双击/滚动：右键弹菜单目标用 `ui_invoke index=N action=rightClick`（物理右键，可能弹系统上下文菜单）；双击列表项 `action=doubleClick`；长列表滚到底看后面的项用 `ui_scroll process=… name=listBox direction=down lines=5` 后 `ui_find` 复查。物理动作在断开/非交互桌面（远程、服务）会被系统拒绝——需交互桌面会话。
+- > 目标程序（如 CoreMes/被测 WinForms）已开着，先在切换按钮 `ui_find process=CoreMes text=手动 type=Button` → 拿到行 `[3] Button Name=手动 AutoId=toggleState patterns=invoke,legacy …` 与语义候选（如 `MainViewModel.SwitchAutoStateCommand` 相关同名成员，可用 `decompile_member` 看实现）→ 想断点停在切换代码里：`debug_attach` 附加后用 `debug_breakpoint_set typeName=… memberName=…` 预埋断点 → `ui_action process=CoreMes index=3 verb=invoke`（语义触发，业务代码自然执行；产线副作用，打 AgentActionLog）→ `debug_wait` 等断点命中看 `debug_stack`/`debug_variables` 现场 → `ui_wait process=CoreMes textChangedFrom=手动 textChangedTo=自动` 确认状态已切（业务闭环）。
+- > 按控件能力选动词：复选框 `ui_action verb=toggle`、列表/树/页签项 `verb=select`、下拉/树节点 `verb=expand`/`collapse`、滚动容器 `verb=scroll direction=down lines=5`、屏外项 `verb=scrollintoview`、写文本框/滑块 `ui_input value=…`、读状态 `ui_get what=value/toggle/selected/…`。**无右键/双击**：UIA 无该类入口且物理输入已移除，传 `rightclick`/`doubleclick` 会得到明确中文拒绝——请让目标提供等价的菜单/命令入口再 `verb=invoke`。全 UIA 语义**不移动光标、不注入输入、不抢前台**（仅最小化窗口经 WindowPattern 还原），断开/非交互桌面也能用（只要目标窗口在 UIA 树里）。
 
 **一键复验闭环（V1 debug_verify）——改完 bug 自证修复**
 
@@ -445,8 +447,22 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 }
 ```
 
-- 步骤类型：`breakpoint`（typeName+memberName 成员级定位方法入口，`hit` 第 N 次起）/ `continue`（`waitSeconds`）/ `assert`（kind：breakpointHit/evaluate/output/state/noException）/ `ui`·`set`（预留：依赖 U1/W1 未实现，运行时报「步骤类型依赖未就绪」）。
-  - 注：早期 spec 草案示例曾用顶层 `{"output": …}`/`{"wait": …}` 作步骤——现统一 canonical：顶层步骤只有 `breakpoint`/`continue`/`assert`/`ui`/`set` 五种，输出/状态/表达式断言一律写成 `assert` 步骤（`kind` 分派）。
+> UI 驱动 + 调试断言的闭环示例：`uiAction` 驱动控件、`uiAssert` 断言 UI 状态（`continue.waitSeconds=0` = 放行不等停点，供后续动作在目标运行中执行；`uiAction.verb=input` 时按 `value` 走 `ui_input`）：
+
+```jsonc
+{
+  "name": "切换按钮复验",
+  "target": { "commandLine": "CoreMes.exe" },
+  "steps": [
+    { "continue": { "waitSeconds": 0 } },                                                       // 0=放行不等待新停点
+    { "uiAction": { "process": "CoreMes", "verb": "invoke", "name": "手动", "type": "Button" } },
+    { "uiAssert": { "process": "CoreMes", "what": "name", "name": "自动", "contains": "自动" } }
+  ]
+}
+```
+
+- 步骤类型：`breakpoint`（typeName+memberName 成员级定位方法入口，`hit` 第 N 次起）/ `continue`（`waitSeconds`，0=放行不等停点）/ `assert`（kind：breakpointHit/evaluate/output/state/noException）/ `uiAction`（process+verb+定位 index/name/type + 可选 value/direction/lines/windowstate；调用 U1A `ui_action`/`ui_input` 同款语义核心，无物理输入）/ `uiAssert`（process+定位+what + equals|contains，调用 `ui_get` 核心比对；失败附期望 vs 实际、实际值经 DB1 脱敏）/ `ui`·`set`（预留：依赖 U1/W1 未实现，运行时报「步骤类型依赖未就绪」）。
+  - 注：早期 spec 草案示例曾用顶层 `{"output": …}`/`{"wait": …}` 作步骤——现统一 canonical：顶层步骤只有 `breakpoint`/`continue`/`assert`/`uiAction`/`uiAssert`/`ui`/`set` 七种，输出/状态/表达式断言一律写成 `assert` 步骤（`kind` 分派）。
 - `build` 分支：只重编场景指定工程、**不设置 OutputPath**，产物用项目默认输出路径经 `-getProperty:TargetPath` 自动拿取（SDK 现算，agent 不写路径/TFM）；`commandLine` 首段写**工程入口文件名**（如 `CoreMes.exe`，须与编译产物同名，忽略扩展名/大小写）+ 参数——不一致或 build 失败即 FAIL（绝不启动旧产物）。
 - 无 `build`：`commandLine` 用完整路径或相对 server 工作目录（不搜 PATH，同 `debug_launch`）；目标文件不存在 → 中文提示。
 - 断言语义：`breakpointHit` 看最近停点是否命中该断点；`evaluate` equals=精确（字符串比字面值，数字/布尔比展示文本，大小写敏感）、contains=展示文本含子串（忽略大小写，也适用于日志串）；`output` **只支持 contains**（`stream`=out/err，缺省全部）；`state` `expect` 可逗号分隔（任一命中即过）；`noException` 场景期间无异常停点。

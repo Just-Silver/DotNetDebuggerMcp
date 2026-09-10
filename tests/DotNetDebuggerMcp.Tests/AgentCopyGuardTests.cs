@@ -33,13 +33,16 @@ public sealed class AgentCopyGuardTests
         { nameof(DebugVerifyTool.DebugVerify), "场景" },                // 场景 JSON 文件输入
         { nameof(DebugVerifyTool.DebugVerify), "PASS" },                // 执行到 PASS/FAIL 结果
         { nameof(DebugVerifyTool.DebugVerify), "fail-fast" },           // 断言失败即停语义
-        // U1 ui_* 工具补录（四件套契约：无视觉清单 / 副作用与多键 / 等待超时语义 / 物理滚轮）
+        // U1A ui_* 工具补录（语义动词契约：无视觉清单 / 能力清单 / 语义动词与无右键·双击 / 读值 what / 写值 value / 等待超时）
         { nameof(UiTools.UiFind), "控件清单" },                         // ui_find 返回文本控件清单（无视觉）
         { nameof(UiTools.UiFind), "无视觉" },
-        { nameof(UiTools.UiInvoke), "副作用" },                         // ui_invoke 真实操作副作用提示
-        { nameof(UiTools.UiInvoke), "rightClick" },                     // action 多键（右键/双击物理鼠标）
+        { nameof(UiTools.UiFind), "patterns" },                          // ui_find 输出能力清单
+        { nameof(UiTools.UiAction), "verb" },                            // ui_action 语义动词
+        { nameof(UiTools.UiAction), "右键" },                            // 无右键/双击边界（物理输入已移除）
+        { nameof(UiTools.UiAction), "不抢前台" },                        // UIA-only 前台策略
+        { nameof(UiTools.UiInput), "value" },                            // ui_input 写入值
+        { nameof(UiTools.UiGet), "what" },                               // ui_get 读取状态
         { nameof(UiTools.UiWait), "超时返回当前状态" },                 // ui_wait 超时不报错
-        { nameof(UiTools.UiScroll), "滚轮" },                           // ui_scroll 物理滚轮语义
     };
 
     [Theory]
