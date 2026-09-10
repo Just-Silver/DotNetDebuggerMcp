@@ -33,6 +33,9 @@ internal static class TestDataPaths
     /// </summary>
     public static readonly string TestSamplesExtDll = Locate("tests", "TestData", TestSamplesExtAssemblyName + ".dll");
 
+    /// <summary>仓库根目录（含 DotNetDebuggerMcp.slnx）——供源码/产物扫描类护栏测试定位文件。</summary>
+    public static readonly string RepositoryRoot = LocateRoot();
+
     /// <summary>
     /// 取指定程序集中 Callee 类型首个方法（Help，被 Caller.Run 的 c.Help() 调用）的元数据 token， 供 call_graph 的 token
     /// 方法级调用点用例。CallGraphToolTests / DotNetDebuggerMcpCmdTests / CallGraphExtractorTests 共用， 避免三处各存一份逐字符相同的辅助。
@@ -55,6 +58,11 @@ internal static class TestDataPaths
 
     private static string Locate(params string[] segments)
     {
+        return Path.Combine([LocateRoot(), .. segments]);
+    }
+
+    private static string LocateRoot()
+    {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         // 从测试进程 CWD（bin/Debug/net10.0）逐级上溯，直到找到含 DotNetDebuggerMcp.slnx 的仓库根
         while (dir is not null)
@@ -66,6 +74,6 @@ internal static class TestDataPaths
         {
             throw new DirectoryNotFoundException("未找到仓库根目录（缺少 DotNetDebuggerMcp.slnx）");
         }
-        return Path.Combine([dir.FullName, .. segments]);
+        return dir.FullName;
     }
 }
