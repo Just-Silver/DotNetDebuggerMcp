@@ -7,35 +7,26 @@ using System.Runtime.Versioning;
 namespace DotNetDebuggerMcp.Services.Ui;
 
 /// <summary>
-/// U1A 事件化等待（spec §10）：对目标窗口订阅 StructureChanged（控件出现/消失）+ PropertyChanged（Name/Value，
-/// 文本变化），命中即唤醒（回调只判位 + TrySetResult，不重入 UIA 大操作）；无事件时按 200ms 轮询兜底。整体
-/// 由 facade 在 gate 内调用（订阅/退订/探测均在 gate 内串行）。
+/// U1A 事件订阅（spec §10）：对目标窗口订阅 StructureChanged（控件出现/消失）+ PropertyChanged（Name/Value，
+/// 文本变化），任一事件触发即回调。**订阅/退订由 facade 在 gate 内调用**（与探测串行、无竞态）；回调只
+/// <c>TrySetResult</c>，不重入 UIA 大操作。等待循环与探测由 facade 负责（每轮取放 gate），故本类不长时间持有 gate。
 /// </summary>
 [SupportedOSPlatform("windows7.0")]
 internal sealed class UiEventWaiter
 {
-    /// <summary>等待结果：Hit=命中、EventSeen=期间是否收到事件、Result=命中时 probe 返回的描述（超时=null）。</summary>
-    public readonly record struct WaitOutcome(bool Hit, bool EventSeen, string? Result);
-
     /// <summary>
-    /// 等到 <paramref name="probe"/> 返回非 null 或超时。<paramref name="probe"/> 返回命中描述文本，未命中返回 null。
+    /// 在给定窗口上注册结构/属性变化事件；任一事件触发即调用 <paramref name="onSignal"/>（应只做 TrySetResult）。
+    /// 返回可释放句柄（Dispose 退订两个 handler，幂等；provider 不支持事件时仍返回有效句柄，由轮询兜底）。
     /// </summary>
-    public async Task<WaitOutcome> WaitAsync(AutomationElement window, Func<string?> probe, int timeoutSeconds, CancellationToken ct)
+    public IDisposable Subscribe(AutomationElement window, Action onSignal)
     {
-        // 先探测一次（已在树里/已满足条件时无需等事件）。
-        var immediate = SafeProbe(probe);
-        if (immediate is not null) return new WaitOutcome(true, false, immediate);
-
-        var eventSeen = false;
-        var signal = NewSignal();
         StructureChangedEventHandlerBase? structure = null;
         PropertyChangedEventHandlerBase? property = null;
         try
         {
             try
             {
-                structure = window.RegisterStructureChangedEvent(TreeScope.Subtree,
-                    (_, _, _) => signal.TrySetResult(true));
+                structure = window.RegisterStructureChangedEvent(TreeScope.Subtree, (_, _, _) => onSignal());
             }
             catch { /* provider 不支持事件：走轮询 */ }
 
@@ -46,42 +37,29 @@ internal sealed class UiEventWaiter
                     window.Automation.PropertyLibrary.Element.Name,
                     window.Automation.PropertyLibrary.Value.Value,
                 };
-                property = window.RegisterPropertyChangedEvent(TreeScope.Subtree,
-                    (_, _, _) => signal.TrySetResult(true), ids);
+                property = window.RegisterPropertyChangedEvent(TreeScope.Subtree, (_, _, _) => onSignal(), ids);
             }
             catch { /* 同上 */ }
-
-            var deadline = DateTime.UtcNow.AddSeconds(Math.Clamp(timeoutSeconds, 1, 300));
-            while (true)
-            {
-                var hit = SafeProbe(probe);
-                if (hit is not null) return new WaitOutcome(true, eventSeen, hit);
-
-                var remaining = deadline - DateTime.UtcNow;
-                if (remaining <= TimeSpan.Zero) return new WaitOutcome(false, eventSeen, null);
-
-                var wait = (int)Math.Min(200, remaining.TotalMilliseconds);
-                var wake = await Task.WhenAny(signal.Task, Task.Delay(wait, ct)).ConfigureAwait(false);
-                if (wake == signal.Task)
-                {
-                    eventSeen = true;
-                    signal = NewSignal(); // 重置：事件可能与本条件无关，继续等
-                }
-            }
         }
-        finally
+        catch
         {
             try { property?.Dispose(); } catch { }
             try { structure?.Dispose(); } catch { }
+            throw;
         }
+
+        return new Subscription(structure, property);
     }
 
-    private static TaskCompletionSource<bool> NewSignal()
-        => new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-    private static string? SafeProbe(Func<string?> probe)
+    private sealed class Subscription(StructureChangedEventHandlerBase? structure, PropertyChangedEventHandlerBase? property) : IDisposable
     {
-        try { return probe(); }
-        catch { return null; } // 单次探测失败（UIA 瞬断/窗口重建）视作未命中，下轮再试
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+            try { property?.Dispose(); } catch { }
+            try { structure?.Dispose(); } catch { }
+        }
     }
 }

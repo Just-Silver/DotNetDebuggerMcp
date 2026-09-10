@@ -33,6 +33,9 @@ internal sealed class UiAutomationService
     /// <summary>最近一次 ui_find 命中的窗口标题（供工具头部展示）。</summary>
     public string LastFindWindowTitle => _locator.LastFindWindowTitle;
 
+    /// <summary>最近一次 ui_find 是否因 limit 截断（供工具层如实报告总量）。</summary>
+    public bool LastFindTruncated => _locator.LastFindTruncated;
+
     /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。</summary>
     public Task<IReadOnlyList<UiElementInfo>> FindAsync(string process, string title, string text, string type, string automationId, int limit, CancellationToken ct)
         => RunGateAsync(() => _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit), ct);
@@ -57,40 +60,67 @@ internal sealed class UiAutomationService
         if (!modeText && (string.IsNullOrEmpty(textChangedFrom) || string.IsNullOrEmpty(textChangedTo)))
             throw new UiException("ui_wait 需给出 text（等控件出现）或 textChangedFrom+textChangedTo 成对（等文本变化）。");
 
-        await _gate.WaitAsync(ct);
+        var probeText = modeText ? text : textChangedTo;
+
+        // 1) 解析窗口 + 类型过滤 + 首次探测（gate 内 + 5s 兜底）。
+        var (window, typeFilter, immediate) = await RunGateAsync(() =>
+        {
+            var w = UiElementLocator.ResolveTopWindow(GetAutomation(), process);
+            var tf = UiElementLocator.ResolveControlType(type);
+            return (w, tf, FindFirstName(w, probeText, tf));
+        }, ct);
+        if (immediate is not null)
+            return HitResult(modeText, immediate, typeFilter, textChangedFrom);
+
+        // 2) 订阅（gate 内）→ 等待循环（**期间不持 gate**，每轮探测取放一次）→ 退订（gate 内）。
+        //    旧实现整段等待都持 gate（最长 300s），会阻塞并发 ui_*（含本应触发等待条件的 ui_action）——此处改为 U1 的每轮取放锁。
+        IDisposable? subscription = null;
+        var signal = NewSignal();
         try
         {
-            var window = UiElementLocator.ResolveTopWindow(GetAutomation(), process);
-            var typeFilter = UiElementLocator.ResolveControlType(type);
-            var probeText = modeText ? text : textChangedTo;
-            Func<string?> probe = () =>
+            subscription = await RunGateAsync(() => _waiter.Subscribe(window, () => signal.TrySetResult(true)), ct);
+
+            var deadline = DateTime.UtcNow.AddSeconds(timeout);
+            while (true)
             {
                 string? hit;
-                try { hit = UiaBoundAsync(() => FindFirstName(window, probeText, typeFilter), ct).GetAwaiter().GetResult(); }
-                catch { return null; }
-                return hit;
-            };
+                try { hit = await RunGateAsync(() => FindFirstName(window, probeText, typeFilter), ct); }
+                catch (UiException) { hit = null; } // 单轮探测超时视为未命中（继续等，整体受 timeout 约束）
+                if (hit is not null)
+                    return HitResult(modeText, hit, typeFilter, textChangedFrom);
 
-            var outcome = await _waiter.WaitAsync(window, probe, timeout, ct);
-            if (outcome.Hit)
-            {
-                var hit = outcome.Result!;
-                return modeText
-                    ? new UiWaitResult("出现", $"控件已出现：{TypeSuffix(typeFilter)}文本「{hit}」。")
-                    : new UiWaitResult("已变化", $"控件文本已变为「{hit}」（原「{textChangedFrom}」）。");
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero) break;
+
+                var wait = (int)Math.Min(200, remaining.TotalMilliseconds);
+                var wake = await Task.WhenAny(signal.Task, Task.Delay(wait, ct)).ConfigureAwait(false);
+                if (wake == signal.Task) signal = NewSignal(); // 事件可能与本条件无关，重置后继续等
             }
-
-            string? still = null;
-            try { still = FindFirstName(window, probeText, typeFilter); } catch { }
-            return new UiWaitResult("超时", still is null
-                ? $"等待 {timeout}s 未命中（事件化等待 + 200ms 轮询兜底）。"
-                : $"等待 {timeout}s 未命中（当前仍: {still}）。");
         }
         finally
         {
-            _gate.Release();
+            if (subscription is not null)
+            {
+                var sub = subscription;
+                try { await RunGateAsync(() => { sub.Dispose(); return true; }, CancellationToken.None); } catch { /* 退订失败忽略 */ }
+            }
         }
+
+        // 3) 超时：读一次当前状态（gate 内 + 5s 兜底；失败不报错）。
+        string? still = null;
+        try { still = await RunGateAsync(() => FindFirstName(window, probeText, typeFilter), ct); } catch { }
+        return new UiWaitResult("超时", still is null
+            ? $"等待 {timeout}s 未命中（事件化等待 + 200ms 轮询兜底）。"
+            : $"等待 {timeout}s 未命中（当前仍: {still}）。");
     }
+
+    private static UiWaitResult HitResult(bool modeText, string hit, string? typeFilter, string textChangedFrom)
+        => modeText
+            ? new UiWaitResult("出现", $"控件已出现：{TypeSuffix(typeFilter)}文本「{hit}」。")
+            : new UiWaitResult("已变化", $"控件文本已变为「{hit}」（原「{textChangedFrom}」）。");
+
+    private static TaskCompletionSource<bool> NewSignal()
+        => new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     // ===== 核心（gate 内串行 + 5s 兜底） =====
 

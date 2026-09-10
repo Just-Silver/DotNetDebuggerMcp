@@ -41,8 +41,9 @@ public static class UiTools
 
             var pid = UiAutomationService.Instance.LastFindPid;
             var winTitle = UiAutomationService.Instance.LastFindWindowTitle;
+            var truncated = UiAutomationService.Instance.LastFindTruncated;
             var sb = new StringBuilder();
-            sb.Append($"UI 控件清单 进程 {process.Trim()}(pid={pid}) 窗口「{winTitle}」共 {elements.Count} 个控件:");
+            sb.Append($"UI 控件清单 进程 {process.Trim()}(pid={pid}) 窗口「{winTitle}」共 {elements.Count} 个控件{(truncated ? "（已达上限，可能还有更多）" : "")}:");
             if (elements.Count == 0)
             {
                 sb.Append("未找到符合条件的控件。可放宽条件（去掉 type/text）或用 ui_find process 只带进程名看全量。");
@@ -58,8 +59,8 @@ public static class UiTools
                 if (!string.IsNullOrEmpty(el.Semantic))
                     sb.Append($" 语义候选: {el.Semantic}（可 decompile_member 看实现）");
             }
-            if (elements.Count == limit)
-                sb.AppendLine().Append($"已达上限 {limit} 条——可加 text/type 条件缩小范围，或用 limit 放大。");
+            if (truncated)
+                sb.AppendLine().Append($"已达上限 {elements.Count} 条——可加 text/type 条件缩小范围，或用 limit 放大。");
             sb.AppendLine().Append("操作：ui_action（语义动词 invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate）/ ui_input（写值）/ ui_get（读值）；动作后用 ui_wait 确认状态变化。");
             return Done("ui_find", argsText, sb.ToString());
         }

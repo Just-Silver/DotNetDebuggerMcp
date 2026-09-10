@@ -18,6 +18,13 @@ internal static class UiPatternDispatcher
     internal static readonly string[] Verbs =
         ["invoke", "toggle", "select", "expand", "collapse", "focus", "scroll", "scrollintoview", "windowstate"];
 
+    /// <summary>
+    /// pattern 调用被 provider 拒绝时的补充引导（spec §9）：后台/不可见控件常导致语义动作失败，
+    /// 提示 agent 用 ui_get what=offscreen 确认，并可用 windowstate=normal 还原最小化窗口（绝不静默提前台）。
+    /// </summary>
+    internal const string OffscreenHint =
+        "；若为目标后台/不可见导致 provider 拒绝，可用 ui_get what=offscreen 确认，必要时先 ui_action verb=windowstate windowstate=normal 还原最小化窗口。";
+
     /// <summary>纯决策：按 verb 与能力快照选 pattern，全部不支持时抛 <see cref="UiException"/>（中文）。</summary>
     public static ChosenAction Choose(string verb, UiPatternCapabilities caps, string direction, int lines, string windowstate)
     {
@@ -239,15 +246,15 @@ internal static class UiPatternDispatcher
         }
         catch (Exception ex)
         {
-            throw new UiException($"滚动调用失败：{ex.Message}");
+            throw new UiException($"滚动调用失败：{ex.Message}{OffscreenHint}");
         }
     }
 
-    /// <summary>执行并包装 pattern 调用异常为中文 <see cref="UiException"/>。</summary>
+    /// <summary>执行并包装 pattern 调用异常为中文 <see cref="UiException"/>（附 provider 后台/不可见排查引导）。</summary>
     private static void Invoke(Action action, string op)
     {
         try { action(); }
-        catch (Exception ex) { throw new UiException($"{op} 调用失败：{ex.Message}"); }
+        catch (Exception ex) { throw new UiException($"{op} 调用失败：{ex.Message}{OffscreenHint}"); }
     }
 
     private static T SafeRead<T>(Func<T> f, T fallback)
