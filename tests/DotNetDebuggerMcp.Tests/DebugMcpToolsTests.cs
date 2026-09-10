@@ -1233,7 +1233,7 @@ public sealed class DebugMcpToolsTests
         }
         Assert.True(loopTarget is not null, "未找到 WorkBag 循环体源码行");
 
-        const string notice = "疑似凭据已脱敏——用类型/长度/null 判断，勿读原始值";
+        const string notice = "疑似凭据已脱敏——请用该出口提供的类型/长度/null 等非敏感信息判断，勿读原始值";
         const string ph = "[已脱敏:疑似凭据]";
 
         await using var mcp = await ConnectAsync();
@@ -1322,7 +1322,7 @@ public sealed class DebugMcpToolsTests
         Assert.True(loopTarget is not null, "未找到 WorkBag 循环体源码行");
 
         const string ph = "[已脱敏:疑似凭据]";
-        const string notice = "疑似凭据已脱敏——用类型/长度/null 判断，勿读原始值";
+        const string notice = "疑似凭据已脱敏——请用该出口提供的类型/长度/null 等非敏感信息判断，勿读原始值";
 
         await using var mcp = await ConnectAsync();
 

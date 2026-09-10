@@ -170,14 +170,14 @@ public static class DebugInspectTool
 
         if (requested is null)
         {
-            // 全量模式：现状渲染（每节头 + 全量 RenderVariable + CountRedacted）
+            // 全量模式：每节头 + 全量单次递归渲染（渲染同时产出脱敏计数）
             foreach (var (scope, list) in vars)
             {
                 lines.Add($"[{scope}]");
                 foreach (var v in list)
                 {
-                    redacted += CountRedacted(v);
-                    lines.Add(RenderVariable(v, depth: 1));
+                    lines.Add(RenderVariable(v, depth: 1, out var hit));
+                    redacted += hit;
                 }
             }
             return (lines, hits, redacted);
@@ -198,8 +198,8 @@ public static class DebugInspectTool
             foreach (var v in wanted)
             {
                 hits++;
-                redacted += CountRedacted(v);
-                lines.Add(RenderVariable(v, depth: 1));
+                lines.Add(RenderVariable(v, depth: 1, out var hit));
+                redacted += hit;
             }
         }
 
@@ -212,26 +212,25 @@ public static class DebugInspectTool
         return (lines, hits, redacted);
     }
 
-    /// <summary>递归渲染变量（对象/数组 children 缩进展示；引擎已按一级展开 + 截断）。debug_evaluate 复用。
+    /// <summary>递归渲染变量（对象/数组 children 缩进展示；引擎已按一级展开 + 截断）。debug_evaluate/debug_object 复用。
     /// DB1：每层按变量自身名 + 值内容形态脱敏（父对象名不敏感不整体脱敏，children 逐字段行各自判定）。</summary>
     internal static string RenderVariable(DotNetDebugger.Engine.Models.DebugVariable v, int depth)
+        => RenderVariable(v, depth, out _);
+
+    /// <summary>单次递归渲染并回传子树脱敏命中数（计数与占位符恒一致；debug_variables 顶部计数用）。</summary>
+    private static string RenderVariable(DotNetDebugger.Engine.Models.DebugVariable v, int depth, out int redacted)
     {
         var indent = new string(' ', depth * 2);
-        var (valueText, _) = SensitiveValueRedactor.Redact(v.Name, v.Value.Display);
+        var (valueText, hit) = SensitiveValueRedactor.Redact(v.Name, v.Value.Display);
+        redacted = hit ? 1 : 0;
         var line = $"{indent}{v.Name ?? $"slot{v.Slot}"} = {valueText}";
         if (v.Value.Children is not { } children) return line;
         foreach (var c in children)
-            line += Environment.NewLine + RenderVariable(c, depth + 1);
+        {
+            line += Environment.NewLine + RenderVariable(c, depth + 1, out var childHit);
+            redacted += childHit;
+        }
         return line;
-    }
-
-    /// <summary>统计子树中脱敏命中的值个数（DB1 顶部计数提示；纯函数与 RenderVariable 各判一次，无副作用）。</summary>
-    private static int CountRedacted(DotNetDebugger.Engine.Models.DebugVariable v)
-    {
-        var count = SensitiveValueRedactor.Redact(v.Name, v.Value.Display).Redacted ? 1 : 0;
-        if (v.Value.Children is { } children)
-            foreach (var c in children) count += CountRedacted(c);
-        return count;
     }
 
     /// <summary>

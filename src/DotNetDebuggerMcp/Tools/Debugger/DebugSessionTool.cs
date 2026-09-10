@@ -207,7 +207,12 @@ public static class DebugSessionTool
     {
         if (stop is null) return "（无）";
         var text = $"{stop.Kind} thread={stop.ThreadId} top={stop.TopFrame} reason={stop.Reason}";
-        if (!string.IsNullOrEmpty(stop.Message)) text += $" message=\"{stop.Message}\"";
+        if (!string.IsNullOrEmpty(stop.Message))
+        {
+            // P0-1：停点 message 按内容形态脱敏（name=null，仅内容判定）；普通消息原样。
+            var (message, _) = SensitiveValueRedactor.Redact(null, stop.Message);
+            text += $" message=\"{message}\"";
+        }
         return text;
     }
 }

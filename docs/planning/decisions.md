@@ -2,6 +2,12 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D26 · DB1 停点 message 内容脱敏（fix wave，2026-09-10）
+- 决策：停点 `message`（异常 Message）**改按内容形态脱敏**——`SensitiveValueRedactor.Redact(null, stop.Message)` 仅内容判定（name=null，不按名），命中给占位符；普通 message 原样。影响 `debug_state`/`debug_wait`/`debug_continue` 的停点现场输出。
+- 覆盖关系：本项**覆盖 D17①「异常 Message 不脱敏」**的旧决定——安全审查（P0-1）指出异常文本常内嵌连接串/Token（`Password=…`、`Authorization: Bearer …`），与 `$exception` 变量脱敏行为不一致。
+- 边界：Web 监视器与 CLI `-dbg` **仍不脱敏**（本地人类观看席，同 D17② 口径）。
+- 日期：2026-09-10。来源：审查 `docs/planning/reviews/2026-09-10-sensitive-value-redactor-review.md` P0-1。
+
 ## D25 · W3 数据断点立项拍板（用户 2026-09-09）
 - 决策①（节奏）：现在出实施计划，**spike 为 Task0**（A ValueBreakpoint / B OnDataBreakpoint 现代创建端 / 降级 三问实测），后续按三选一分支走（分支在计划写死），本会话不实跑 spike。
 - 决策②（入口）：`debug_breakpoint_set` 加 `dataPath` 参数（A/B 任一可行时），复用 hitCount/condition/断点清单/移除体系。

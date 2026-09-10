@@ -61,6 +61,23 @@ public sealed class SensitiveValueRedactorTests
         Assert.False(SensitiveValueRedactor.IsSensitiveName("x-api-key")); // 不在全集内（非子串规则）
     }
 
+    [Fact]
+    public void IsSensitiveName_Null_ReturnsFalse()
+    {
+        // P1-4：上游接受 null/undefined；签名应防御，首行不得 NRE
+        Assert.False(SensitiveValueRedactor.IsSensitiveName(null!));
+    }
+
+    [Theory]
+    [InlineData("api\tkey")]   // P1-3：tab 与 \s 对齐
+    [InlineData("api\nkey")]   // 换行
+    [InlineData("api\rkey")]
+    [InlineData("api key")]    // 普通空格（原本已支持，回归）
+    public void IsSensitiveName_WhitespaceSeparators_Normalized(string name)
+    {
+        Assert.True(SensitiveValueRedactor.IsSensitiveName(name));
+    }
+
     // ---- 平凡不动：null/空/平凡值原样返回且 Redacted==false（含敏感名 + trivial 值）----
 
     [Theory]
@@ -98,6 +115,18 @@ public sealed class SensitiveValueRedactorTests
     {
         var (text, redacted) = SensitiveValueRedactor.Redact(null, "\"null\"");
         Assert.Equal("\"null\"", text);
+        Assert.False(redacted);
+    }
+
+    [Theory]
+    [InlineData("`None`")]
+    [InlineData("`null`")]
+    [InlineData("`nil`")]
+    public void Redact_BacktickQuotedTrivial_UnchangedEvenSensitiveName(string value)
+    {
+        // P1-2：反引号装饰与 ' " 同等（上游 unwrap 三选）；敏感名 + 平凡反引号值仍保留可调
+        var (text, redacted) = SensitiveValueRedactor.Redact("token", value);
+        Assert.Equal(value, text);
         Assert.False(redacted);
     }
 
@@ -207,6 +236,38 @@ public sealed class SensitiveValueRedactorTests
         var (text, redacted) = SensitiveValueRedactor.RedactExpression("x", "\"hello\"");
         Assert.Equal("\"hello\"", text);
         Assert.False(redacted);
+    }
+
+    [Fact]
+    public void RedactExpression_TrivialValue_PrecedesSensitiveExpression()
+    {
+        // 平凡分支先于表达式级：末段 Token 敏感但值为 null → 原样保留（「为什么 token 是 null」可调）
+        var (text, redacted) = SensitiveValueRedactor.RedactExpression("cfg.Token", "null");
+        Assert.Equal("null", text);
+        Assert.False(redacted);
+    }
+
+    // ---- P3-3 性能护栏（对齐上游 secretRedaction.test.ts 两条 adversarial 输入，<1s）----
+
+    [Fact]
+    public void LooksLikeSecret_BackslashRun_NoCatastrophicBacktracking()
+    {
+        var evil = "{\"api_key\": \"" + new string('\\', 50_000);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        SensitiveValueRedactor.LooksLikeSecret(evil);
+        sw.Stop();
+        Assert.True(sw.ElapsedMilliseconds < 1000, $"redaction took {sw.ElapsedMilliseconds}ms - patterns are backtracking");
+    }
+
+    [Fact]
+    public void LooksLikeSecret_LongIdentifierRun_MatchingNothing_StaysFast()
+    {
+        // 'a_' × 40000 + "=x"（上游同款）；无任何凭据形态命中，仅验证线性
+        var longRun = string.Concat(Enumerable.Repeat("a_", 40_000)) + "=x";
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        SensitiveValueRedactor.LooksLikeSecret(longRun);
+        sw.Stop();
+        Assert.True(sw.ElapsedMilliseconds < 1000, $"redaction took {sw.ElapsedMilliseconds}ms");
     }
 }
 
