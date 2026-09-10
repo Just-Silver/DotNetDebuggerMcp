@@ -22,6 +22,7 @@ public sealed class AgentCopyGuardTests
         { nameof(DebugSessionTool.DebugLaunch), "冻结在 Main 前" },     // launch 早期冻结语义（无需目标配合）
         { nameof(DebugSessionTool.DebugState), "Stopped" },             // 读栈/变量前先 debug_state 确认 Stopped
         { nameof(DebugSessionTool.DebugTerminate), "强制结束" },        // debug_terminate 结束目标进程（区别于 disconnect）
+        { nameof(DebugSessionTool.DebugModules), "已加载的模块" },      // debug_modules 列已加载模块（断点定位排障）
         { nameof(DebugInspectTool.DebugVariables), "$exception" },      // 异常停点观察口
         { nameof(DebugBreakpointTool.DebugBreakpointList), "绑定" },    // list 返回含绑定状态
         { nameof(DebugExceptionTool.DebugExceptions), "first-chance" }, // 异常断点语义

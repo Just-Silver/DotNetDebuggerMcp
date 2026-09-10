@@ -925,6 +925,28 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task DebugModules_ListsLoadedModules()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 1 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        // 等待目标程序集加载（模块登记异步）
+        await Task.Delay(1500, TestContext.Current.CancellationToken);
+
+        var mods = await CallAsync(mcp, "debug_modules", new Dictionary<string, object?>());
+        Assert.True(mods.IsError != true, mods.Text());
+        Assert.Contains("已加载模块", mods.Text());
+        Assert.Contains("DebugTarget.dll", mods.Text());
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    [Fact]
     public async Task DebugTerminate_KillsTargetAndClosesSession()
     {
         var exe = DebugTargetExe;

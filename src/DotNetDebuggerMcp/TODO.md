@@ -8,7 +8,7 @@
 
 > 来源：对 WPF 应用 CoreMes（离线跑）做 47 工具全量实测，端到端闭环（launch→断点→单步→异常→UI→verify PASS）跑通。按严重度排序；**改工具面须同步根 `README.md` 与 CHANGELOG `[Unreleased]`**。
 
-- [ ] **【低】缺失工具候选**：① `debug_modules`（已加载模块+符号/绑定状态，断点待绑定排障）；② 帧选择 `frameIndex`（evaluate/variables 指定非栈顶帧）。（`debug_terminate` 已补，2026-09-10）
+- [ ] **【低】缺失工具候选**：帧选择 `frameIndex`（evaluate/variables 指定非栈顶帧）。（`debug_terminate`/`debug_modules` 已补，2026-09-10）
 
 ## 三、已评估关闭/远期（防重复立项，一行结论）
 

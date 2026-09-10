@@ -5,6 +5,7 @@ using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Server;
 
 using System.ComponentModel;
+using System.Text;
 
 namespace DotNetDebuggerMcp.Tools.Debugger;
 
@@ -125,6 +126,36 @@ public static class DebugSessionTool
         catch (Exception ex)
         {
             return $"终止目标进程失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// 列出当前调试会话已加载的模块（短名 + 磁盘路径）。无活动会话返回提示。
+    /// </summary>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>模块列表文本或提示。</returns>
+    [McpServerTool]
+    [Description("列出当前调试会话已加载的模块（短名 + 磁盘路径）。用于确认目标程序集是否已加载（断点待绑定/行断点定位排障）——行/成员/源码行断点定位要求模块已加载。")]
+    public static async Task<string> DebugModules(CancellationToken cancellationToken = default)
+    {
+        var active = DebugSessionService.Manager.Active;
+        if (active is null)
+            return "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。";
+
+        try
+        {
+            var modules = await active.Session.GetModulesAsync(cancellationToken);
+            DebugSessionService.Manager.Actions.Log("debug_modules", "", $"{modules.Count} 模块");
+            if (modules.Count == 0)
+                return "当前会话未登记已加载模块（可能 CLR 尚未加载目标程序集——先 debug_continue 再试）。";
+            var sb = new StringBuilder($"已加载模块（{modules.Count}）:");
+            foreach (var m in modules)
+                sb.AppendLine().Append($"  {m.Name}  {m.Path}");
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            return $"读模块列表失败：{ex.Message}";
         }
     }
 
