@@ -2,21 +2,23 @@
 
 > 近期待办，完成一项删一项；远期想法见 `docs/ROADMAP.md`；开发指南见同目录 `AGENTS.md`。
 
-> **2026-09-10 清理归档**：已完成历史已删除（细节见 git log 与 `docs/planning/specs/`）。已交付：W1 现场改写、V3 统一时间线、DB1 敏感脱敏、DB2 按名白名单、D1 对象深读、D2 子进程跟随、V4 语料断言、U1+U1A 全 UIA 化 UI 自动化、V1 一键复验。W3 数据断点、W2 SetIP、V2 崩溃 dump、`frameIndex` 帧选择 **已转 `docs/ROADMAP.md`**。**当前无未完成近期待办**；以下保留**本轮 CoreMes 实证发现处置记录**、**防重复立项结论**与**实施后遗留观察项**。
+> **当前无未完成近期待办。**
+> **2026-09-10 清理归档**：已完成历史已删除（细节见 git log 与 `docs/planning/specs/`）。已交付：W1 现场改写、V3 统一时间线、DB1 敏感脱敏、DB2 按名白名单、D1 对象深读、D2 子进程跟随、V4 语料断言、U1+U1A 全 UIA 化 UI 自动化、V1 一键复验；**2026-09-10 CoreMes 实证修复**：实例方法参数名对齐 `this`、同址重复断点、`debug_run_to` 陈旧停点、`debug_evaluate` `$exception`、`search_string` 生成类型、ilOffset 中文提示、源行断点聚合提示、新增 `debug_terminate`/`debug_modules`、`debug_*` 描述订正、D2 无 CLR 不虚报、D1 文案。W3 数据断点、W2 SetIP、V2 崩溃 dump、`frameIndex` 帧选择 **已转 `docs/ROADMAP.md`**。
 
-## 一、CoreMes 动态调试实证发现（2026-09-10，47 工具全量实测）
+## 本轮 CoreMes 动态调试实证（2026-09-10，47 工具全量实测）——全部处置
 
-> 来源：对 WPF 应用 CoreMes（离线跑）做 47 工具全量实测，端到端闭环（launch→断点→单步→异常→UI→verify PASS）跑通。**本轮实证缺陷已全部处置（2026-09-10 修复）**：D2 无 CLR 不虚报、D1 `debug_object` 文案、实例方法参数名对齐 `this`、同址重复断点卡单步、`debug_run_to` 陈旧停点、`debug_evaluate` `$exception`、`search_string` 生成类型（`includeCompilerGenerated`）、ilOffset 裸 HRESULT、源行断点误导提示、新增 `debug_terminate`/`debug_modules`、`debug_*` 描述订正。**唯一剩余项 `frameIndex`（读非栈顶帧）价值中等偏低，已转 `docs/ROADMAP.md`「近期评估转远期」节**（含 spike 前置与触发条件）。本清单清空。
+> 来源：对 WPF 应用 CoreMes（离线跑）做 47 工具全量实测，端到端闭环（launch→断点→单步→异常→UI→verify PASS）跑通。所有实证缺陷当日修复：详见上方归档段与 git log；唯一剩余项 `frameIndex`（读非栈顶帧）价值中等偏低，已转 `docs/ROADMAP.md`「近期评估转远期」节（含 spike 前置与触发条件）。本清单清空，无需保留明细。
 
-## 二、已评估关闭/远期（防重复立项，一行结论）
+## 已评估关闭/远期（防重复立项，一行结论）
 
 - **func-eval 主动调用业务方法** = **关闭**（async/UI/外设方法 func-eval 必死锁；纯函数触发需求未见）。
 - **W2 完整 SetIP/强制返回** = 远期（已转 ROADMAP 2026-09-08）。
 - **V2 崩溃自动 dump** = 远期（注入 `DOTNET_DbgEnableMiniDump` 改环境 + spike 不确定；退出码/崩溃判定小增量随 V3 已完成）。
 - **W3 数据断点** = 远期（2026-09-10 spike 实测：A `CorDebugValue.CreateBreakpoint` 恒 E_NOTIMPL、B 无创建端，均不可行；用已知写入点条件断点替代）。
+- **`frameIndex` 帧选择** = 远期（2026-09-10 转 ROADMAP：便利性增强非能力跃迁，须先 spike 非活动帧可读性）。
 - **ClrMD live 内存分析** = ROADMAP（dump 事后分析，live 会话内与 ICorDebug 冲突）。
 - **多调试会话并行** = ROADMAP（Engine 实测相互干扰）。
 
-## 三、实施后遗留观察项（低优先）
+## 实施后遗留观察项（低优先）
 
 - U1A：① locator 严格 Name 全等使「UIA Name 随内容变化」控件同 index 二次操作判 stale（既定契约）；② `ui_wait` 释放 gate 后 `window` 跨操作复用（降级轮询，无崩溃证据）。
