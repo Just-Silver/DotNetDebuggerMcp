@@ -26,6 +26,7 @@ internal sealed class DebugTargetProcess : IDisposable
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            CreateNoWindow = true,
         };
         var process = Process.Start(psi)!;
         var wrapper = new DebugTargetProcess(process);

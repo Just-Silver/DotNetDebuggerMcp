@@ -28,6 +28,7 @@ internal static class TestTarget
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            CreateNoWindow = true,
         };
         var p = Process.Start(psi)!;
         return new DebugTargetProcess(p);

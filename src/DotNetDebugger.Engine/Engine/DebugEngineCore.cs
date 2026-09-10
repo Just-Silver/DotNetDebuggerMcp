@@ -1192,7 +1192,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
             catch (Exception ex) { children.Add(new DebugVariable($"[{i}]", -1, DebugValue.Summary("error", $"<读取失败:{ex.Message}>"), IsArgument: false)); }
         }
         var display = total > children.Count ? $"数组 {total} 项（前 {children.Count}）" : $"数组 {total} 项";
-        return DebugValue.Object(display, children);
+        return DebugValue.Array(display, children);
     }
 
     private static DebugValue ExpandNode(CorDebugValue value, int depth, HashSet<ulong> visited, int limit)

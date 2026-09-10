@@ -1196,6 +1196,11 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("Name", d3.Text());
         Assert.Contains("Value", d3.Text());
 
+        // 正路径：数组目标 → 返回头应标「数组」（而非「对象」）
+        var arr = await CallAsync(mcp, "debug_object", new Dictionary<string, object?> { ["path"] = "arr", ["depth"] = 2 });
+        Assert.True(arr.IsError != true, arr.Text());
+        Assert.Contains("数组 arr", arr.Text());
+
         // 错误面②：标量终值（root.Value 是 int）→ 中文「不是对象/数组」
         var scalar = await CallAsync(mcp, "debug_object", new Dictionary<string, object?> { ["path"] = "root.Value" });
         Assert.True(scalar.IsError != true, scalar.Text());

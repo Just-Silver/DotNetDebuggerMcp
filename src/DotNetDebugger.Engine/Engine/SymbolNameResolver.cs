@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -42,7 +43,8 @@ internal static class SymbolNameResolver
         return new Names(argNames ?? [], localNames ?? []);
     }
 
-    /// <summary>参数名：DLL 元数据 Param 表（SequenceNumber 1 起 → 数组 0 起）。无需 PDB。</summary>
+    /// <summary>参数名：DLL 元数据 Param 表（SequenceNumber 1 起）。实例方法在槽 0 补 "this"——
+    /// ICorDebug 的 ilf.Arguments 含 this（实例方法槽 0），须与参数序列整体对齐，否则参数名错位。</summary>
     private static string?[] ReadArgNames(string modulePath, int methodToken)
     {
         using var fs = File.OpenRead(modulePath);
@@ -50,6 +52,7 @@ internal static class SymbolNameResolver
         var mr = pe.GetMetadataReader();
         var handle = MetadataTokens.MethodDefinitionHandle(methodToken);
         var md = mr.GetMethodDefinition(handle);
+        var hasThis = (md.Attributes & MethodAttributes.Static) == 0; // 非静态 = 实例方法（槽 0 为 this）
         var list = new List<(int Seq, string Name)>();
         foreach (var ph in md.GetParameters())
         {
@@ -57,10 +60,12 @@ internal static class SymbolNameResolver
             if (p.SequenceNumber > 0 && !p.Name.IsNil)
                 list.Add((p.SequenceNumber, mr.GetString(p.Name)));
         }
-        if (list.Count == 0) return [];
-        var max = list.Max(x => x.Seq);
-        var names = new string?[max];
-        foreach (var (seq, name) in list) names[seq - 1] = name;
+        var offset = hasThis ? 1 : 0;   // 实例方法：参数名从槽 1 起套用，槽 0 命名为 this
+        var length = (list.Count == 0 ? 0 : list.Max(x => x.Seq)) + offset;
+        if (length == 0) return [];
+        var names = new string?[length];
+        if (hasThis) names[0] = "this";
+        foreach (var (seq, name) in list) names[seq - 1 + offset] = name;
         return names;
     }
 

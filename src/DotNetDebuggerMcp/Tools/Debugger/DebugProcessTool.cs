@@ -29,10 +29,9 @@ public static class DebugProcessTool
     {
         try
         {
-            // dbgshim EnumerateCLRs 对无 CLR 进程返回 S_OK + 空枚举（dbgshim.cpp EnumerateCLRs：GetRuntime S_FALSE
-            // 时数组长度=0 仍返回 S_OK），ClrProcessFinder 现会把这些进程记成 CLR "<unknown>"——过滤掉才符合
-            // 「可附加 .NET 进程」语义（P8 文档意图；D2 子进程链交集同样依赖此精确枚举，否则 conhost 等会被误标注）。
-            var all = ClrProcessFinder.List().Where(p => p.ClrVersion != "<unknown>").ToList();
+            // ClrProcessFinder 已在 Engine 侧跳过无 CLR 进程（EnumerateCLRs 对它们返回 S_OK + 空枚举），
+            // 这里直接使用即可得到「可附加 .NET 进程」全集（D2 子进程链交集同源）。
+            var all = ClrProcessFinder.List();
             var hits = string.IsNullOrWhiteSpace(filter)
                 ? all
                 : all.Where(p => p.ProcessName.Contains(filter.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();

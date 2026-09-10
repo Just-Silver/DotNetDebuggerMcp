@@ -49,9 +49,10 @@ public static class DebugObjectTool
             var lim = Math.Clamp(limit, 1, 128);
             var value = await active.Session.ReadObjectAtPathAsync(tid, target.Value.Root, target.Value.Segments, d, lim, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_object", $"{path} depth={d} limit={lim}", "ok");
+            var kind = value.Kind == "array" ? "数组" : "对象";
             if (value.Children is not { Count: > 0 } children)
-                return $"对象 {path}（depth={d}）：{value.Display}（空对象/空数组，无 children）。"; // 标量/字符串/null 已由引擎抛错
-            var sb = new StringBuilder($"对象 {path}（depth={d}，{children.Count} 项）:");
+                return $"{kind} {path}（depth={d}）：{value.Display}（无 children）。"; // 标量/字符串/null 已由引擎抛错
+            var sb = new StringBuilder($"{kind} {path}（depth={d}，{children.Count} 项）:");
             foreach (var c in children)
                 sb.AppendLine().Append(DebugInspectTool.RenderVariable(c, depth: 1));
             return sb.ToString();

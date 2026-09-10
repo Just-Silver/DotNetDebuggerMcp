@@ -8,7 +8,7 @@ public sealed record ClrProcessInfo(int ProcessId, string ProcessName, string Cl
 
 /// <summary>
 /// .NET 进程发现（P8）：枚举系统进程，经 dbgshim EnumerateCLRs 逐个探测已加载 CLR——「可被 ICorDebug 附加」的
-/// 权威判定（非 .NET/无 CLR 进程该调用快速失败）。排除调试器自身（attach 自身必然死锁）。
+/// 权威判定（非 .NET/无 CLR 进程该调用返回 S_OK 但 CLR 数组为空，据此跳过）。排除调试器自身（attach 自身必然死锁）。
 /// EnumerateCLRs 成功后须 CloseCLREnumeration 释放句柄与内存（ClrDebug 文档约束）。
 /// 与引擎无会话关联：纯发现入口，可在无活动会话时调用；线程安全（每次调用独立加载 DbgShim 实例句柄）。
 /// </summary>
@@ -35,6 +35,11 @@ public static class ClrProcessFinder
 
                 try
                 {
+                    // dbgshim EnumerateCLRs 对无 CLR 进程返回 S_OK + 空枚举（GetRuntime 返回 S_FALSE 时数组长度=0
+                    // 仍返回 S_OK）——空枚举不属「可附加 .NET 进程」，须跳过，否则整机非 .NET 进程被虚报为 CLR "<unknown>"。
+                    if (result.Items.Length == 0)
+                        continue;
+
                     // 取首个 CLR 版本串（多 CLR 同进程极罕见）；串形如 .../Microsoft.NETCore.App/10.0.9/System.Private.CoreLib.dll
                     var clrPath = result.Items.FirstOrDefault().Path ?? "";
                     var version = ExtractVersion(clrPath);

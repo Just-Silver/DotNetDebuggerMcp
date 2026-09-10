@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **`debug_variables`/`debug_evaluate` 实例方法参数名错位**：实例方法停点读变量时，`this` 占用首个形参名、其余形参整体右移、真实末参退化为 `slotN`（如 `UpdatePlcOnline(type, isOnline)` 显示 `type`=this、`isOnline`=type、`slot2`=isOnline；`OnStartup(e)` 显示 `e`=this、真参=`slot1`）。现按 ICorDebug 参数槽对齐：实例方法槽 0 命名为 `this`，形参名从槽 1 起套用——`debug_variables`/`debug_evaluate`/`debug_set` 的路径根名与按名白名单同步修正
+- **`debug_object` 数组目标返回头与空结果文案**：数组目标的返回头由「对象」改为「数组」（与对象区分）；空对象/空数组的兜底文案去除与显示值重复的措辞（`对象/数组 {path}（depth=N）：{Display}（无 children）。`）
+
 ## [1.8.0] - 2026-09-10
 
 ### Added

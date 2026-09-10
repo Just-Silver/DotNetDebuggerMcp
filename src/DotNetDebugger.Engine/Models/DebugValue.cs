@@ -9,4 +9,5 @@ public sealed record DebugValue(string Kind, string Display, IReadOnlyList<Debug
     public static DebugValue Scalar(string display) => new("scalar", display);
     public static DebugValue Summary(string kind, string display) => new(kind, display);
     public static DebugValue Object(string display, IReadOnlyList<DebugVariable> children) => new("object", display, children);
+    public static DebugValue Array(string display, IReadOnlyList<DebugVariable> children) => new("array", display, children);
 }
