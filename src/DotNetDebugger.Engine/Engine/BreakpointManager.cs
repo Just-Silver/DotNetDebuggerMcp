@@ -171,7 +171,20 @@ public sealed class BreakpointManager
         }
         var il = fn.ILCode
             ?? throw new InvalidOperationException($"方法 {bp.MethodToken:x8} 无 IL 代码（非 IL 方法或取 IL 失败）");
-        var runtimeBp = il.CreateBreakpoint(bp.IlOffset);
+        CorDebugFunctionBreakpoint runtimeBp;
+        try
+        {
+            runtimeBp = il.CreateBreakpoint(bp.IlOffset);
+        }
+        catch (Exception ex)
+        {
+            // 非 IL 指令边界/越界的 offset 会被运行时拒绝（如方法体只到 0x20 却传 5——5 落在指令中段）；
+            // 底层是裸 HRESULT（CORDBG_E_UNABLE_TO_SET_BREAKPOINT），此处转成面向 agent 的中文提示。
+            var size = il.Size;
+            throw new InvalidOperationException(
+                $"IL 偏移 {bp.IlOffset}（0x{bp.IlOffset:x}）无法设断点：须落在方法 {bp.MethodToken:x8} 的 IL 指令边界/序列点上"
+                + $"（该方法 IL 长度 {size} 字节；越界或落在指令中段都会被拒绝）。请改用在反编译视图行或方法入口(ilOffset=0)设断点。", ex);
+        }
         runtimeBp.Activate(true); // 关键：创建后必须 Activate 才生效（research/06 A.2）
         bp.RuntimeBreakpoint = runtimeBp;
     }

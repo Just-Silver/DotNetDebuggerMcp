@@ -15,6 +15,29 @@ namespace DotNetDebugger.Engine.Tests;
 public sealed class BreakpointTests
 {
     [Fact]
+    public async Task SetBreakpoint_InvalidIlOffset_ThrowsChineseHint()
+    {
+        var exe = TestPaths.DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        using var target = DebugTargetProcess.Start("1 5");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+        Assert.False(target.HasExited);
+
+        var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
+        Assert.True(workToken > 0);
+
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        // Work 方法体远小于 99999：该 offset 必非法（非 IL 指令边界）——须给中文提示，而非裸 HRESULT
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 99999, ct: TestContext.Current.CancellationToken));
+        Assert.DoesNotContain("COM component", ex.Message);
+        Assert.Contains("IL", ex.Message);
+    }
+
+    [Fact]
     public async Task SetBreakpoint_OnWorkEntry_HitsAndResumes()
     {
         var exe = TestPaths.DebugTargetExe;

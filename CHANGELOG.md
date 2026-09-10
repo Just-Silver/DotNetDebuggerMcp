@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- **无效 IL 偏移设断点返回中文提示（原为裸 HRESULT）**：`debug_breakpoint_set` 用 token 定位时若 `ilOffset` 落在指令中段或越界，运行时拒绝（`CORDBG_E_UNABLE_TO_SET_BREAKPOINT`）——现转成中文提示，说明须落在 IL 指令边界/序列点，并给出方法 IL 长度，引导改用反编译视图行或方法入口。修复前 agent 看到的是英文裸 HRESULT
 - **`debug_evaluate` 支持 `$exception` 伪根**：异常停点下可直接求值 `$exception._message`、`$exception.InnerException` 等（此前仅 `debug_variables`/`debug_object` 支持，evaluate 报「表达式子集不支持 `$`」）——表达式词法现允许 `$` 起始标识符（仅 `$exception` 伪根有值，其它 `$xxx` 报未知根）
 - **`debug_run_to` 单步后立即调用被残留单步事件吞掉**：前序 `debug_step` 的停点事件尚未被事件缓冲消费时（缓冲滞后于引擎），run_to 会误判「停在 STEP_NORMAL，尚未到目标」并清掉临时断点。现 run_to 总是尝试 continue（引擎对「已在运行」的 continue 是安全空操作），并把 continue 前旧停点快照与残留 `StepCompleted` 一律按陈旧停点跳过、继续等到真正目标命中
 - **同一地址重复设置断点不再导致单步卡死**：`debug_breakpoint_set` 对同一 `(模块, 方法 token, IL offset)` 再次设置时**替换**旧断点（最新 `hitCount`/`mode`/`condition` 生效），而非新增一个同址断点——多个 ICorDebug 断点落在同一地址会产生重复命中回调，且从该地址单步时因排队回调原地重命中（`debug_step` 看似无效）。修复后从断点处单步正常推进

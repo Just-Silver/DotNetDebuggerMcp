@@ -8,7 +8,6 @@
 
 > 来源：对 WPF 应用 CoreMes（离线跑）做 47 工具全量实测，端到端闭环（launch→断点→单步→异常→UI→verify PASS）跑通。按严重度排序；**改工具面须同步根 `README.md` 与 CHANGELOG `[Unreleased]`**。
 
-- [ ] **【低】`debug_breakpoint_set` ilOffset 非序列点吐裸 HRESULT**：`ilOffset=5/10` 返回 `Error HRESULT CORDBG_E_UNABLE_TO_SET_BREAKPOINT ... COM component.`（英文裸错）；`ilOffset=1`（序列点）正常。**修法**：返回中文提示并说明“需序列点偏移”。
 - [ ] **【低】源文件仅文件名定位搜错模块 + 误导提示**：`sourcePath:"App.xaml.cs"` 绑定成功（CoreMes.dll），却提示“PDB 中未找到源文件 App.xaml.cs（模块 Wpf.Ui.Yin.dll）”。**修法**：合并为“已在本模块解析，其它模块无匹配（忽略）”。
 - [ ] **【低】缺失工具候选**：① `debug_terminate` 结束目标进程（现 disconnect 后进程继续跑，复验/测试后无法收口，本次靠外部 taskkill）；② `debug_modules`（已加载模块+符号/绑定状态，断点待绑定排障）；③ 帧选择 `frameIndex`（evaluate/variables 指定非栈顶帧）。
 - [ ] **【低】描述修正**：`debug_attach`「冻结在 Main 前」对**已运行进程**错误（应“当前执行点”）；`debug_evaluate` 未注明不支持 `$exception`；`debug_breakpoint_set` 未提示 ilOffset 需序列点；`search_string` 未说明不含生成类型；`debug_step` 未提示断点上重复命中；`debug_stack` 空栈可补“async 状态机帧常见”。
