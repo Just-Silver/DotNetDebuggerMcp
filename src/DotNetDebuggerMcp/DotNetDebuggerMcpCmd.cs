@@ -286,7 +286,7 @@ public class DotNetDebuggerMcpCmd
         }
         if (!string.IsNullOrEmpty(searchString))
         {
-            return await SearchStringTool.SearchString(assembly, searchString, typeName, lines, cancellationToken);
+            return await SearchStringTool.SearchString(assembly, searchString, typeName, includeCompilerGenerated: false, lines, cancellationToken);
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {

@@ -25,15 +25,17 @@ public static class SearchStringTool
     /// <param name="assembly">要反查的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
     /// <param name="search">要搜索的字符串字面量子串（忽略大小写，必填），如 "配置Key"、"order by"。</param>
     /// <param name="typeName">限定在指定类型内反查，类型全名（格式与 list_types 输出一致）；省略时跨程序集全部类型。</param>
+    /// <param name="includeCompilerGenerated">是否包含编译器生成类型（默认 false=跳过 async 状态机/lambda 闭包等）。</param>
     /// <param name="lines">按行号范围读取结果，格式 "start-end"；缺省返回前约 8 KB。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的命中成员行或错误提示文本。</returns>
     [McpServerTool]
-    [Description("在方法体的字符串字面量中按子串反查成员（忽略大小写）：扫描全部（或 typeName 限定）类型的方法体，匹配业务文案、SQL 片段、配置 Key 等，输出每行 类型全名::成员签名 字符串值 成员token（token 可直接用于 decompile_member 反编译对应成员）。同一成员内多个匹配各占一行，匹配数可能很多。" + ToolParameterText.FooterPagination)]
+    [Description("在方法体的字符串字面量中按子串反查成员（忽略大小写）：扫描全部（或 typeName 限定）类型的方法体，匹配业务文案、SQL 片段、配置 Key 等，输出每行 类型全名::成员签名 字符串值 成员token（token 可直接用于 decompile_member 反编译对应成员）。同一成员内多个匹配各占一行，匹配数可能很多。默认跳过编译器生成类型；async/lambda 方法里的字面量位于生成的状态机/闭包类型内，需 includeCompilerGenerated=true 才可见。" + ToolParameterText.FooterPagination)]
     public static Task<string> SearchString(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("要搜索的字符串字面量子串（忽略大小写，必填）")] string search = "",
         [Description("限定仅在指定类型内反查，类型全名（格式与 list_types 输出一致）；省略则跨程序集全部类型（默认空=全程序集）")] string typeName = "",
+        [Description("是否包含编译器生成类型（async 状态机/lambda 闭包等，默认 false=跳过）；要找 async/lambda 方法里的字面量时置 true。")] bool includeCompilerGenerated = false,
         [Description(ToolParameterText.LinesParam)] string lines = "",
         CancellationToken cancellationToken = default)
     {
@@ -48,12 +50,11 @@ public static class SearchStringTool
 
         // 头部信息块：程序集绝对路径 + 目标描述（参数不展示——agent 面对的是 MCP 命名参数）
         var target = string.IsNullOrEmpty(typeName) ? $"字符串字面量含 {search}" : $"类型 {typeName} 内字符串字面量含 {search}";
-        var context = new FormatContext(assemblyFull, target, IsListing: true);
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）；typeName 歧义/未找到以异常抛提示、不入缓存
-        var signature = $"{CacheSignatures.SearchString}{CacheSignatures.Separator}{search}{CacheSignatures.Separator}{typeName}";
+        var signature = $"{CacheSignatures.SearchString}{CacheSignatures.Separator}{search}{CacheSignatures.Separator}{typeName}{CacheSignatures.Separator}{includeCompilerGenerated}";
         var aborted = 0;
-        return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, context, (pe, reader) =>
+        return Task.FromResult(ToolExecutor.RunMetadataPe(assemblyFull, signature, lines, new FormatContext(assemblyFull, target, IsListing: true), (pe, reader) =>
         {
             var scanner = new StringLiteralScanner(pe);
             TypeDefinitionHandle? onlyType = null;
@@ -65,7 +66,7 @@ public static class SearchStringTool
                 onlyType = candidates[0];
             }
 
-            var hits = scanner.Scan(search, onlyType);
+            var hits = scanner.Scan(search, onlyType, includeCompilerGenerated);
             aborted = scanner.AbortedBodies;
             var outputLines = new List<string>(hits.Count);
             foreach (var hit in hits)

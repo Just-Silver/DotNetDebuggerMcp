@@ -35,21 +35,25 @@ public sealed class StringLiteralScanner
 
     /// <summary>
     /// 扫描类型方法体，反查字符串字面量含指定子串（忽略大小写）的成员。 onlyType 有值时仅扫描该类型，否则扫描程序集全部非编译器生成类型。
+    /// includeCompilerGenerated=true 时连编译器生成类型（async 状态机 /lambda 闭包等）一并扫描——其方法体
+    /// （如 &lt;Go&gt;d__N.MoveNext）承载原 async 方法里的字面量，默认过滤会漏检。
     /// </summary>
     /// <param name="substring">待匹配的字符串字面量子串（忽略大小写）。</param>
     /// <param name="onlyType">限定的类型定义句柄；为 null 时扫描全部非编译器生成类型。</param>
+    /// <param name="includeCompilerGenerated">是否包含编译器生成类型（默认 false=跳过）。</param>
     /// <returns>命中的字符串字面量条目列表（含来源类型全名/成员签名/token/原文），按元数据枚举序。</returns>
-    public IReadOnlyList<StringHit> Scan(string substring, TypeDefinitionHandle? onlyType = null)
+    public IReadOnlyList<StringHit> Scan(string substring, TypeDefinitionHandle? onlyType = null, bool includeCompilerGenerated = false)
     {
         var results = new List<StringHit>();
+        var skipGenerated = !includeCompilerGenerated;
         if (onlyType is { } handle)
         {
-            ScanType(handle, substring, results);
+            ScanType(handle, substring, results, skipGenerated);
             return results;
         }
         foreach (var typeHandle in _reader.TypeDefinitions)
         {
-            ScanType(typeHandle, substring, results);
+            ScanType(typeHandle, substring, results, skipGenerated);
         }
         return results;
     }
@@ -57,10 +61,10 @@ public sealed class StringLiteralScanner
     /// <summary>
     /// 扫描单个类型定义的全部方法体（含访问器方法体，属性 getter 内的字符串同样属该类型的字面量）。
     /// </summary>
-    private void ScanType(TypeDefinitionHandle typeHandle, string substring, List<StringHit> results)
+    private void ScanType(TypeDefinitionHandle typeHandle, string substring, List<StringHit> results, bool skipGenerated)
     {
         var type = _reader.GetTypeDefinition(typeHandle);
-        if (CompilerGeneratedFilter.IsCompilerGenerated(_reader, type)) return;
+        if (skipGenerated && CompilerGeneratedFilter.IsCompilerGenerated(_reader, type)) return;
         var fullName = MetadataNaming.FullName(_reader, type);
         foreach (var methodHandle in type.GetMethods())
         {

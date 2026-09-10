@@ -104,4 +104,25 @@ public class SearchStringToolTests
 
         Assert.Contains("请指定 search", result);
     }
+
+    [Fact]
+    public async Task SearchString_includeCompilerGenerated_命中async状态机字面量()
+    {
+        AppServices.ConfigureForTest();
+        try
+        {
+            // 默认：生成类型被跳过 → 零匹配
+            var byDefault = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "async状态机字面量XYZ", cancellationToken: TestContext.Current.CancellationToken);
+            Assert.Contains("匹配实体: 0 个", byDefault);
+
+            // includeCompilerGenerated=true：命中 <Go>d__N 状态机里的字面量
+            var included = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "async状态机字面量XYZ", includeCompilerGenerated: true, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.Contains("async状态机字面量XYZ", included);
+            Assert.Contains("<Go>", included);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
 }

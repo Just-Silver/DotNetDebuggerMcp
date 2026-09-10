@@ -100,7 +100,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_call_graph` | 方法体调用关系清单（双向，扫描 `call`/`callvirt`/`newobj` 等）；`token` 模式反向定位调用点，`includeExternal` 同上 |
 | `dotnetdebugger_interface_usage` | 接口组合视图：实现者 + 调用点（`类型::成员 → 接口成员`）+ 签名引用；`includeIndirect` 含子接口/实现者子类 |
 | `dotnetdebugger_generic_instantiations` | 泛型实例化的两段使用点：签名中 / 方法体调用中；`typeName` 可带或不带 `` `1`` arity |
-| `dotnetdebugger_search_string` | 按字符串字面量子串反查成员（忽略大小写），输出 `类型::成员 字符串值 token` |
+| `dotnetdebugger_search_string` | 按字符串字面量子串反查成员（忽略大小写），输出 `类型::成员 字符串值 token`。默认跳过编译器生成类型；找 async 方法/lambda 里的字面量（位于生成的状态机/闭包类型内）需 `includeCompilerGenerated=true` |
 | `dotnetdebugger_field_access` | 追踪字段的读/写/取地址三段来源（空段输出 `（无）`） |
 | `dotnetdebugger_assembly_info` | 程序集概览：名称版本、目标框架、引用清单、类型计数、入口点 |
 
@@ -319,7 +319,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 
 | 工具 | 参数 | 说明 |
 | ---- | ---- | ---- |
-| `dotnetdebugger_search_string` | `assembly` + `search` 必填，`typeName?` + `lines` | 字符串字面量反查，忽略大小写；输出 `类型::成员 字符串值 token` |
+| `dotnetdebugger_search_string` | `assembly` + `search` 必填，`typeName?` + `includeCompilerGenerated?` + `lines` | 字符串字面量反查，忽略大小写；输出 `类型::成员 字符串值 token`。默认跳过编译器生成类型；`includeCompilerGenerated=true` 含 async 状态机/lambda 闭包里的字面量 |
 | `dotnetdebugger_field_access` | `assembly` 必填，`typeName?` + `fieldName`/`fieldToken` + `lines` | 读/写/取地址三段来源，空段 `（无）`；`fieldToken` 为 `0x04` 开头 |
 | `dotnetdebugger_assembly_info` | `assembly` 必填，`lines` | 程序集概览（元数据秒回） |
 | `dotnetdebugger_cache_stats` | 仅 `lines` | 无 `assembly` 参数；按占用降序列条目 |

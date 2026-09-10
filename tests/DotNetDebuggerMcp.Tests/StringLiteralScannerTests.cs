@@ -43,6 +43,20 @@ public class StringLiteralScannerTests
         Assert.All(hits, h => Assert.Equal($"{TestDataPaths.SamplesNamespace}.StringHolder", h.TypeFullName));
     }
 
+    [Fact]
+    public void 编译器生成类型默认跳过_开启后命中async状态机字面量()
+    {
+        using var scope = new MetadataScope();
+
+        // 默认：编译器生成类型（async 状态机 <Go>d__N.MoveNext）被跳过——字面量不可见
+        var byDefault = new StringLiteralScanner(scope.Pe).Scan("async状态机字面量XYZ");
+        Assert.Empty(byDefault);
+
+        // includeCompilerGenerated=true：扫到生成类型里的字面量（其全名含 '<Go>'）
+        var included = new StringLiteralScanner(scope.Pe).Scan("async状态机字面量XYZ", includeCompilerGenerated: true);
+        Assert.Contains(included, h => h.TypeFullName.Contains("<Go>") && h.Value == "async状态机字面量XYZ");
+    }
+
     /// <summary>
     /// 持有打开的 PEReader 与元数据读取器，保证 reader 在断言期间有效（PE 释放后 reader 访问会崩）。
     /// </summary>

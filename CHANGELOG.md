@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`search_string` 新增 `includeCompilerGenerated` 参数**：默认仍跳过编译器生成类型；置 `true` 时连编译器生成类型（async 状态机 `<Go>d__N`、lambda 闭包等）一并扫描——async/lambda 方法里的字符串字面量位于其生成类型的方法体内，此前默认过滤会漏检（如 CoreMes `OnStartup`/`OnInitialized` 里的字面量扫描不到）。`.codegraph`/`list_types` 默认过滤语义不变
+
 ### Fixed
 
 - **`debug_evaluate` 支持 `$exception` 伪根**：异常停点下可直接求值 `$exception._message`、`$exception.InnerException` 等（此前仅 `debug_variables`/`debug_object` 支持，evaluate 报「表达式子集不支持 `$`」）——表达式词法现允许 `$` 起始标识符（仅 `$exception` 伪根有值，其它 `$xxx` 报未知根）
