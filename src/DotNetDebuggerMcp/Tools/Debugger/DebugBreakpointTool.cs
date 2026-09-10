@@ -332,14 +332,18 @@ public static class DebugBreakpointTool
             }
 
             var resolved = new List<(string Module, SourceLineResolver.SourceLineTarget Target)>();
-            string? lastError = null;
+            var scannedModules = new List<string>();
             foreach (var m in candidates)
             {
-                if (SourceLineResolver.Resolve(m.Path, sourcePath, line, out var err) is { } t)
+                scannedModules.Add(m.Name);
+                if (SourceLineResolver.Resolve(m.Path, sourcePath, line, out _) is { } t)
                     resolved.Add((m.Name, t));
-                else
-                    lastError = err;
             }
+            // 聚合描述：避免把某个随机模块的「PDB 中未找到源文件」当结论（无 moduleName 时遍历顺序不定，
+            // 报「（模块 X）」会误导——如实说清「已扫描 N 个模块，均未包含」）。
+            var scannedText = scannedModules.Count == 0
+                ? "当前无已加载模块"
+                : $"已扫描 {scannedModules.Count} 个已加载模块（{string.Join("、", scannedModules)}）的 PDB 均未包含该源文件";
 
             if (resolved.Count == 0)
             {
@@ -349,10 +353,9 @@ public static class DebugBreakpointTool
                 {
                     var pending = await active.Session.SetSourceLineBreakpointAsync(sourcePath, line, "", hitCount, modeValue, condition, ct);
                     DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{sourcePath}:{line}（已加载模块未命中，延迟绑定）", $"id={pending.Id}");
-                    return DescribeSetWithPosition(pending, $"源 {sourcePath} 第 {line} 行（已加载模块未命中，登记延迟——模块加载后按 PDB 自动解析绑定）")
-                        + " " + (lastError ?? "");
+                    return DescribeSetWithPosition(pending, $"源 {sourcePath} 第 {line} 行（{scannedText}，登记延迟——模块加载后按 PDB 自动解析绑定）");
                 }
-                return (lastError ?? "未能按源文件+行定位断点。") + LineBreakpointRetryHint;
+                return $"{scannedText}，未能按源文件+行定位断点。" + LineBreakpointRetryHint;
             }
             if (resolved.Count > 1)
                 return $"源文件 \"{sourcePath}\" 第 {line} 行在多个模块命中，请提供 moduleName 消歧：{string.Join("、", resolved.Select(r => r.Module))}";

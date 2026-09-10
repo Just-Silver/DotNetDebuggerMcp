@@ -925,6 +925,29 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task SourceLineBreakpoint_NotFound_AggregatesWithoutBlamingOneModule()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 1 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        // 源文件在任何已加载模块的 PDB 里都不存在 → 应聚合说明「已扫描 N 个模块」，而非把某个随机模块
+        // （如最后遍历到的 Wpf.Ui.Yin.dll）的「PDB 中未找到源文件」当成结论（CoreMes 实证的误导）
+        var set = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "NoSuchSourceFile_xyz.cs", ["line"] = 1 });
+        Assert.True(set.IsError != true, set.Text());
+        Assert.Contains("均未包含", set.Text());
+        Assert.DoesNotContain("未找到源文件 \"NoSuchSourceFile_xyz.cs\"（模块", set.Text());
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    [Fact]
     public async Task DebugTimeline_LaunchExit_LogStateRowsChronological()
     {
         var exe = DebugTargetExe;
