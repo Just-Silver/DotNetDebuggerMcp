@@ -9,15 +9,14 @@ namespace DotNetDebuggerMcp.Tests;
 /// <summary>
 /// U1A ui_find/ui_action/ui_input/ui_get/ui_wait 端到端：真实起 UiSampleApp（WinForms，tests/TestData/UiSampleApp），
 /// 经 MCP server 文本契约验证——全 UIA 语义 pattern，**不移动光标、不注入输入、不抢前台**。
-/// 每个动作前后断言 GetCursorPos()/GetForegroundWindow() 不变（focus/windowstate 豁免——spec §9）。
+/// 每个动作前取「静默基线」（连续采样一致）、动作后断言 GetCursorPos()/GetForegroundWindow() 任一变化即失败
+/// （基线本就不稳则 Skip；focus/windowstate 豁免——spec §9）。确定性源码/IL 兜底见 NoPhysicalInputGuardTests。
 /// </summary>
 [Collection("UiTools")]
 public sealed class DebugUiToolsTests
 {
     internal static string UiSampleAppExe => Path.Combine(
         Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, "UiSampleApp", "UiSampleApp.exe");
-
-    // ===== 探查：UiSampleApp 真实暴露的 pattern（临时，跑完删） =====
 
     [Fact]
     public async Task UiFind_ReportsPatternCapabilities_AndSemanticCandidates()
@@ -52,10 +51,11 @@ public sealed class DebugUiToolsTests
         try
         {
             await WaitFindAsync(mcp, "手动");
-            var before = await CaptureStableInputStateAsync();
+            var before = await CaptureQuietInputStateAsync();
             var invokeText = await WriteWithEffectAsync(mcp, "ui_action",
                 new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["name"] = "手动", ["type"] = "Button", ["verb"] = "invoke" },
-                () => FindContainsAsync(mcp, "自动"));
+                "已 invoke（InvokePattern）",
+                () => FindContainsAsync(mcp, "自动"), retryOnTimeout: false);
             AssertActionOutcome(invokeText, "已 invoke（InvokePattern）");
             await AssertInputUnchangedAsync(before, "invoke", app);
 
@@ -80,10 +80,12 @@ public sealed class DebugUiToolsTests
         try
         {
             await WaitFindAsync(mcp, "手动");
-            var before = await CaptureStableInputStateAsync();
+            var before = await CaptureQuietInputStateAsync();
             var toggleText = await WriteWithEffectAsync(mcp, "ui_action",
                 new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["name"] = "checkBox", ["verb"] = "toggle" },
-                async () => (await UiGetAsync(mcp, new() { ["what"] = "toggle", ["name"] = "checkBox" })).Text().Contains("On", StringComparison.Ordinal));
+                "已 toggle（TogglePattern）",
+                async () => (await UiGetAsync(mcp, new() { ["what"] = "toggle", ["name"] = "checkBox" })).Text().Contains("On", StringComparison.Ordinal),
+                retryOnTimeout: false);
             AssertActionOutcome(toggleText, "已 toggle（TogglePattern）");
             await AssertInputUnchangedAsync(before, "toggle", app);
 
@@ -105,10 +107,12 @@ public sealed class DebugUiToolsTests
         try
         {
             await WaitFindAsync(mcp, "手动");
-            var before = await CaptureStableInputStateAsync();
+            var before = await CaptureQuietInputStateAsync();
             var selectText = await WriteWithEffectAsync(mcp, "ui_action",
                 new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["name"] = "Item 90", ["type"] = "ListItem", ["verb"] = "select" },
-                async () => (await UiGetAsync(mcp, new() { ["what"] = "selected", ["name"] = "Item 90", ["type"] = "ListItem" })).Text().Contains("True", StringComparison.Ordinal));
+                "已 select（SelectionItemPattern）",
+                async () => (await UiGetAsync(mcp, new() { ["what"] = "selected", ["name"] = "Item 90", ["type"] = "ListItem" })).Text().Contains("True", StringComparison.Ordinal),
+                retryOnTimeout: true);
             AssertActionOutcome(selectText, "已 select（SelectionItemPattern）");
             await AssertInputUnchangedAsync(before, "select", app);
 
@@ -130,21 +134,29 @@ public sealed class DebugUiToolsTests
         try
         {
             await WaitFindAsync(mcp, "手动");
-            var before = await CaptureStableInputStateAsync();
+            var before = await CaptureQuietInputStateAsync();
             var expandText = await WriteWithEffectAsync(mcp, "ui_action",
                 new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["name"] = "comboBox", ["verb"] = "expand" },
-                async () => (await UiGetAsync(mcp, new() { ["what"] = "expandstate", ["name"] = "comboBox" })).Text().Contains("Expanded", StringComparison.Ordinal));
+                "已 expand（ExpandCollapsePattern）",
+                async () => (await UiGetAsync(mcp, new() { ["what"] = "expandstate", ["name"] = "comboBox" })).Text().Contains("Expanded", StringComparison.Ordinal),
+                retryOnTimeout: true);
             AssertActionOutcome(expandText, "已 expand（ExpandCollapsePattern）");
             var state = await UiGetAsync(mcp, new() { ["what"] = "expandstate", ["name"] = "comboBox" });
             Assert.True(state.IsError != true, state.Text());
-            // ComboBox 下拉在失焦时会自动收起——外部活动下可能读到 Collapsed；此处确认可读且为合法展开态之一
             Assert.Contains("what=expandstate", state.Text());
-            Assert.True(state.Text().Contains("Expanded") || state.Text().Contains("Collapsed"), state.Text());
+            // R6：expand 后必须 Expanded（不得接受 Collapsed——否则等于没校验 expand 效果）
+            Assert.Contains("Expanded", state.Text());
 
             var collapseText = await WriteWithEffectAsync(mcp, "ui_action",
                 new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["name"] = "comboBox", ["verb"] = "collapse" },
-                async () => (await UiGetAsync(mcp, new() { ["what"] = "expandstate", ["name"] = "comboBox" })).Text().Contains("Collapsed", StringComparison.Ordinal));
+                "已 collapse（ExpandCollapsePattern）",
+                async () => (await UiGetAsync(mcp, new() { ["what"] = "expandstate", ["name"] = "comboBox" })).Text().Contains("Collapsed", StringComparison.Ordinal),
+                retryOnTimeout: true);
             AssertActionOutcome(collapseText, "已 collapse（ExpandCollapsePattern）");
+            var collapsed = await UiGetAsync(mcp, new() { ["what"] = "expandstate", ["name"] = "comboBox" });
+            Assert.True(collapsed.IsError != true, collapsed.Text());
+            // R6：collapse 后必须 Collapsed
+            Assert.Contains("Collapsed", collapsed.Text());
             await AssertInputUnchangedAsync(before, "expand/collapse", app);
         }
         finally
@@ -161,16 +173,18 @@ public sealed class DebugUiToolsTests
         try
         {
             await WaitFindAsync(mcp, "手动");
-            var before = await CaptureStableInputStateAsync();
+            var before = await CaptureQuietInputStateAsync();
 
             var setText = await WriteWithEffectAsync(mcp, "ui_input",
                 new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "hello-u1a", ["name"] = "inputBox" },
-                async () => (await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" })).Text().Contains("hello-u1a", StringComparison.Ordinal));
+                "已 input（ValuePattern）",
+                async () => (await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" })).Text().Contains("hello-u1a", StringComparison.Ordinal),
+                retryOnTimeout: true);
             AssertActionOutcome(setText, "已 input（ValuePattern）");
             var readText = await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" });
             Assert.Contains("hello-u1a", readText.Text());
 
-            // RangeValue 分支：ProgressBar 暴露 RangeValuePattern（只读）——ui_get 读得到，ui_input 报只读
+            // RangeValue 只读分支：ProgressBar 暴露只读 RangeValuePattern——ui_get 读得到，ui_input 必须失败并报只读
             var readRange = await UiGetAsync(mcp, new() { ["what"] = "rangevalue", ["name"] = "progressBar" });
             Assert.True(readRange.IsError != true, readRange.Text());
             Assert.Contains("40", readRange.Text());
@@ -180,18 +194,25 @@ public sealed class DebugUiToolsTests
                 ["process"] = "UiSampleApp", ["value"] = "66", ["name"] = "progressBar",
             });
             Assert.True(rangeReadOnly.IsError != true, rangeReadOnly.Text());
-            Assert.True(rangeReadOnly.Text().Contains("已 input（RangeValuePattern）")
-                || rangeReadOnly.Text().Contains("只读")
-                || rangeReadOnly.Text().Contains(UiaTimeoutMarker), rangeReadOnly.Text());
-            await AssertInputUnchangedAsync(before, "ui_input", app);
+            // R6：只读控件误写「已 input」不得当 PASS——必须中文只读提示
+            Assert.Contains("只读", rangeReadOnly.Text());
 
-            // ValuePattern 只读拒绝
+            // VScrollBar 的 RangeValuePattern 可写（WinForms ScrollBarAccessibleObject.IsReadOnly=false）——正路径写值
+            var vscroll = await WriteWithEffectAsync(mcp, "ui_input",
+                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "77", ["name"] = "vscrollBar" },
+                "已 input（RangeValuePattern）",
+                async () => (await UiGetAsync(mcp, new() { ["what"] = "rangevalue", ["name"] = "vscrollBar" })).Text().Contains("77", StringComparison.Ordinal),
+                retryOnTimeout: true);
+            AssertActionOutcome(vscroll, "已 input（RangeValuePattern）");
+
+            // ValuePattern 只读拒绝：必须报只读
             var readOnly = await DebugMcpToolsTests.CallAsync(mcp, "ui_input", new Dictionary<string, object?>
             {
                 ["process"] = "UiSampleApp", ["value"] = "x", ["name"] = "readOnlyBox",
             });
             Assert.True(readOnly.IsError != true, readOnly.Text());
-            Assert.True(readOnly.Text().Contains("只读") || readOnly.Text().Contains(UiaTimeoutMarker), readOnly.Text());
+            Assert.Contains("只读", readOnly.Text());
+            await AssertInputUnchangedAsync(before, "ui_input", app);
         }
         finally
         {
@@ -259,7 +280,7 @@ public sealed class DebugUiToolsTests
         try
         {
             await WaitFindAsync(mcp, "手动");
-            var before = await CaptureStableInputStateAsync();
+            var before = await CaptureQuietInputStateAsync();
             foreach (var dir in new[] { "down", "up" })
             {
                 var scroll = await UiActionAsync(mcp, new() { ["name"] = "listBox", ["verb"] = "scroll", ["direction"] = dir, ["lines"] = 5 });
@@ -270,6 +291,78 @@ public sealed class DebugUiToolsTests
             Assert.True(intoView.IsError != true, intoView.Text());
             AssertActionOutcome(intoView.Text(), "已 scrollintoview（");
             await AssertInputUnchangedAsync(before, "scroll/scrollintoview", app);
+        }
+        finally
+        {
+            KillUiSampleApp(app);
+        }
+    }
+
+    [Fact]
+    public async Task UiInput_ByIndex_ResolvesCachedTargetDescriptor()
+    {
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            // 先 ui_find 更新 index 条件缓存（用 type=Edit 缩小范围），再按 index 写值——覆盖 index→重解析路径。
+            var found = await WaitUiFindAsync(mcp, new Dictionary<string, object?> { ["type"] = "Edit" }, "inputBox");
+            var idx = IndexByAutoId(found, "inputBox");
+            var before = await CaptureQuietInputStateAsync();
+
+            var write = await WriteWithEffectAsync(mcp, "ui_input",
+                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "by-index", ["index"] = idx },
+                "已 input（ValuePattern）",
+                async () => (await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" })).Text().Contains("by-index", StringComparison.Ordinal),
+                retryOnTimeout: true);
+            AssertActionOutcome(write, "已 input（ValuePattern）");
+
+            var read = await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" });
+            Assert.True(read.IsError != true, read.Text());
+            Assert.Contains("by-index", read.Text());
+            await AssertInputUnchangedAsync(before, "ui_input(index)", app);
+        }
+        finally
+        {
+            KillUiSampleApp(app);
+        }
+    }
+
+    [Fact]
+    public async Task UiAction_ByIndex_AfterTargetTextChanged_ReportsStale()
+    {
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            var found = await WaitFindAsync(mcp, "手动");
+            var idx = IndexByAutoId(found, "toggleState");
+
+            // 首次按 index invoke：重解析按 (AutoId=toggleState, Name=手动, Type=Button) 精确命中。
+            var first = await WriteWithEffectAsync(mcp, "ui_action",
+                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["index"] = idx, ["verb"] = "invoke" },
+                "已 invoke（InvokePattern）",
+                () => FindContainsAsync(mcp, "自动"), retryOnTimeout: false);
+            AssertActionOutcome(first, "已 invoke（InvokePattern）");
+            await WaitFindAsync(mcp, "自动"); // 确认 UIA Name 已更新为 自动
+
+            // 同一 index 的定位条件（Name=手动）已不再匹配 → 重解析 3 次失败 → 中文「目标已变化」（stale 重解析路径）。
+            var staleText = "";
+            for (var i = 0; i < 3; i++)
+            {
+                staleText = (await UiActionAsync(mcp, new() { ["index"] = idx, ["verb"] = "invoke" })).Text();
+                if (staleText.Contains("目标已变化", StringComparison.Ordinal)) break;
+                if (!staleText.Contains(UiaTimeoutMarker, StringComparison.Ordinal)) break;
+                await Task.Delay(300, TestContext.Current.CancellationToken);
+            }
+            Assert.Contains("目标已变化", staleText);
+
+            // 重新 ui_find 后按新 index 可继续操作（验证 index 与最新清单一致）。
+            var refound = await WaitFindAsync(mcp, "自动");
+            var idx2 = IndexByAutoId(refound, "toggleState");
+            var again = await UiActionAsync(mcp, new() { ["index"] = idx2, ["verb"] = "invoke" });
+            Assert.True(again.IsError != true, again.Text());
+            AssertActionOutcome(again.Text(), "已 invoke（InvokePattern）");
         }
         finally
         {
@@ -443,27 +536,37 @@ public sealed class DebugUiToolsTests
     }
 
     /// <summary>
-    /// 写动作遇 5s 超时（环境慢/响应丢失）时：效果已达成按成功返回；未达成则重试（最多 3 次）。
-    /// 对 invoke/toggle 等非幂等动作安全——只在效果未出现时才重发。
+    /// 写动作执行：命中预期 pattern 或**效果经只读探测独立确认**才算成功；若 5s 超时且效果未确认，仅对幂等动作重试
+    /// （invoke/toggle 不重试，防双触发——与产品 <c>VerifyService.IsIdempotentVerb</c> 对齐）。超时且效果始终未确认时
+    /// Success=false（超时不得当 PASS）。
     /// </summary>
-    private static async Task<string> WriteWithEffectAsync(McpClient mcp, string tool, Dictionary<string, object?> args, Func<Task<bool>> effect)
+    private static async Task<(string Text, bool Success)> WriteWithEffectAsync(
+        McpClient mcp, string tool, Dictionary<string, object?> args, string expectedPattern,
+        Func<Task<bool>> effect, bool retryOnTimeout)
     {
         var text = "";
         for (var i = 0; i < 3; i++)
         {
             var r = await DebugMcpToolsTests.CallAsync(mcp, tool, args);
             text = r.Text();
-            if (!text.Contains(UiaTimeoutMarker, StringComparison.Ordinal)) return text;
-            if (await effect()) return text;
+            if (text.Contains(expectedPattern, StringComparison.Ordinal)) return (text, true);
+            if (!text.Contains(UiaTimeoutMarker, StringComparison.Ordinal)) return (text, false); // 明确失败
+            if (await effect()) return (text, true); // 超时但动作实际生效（效果已独立确认）——非「超时即通过」
+            if (!retryOnTimeout) return (text, false); // 非幂等：不重发
             await Task.Delay(400, TestContext.Current.CancellationToken);
         }
-        return text;
+        return (text, false);
     }
 
-    /// <summary>写动作结果断言：命中预期 pattern，或环境慢导致的 5s 超时（效果由后续断言确认）。</summary>
+    /// <summary>动作结果断言：必须命中预期 pattern 或已确认效果（超时/失败不得当 PASS）。</summary>
+    private static void AssertActionOutcome((string Text, bool Success) result, string expectedPattern)
+        => Assert.True(result.Success,
+            $"未命中预期「{expectedPattern}」且未确认效果（超时/失败不得当 PASS）：{result.Text}");
+
+    /// <summary>无独立效果探针的动作（scroll/scrollintoview/focus/windowstate）结果断言：必须命中预期 pattern（超时/失败一律 Fail）。</summary>
     private static void AssertActionOutcome(string text, string expectedPattern)
-        => Assert.True(text.Contains(expectedPattern, StringComparison.Ordinal) || text.Contains(UiaTimeoutMarker, StringComparison.Ordinal),
-            $"既未命中预期 pattern（{expectedPattern}）也非 5s 超时（环境慢）：{text}");
+        => Assert.True(text.Contains(expectedPattern, StringComparison.Ordinal),
+            $"未命中预期「{expectedPattern}」（超时/失败不得当 PASS）：{text}");
 
     /// <summary>错误路径断言：命中预期中文提示，或环境慢导致的 5s 超时（UIA 目标解析未及返回）。</summary>
     private static void AssertContainsOrTimeout(string text, string fragment)
@@ -536,6 +639,14 @@ public sealed class DebugUiToolsTests
         return int.Parse(m.Groups[1].Value);
     }
 
+    /// <summary>在 ui_find 文本中按 AutoId= 定位行并取 [index]。</summary>
+    private static int IndexByAutoId(string findText, string autoId)
+    {
+        var row = FirstRow(findText, line => line.Contains($"AutoId={autoId}", StringComparison.Ordinal));
+        Assert.True(row is not null, $"ui_find 结果未找到 AutoId={autoId} 的行：{findText}");
+        return RowIndex(row!);
+    }
+
     // ===== 不抢鼠标/前台强断言（护栏，防回退到物理输入；focus/windowstate 豁免，spec §9） =====
 
     [DllImport("user32.dll")]
@@ -565,41 +676,37 @@ public sealed class DebugUiToolsTests
         public readonly bool Contains(int x, int y) => x >= Left && x <= Right && y >= Top && y <= Bottom;
     }
 
-    private const string DesktopNoiseSkipReason =
-        "桌面在动作期间被外部活动改变（交互会话可能有人操作鼠标/切换窗口），且变化不具备物理输入回归特征（光标未移入目标窗口、前台未被目标窗口抢占）——跳过不抢鼠标/前台断言。";
+    private const string QuietBaselineSkipReason =
+        "动作前桌面输入状态持续变化（检出外部光标/前台活动，交互式共享桌面）——基线不静默，跳过不抢鼠标/前台断言（no physical input）。";
 
-    private static (Point Cursor, IntPtr Foreground) CaptureInputState()
+    private readonly record struct InputSnapshot(Point Cursor, IntPtr Foreground);
+
+    private static InputSnapshot CaptureInputState()
     {
         GetCursorPos(out var p);
-        return (p, GetForegroundWindow());
+        return new InputSnapshot(p, GetForegroundWindow());
     }
 
-    /// <summary>等到桌面输入状态连续两次采样一致（静默）后再取基线，避免窗口就绪/外部活动造成的假象。</summary>
-    private static async Task<(Point Cursor, IntPtr Foreground)> CaptureStableInputStateAsync()
+    private static bool SameInput(InputSnapshot a, InputSnapshot b)
+        => a.Cursor.X == b.Cursor.X && a.Cursor.Y == b.Cursor.Y && a.Foreground == b.Foreground;
+
+    /// <summary>
+    /// 取静默基线：连续 3 次采样（约 400ms）一致才认为桌面静默；否则判定检出外部活动 → Skip（不虚判）。
+    /// CI 非交互桌面下应稳定取到静默基线，从而使动作后断言成为强断言。
+    /// </summary>
+    private static async Task<InputSnapshot> CaptureQuietInputStateAsync()
     {
-        for (var i = 0; i < 20; i++)
+        for (var attempt = 0; attempt < 10; attempt++)
         {
             var a = CaptureInputState();
-            await Task.Delay(250, TestContext.Current.CancellationToken);
+            await Task.Delay(200, TestContext.Current.CancellationToken);
             var b = CaptureInputState();
-            if (a.Cursor.X == b.Cursor.X && a.Cursor.Y == b.Cursor.Y && a.Foreground == b.Foreground)
-                return b;
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+            var c = CaptureInputState();
+            if (SameInput(a, b) && SameInput(b, c)) return c;
         }
-        Assert.Skip("桌面输入状态 5s 内持续不稳定（交互会话有其他活动）——无法进行不抢鼠标/前台断言。");
+        Assert.Skip(QuietBaselineSkipReason);
         return default;
-    }
-
-    /// <summary>桌面是否仍在变化（疑似外部活动）。</summary>
-    private static async Task<bool> IsDesktopUnstableAsync()
-    {
-        for (var i = 0; i < 5; i++)
-        {
-            var a = CaptureInputState();
-            await Task.Delay(300, TestContext.Current.CancellationToken);
-            var b = CaptureInputState();
-            if (a.Cursor.X != b.Cursor.X || a.Cursor.Y != b.Cursor.Y || a.Foreground != b.Foreground) return true;
-        }
-        return false;
     }
 
     private static bool TryGetMainWindowRect(Process app, out Rect rect)
@@ -615,34 +722,26 @@ public sealed class DebugUiToolsTests
     }
 
     /// <summary>
-    /// 断言动作未移动系统光标、未抢前台（focus/windowstate 调用方豁免，spec §9）。
-    /// 变化归因：具备物理输入回归特征（光标被移入目标窗口 / 前台被目标窗口抢占）→ 失败；
-    /// 否则视为桌面外部活动 → 跳过（防交互会话误报）。
+    /// R2 不抢鼠标/前台强断言（focus/windowstate 调用方豁免，spec §9）：基线已确认静默（<see cref="CaptureQuietInputStateAsync"/>），
+    /// 动作后光标/前台发生<b>任何</b>变化即 Fail（不静默放过物理回归）；目标窗口被抢前台 / 光标落入目标窗口作为额外 Fail 触发。
+    /// 若动作前基线本就不稳定，CaptureQuietInputStateAsync 已 Skip 并打印原因（不做强特征启发式）。
     /// </summary>
-    private static async Task AssertInputUnchangedAsync((Point Cursor, IntPtr Foreground) before, string action, Process app)
+    private static Task AssertInputUnchangedAsync(InputSnapshot before, string action, Process app)
     {
         var after = CaptureInputState();
-        if (before.Cursor.X == after.Cursor.X && before.Cursor.Y == after.Cursor.Y && before.Foreground == after.Foreground)
-            return;
+        if (SameInput(before, after)) return Task.CompletedTask;
 
-        if (await IsDesktopUnstableAsync())
-            Assert.Skip(DesktopNoiseSkipReason);
-
-        var targetHwnd = IntPtr.Zero;
         var hasRect = TryGetMainWindowRect(app, out var rect);
+        var targetHwnd = IntPtr.Zero;
         try { app.Refresh(); targetHwnd = app.MainWindowHandle; } catch { }
 
         var cursorMoved = after.Cursor.X != before.Cursor.X || after.Cursor.Y != before.Cursor.Y;
         var fgChanged = after.Foreground != before.Foreground;
-        var afterInside = hasRect && rect.Contains(after.Cursor.X, after.Cursor.Y);
-        var beforeInside = hasRect && rect.Contains(before.Cursor.X, before.Cursor.Y);
+        var cursorInsideTarget = hasRect && rect.Contains(after.Cursor.X, after.Cursor.Y);
+        var targetTookForeground = targetHwnd != IntPtr.Zero && after.Foreground == targetHwnd;
 
-        // 物理输入回归的强特征：光标被移入目标窗口 + 前台同时被目标窗口抢占（旧实现 ActivateWindow+Mouse.Position/Click 的签名）。
-        // 只满足其一的桌面变化视为外部活动（人在用机器），跳过而非误报。
-        if (cursorMoved && afterInside && !beforeInside && fgChanged && targetHwnd != IntPtr.Zero && after.Foreground == targetHwnd)
-            Assert.Fail($"{action} 具备物理输入回归特征：光标 ({before.Cursor.X},{before.Cursor.Y}) → ({after.Cursor.X},{after.Cursor.Y}) 且目标窗口被抢前台——U1A 禁止物理输入。");
-
-        Assert.Skip(DesktopNoiseSkipReason);
+        Assert.Fail($"{action} 动作期间系统光标/前台发生变化（基线静默）：光标 ({before.Cursor.X},{before.Cursor.Y}) → ({after.Cursor.X},{after.Cursor.Y})（移动={cursorMoved}、落入目标窗口={cursorInsideTarget}）；前台 {before.Foreground} → {after.Foreground}（变化={fgChanged}、目标窗口被抢前台={targetTookForeground}）——U1A 禁止物理输入/抢前台。");
+        return Task.CompletedTask;
     }
 }
 
