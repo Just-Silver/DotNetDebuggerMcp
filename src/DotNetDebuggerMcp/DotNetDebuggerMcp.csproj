@@ -18,7 +18,7 @@
     <!-- Set recommended package metadata -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageId>DotNetDebuggerMcp</PackageId>
-    <Version>1.7.0</Version>
+    <Version>1.8.0</Version>
     <ToolCommandName>DotNetDebuggerMcp</ToolCommandName>
     <!-- U1 UI 自动化：FlaUI 5.0（版本号集中一处；见下方 FlaUI 引用段注释的原理说明） -->
     <FlaUIVersion>5.0.0</FlaUIVersion>

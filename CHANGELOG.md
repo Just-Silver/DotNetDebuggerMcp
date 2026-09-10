@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-09-10
+
 ### Added
 
 - **`debug_verify` 一键复验工具（V1，调试-修复-复验闭环最后一跳）**：读场景 JSON 文件（`target` 启动快照 + 可选 `build` 重编译 + `steps` 断言序列）一条命令执行到 **PASS/FAIL**——agent 改完源码可自证修复。可选 `build` 分支先 `dotnet build` 重编译场景指定工程（**产物自动拿取**：build 成功后按项目默认输出路径定位，不设置 OutputPath、agent 不写路径/TFM；`target.commandLine` 写工程入口 exe 文件名+参数，首段文件名须与产物同名，build 失败绝不启动旧产物）；随后启动目标并逐步骤执行（`breakpoint` 成员级定位下断点 / `continue` 等停点 / `assert` 断言：`breakpointHit`（`breakpointIndex` 0-based 引场景内断点步骤）/`evaluate`（equals 精确或 contains 子串）/`output`（contains，out/err）/`state`/`noException`），**断言失败即停（fail-fast）**返回失败步骤+目标输出尾部；`ui`/`set` 步骤类型预留（依赖 U1/W1，运行时报「依赖未就绪」）。执行结果直接落 AgentActionLog；断言失败理由中的求值实际值同走 DB1 敏感脱敏。Engine/Session 零改动（宿主新增 `Services/VerifyScenario`+`VerifyBuildRunner`+`VerifyService`）
