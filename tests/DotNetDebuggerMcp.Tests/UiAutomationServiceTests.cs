@@ -179,6 +179,16 @@ public sealed class UiPatternDispatcherTests
     }
 
     [Fact]
+    public void ChooseInputCandidates_ReturnsAllSupportedInPriorityOrder()
+    {
+        var kinds = UiPatternDispatcher.ChooseInputCandidates(Caps(value: true, rangeValue: true, legacy: true))
+            .Select(c => c.Kind).ToArray();
+        Assert.Equal(new[] { UiInputKind.Value, UiInputKind.RangeValue, UiInputKind.LegacySetValue }, kinds);
+        Assert.Equal(UiInputKind.RangeValue,
+            UiPatternDispatcher.ChooseInputCandidates(Caps(rangeValue: true, legacy: true))[0].Kind);
+    }
+
+    [Fact]
     public void Capabilities_Describe_ListsOnlySupportedInOrder()
     {
         var caps = Caps(invoke: true, toggle: true, value: true, window: true);

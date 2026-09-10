@@ -87,14 +87,20 @@ internal static class UiPatternDispatcher
         }
     }
 
-    /// <summary>纯决策：ui_input 按 ValuePattern → RangeValuePattern → LegacyIAccessiblePattern 优先级选写入方式。</summary>
-    public static ChosenInput ChooseInput(UiPatternCapabilities caps)
+    /// <summary>纯决策：ui_input 写值候选（ValuePattern → RangeValuePattern → LegacyIAccessiblePattern，只列已支持）。</summary>
+    public static IReadOnlyList<ChosenInput> ChooseInputCandidates(UiPatternCapabilities caps)
     {
-        if (caps.Value) return new ChosenInput(UiInputKind.Value, "ValuePattern");
-        if (caps.RangeValue) return new ChosenInput(UiInputKind.RangeValue, "RangeValuePattern");
-        if (caps.Legacy) return new ChosenInput(UiInputKind.LegacySetValue, "LegacyIAccessiblePattern");
-        throw new UiException("该控件不支持写值（无 Value/RangeValue/LegacyIAccessible）。");
+        var candidates = new List<ChosenInput>(3);
+        if (caps.Value) candidates.Add(new ChosenInput(UiInputKind.Value, "ValuePattern"));
+        if (caps.RangeValue) candidates.Add(new ChosenInput(UiInputKind.RangeValue, "RangeValuePattern"));
+        if (caps.Legacy) candidates.Add(new ChosenInput(UiInputKind.LegacySetValue, "LegacyIAccessiblePattern"));
+        if (candidates.Count == 0)
+            throw new UiException("该控件不支持写值（无 Value/RangeValue/LegacyIAccessible）。");
+        return candidates;
     }
+
+    /// <summary>首选写值方式（候选首项）；执行侧会读回确认，未生效则依次退候。</summary>
+    public static ChosenInput ChooseInput(UiPatternCapabilities caps) => ChooseInputCandidates(caps)[0];
 
     /// <summary>真实执行已决策动作（跨进程 UIA 调用；异常转中文 <see cref="UiException"/>）。</summary>
     public static void Execute(AutomationElement element, ChosenAction action)

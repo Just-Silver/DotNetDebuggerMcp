@@ -181,10 +181,52 @@ internal sealed class UiAutomationService
         EnsureWindowRestored(window);
 
         var caps = UiPatternCapabilities.Probe(element);
-        var chosen = UiPatternDispatcher.ChooseInput(caps);
-        UiPatternDispatcher.ExecuteInput(element, chosen, value);
-        return new UiActionResult(true, $"已 input（{chosen.PatternName}）");
+        var candidates = UiPatternDispatcher.ChooseInputCandidates(caps);
+        UiException? readOnly = null;
+        foreach (var choice in candidates)
+        {
+            var before = TryReadInputValue(element, choice);
+            try { UiPatternDispatcher.ExecuteInput(element, choice, value); }
+            catch (UiException ex) when (ex.Message.Contains("只读", StringComparison.Ordinal))
+            {
+                readOnly ??= ex; // 该 pattern 只读：记下并尝试下一候选（如 Value 只读但 RangeValue 可写）
+                continue;
+            }
+
+            var after = TryReadInputValue(element, choice);
+            // 无法读回（provider 不暴露读值）时信任写入；可读回则要求值确有反映，否则退下一候选——
+            // 防 WinForms 滚动条经 MSAA-UIA 桥暴露的 ValuePattern.IsReadOnly 误报 false 而 SetValue 静默 no-op
+            //（返回假成功；2026-09-10 远程 CI 实证）。
+            if (before is null || after is null || Reflected(before, after, value))
+                return new UiActionResult(true, $"已 input（{choice.PatternName}）");
+        }
+
+        if (readOnly is not null) throw readOnly;
+        throw new UiException("写入未生效：控件暴露的写值 pattern（Value/RangeValue/LegacyIAccessible）均未反映新值。");
     }
+
+    /// <summary>读回当前值（Value/RangeValue；Legacy 不读值返回 null 表示不可校验）。读取失败返回 null（不可校验）。</summary>
+    private static string? TryReadInputValue(AutomationElement element, ChosenInput choice)
+    {
+        try
+        {
+            return choice.Kind switch
+            {
+                UiInputKind.Value => element.Patterns.Value.PatternOrDefault?.Value.ValueOrDefault,
+                UiInputKind.RangeValue => element.Patterns.RangeValue.PatternOrDefault?.Value.ValueOrDefault
+                    .ToString(System.Globalization.CultureInfo.InvariantCulture),                _ => null,
+            };
+        }
+        catch { return null; }
+    }
+
+    /// <summary>写值是否已反映：等于期望、或相比写入前发生变化、或数值等价。</summary>
+    private static bool Reflected(string before, string after, string desired)
+        => string.Equals(after, desired, StringComparison.Ordinal)
+        || !string.Equals(before, after, StringComparison.Ordinal)
+        || (double.TryParse(after, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var a)
+            && double.TryParse(desired, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d)
+            && a == d);
 
     private UiStateResult GetCore(string process, string what, int index, string name, string type)
     {
