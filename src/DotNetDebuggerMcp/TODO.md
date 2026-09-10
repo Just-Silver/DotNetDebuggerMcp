@@ -75,7 +75,8 @@
 
 ## 实施后 follow-up（2026-09-10，review 循环收集，低优先）
 
-- [x] **U1A 全 UIA 化（2026-09-10 已完成）**：`docs/planning/specs/2026-09-10-u1a-uia-only-ui-automation.md`（取代 U1 工具面）→ 计划 `docs/planning/plans/2026-09-10-u1a-uia-only-ui-automation.md` 已实施：删 `ui_invoke`/`ui_scroll`、增 `ui_action`/`ui_input`/`ui_get`、`Services/Ui/` 组件化、`ui_find` 能力清单、`ui_wait` 事件化、去一切物理输入、verify `uiAction`/`uiAssert`；Engine/Session 零改动（本地 commit，未合并/未 push）。
+- [x] **U1A 全 UIA 化（2026-09-10 实现完成）**：`docs/planning/specs/2026-09-10-u1a-uia-only-ui-automation.md`（取代 U1 工具面）→ 计划 `docs/planning/plans/2026-09-10-u1a-uia-only-ui-automation.md` 已实施：删 `ui_invoke`/`ui_scroll`、增 `ui_action`/`ui_input`/`ui_get`、`Services/Ui/` 组件化、`ui_find` 能力清单、`ui_wait` 事件化、去一切物理输入、verify `uiAction`/`uiAssert`；Engine/Session 零改动（本地 commit，未合并/未 push）。修复波 + re-review Approved（R1 源码+IL 双扫描实证非恒真、R4 locator 身份匹配修复）。**确定性测试全绿；UI e2e（`DebugUiToolsTests`/`DebugVerifyToolTests` UI 例）因本机 UIA 全局 5s 超时未能复现「隔离绿」，待安静/非交互环境复验后才算签收**。
+- [ ] **U1A UI e2e 待安静环境复验**：`DebugUiToolsTests`（含 R2 基线静默强判、R6 收紧断言、index/stale e2e）与 `DebugVerifyToolTests` UI 例需在非交互/安静桌面整跑留日志；当前机器 UIA 在 OS 层持续 5s 超时（确定性测试不受影响）。顺带观察项：① locator 严格 Name 全等使「UIA Name 随内容变化」控件同 index 二次操作判 stale（既定契约，正常路径无 e2e 验证）；② `ui_wait` 释放 gate 后 `window` 跨操作复用（降级轮询，无崩溃证据）。
 
 - [ ] **D2 根因下沉 Engine**：dbgshim `EnumerateCLRs` 对无 CLR 进程返回 S_OK+空枚举，`ClrProcessFinder` 把本机全部非 .NET 进程记为 `CLR <unknown>`（Engine 注释语义与实测不符）；D2 在宿主按 `ClrVersion != "<unknown>"` 过滤绕过（review Ruling Accept + CHANGELOG Fixed）。**正确修法**：Engine `ClrProcessFinder.List` 改判「枚举 0 项跳过」而非返回 `<unknown>` 哨兵，补 Engine 单测；宿主过滤随之可去。
 - [x] **W1 收口（review deferred minors）**：README/DebugSetTool Description「枚举给底层整数值」口径与 enum 对象字段 v1 实测降级不一致，统一为「枚举仅底层 GenericValue 形态可写整数值，enum 对象字段 v1 降级」；`WritePathTests` hex 注释校正（isHex 同时豁免后缀/科学计数误判、带符号 hex 工具面不可达）；引擎 `ParseCharBytes` 单引号路径注记经工具不可达（防御性保留）。**终审 fix wave 一并补齐 debug_set 回显值脱敏（DB1 出口）。**
