@@ -124,7 +124,7 @@
 ## 收尾
 
 - [ ] Release build 全解决方案 0 警告；Engine/Session/宿主全量测试；Client；`git grep` 确认无 `FlaUI.Core.Input`/`SetForegroundWindow`/`Mouse.` 残留与 `ui_invoke`/`ui_scroll` 残留（除历史 CHANGELOG/spec）。
-- [ ] 核对 `TODO.md` U1A 条目、`specs/README.md`（U1 已标 superseded、U1A 行）；**U1 spec 正文顶部加 Superseded 说明**（`docs/planning/specs/2026-09-08-u1-ui-automation.md` 置顶：工具面被 U1A 取代、正文保留，spec §14 要求）；**spec U1A §15 勘误注**：不抢前台强断言口径收窄为「invoke/toggle/select/expand/collapse/scroll/scrollintoview/ui_input，豁免 focus/windowstate」（依据 §9）——在 spec 加勘误行，避免后续按原 §15 无条件口径复核；CHANGELOG `[Unreleased]` Breaking 记录齐全。
+- [ ] 核对 `TODO.md` U1A 条目、`specs/README.md`（U1 已标 superseded、U1A 行）；**U1 spec 正文顶部加 Superseded 说明**（`docs/planning/specs/2026-09-08-u1-ui-automation.md` 置顶：工具面被 U1A 取代、正文保留，spec §14 要求）；**spec U1A §15 勘误注**：① 不抢前台强断言口径收窄为「invoke/toggle/select/expand/collapse/scroll/scrollintoview/ui_input，豁免 focus/windowstate」（依据 §9）；② `UiElementLocator` 测试策略改为「纯逻辑（若有）单测 + 条件缓存/失效重试/虚拟化走跨进程 e2e」——宿主测试工程不引入 WinForms（spec §15 原文与计划不符处按此勘误）。在 spec 加勘误行，避免后续按原 §15 无条件口径复核；CHANGELOG `[Unreleased]` Breaking 记录齐全。
 - [ ] 本地分支提交，不合并/不 push（用户 2026-09-10 决定）。
 
 ## Self-Review（writing-plans 内审）
