@@ -8,7 +8,6 @@
 
 > 来源：对 WPF 应用 CoreMes（离线跑）做 47 工具全量实测，端到端闭环（launch→断点→单步→异常→UI→verify PASS）跑通。按严重度排序；**改工具面须同步根 `README.md` 与 CHANGELOG `[Unreleased]`**。
 
-- [ ] **【中】停在断点上 `debug_step` 原地卡住**（Engine/Session）：PC 落在断点指令（或同地址多断点）时单步立即再命中同断点，表象“单步无效”；`debug_breakpoint_clear` 后恢复。**修法**：单步时对当前 PC 断点做一次性跳过（多数调试器标准行为）。
 - [ ] **【中】`debug_run_to` 被残留 step 事件提前吞掉**（Session/宿主）：先前单步的 `StepCompleted` 未消费时，run_to 立即返回“停在 STEP_NORMAL，尚未到目标”并清掉临时断点。**修法**：忽略/消费非目标停点事件继续等待。命中路径正常（清空后实测“临时断点命中并自动移除”）。
 - [ ] **【中】`debug_evaluate` 不支持 `$exception` 根**：异常停点下 `debug_variables`/`debug_object` 均支持，唯 evaluate 报“表达式子集不支持 `$`”，只能绕道 debug_object；另 `!(a==b)` 括号不支持。**修法**：evaluate 增加 `$exception` 根（括号可选）。
 - [ ] **【中】`search_string` 漏检编译器生成类型（async 状态机）**：`"程序启动"` 位于 `App.OnInitialized` 的 `<OnInitialized>d__3.MoveNext`，返回 0 命中（同步方法字面量正常）；`decompile_member` 亦无法按名定位 `CoreMes.App+<OnInitialized>d__3`。**修法**：`list_types`/`search_string`/`decompile_member` 提供“含编译器生成类型”开关或生成类型 token 直达。

@@ -63,6 +63,47 @@ public sealed class StepTests
         await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
     }
 
+    [Fact]
+    public async Task StepOver_WithDuplicateBreakpointAtCurrentIp_Advances()
+    {
+        var exe = TestPaths.DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        using var target = DebugTargetProcess.Start("5 5");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+        Assert.False(target.HasExited);
+
+        var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
+        Assert.True(workToken > 0);
+
+        var events = new List<DebugEvent>();
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
+        var reader = ConsumeAsync(session.Events, events);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        // 同一地址登记两个断点（回归：曾致单步从断点指令原地重命中、StepCompleted 永不产生）
+        await session.SetBreakpointAsync("DebugTarget.dll", workToken, 0, ct: TestContext.Current.CancellationToken);
+        await session.SetBreakpointAsync("DebugTarget.dll", workToken, 0, ct: TestContext.Current.CancellationToken);
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
+        await WaitForAsync(() => events.Any(e => e.Kind == DebugEventKind.BreakpointHit), 15_000);
+
+        // 单步 over：必须产生 StepCompleted 且离开入口（而非又命中同一断点）
+        var before = events.Count(e => e.Kind == DebugEventKind.StepCompleted);
+        await session.StepOverAsync(TestContext.Current.CancellationToken);
+        await WaitForAsync(() => events.Count(e => e.Kind == DebugEventKind.StepCompleted) > before, 10_000);
+        var payload = Assert.IsType<StepCompletedPayload>(
+            events.Last(e => e.Kind == DebugEventKind.StepCompleted).Payload);
+        Assert.True(payload.TopFrame?.IlOffset > 0,
+            $"同址重复断点下单步未推进：offset={payload.TopFrame?.IlOffset}（应为 >0）");
+
+        // 恢复并退出
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
+        var exitDeadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < exitDeadline && !target.HasExited) await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.True(target.HasExited, "单步后未正常退出");
+        await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
+    }
+
     private static async Task WaitForAsync(Func<bool> cond, int timeoutMs)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);

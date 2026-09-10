@@ -95,6 +95,14 @@ public sealed class BreakpointManager
     /// </summary>
     public DebugBreakpoint Add(string moduleName, int methodToken, int ilOffset, int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null)
     {
+        // 同址去重（关键）：同一 (模块, token, IL offset) 只保留一个运行时断点——多个 ICorDebug 断点落在同一
+        // 地址时，命中会产生重复回调，且从该地址步出会因排队回调原地重命中（单步卡死，实证）。重设即替换：
+        // 移除旧断点（停用运行时断点）后按新设置重建，最新 hitCount/mode/condition 生效。
+        var duplicate = _breakpoints.FirstOrDefault(b => !b.IsSourceLine
+            && b.MethodToken == methodToken && b.IlOffset == ilOffset
+            && string.Equals(b.ModuleName, moduleName, StringComparison.OrdinalIgnoreCase));
+        if (duplicate is not null) Remove(duplicate.Id);
+
         var bp = new DebugBreakpoint(_nextId++, moduleName, methodToken, ilOffset, hitCount, mode, condition);
         if (!_modules.TryGetValue(moduleName, out var module))
         {

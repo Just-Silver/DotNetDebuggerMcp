@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **同一地址重复设置断点不再导致单步卡死**：`debug_breakpoint_set` 对同一 `(模块, 方法 token, IL offset)` 再次设置时**替换**旧断点（最新 `hitCount`/`mode`/`condition` 生效），而非新增一个同址断点——多个 ICorDebug 断点落在同一地址会产生重复命中回调，且从该地址单步时因排队回调原地重命中（`debug_step` 看似无效）。修复后从断点处单步正常推进
 - **`debug_variables`/`debug_evaluate` 实例方法参数名错位**：实例方法停点读变量时，`this` 占用首个形参名、其余形参整体右移、真实末参退化为 `slotN`（如 `UpdatePlcOnline(type, isOnline)` 显示 `type`=this、`isOnline`=type、`slot2`=isOnline；`OnStartup(e)` 显示 `e`=this、真参=`slot1`）。现按 ICorDebug 参数槽对齐：实例方法槽 0 命名为 `this`，形参名从槽 1 起套用——`debug_variables`/`debug_evaluate`/`debug_set` 的路径根名与按名白名单同步修正
 - **`debug_object` 数组目标返回头与空结果文案**：数组目标的返回头由「对象」改为「数组」（与对象区分）；空对象/空数组的兜底文案去除与显示值重复的措辞（`对象/数组 {path}（depth=N）：{Display}（无 children）。`）
 
