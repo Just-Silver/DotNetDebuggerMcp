@@ -15,6 +15,32 @@ namespace DotNetDebugger.Engine.Tests;
 public sealed class BreakpointTests
 {
     [Fact]
+    public async Task Terminate_KillsTargetProcess()
+    {
+        var exe = TestPaths.DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        // sleep 模式：长活（30s），供 terminate 收口测试
+        using var target = DebugTargetProcess.Start("sleep 30");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+        Assert.False(target.HasExited);
+
+        var events = new List<DebugEvent>();
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
+        var reader = ConsumeAsync(session.Events, events);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        await session.TerminateAsync(exitCode: 7, ct: TestContext.Current.CancellationToken);
+
+        // 目标进程被强制结束（ExitProcess 事件/进程消失）
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline && !target.HasExited) await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.True(target.HasExited, "Terminate 后目标进程未退出");
+
+        await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task SetBreakpoint_InvalidIlOffset_ThrowsChineseHint()
     {
         var exe = TestPaths.DebugTargetExe;

@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`debug_terminate` 终止目标进程工具**：强制结束当前调试会话的目标进程（非正常退出）并关闭会话——调试/复验结束后收口。`debug_disconnect` 只断开调试、目标进程继续独立运行；本工具直接结束目标（launch/attach 会话均适用，可选 `exitCode`，默认 0）
+
 ### Changed
 
 - **`search_string` 新增 `includeCompilerGenerated` 参数**：默认仍跳过编译器生成类型；置 `true` 时连编译器生成类型（async 状态机 `<Go>d__N`、lambda 闭包等）一并扫描——async/lambda 方法里的字符串字面量位于其生成类型的方法体内，此前默认过滤会漏检（如 CoreMes `OnStartup`/`OnInitialized` 里的字面量扫描不到）。`.codegraph`/`list_types` 默认过滤语义不变

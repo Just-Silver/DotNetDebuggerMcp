@@ -8,7 +8,7 @@
 
 > 来源：对 WPF 应用 CoreMes（离线跑）做 47 工具全量实测，端到端闭环（launch→断点→单步→异常→UI→verify PASS）跑通。按严重度排序；**改工具面须同步根 `README.md` 与 CHANGELOG `[Unreleased]`**。
 
-- [ ] **【低】缺失工具候选**：① `debug_terminate` 结束目标进程（现 disconnect 后进程继续跑，复验/测试后无法收口，本次靠外部 taskkill）；② `debug_modules`（已加载模块+符号/绑定状态，断点待绑定排障）；③ 帧选择 `frameIndex`（evaluate/variables 指定非栈顶帧）。
+- [ ] **【低】缺失工具候选**：① `debug_modules`（已加载模块+符号/绑定状态，断点待绑定排障）；② 帧选择 `frameIndex`（evaluate/variables 指定非栈顶帧）。（`debug_terminate` 已补，2026-09-10）
 - [ ] **【低】描述修正**：`debug_attach`「冻结在 Main 前」对**已运行进程**错误（应“当前执行点”）；`debug_evaluate` 未注明不支持 `$exception`；`debug_breakpoint_set` 未提示 ilOffset 需序列点；`search_string` 未说明不含生成类型；`debug_step` 未提示断点上重复命中；`debug_stack` 空栈可补“async 状态机帧常见”。
 
 ## 三、已评估关闭/远期（防重复立项，一行结论）

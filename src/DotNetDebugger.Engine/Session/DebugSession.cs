@@ -48,6 +48,9 @@ public sealed class DebugSession : IAsyncDisposable
     /// <summary>暂停/断开：detach 调试器（目标进程继续独立运行）。</summary>
     public Task DisconnectAsync(CancellationToken ct = default) => _core.DisconnectAsync(ct);
 
+    /// <summary>终止目标进程（强制结束，非正常退出）——调试/复验结束后收口（DisconnectAsync 只断开调试、进程继续运行）。</summary>
+    public Task TerminateAsync(int exitCode = 0, CancellationToken ct = default) => _core.TerminateAsync(exitCode, ct);
+
     // ---- 断点 ----
 
     /// <summary>设置断点（模块名须与运行时模块一致；token 取 signature 行尾或 #MEMBER 的 token）。

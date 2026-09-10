@@ -254,6 +254,16 @@ public sealed class DebugEngineCore : IAsyncDisposable
             return Task.CompletedTask;
         }, ct);
 
+    /// <summary>终止目标进程（强制结束，非正常退出）——调试/复验结束后收口（disconnect 只断开调试、进程继续运行）。</summary>
+    public Task TerminateAsync(int exitCode = 0, CancellationToken ct = default)
+        => PostAsync(() =>
+        {
+            try { _process?.Terminate(exitCode); } catch { /* 进程已退出/未就绪：忽略 */ }
+            _stoppedThreadId = -1;
+            PublishState(DebugSessionState.Exited, $"terminated (exitCode={exitCode})");
+            return Task.CompletedTask;
+        }, ct);
+
     /// <summary>设置断点（模块未加载时登记为 pending，LoadModule 自动重绑；方法 token 无效抛错）。
     /// P5：hitCount=第 N 次起生效（默认 1）；mode=Stop 命中停 / Trace 命中不停记轨迹。
     /// P7：condition=P6 表达式子集条件（非空时须已注入求值器；条件先于计数，false/求值失败放行）。</summary>

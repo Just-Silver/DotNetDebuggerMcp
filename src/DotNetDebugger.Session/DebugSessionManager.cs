@@ -193,6 +193,21 @@ public sealed class DebugSessionManager : IAsyncDisposable
         ActiveSessionChanged?.Invoke(null);
     }
 
+    /// <summary>
+    /// 终止活动会话的目标进程（强制结束，非正常退出）并关闭会话。返回是否存在被终止的活动会话。
+    /// 与 <see cref="CloseAsync"/> 的区别：Close 只断开调试（目标继续运行），本方法结束目标进程——调试/复验收口用。
+    /// </summary>
+    public async Task<bool> TerminateAsync(int exitCode = 0, CancellationToken ct = default)
+    {
+        ActiveDebugSession? toClose;
+        lock (_gate) { toClose = _active; _active = null; }
+        if (toClose is null) return false;
+        try { await toClose.Session.TerminateAsync(exitCode, ct); } catch { /* 已退出/竞态：忽略，仍释放会话 */ }
+        await toClose.DisposeAsync();
+        ActiveSessionChanged?.Invoke(null);
+        return true;
+    }
+
     /// <summary>会话摘要（供 debug_state）。无活动会话返回 null。</summary>
     public DebugSessionInfo? GetInfo()
     {

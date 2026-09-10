@@ -925,6 +925,36 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task DebugTerminate_KillsTargetAndClosesSession()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+
+        // sleep 30：长活目标，供 terminate 收口
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} sleep 30", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        var pid = int.Parse(System.Text.RegularExpressions.Regex.Match(launch.Text(), @"目标 pid=(\d+)").Groups[1].Value);
+        Assert.True(pid > 0, launch.Text());
+
+        var term = await CallAsync(mcp, "debug_terminate", new Dictionary<string, object?> { ["exitCode"] = 7 });
+        Assert.True(term.IsError != true, term.Text());
+        Assert.Contains("已终止目标进程", term.Text());
+
+        // 目标进程确已结束
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        while (DateTime.UtcNow < deadline && System.Diagnostics.Process.GetProcesses().Any(p => p.Id == pid))
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.False(System.Diagnostics.Process.GetProcesses().Any(p => p.Id == pid), "debug_terminate 后目标进程仍在");
+
+        // 会话已关闭：无活动会话
+        var state = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        Assert.Contains("无活动调试会话", state.Text());
+    }
+
+    [Fact]
     public async Task SourceLineBreakpoint_NotFound_AggregatesWithoutBlamingOneModule()
     {
         var exe = DebugTargetExe;

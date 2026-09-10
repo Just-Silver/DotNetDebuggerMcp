@@ -99,6 +99,36 @@ public static class DebugSessionTool
     }
 
     /// <summary>
+    /// 终止当前调试会话的目标进程（强制结束，非正常退出）并关闭会话。无活动会话返回提示。
+    /// </summary>
+    /// <param name="exitCode">目标进程退出码（默认 0）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>中文结果提示。</returns>
+    [McpServerTool]
+    [Description("终止当前调试会话的目标进程（强制结束，非正常退出）并关闭调试会话。用于调试/复验结束后收口——debug_disconnect 只断开调试、目标进程继续独立运行；本工具直接结束目标。")]
+    public static async Task<string> DebugTerminate(
+        [Description("目标进程退出码（默认 0）。")] int exitCode = 0,
+        CancellationToken cancellationToken = default)
+    {
+        var active = DebugSessionService.Manager.Active;
+        if (active is null)
+            return "当前无活动调试会话。";
+        var pid = active.ProcessId;
+        try
+        {
+            var terminated = await DebugSessionService.Manager.TerminateAsync(exitCode, cancellationToken);
+            DebugSessionService.Manager.Actions.Log("debug_terminate", $"pid={pid} exitCode={exitCode}", terminated ? "ok" : "会话已变更");
+            return terminated
+                ? $"已终止目标进程 pid={pid}（exitCode={exitCode}）并关闭调试会话。"
+                : "终止时活动会话已变更（可能已被其它操作关闭）。";
+        }
+        catch (Exception ex)
+        {
+            return $"终止目标进程失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>
     /// 查询当前调试会话状态（有无活动会话、会话状态、最近停点）。立即返回，不等停。
     /// 停点时默认附反编译视图上下文（行号=decompile 输出行号；contextLines=0 关闭）。
     /// </summary>
