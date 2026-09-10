@@ -61,7 +61,7 @@ public static class DebugSessionTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("附加到已运行的 .NET 进程进行调试。返回会话 id 与初始状态；用 debug_breakpoint_set 下断点后 debug_continue 运行。")]
+    [Description("附加到已运行的 .NET 进程进行调试。返回目标 pid 与初始状态；附加后进程冻结在附加时刻的执行点（非 Main 前——launch 才是冻结在 Main 前）。可设断点（未加载模块自动待绑定）后 debug_continue 运行至停点。")]
     public static async Task<string> DebugAttach(
         [Description("目标进程 id（必填）。")] int processId = 0,
         CancellationToken cancellationToken = default)
@@ -229,7 +229,7 @@ public static class DebugSessionTool
         DotNetDebugger.Engine.Models.DebugSessionState.Exited => "已退出 (Exited)",
         DotNetDebugger.Engine.Models.DebugSessionState.Detached => "已断开 (Detached)",
         DotNetDebugger.Engine.Models.DebugSessionState.Launching => "启动中 (Launching，等待 CLR 初始化完成，进程尚冻结)",
-        DotNetDebugger.Engine.Models.DebugSessionState.Attaching => "已附加 (Attaching，进程冻结在 Main 前，可设断点后 debug_continue 放行)",
+        DotNetDebugger.Engine.Models.DebugSessionState.Attaching => "已附加 (Attaching，进程已冻结待放行，可设断点后 debug_continue；launch 冻结在 Main 前，attach 冻结在附加时刻的执行点)",
         _ => state.ToString(),
     };
 

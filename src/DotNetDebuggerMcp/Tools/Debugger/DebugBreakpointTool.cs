@@ -41,7 +41,7 @@ public static class DebugBreakpointTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示（断点 id）或错误提示。</returns>
     [McpServerTool]
-    [Description("设置断点，四种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（未加载模块登记待绑定，加载后自动绑定）；② 成员：typeName+memberName（类型内方法名子串，忽略大小写，命中唯一方法即设断点；属性/事件/字段成员会提示；多方法匹配返回 #MEMBER 清单，取 methodToken 精确重设）；③ 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；④ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，需模块旁有 PDB；模块未加载/未命中时登记延迟项，模块加载后自动解析绑定）。memberName 提供时成员级优先（line 忽略）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
+    [Description("设置断点，四种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（须落在 IL 指令边界/序列点——非边界或越界会被运行时拒绝并返回中文提示；未加载模块登记待绑定，加载后自动绑定）；② 成员：typeName+memberName（类型内方法名子串，忽略大小写，命中唯一方法即设断点；属性/事件/字段成员会提示；多方法匹配返回 #MEMBER 清单，取 methodToken 精确重设）；③ 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；④ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，需模块旁有 PDB；模块未加载/未命中时登记延迟项，模块加载后自动解析绑定）。memberName 提供时成员级优先（line 忽略）。同一 (模块, token, IL offset) 重复设置会替换旧断点（不产生同址多断点）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
     public static async Task<string> DebugBreakpointSet(
         [Description("模块名（如 DebugTarget.dll）；token 方式必填；行/成员定位方式可省，省缺在已加载模块中解析。")] string moduleName = "",
         [Description("方法 token（0x06000005，从反编译 signature 行尾或 #MEMBER 取）；提供时优先按 token 定位。")] string methodToken = "",

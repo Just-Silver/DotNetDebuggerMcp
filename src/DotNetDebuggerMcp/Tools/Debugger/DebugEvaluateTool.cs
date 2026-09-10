@@ -23,7 +23,7 @@ public static class DebugEvaluateTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>表达式值文本或中文提示。</returns>
     [McpServerTool]
-    [Description("求值表达式读当前值（纯读、无副作用，进程需停在断点/异常）。支持：字面量（int/string/true/false/null）、成员访问 a.b.c、数组/字符串任意下标 a[i]（字符串索引得单字符）、一元 !、单次比较（== != < <= > >=）。属性 X 不可直接读，自动按字段约定降级（X→_x→_X→<X>k__BackingField），未命中时报错列出可用字段（如 List 的 _items/_size）。不支持算术、方法调用、赋值、链式比较。")]
+    [Description("求值表达式读当前值（纯读、无副作用，进程需停在断点/异常）。支持：字面量（int/string/true/false/null）、成员访问 a.b.c、数组/字符串任意下标 a[i]（字符串索引得单字符）、一元 !、单次比较（== != < <= > >=）、异常停点伪根 $exception（如 $exception._message、$exception.InnerException）。属性 X 不可直接读，自动按字段约定降级（X→_x→_X→<X>k__BackingField），未命中时报错列出可用字段（如 List 的 _items/_size）。不支持算术、方法调用、赋值、链式比较。")]
     public static async Task<string> DebugEvaluate(
         [Description("表达式（必填），如 user.Id、bag._items[3].Name、i == retryCount、!done。")] string expression,
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,

@@ -21,7 +21,7 @@ public static class DebugInspectTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>调用栈文本或错误提示。</returns>
     [McpServerTool]
-    [Description("读取调用栈（进程需停在断点/异常/单步）。每帧输出 类型.方法 [token]（解析失败降级为 模块!token+ILoffset）。缺省读最近停点线程；threadId 指定时读该线程。")]
+    [Description("读取调用栈（进程需停在断点/异常/单步）。每帧输出 类型.方法 [token]（解析失败降级为 模块!token+ILoffset）。缺省读最近停点线程；threadId 指定时读该线程。停在编译器生成的 async 状态机帧时可能读不到栈（返回空栈提示）——此时改用 debug_breakpoint_set typeName+line 断还原源码的 await 行。")]
     public static async Task<string> DebugStack(
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
         CancellationToken cancellationToken = default)
@@ -34,7 +34,7 @@ public static class DebugInspectTool
         try
         {
             var frames = await active.Session.GetStackFramesAsync(tid, cancellationToken);
-            if (frames.Count == 0) return "调用栈为空（可能停在非托管/无 IL 帧处）。";
+            if (frames.Count == 0) return "调用栈为空（可能停在非托管/无 IL 帧处；async 状态机帧亦常见）。";
             var lines = frames.Select(f =>
             {
                 var loc = f.Location;

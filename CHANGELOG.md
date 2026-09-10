@@ -14,6 +14,7 @@
 
 ### Changed
 
+- **调试工具描述（`[Description]`）修正**：`debug_attach` 不再暗示「冻结在 Main 前」（改为「冻结在附加时刻的执行点」，`debug_state` 的 Attaching 措辞同步澄清 launch/attach 差异）；`debug_evaluate` 补注支持 `$exception` 伪根；`debug_breakpoint_set` 补注 token 方式的 `ilOffset` 须落在 IL 指令边界 + 同址重复设置会替换；`debug_stack` 补注 async 状态机帧可能读不到栈
 - **`search_string` 新增 `includeCompilerGenerated` 参数**：默认仍跳过编译器生成类型；置 `true` 时连编译器生成类型（async 状态机 `<Go>d__N`、lambda 闭包等）一并扫描——async/lambda 方法里的字符串字面量位于其生成类型的方法体内，此前默认过滤会漏检（如 CoreMes `OnStartup`/`OnInitialized` 里的字面量扫描不到）。`.codegraph`/`list_types` 默认过滤语义不变
 
 ### Fixed
