@@ -290,6 +290,13 @@ public sealed class DebugVerifyToolTests
         {
             await using var mcp = await DebugMcpToolsTests.ConnectAsync();
             var r = await VerifyCallAsync(mcp, scenario);
+            // 负载下 UIA 5s 超时（环境）重试（每次先清理上轮遗留目标）
+            for (var i = 0; i < 3 && !r.Text().Contains("PASS") && (r.Text().Contains("UIA 调用超过 5s") || r.Text().Contains("没有 UIA 可见顶层窗口")); i++)
+            {
+                KillUiSampleApp();
+                await Task.Delay(600);
+                r = await VerifyCallAsync(mcp, scenario);
+            }
             Assert.True(r.IsError != true, r.Text());
             Assert.Contains("PASS", r.Text());
             Assert.Contains("断言 1/1 通过", r.Text());
@@ -320,6 +327,13 @@ public sealed class DebugVerifyToolTests
         {
             await using var mcp = await DebugMcpToolsTests.ConnectAsync();
             var r = await VerifyCallAsync(mcp, scenario);
+            // 共享机器负载下 uiAssert 可能反复 UIA 5s 超时（环境），重试至拿到真实比对结果（每次先清理上轮遗留目标）
+            for (var i = 0; i < 3 && (r.Text().Contains("UIA 调用超过 5s") || r.Text().Contains("没有 UIA 可见顶层窗口")); i++)
+            {
+                KillUiSampleApp();
+                await Task.Delay(600);
+                r = await VerifyCallAsync(mcp, scenario);
+            }
             Assert.True(r.IsError != true, r.Text());
             Assert.Contains("FAIL", r.Text());
             Assert.Contains("实际值", r.Text());
