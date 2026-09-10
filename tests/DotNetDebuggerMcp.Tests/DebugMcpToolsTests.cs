@@ -877,6 +877,48 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task RunTo_AfterUnwaitedStep_ReachesTarget()
+    {
+        // 回归：单步后立即 run_to（不先 debug_wait 等单步停点）——残留的单步完成事件/事件缓冲滞后
+        // 不应让 run_to 误判「停在 STEP_NORMAL，尚未到目标」。run_to 须继续等到真正目标命中。
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workBagToken = ReadMethodToken(dll, "WorkBag");
+        var workScoresToken = ReadMethodToken(dll, "WorkScores");
+        Assert.True(workBagToken > 0 && workScoresToken > 0);
+
+        await using var mcp = await ConnectAsync();
+
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} bag 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        var bpSet = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workBagToken:x8}", ["ilOffset"] = 0 });
+        Assert.True(bpSet.IsError != true, bpSet.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(bpSet.Text()));
+        var waitBag = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", waitBag.Text());
+
+        // 单步一步（不等待其停点）→ 立刻 run_to：此刻单步完成事件可能仍在途/未消费
+        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["stepType"] = "over" });
+        Assert.True(step.IsError != true, step.Text());
+
+        var runTo = await CallAsync(mcp, "debug_run_to",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["typeName"] = "DebugTarget.Program", ["memberName"] = "WorkScores", ["timeoutSeconds"] = 25 });
+        Assert.True(runTo.IsError != true, runTo.Text());
+        Assert.Contains("已运行到目标", runTo.Text());
+
+        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.Contains($"0x{workScoresToken:x8}", stack.Text());
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    [Fact]
     public async Task DebugTimeline_LaunchExit_LogStateRowsChronological()
     {
         var exe = DebugTargetExe;

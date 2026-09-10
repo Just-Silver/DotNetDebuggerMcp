@@ -58,19 +58,20 @@ public static class DebugRunToTool
                 ? $"run-to 目标未唯一：{setText}"
                 : $"未能在 {typeName} 定位到 run-to 目标：{setText}";
 
-        // 3. 编排：进程被调试器持有（Stopped 停点 / launch 冻结在 Main 前 Attaching）→ continue 放行跑向目标；
-        //    已 Running 直接等。等命中用 deadline 循环跳过 continue 前停点的**陈旧快照**（ContinueAsync 返回时
-        //    事件缓冲未必已消费 Running 事件——单次 WaitForStopAsync 会立刻返回旧的 Stopped 快照，误判「命中其它断点」）。
+        // 3. 编排：总是尝试 continue 放行跑向目标（引擎对「已在运行」的 continue 是安全空操作；缓冲可能滞后）。
+        //    等待命中用 deadline 循环跳过**陈旧停点**：continue 前同一停点实例（ContinueAsync 返回时事件缓冲
+        //    未必已消费 Running 事件，单次 WaitForStopAsync 会立刻返回旧 Stopped 快照），以及残留的 StepCompleted
+        //    （前序 step 的遗留事件）——否则会误判「停在 STEP_NORMAL，尚未到目标」。
         //    退出按 CurrentState 判定（进程退出时 WaitForStopAsync 返回最近停点快照，可能是 continue 前那个）。
         StopContext? stop = null;
         string message;
         try
         {
             var preStop = active.Buffer.LastStop; // continue 前快照（引用比较识别陈旧返回）
-            var held = active.Buffer.CurrentState is DebugSessionState.Stopped
-                or DebugSessionState.Attaching
-                or DebugSessionState.Launching;
-            if (held)
+            // 进程被调试器持有（Stopped 停点 / launch 冻结在 Main 前 Attaching）→ continue 放行跑向目标。
+            // 事件缓冲可能滞后于引擎（如刚 step 完缓冲仍显示 Running 而引擎已 Stopped）——**总是尝试 continue**
+            // 以免漏放行而卡住（引擎对「已在运行」的 continue 是安全空操作：TryIsRunning 直接返回）。
+            if (active.Buffer.CurrentState != DebugSessionState.Exited)
             {
                 await active.Session.ContinueAsync(cancellationToken);
             }
@@ -81,10 +82,9 @@ public static class DebugRunToTool
                 var remaining = deadline - DateTime.UtcNow;
                 if (remaining <= TimeSpan.Zero) break; // 到期 = 超时（stop 保持 null 或最后陈旧快照）
                 stop = await active.Buffer.WaitForStopAsync(remaining, cancellationToken);
-                // 陈旧快照：状态非 Exited 且返回的仍是 continue 前那个停点实例（缓冲还没翻到 Running 就被读走）
-                // → 丢弃继续等真正的新停点。进程 Exited 时 LastStop 也可能仍是 preStop——交给下方状态判定。
-                if (stop is not null && ReferenceEquals(stop, preStop)
-                    && active.Buffer.CurrentState != DebugSessionState.Exited)
+                // 陈旧停点（continue 前同一实例 / 残留单步完成事件）→ 丢弃继续等真正的新停点；
+                // 进程 Exited 时 LastStop 也可能仍是 preStop——交给下方状态判定。
+                if (stop is not null && IsStaleStop(stop, preStop, active.Buffer.CurrentState))
                 {
                     stop = null;
                     continue;
@@ -152,4 +152,10 @@ public static class DebugRunToTool
             // 清理失败不影响主结果——引擎侧断点可能已随进程退出/会话关闭释放
         }
     }
+
+    /// <summary>run_to 等待期间的陈旧停点判定：需丢弃并继续等待——①continue 前同一停点实例（事件缓冲滞后返回旧快照）；
+    /// ②残留的 StepCompleted（run_to 自身不单步，等待期间出现的单步停点必是前序 step 的遗留）。进程已退出不算陈旧（交退出判定）。</summary>
+    internal static bool IsStaleStop(StopContext stop, StopContext? preStop, DebugSessionState state)
+        => state != DebugSessionState.Exited
+           && (ReferenceEquals(stop, preStop) || stop.Kind == DebugEventKind.StepCompleted);
 }
