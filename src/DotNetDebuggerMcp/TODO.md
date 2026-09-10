@@ -10,7 +10,7 @@
 
 - [ ] **【低】缺失工具候选**：帧选择 `frameIndex`（evaluate/variables 指定非栈顶帧）。（`debug_terminate`/`debug_modules` 已补，2026-09-10）
 
-## 三、已评估关闭/远期（防重复立项，一行结论）
+## 二、已评估关闭/远期（防重复立项，一行结论）
 
 - **func-eval 主动调用业务方法** = **关闭**（async/UI/外设方法 func-eval 必死锁；纯函数触发需求未见）。
 - **W2 完整 SetIP/强制返回** = 远期（已转 ROADMAP 2026-09-08）。
@@ -19,6 +19,6 @@
 - **ClrMD live 内存分析** = ROADMAP（dump 事后分析，live 会话内与 ICorDebug 冲突）。
 - **多调试会话并行** = ROADMAP（Engine 实测相互干扰）。
 
-## 四、实施后遗留观察项（低优先）
+## 三、实施后遗留观察项（低优先）
 
 - U1A：① locator 严格 Name 全等使「UIA Name 随内容变化」控件同 index 二次操作判 stale（既定契约）；② `ui_wait` 释放 gate 后 `window` 跨操作复用（降级轮询，无崩溃证据）。
