@@ -294,7 +294,7 @@ public sealed class DebugVerifyToolTests
             for (var i = 0; i < 3 && !r.Text().Contains("PASS") && (r.Text().Contains("UIA 调用超过 5s") || r.Text().Contains("没有 UIA 可见顶层窗口")); i++)
             {
                 KillUiSampleApp();
-                await Task.Delay(600);
+                await Task.Delay(600, TestContext.Current.CancellationToken);
                 r = await VerifyCallAsync(mcp, scenario);
             }
             Assert.True(r.IsError != true, r.Text());
@@ -331,7 +331,7 @@ public sealed class DebugVerifyToolTests
             for (var i = 0; i < 3 && (r.Text().Contains("UIA 调用超过 5s") || r.Text().Contains("没有 UIA 可见顶层窗口")); i++)
             {
                 KillUiSampleApp();
-                await Task.Delay(600);
+                await Task.Delay(600, TestContext.Current.CancellationToken);
                 r = await VerifyCallAsync(mcp, scenario);
             }
             Assert.True(r.IsError != true, r.Text());

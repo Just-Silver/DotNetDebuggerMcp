@@ -1,5 +1,6 @@
 using DotNetDebuggerMcp.Services;
 using DotNetDebuggerMcp.Services.Ui;
+using System.Runtime.Versioning;
 using Xunit;
 
 namespace DotNetDebuggerMcp.Tests;
@@ -80,6 +81,7 @@ public sealed class UiSemanticResolverTests
 /// U1A UiPatternDispatcher 纯 Choose 决策（spec §6 逐行）：吃能力快照、不触碰 COM/WinForms。
 /// Execute 真实 pattern 调用由 DebugUiToolsTests 跨进程 e2e 覆盖。
 /// </summary>
+[SupportedOSPlatform("windows7.0")]
 public sealed class UiPatternDispatcherTests
 {
     private static UiPatternCapabilities Caps(
@@ -186,6 +188,7 @@ public sealed class UiPatternDispatcherTests
 }
 
 /// <summary>U1A UiStateReader 纯 Choose 决策（ui_get what → 品类）与失败文案。</summary>
+[SupportedOSPlatform("windows7.0")]
 public sealed class UiStateReaderTests
 {
     private static UiPatternCapabilities Caps(bool value = false, bool rangeValue = false, bool toggle = false,
