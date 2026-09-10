@@ -2,13 +2,11 @@
 
 > 近期待办，完成一项删一项；远期想法见 `docs/ROADMAP.md`；开发指南见同目录 `AGENTS.md`。
 
-> **2026-09-10 清理归档**：已完成历史已删除（细节见 git log 与 `docs/planning/specs/`）。已交付：W1 现场改写、V3 统一时间线、DB1 敏感脱敏、DB2 按名白名单、D1 对象深读、D2 子进程跟随、V4 语料断言、U1+U1A 全 UIA 化 UI 自动化、V1 一键复验。W3 数据断点、W2 SetIP、V2 崩溃 dump **已转 `docs/ROADMAP.md`**。以下仅保留**未完成近期待办**、**本轮 CoreMes 实证发现**与**防重复立项结论**。
+> **2026-09-10 清理归档**：已完成历史已删除（细节见 git log 与 `docs/planning/specs/`）。已交付：W1 现场改写、V3 统一时间线、DB1 敏感脱敏、DB2 按名白名单、D1 对象深读、D2 子进程跟随、V4 语料断言、U1+U1A 全 UIA 化 UI 自动化、V1 一键复验。W3 数据断点、W2 SetIP、V2 崩溃 dump、`frameIndex` 帧选择 **已转 `docs/ROADMAP.md`**。**当前无未完成近期待办**；以下保留**本轮 CoreMes 实证发现处置记录**、**防重复立项结论**与**实施后遗留观察项**。
 
 ## 一、CoreMes 动态调试实证发现（2026-09-10，47 工具全量实测）
 
-> 来源：对 WPF 应用 CoreMes（离线跑）做 47 工具全量实测，端到端闭环（launch→断点→单步→异常→UI→verify PASS）跑通。按严重度排序；**改工具面须同步根 `README.md` 与 CHANGELOG `[Unreleased]`**。
-
-- [ ] **【低】缺失工具候选**：帧选择 `frameIndex`（evaluate/variables 指定非栈顶帧）。（`debug_terminate`/`debug_modules` 已补，2026-09-10）
+> 来源：对 WPF 应用 CoreMes（离线跑）做 47 工具全量实测，端到端闭环（launch→断点→单步→异常→UI→verify PASS）跑通。**本轮实证缺陷已全部处置（2026-09-10 修复）**：D2 无 CLR 不虚报、D1 `debug_object` 文案、实例方法参数名对齐 `this`、同址重复断点卡单步、`debug_run_to` 陈旧停点、`debug_evaluate` `$exception`、`search_string` 生成类型（`includeCompilerGenerated`）、ilOffset 裸 HRESULT、源行断点误导提示、新增 `debug_terminate`/`debug_modules`、`debug_*` 描述订正。**唯一剩余项 `frameIndex`（读非栈顶帧）价值中等偏低，已转 `docs/ROADMAP.md`「近期评估转远期」节**（含 spike 前置与触发条件）。本清单清空。
 
 ## 二、已评估关闭/远期（防重复立项，一行结论）
 
