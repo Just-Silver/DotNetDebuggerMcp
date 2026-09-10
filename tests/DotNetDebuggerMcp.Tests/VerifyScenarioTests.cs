@@ -34,6 +34,8 @@ public sealed class VerifyScenarioTests
                 { "assert": { "kind": "output", "contains": "切换完成", "stream": "err" } },
                 { "assert": { "kind": "state", "expect": "Stopped" } },
                 { "assert": { "kind": "noException" } },
+                { "uiAction": { "process": "CoreMes", "verb": "invoke", "index": 5, "name": "手动", "type": "Button" } },
+                { "uiAssert": { "process": "CoreMes", "what": "name", "name": "自动", "contains": "自动" } },
                 { "ui": { "tool": "ui_invoke", "args": { "index": 5 } } },
                 { "set": { "path": "x", "value": "1" } }
               ]
@@ -50,7 +52,7 @@ public sealed class VerifyScenarioTests
         Assert.Equal("D:\\proj\\CoreMes\\CoreMes.csproj", scenario.Build!.Project);
         Assert.Equal("Release", scenario.Build.Configuration);
         Assert.Equal(180, scenario.Build.TimeoutSeconds);
-        Assert.Equal(10, scenario.Steps.Count);
+        Assert.Equal(12, scenario.Steps.Count);
 
         var bp = scenario.Steps[0];
         Assert.Equal(VerifyStepKind.Breakpoint, bp.Kind);
@@ -87,10 +89,25 @@ public sealed class VerifyScenarioTests
         Assert.Equal("Stopped", scenario.Steps[6].Expect);
         Assert.Equal(VerifyAssertKind.NoException, scenario.Steps[7].AssertKind);
 
-        Assert.Equal(VerifyStepKind.Ui, scenario.Steps[8].Kind);
-        Assert.Equal("U1", scenario.Steps[8].Requires);
-        Assert.Equal(VerifyStepKind.Set, scenario.Steps[9].Kind);
-        Assert.Equal("W1", scenario.Steps[9].Requires);
+        var action = scenario.Steps[8];
+        Assert.Equal(VerifyStepKind.UiAction, action.Kind);
+        Assert.Equal("CoreMes", action.Process);
+        Assert.Equal("invoke", action.Verb);
+        Assert.Equal(5, action.UiIndex);
+        Assert.Equal("手动", action.UiName);
+        Assert.Equal("Button", action.UiType);
+
+        var uiAssert = scenario.Steps[9];
+        Assert.Equal(VerifyStepKind.UiAssert, uiAssert.Kind);
+        Assert.Equal("CoreMes", uiAssert.Process);
+        Assert.Equal("name", uiAssert.What);
+        Assert.Equal("自动", uiAssert.ContainsText);
+        Assert.Equal("", uiAssert.EqualsText);
+
+        Assert.Equal(VerifyStepKind.Ui, scenario.Steps[10].Kind);
+        Assert.Equal("U1", scenario.Steps[10].Requires);
+        Assert.Equal(VerifyStepKind.Set, scenario.Steps[11].Kind);
+        Assert.Equal("W1", scenario.Steps[11].Requires);
     }
 
     [Fact]
@@ -142,6 +159,46 @@ public sealed class VerifyScenarioTests
     }
 
     [Fact]
+    public void Parse_UiActionAndUiAssert_DefaultsAndValidation()
+    {
+        // 缺省：index=-1、lines=0、其余空
+        var ok = VerifyScenario.Parse(WriteScenario(
+            """{ "target": { "commandLine": "x" }, "steps": [ { "uiAction": { "process": "App", "verb": "invoke", "name": "B" } }, { "uiAssert": { "process": "App", "what": "value", "name": "T", "equals": "v" } } ] }"""));
+        var action = ok.Steps[0];
+        Assert.Equal(VerifyStepKind.UiAction, action.Kind);
+        Assert.Equal(-1, action.UiIndex);
+        Assert.Equal(0, action.Lines);
+        var assert = ok.Steps[1];
+        Assert.Equal(VerifyStepKind.UiAssert, assert.Kind);
+        Assert.Equal("value", assert.What);
+        Assert.Equal("v", assert.EqualsText);
+
+        // 缺 process / verb
+        var noProcess = Assert.Throws<VerifyFormatException>(() => VerifyScenario.Parse(WriteScenario(
+            """{ "target": { "commandLine": "x" }, "steps": [ { "uiAction": { "verb": "invoke" } } ] }""")));
+        Assert.Contains("process", noProcess.Message);
+        var noVerb = Assert.Throws<VerifyFormatException>(() => VerifyScenario.Parse(WriteScenario(
+            """{ "target": { "commandLine": "x" }, "steps": [ { "uiAction": { "process": "App" } } ] }""")));
+        Assert.Contains("verb", noVerb.Message);
+
+        // uiAssert 缺 what / equals+contains 互斥 / 二者都缺
+        var noWhat = Assert.Throws<VerifyFormatException>(() => VerifyScenario.Parse(WriteScenario(
+            """{ "target": { "commandLine": "x" }, "steps": [ { "uiAssert": { "process": "App", "equals": "v" } } ] }""")));
+        Assert.Contains("what", noWhat.Message);
+        var both = Assert.Throws<VerifyFormatException>(() => VerifyScenario.Parse(WriteScenario(
+            """{ "target": { "commandLine": "x" }, "steps": [ { "uiAssert": { "process": "App", "what": "value", "equals": "v", "contains": "v" } } ] }""")));
+        Assert.Contains("互斥", both.Message);
+        var neither = Assert.Throws<VerifyFormatException>(() => VerifyScenario.Parse(WriteScenario(
+            """{ "target": { "commandLine": "x" }, "steps": [ { "uiAssert": { "process": "App", "what": "value" } } ] }""")));
+        Assert.Contains("二选一", neither.Message);
+
+        // continue.waitSeconds=0 合法（放行不等停点）
+        var zero = VerifyScenario.Parse(WriteScenario(
+            """{ "target": { "commandLine": "x" }, "steps": [ { "continue": { "waitSeconds": 0 } } ] }"""));
+        Assert.Equal(0, zero.Steps[0].WaitSeconds);
+    }
+
+    [Fact]
     public void Parse_MissingFile_ChineseError()
     {
         var missing = Path.Combine(Path.GetTempPath(), "no-such-scenario-" + Guid.NewGuid() + ".json");
@@ -165,7 +222,7 @@ public sealed class VerifyScenarioTests
         var ex = Assert.Throws<VerifyFormatException>(() => VerifyScenario.Parse(path));
         Assert.Contains("第 1 步", ex.Message);
         Assert.Contains("未知步骤类型", ex.Message);
-        Assert.Contains("breakpoint/continue/assert/ui/set", ex.Message);
+        Assert.Contains("breakpoint/continue/assert/uiAction/uiAssert/ui/set", ex.Message);
     }
 
     [Fact]

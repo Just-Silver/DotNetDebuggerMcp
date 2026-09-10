@@ -11,7 +11,9 @@ namespace DotNetDebuggerMcp.Tests;
 /// commandLine 文件名与产物不一致 → 中文；产物路径含空格 → v1 边界中文提示；工具参数缺失/文件不存在提示。
 /// 每测试自起真实 server（与 DebugMcpToolsTests 同源）。真实 attach/ICorDebug——不加并行集合会互相干扰吗？
 /// debug 测试经独立 server 进程隔离（Manager 在 server 内），与其它 MCP-client 测试可并行（同 DebugMcpToolsTests 无 Collection）。
+/// 但 U1A 的 uiAction/uiAssert e2e 驱动 UiSampleApp——与 DebugUiToolsTests 共用进程名，故并入 UiTools 集合串行，避免互相杀进程。
 /// </summary>
+[Collection("UiTools")]
 public sealed class DebugVerifyToolTests
 {
     [Fact]
@@ -266,7 +268,77 @@ public sealed class DebugVerifyToolTests
         Assert.Contains("场景文件不存在", missing.Text());
     }
 
+    [Fact]
+    public async Task DebugVerify_UiActionAndUiAssert_DrivesAndAssertsUi()
+    {
+        var exe = DebugUiToolsTests.UiSampleAppExe;
+        Assert.True(File.Exists(exe), "UiSampleApp.exe 不存在，请先运行 generate-testdata.ps1");
+        var scenario = WriteScenario(
+            """
+            {
+              "name": "UiSampleApp UI 复验 PASS",
+              "target": { "commandLine": "<EXE>" },
+              "steps": [
+                { "continue": { "waitSeconds": 0 } },
+                { "uiAction": { "process": "UiSampleApp", "verb": "select", "name": "Item 90", "type": "ListItem" } },
+                { "uiAssert": { "process": "UiSampleApp", "what": "selected", "name": "Item 90", "type": "ListItem", "equals": "True" } }
+              ]
+            }
+            """.Replace("<EXE>", EscapeJson(exe)));
+
+        try
+        {
+            await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+            var r = await VerifyCallAsync(mcp, scenario);
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("PASS", r.Text());
+            Assert.Contains("断言 1/1 通过", r.Text());
+            Assert.Contains("步骤 3/3 完成", r.Text());
+        }
+        finally { KillUiSampleApp(); }
+    }
+
+    [Fact]
+    public async Task DebugVerify_UiAssertFailure_RedactsSensitiveActualValue()
+    {
+        var exe = DebugUiToolsTests.UiSampleAppExe;
+        Assert.True(File.Exists(exe), "UiSampleApp.exe 不存在，请先运行 generate-testdata.ps1");
+        // password 控件（AutoId=password）经 DB1 敏感名规则：失败理由中的实际值应脱敏
+        var scenario = WriteScenario(
+            """
+            {
+              "name": "uiAssert 失败脱敏",
+              "target": { "commandLine": "<EXE>" },
+              "steps": [
+                { "continue": { "waitSeconds": 0 } },
+                { "uiAssert": { "process": "UiSampleApp", "what": "value", "name": "password", "equals": "wrong" } }
+              ]
+            }
+            """.Replace("<EXE>", EscapeJson(exe)));
+
+        try
+        {
+            await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+            var r = await VerifyCallAsync(mcp, scenario);
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("FAIL", r.Text());
+            Assert.Contains("实际值", r.Text());
+            Assert.Contains("[已脱敏:疑似凭据]", r.Text());
+            Assert.Contains("equals \"wrong\"", r.Text());
+        }
+        finally { KillUiSampleApp(); }
+    }
+
     // ---------- helpers ----------
+
+    private static void KillUiSampleApp()
+    {
+        foreach (var p in System.Diagnostics.Process.GetProcessesByName("UiSampleApp"))
+        {
+            try { if (!p.HasExited) p.Kill(entireProcessTree: true); }
+            catch { /* 权限/已退出忽略 */ }
+        }
+    }
 
     private static async Task<CallToolResult> VerifyCallAsync(McpClient mcp, string scenarioPath)
     {

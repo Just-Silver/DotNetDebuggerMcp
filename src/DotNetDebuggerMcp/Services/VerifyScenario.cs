@@ -8,8 +8,8 @@ internal sealed class VerifyFormatException : Exception
     public VerifyFormatException(string message) : base(message) { }
 }
 
-/// <summary>步骤类型。breakpoint/continue/assert 为 v1 实现步骤；ui/set 预留（Requires 标依赖，运行时报告未就绪）。</summary>
-internal enum VerifyStepKind { Breakpoint, Continue, Assert, Ui, Set }
+/// <summary>步骤类型。breakpoint/continue/assert 为 v1 实现步骤；uiAction/uiAssert 为 U1A（驱动 UI/断言 UI 状态）；ui/set 预留（Requires 标依赖，运行时报告未就绪）。</summary>
+internal enum VerifyStepKind { Breakpoint, Continue, Assert, Ui, Set, UiAction, UiAssert }
 
 /// <summary>断言原语（assert 步骤的 kind）。</summary>
 internal enum VerifyAssertKind { BreakpointHit, Evaluate, Output, State, NoException }
@@ -83,6 +83,37 @@ internal sealed class VerifyStep
     /// <summary>assert state expect：会话状态（Stopped/Exited/…，逗号分隔=任一命中）。</summary>
     public string Expect { get; init; } = "";
 
+    // ---- uiAction / uiAssert（U1A）----
+    /// <summary>uiAction/uiAssert：目标进程（pid 或进程名子串）。</summary>
+    public string Process { get; init; } = "";
+
+    /// <summary>uiAction：语义动词（invoke/toggle/…/windowstate；input=走 ui_input 写值）。</summary>
+    public string Verb { get; init; } = "";
+
+    /// <summary>uiAction/uiAssert：上次 ui_find 序号（&gt;=0 优先；默认 -1 用 name/type）。</summary>
+    public int UiIndex { get; init; } = -1;
+
+    /// <summary>uiAction/uiAssert：控件名/文本子串。</summary>
+    public string UiName { get; init; } = "";
+
+    /// <summary>uiAction/uiAssert：控件类型。</summary>
+    public string UiType { get; init; } = "";
+
+    /// <summary>uiAction（scroll）：up/down。</summary>
+    public string Direction { get; init; } = "";
+
+    /// <summary>uiAction（scroll）：行数（0=默认）。</summary>
+    public int Lines { get; init; }
+
+    /// <summary>uiAction（windowstate）：normal/maximized/minimized。</summary>
+    public string WindowState { get; init; } = "";
+
+    /// <summary>uiAction（verb=input）：要写入的值。</summary>
+    public string UiValue { get; init; } = "";
+
+    /// <summary>uiAssert：读取的状态（value/name/toggle/…）。</summary>
+    public string What { get; init; } = "";
+
     // ---- ui / set（预留）----
     /// <summary>预留步骤的依赖能力代号（ui→U1、set→W1）；已实现步骤为空。</summary>
     public string Requires { get; init; } = "";
@@ -94,7 +125,8 @@ internal sealed class VerifyStep
 /// <summary>
 /// debug_verify 场景模型 + JSON 解析（System.Text.Json JsonDocument 手解析，中文错误含 路径/步骤号/字段 上下文）。
 /// 语法：{ "name"?, "target": { commandLine(必填), workingDirectory?, environment? }, "build"?: { project, configuration?, timeoutSeconds? },
-/// "steps": [ {breakpoint|continue|assert|ui|set}... ] }。断言原语 kind ∈ breakpointHit/evaluate/output/state/noException。
+/// "steps": [ {breakpoint|continue|assert|uiAction|uiAssert|ui|set}... ] }。断言原语 kind ∈ breakpointHit/evaluate/output/state/noException；
+/// uiAction 驱动 U1A 语义动作（verb=input 走写值），uiAssert 断言 UI 状态（what + equals/contains）。
 /// </summary>
 internal sealed class VerifyScenario
 {
@@ -151,7 +183,7 @@ internal sealed class VerifyScenario
             {
                 index++;
                 if (element.ValueKind != JsonValueKind.Object || element.EnumerateObject().Count() != 1)
-                    throw new VerifyFormatException($"场景 {name} 第 {index} 步必须是单键对象（步骤类型：breakpoint/continue/assert/ui/set）。");
+                    throw new VerifyFormatException($"场景 {name} 第 {index} 步必须是单键对象（步骤类型：breakpoint/continue/assert/uiAction/uiAssert/ui/set）。");
                 var property = element.EnumerateObject().First();
                 var (step, isBreakpoint) = ParseStep(property.Name, property.Value, name, index);
                 steps.Add(step);
@@ -236,8 +268,8 @@ internal sealed class VerifyScenario
             case "continue":
             {
                 var wait = GetInt(value, "waitSeconds") ?? 10;
-                if (wait is < 1 or > 300)
-                    throw new VerifyFormatException($"{where} continue.waitSeconds 须在 1-300 之间（默认 10）。");
+                if (wait is < 0 or > 300)
+                    throw new VerifyFormatException($"{where} continue.waitSeconds 须在 0-300 之间（默认 10；0=放行不等停点，供后续 uiAction 在目标运行中驱动 UI）。");
                 return (new VerifyStep { Kind = VerifyStepKind.Continue, Index = index, WaitSeconds = wait }, false);
             }
             case "assert":
@@ -245,13 +277,68 @@ internal sealed class VerifyScenario
                 var step = ParseAssertStep(value, name, index, where);
                 return (step, false);
             }
+            case "uiAction":
+                return (ParseUiActionStep(value, name, index, where), false);
+            case "uiAssert":
+                return (ParseUiAssertStep(value, name, index, where), false);
             case "ui":
                 return (new VerifyStep { Kind = VerifyStepKind.Ui, Index = index, Requires = "U1" }, false);
             case "set":
                 return (new VerifyStep { Kind = VerifyStepKind.Set, Index = index, Requires = "W1" }, false);
             default:
-                throw new VerifyFormatException($"{where} 未知步骤类型 \"{kind}\"（支持：breakpoint/continue/assert/ui/set）。");
+                throw new VerifyFormatException($"{where} 未知步骤类型 \"{kind}\"（支持：breakpoint/continue/assert/uiAction/uiAssert/ui/set）。");
         }
+    }
+
+    /// <summary>解析 uiAction 步骤（process+verb 必填；定位 index/name/type + 可选 direction/lines/windowstate/value）。</summary>
+    private static VerifyStep ParseUiActionStep(JsonElement value, string name, int index, string where)
+    {
+        var process = RequiredString(value, "process", $"{where} uiAction 缺少 process（目标进程 pid 或进程名子串）。");
+        var verb = RequiredString(value, "verb", $"{where} uiAction 缺少 verb（invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate；input=写值）。");
+        var lines = GetInt(value, "lines") ?? 0;
+        if (lines is < 0 or > 100)
+            throw new VerifyFormatException($"{where} uiAction.lines 须在 0-100 之间（默认 0）。");
+        return new VerifyStep
+        {
+            Kind = VerifyStepKind.UiAction,
+            Index = index,
+            Process = process,
+            Verb = verb,
+            UiIndex = GetInt(value, "index") ?? -1,
+            UiName = GetString(value, "name") ?? "",
+            UiType = GetString(value, "type") ?? "",
+            Direction = GetString(value, "direction") ?? "",
+            Lines = lines,
+            WindowState = GetString(value, "windowstate") ?? "",
+            UiValue = GetString(value, "value") ?? "",
+        };
+    }
+
+    /// <summary>解析 uiAssert 步骤（process+what 必填；定位 index/name/type；equals/contains 互斥二选一）。</summary>
+    private static VerifyStep ParseUiAssertStep(JsonElement value, string name, int index, string where)
+    {
+        var process = RequiredString(value, "process", $"{where} uiAssert 缺少 process（目标进程 pid 或进程名子串）。");
+        var what = RequiredString(value, "what", $"{where} uiAssert 缺少 what（value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext）。");
+        var equals = GetString(value, "equals");
+        var contains = GetString(value, "contains");
+        var hasEquals = !string.IsNullOrEmpty(equals);
+        var hasContains = !string.IsNullOrEmpty(contains);
+        if (hasEquals && hasContains)
+            throw new VerifyFormatException($"{where} uiAssert 的 equals 与 contains 互斥——只能二选一。");
+        if (!hasEquals && !hasContains)
+            throw new VerifyFormatException($"{where} uiAssert 须二选一给 equals 或 contains（当前都没给）。");
+        return new VerifyStep
+        {
+            Kind = VerifyStepKind.UiAssert,
+            Index = index,
+            Process = process,
+            What = what,
+            UiIndex = GetInt(value, "index") ?? -1,
+            UiName = GetString(value, "name") ?? "",
+            UiType = GetString(value, "type") ?? "",
+            EqualsText = hasEquals ? equals! : "",
+            ContainsText = hasContains ? contains! : "",
+        };
     }
 
     private static VerifyStep ParseAssertStep(JsonElement value, string name, int index, string where)

@@ -3,6 +3,7 @@ using DotNetDebugger.Engine.Models;
 using DotNetDebugger.Engine.Session;
 using DotNetDebugger.Session;
 using DotNetDebugger.Session.Models;
+using DotNetDebuggerMcp.Services.Ui;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;
@@ -176,6 +177,19 @@ internal static class VerifyService
                 }
                 case VerifyStepKind.Continue:
                 {
+                    if (step.WaitSeconds == 0)
+                    {
+                        // 放行不等停点（供后续 uiAction/uiAssert 在目标运行中驱动 UI）——不做新停点等待。
+                        var st0 = active.Buffer.CurrentState;
+                        if (st0 != DebugSessionState.Exited && st0 != DebugSessionState.Detached)
+                        {
+                            try { await active.Session.ContinueAsync(ct); }
+                            catch (Exception ex) { return FailAt(header, step, $"continue 失败：{ex.Message}", active); }
+                        }
+                        managerLog($"第{step.Index}步 continue（放行不等停点）", "目标继续运行（供后续 uiAction/uiAssert 驱动）");
+                        stepsExecuted++;
+                        break;
+                    }
                     var state = active.Buffer.CurrentState;
                     if (state != DebugSessionState.Exited && state != DebugSessionState.Detached)
                     {
@@ -247,6 +261,57 @@ internal static class VerifyService
                     stepsExecuted++;
                     break;
                 }
+                case VerifyStepKind.UiAction:
+                {
+                    if (!OperatingSystem.IsWindowsVersionAtLeast(7))
+                        return FailAt(header, step, "uiAction 需要 Windows 7+（UIA3 仅 Windows）。", active);
+                    try
+                    {
+                        var ar = await UiRetryAsync(MakeUiAction(step, ct), ct, IsIdempotentVerb(step.Verb));
+                        managerLog($"第{step.Index}步 uiAction {DescribeStep(step)}", ar.Message);
+                        stepsExecuted++;
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (UiException ex) { return FailAt(header, step, ex.Message, active); }
+                    catch (Exception ex) { return FailAt(header, step, $"UI 动作失败：{ex.Message}", active); }
+                    break;
+                }
+                case VerifyStepKind.UiAssert:
+                {
+                    assertCount++;
+                    if (!OperatingSystem.IsWindowsVersionAtLeast(7))
+                        return FailAt(header, step, "uiAssert 需要 Windows 7+（UIA3 仅 Windows）。", active);
+                    var passed = false;
+                    var reason = "";
+                    try
+                    {
+                        var st = await UiRetryAsync(MakeUiGet(step, ct), ct, retryOnTimeout: true);
+                        var actualRaw = st.Raw ?? st.Value;
+                        if (step.EqualsText.Length > 0)
+                            passed = string.Equals(actualRaw, step.EqualsText, StringComparison.Ordinal);
+                        else
+                            passed = st.Value.Contains(step.ContainsText, StringComparison.OrdinalIgnoreCase);
+
+                        if (!passed)
+                        {
+                            // DB1：失败理由中的实际值按控件 Name/AutoId 脱敏（防 UI 读值泄露凭据；期望值来自场景、原样展示）
+                            var expected = step.EqualsText.Length > 0 ? step.EqualsText : step.ContainsText;
+                            var (safeActual, _) = SensitiveValueRedactor.Redact(st.ControlName, actualRaw);
+                            reason = step.EqualsText.Length > 0
+                                ? $"UI 断言 what={step.What} 实际值 {Quote(safeActual)}，期望 equals {Quote(expected)}。"
+                                : $"UI 断言 what={step.What} 实际值 {Quote(safeActual)} 不含 contains {Quote(expected)}。";
+                        }
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch (UiException ex) { reason = ex.Message; }
+                    catch (Exception ex) { reason = $"UI 断言失败：{ex.Message}"; }
+
+                    managerLog($"第{step.Index}步 uiAssert {DescribeStep(step)}", passed ? "PASS" : $"FAIL {reason}");
+                    if (!passed) return FailAt(header, step, reason, active);
+                    assertsPassed++;
+                    stepsExecuted++;
+                    break;
+                }
                 case VerifyStepKind.Ui:
                     return FailAt(header, step, $"步骤类型依赖未就绪（{step.Requires}）：ui.* 触发需 U1 能力，本版本未实现该步骤。", active);
                 case VerifyStepKind.Set:
@@ -284,6 +349,8 @@ internal static class VerifyService
         VerifyStepKind.Breakpoint => $"breakpoint {step.TypeName}.{step.MemberName}",
         VerifyStepKind.Continue => $"continue（等停 {step.WaitSeconds}s）",
         VerifyStepKind.Assert => $"assert {DescribeAssert(step)}",
+        VerifyStepKind.UiAction => $"uiAction {step.Verb}{(step.UiValue.Length > 0 ? $" value={step.UiValue}" : "")} process={step.Process}",
+        VerifyStepKind.UiAssert => $"uiAssert what={step.What} process={step.Process}",
         VerifyStepKind.Ui => $"ui 步骤（{step.Requires}）",
         VerifyStepKind.Set => $"set 步骤（{step.Requires}）",
         _ => step.Kind.ToString(),
@@ -300,6 +367,56 @@ internal static class VerifyService
         VerifyAssertKind.NoException => "noException",
         _ => step.AssertKind.ToString(),
     };
+
+    /// <summary>uiAction/uiAssert 的临时失败重试（目标刚 continue 后窗口尚未就绪 / 元素瞬时失效 / 幂等动作的 5s 超时），最多 ~15s。</summary>
+    private static async Task<T> UiRetryAsync<T>(Func<Task<T>> op, CancellationToken ct, bool retryOnTimeout)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (true)
+        {
+            try { return await op(); }
+            catch (UiException ex) when (DateTime.UtcNow < deadline && IsTransientUiError(ex.Message, retryOnTimeout))
+            {
+                await Task.Delay(250, ct);
+            }
+        }
+    }
+
+    /// <summary>构造 uiAction 的延迟调用（在 [SupportedOSPlatform] 助手中建 lambda，避免 CA1416 在跨平台调用点告警）。</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows7.0")]
+    private static Func<Task<UiActionResult>> MakeUiAction(VerifyStep step, CancellationToken ct)
+    {
+        var svc = UiAutomationService.Instance;
+        if (step.Verb.Trim().Equals("input", StringComparison.OrdinalIgnoreCase))
+            return () => svc.InputAsync(step.Process, step.UiValue, step.UiIndex, step.UiName, step.UiType, ct);
+        return () => svc.ActionAsync(step.Process, step.Verb, step.UiIndex, step.UiName, step.UiType, step.Direction, step.Lines, step.WindowState, ct);
+    }
+
+    /// <summary>构造 uiAssert 的延迟调用（同上，隔离 CA1416）。</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows7.0")]
+    private static Func<Task<UiStateResult>> MakeUiGet(VerifyStep step, CancellationToken ct)
+        => () => UiAutomationService.Instance.GetAsync(step.Process, step.What, step.UiIndex, step.UiName, step.UiType, ct);
+
+    /// <summary>
+    /// 是否可重试：窗口未就绪/元素瞬时失效总是可重试；5s 超时仅幂等动作可重试
+    /// （invoke/toggle/scroll 重试可能双触发，超时按「放弃等待」失败，避免副作用）。
+    /// </summary>
+    private static bool IsTransientUiError(string message, bool retryOnTimeout)
+    {
+        if (message.Contains("没有 UIA 可见顶层窗口", StringComparison.Ordinal)) return true;
+        if (message.Contains("目标已变化", StringComparison.Ordinal)) return true;
+        if (retryOnTimeout && message.Contains("UIA 调用超过 5s", StringComparison.Ordinal)) return true;
+        return false;
+    }
+
+    /// <summary>幂等 verb（重试安全）；input 亦幂等。</summary>
+    private static bool IsIdempotentVerb(string verb)
+    {
+        var v = verb.Trim().ToLowerInvariant();
+        return v is "select" or "expand" or "collapse" or "scrollintoview" or "windowstate" or "input";
+    }
+
+    private static string Quote(string text) => $"\"{text}\"";
 
     /// <summary>构建当前断言上下文（快照当前状态 + 闭包接 session 求值/输出）。</summary>
     private static VerifyAssertContext BuildAssertContext(ActiveDebugSession active,
