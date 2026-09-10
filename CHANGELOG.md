@@ -22,10 +22,12 @@
 - **读值输出敏感脱敏（DB1）**：`debug_variables`/`debug_evaluate`/带变量轨迹（trace）的变量值对疑似凭据（api key/secret/password/token/credential/auth/连接串等，**按变量名归一化 exact-match** 或 **按值内容形态**——JWT/PEM/AWS/GitHub/Slack/Google/OpenAI/Stripe/npm/GitLab/Bearer/`Key=…` 连接串）自动脱敏为 `[已脱敏:疑似凭据]` 占位符，并在 `debug_variables` 头部计数提示 / `debug_evaluate` 行内单次提示「疑似凭据已脱敏——用类型/长度/null 判断，勿读原始值」。`debug_evaluate` 表达式级一并覆盖（表达式末段标识符敏感即脱敏，防「换个变量名读同一 secret」绕过）；null/平凡值（空/none/0/true…）不动——「为什么我的 token 是 null」仍可调。子串不误伤（`tokenCount`/`cookieCount` 照常可读）。不脱敏目标自身控制台输出（`debug_output`）/异常 Message
 - **`debug_state` 退出码与 attach 反馈（V3 顺手项）**：launch 会话进程已退出时状态行附 `（目标已退出：exitCode=N）`（退出码由进程退出事件捕获；attach 会话 ICorDebug 不提供退出码，提示「退出码不可得」）；attach 到长活目标且进程运行中时提示「已附加成功，进程继续独立运行（无停点不会自行停下），设断点后 debug_continue/debug_wait 等待命中」——不再看起来像卡住
 - **`debug_processes` 子进程链标注 + 切换引导（D2）**：存在当前会话目标时，以 kernel32 Toolhelp 快照（pid→父 pid 全表）把目标的 .NET 子孙进程（子/孙/曾孙全链，多层深度）在行尾标注「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」，返回尾部附引导「业务代码在子进程时需停当前会话（debug_disconnect/停断点）后 debug_attach &lt;childPid&gt; 单独调试」——帮 agent 找到 dotnet run/worker/testhost 类目标自起子进程里的业务代码。边界：**单活动会话**（不支持同时调试多进程，只发现+引导切换）；子进程自身输出不在 `debug_output` 捕获范围（launch 只捕获父进程 stdout/stderr）
+- **`debug_set` 枚举文案口径对齐**：README 与工具描述由「枚举给底层整数值」改为如实口径「枚举仅底层 GenericValue 形态可写整数值，enum 对象字段 v1 降级」——与实测一致（enum 对象字段终端为对象值，v1 给中文降级提示）
 
 ### Fixed
 
 - **`debug_processes` 只列实际探测到 CLR 的进程**：dbgshim `EnumerateCLRs` 对无 CLR 进程返回成功但枚举数为 0（源码语义），此前这类进程被误列为 `CLR <unknown>`，导致列表混入大量无关进程（如 svchost/conhost），本项修正为仅保留带真实 CLR 版本的行——列表更贴近「可附加的 .NET 进程」，D2 子进程链标注也基于此精确枚举
+- **`debug_set` 回显值同受敏感脱敏（DB1 出口补齐）**：改写敏感路径（如 `b.Password`/`cfg.Token`）时，「原值 → 新值」回显中的**原值与新值**同样按表达式级敏感名（末段标识符归一化匹配）+ 值内容形态判定脱敏为 `[已脱敏:疑似凭据]` 占位符并附提示——不再因回显旧值而泄露凭据；非敏感路径（如 `b.A`）输出不变
 
 ## [1.7.0] - 2026-09-08
 

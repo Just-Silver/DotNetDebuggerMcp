@@ -76,5 +76,5 @@
 ## 实施后 follow-up（2026-09-10，review 循环收集，低优先）
 
 - [ ] **D2 根因下沉 Engine**：dbgshim `EnumerateCLRs` 对无 CLR 进程返回 S_OK+空枚举，`ClrProcessFinder` 把本机全部非 .NET 进程记为 `CLR <unknown>`（Engine 注释语义与实测不符）；D2 在宿主按 `ClrVersion != "<unknown>"` 过滤绕过（review Ruling Accept + CHANGELOG Fixed）。**正确修法**：Engine `ClrProcessFinder.List` 改判「枚举 0 项跳过」而非返回 `<unknown>` 哨兵，补 Engine 单测；宿主过滤随之可去。
-- [ ] **W1 收口（review deferred minors）**：README/DebugSetTool Description「枚举给底层整数值」口径与 enum 对象字段 v1 实测降级不一致，统一为「仅底层 GenericValue 形态可写」或降级口径；`WritePathTests` 陈旧注释；引擎 `ParseCharBytes` 单引号路径经工具不可达（内部口径注记）。
+- [x] **W1 收口（review deferred minors）**：README/DebugSetTool Description「枚举给底层整数值」口径与 enum 对象字段 v1 实测降级不一致，统一为「枚举仅底层 GenericValue 形态可写整数值，enum 对象字段 v1 降级」；`WritePathTests` hex 注释校正（isHex 同时豁免后缀/科学计数误判、带符号 hex 工具面不可达）；引擎 `ParseCharBytes` 单引号路径注记经工具不可达（防御性保留）。**终审 fix wave 一并补齐 debug_set 回显值脱敏（DB1 出口）。**
 - [ ] **D1 措辞小项**：合成标量/数组目标返回头「对象」、空 children 兜底文案与 Display 重复等（reviewer Minor）。

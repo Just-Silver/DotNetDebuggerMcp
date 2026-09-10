@@ -1420,7 +1420,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
         finally { Marshal.FreeHGlobal(buf); }
     }
 
-    /// <summary>char：单引号字符 'x' 或 0-65535 码点。</summary>
+    /// <summary>char：单引号字符 'x' 或 0-65535 码点。单引号形态经 debug_set 工具面不可达——
+    /// WriteValueParser 拒绝单引号文本（char 只收整数码点），此分支仅引擎内部/直调 API 防御性保留。</summary>
     private static byte[] ParseCharBytes(string text, string targetDesc)
     {
         var t = text.Trim();

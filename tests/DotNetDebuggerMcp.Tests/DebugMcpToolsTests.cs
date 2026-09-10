@@ -1298,6 +1298,71 @@ public sealed class DebugMcpToolsTests
         Assert.True(disc.IsError != true, disc.Text());
     }
 
+    [Fact]
+    public async Task DebugSet_SensitivePath_RedactsOldAndNewDisplay()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workBagToken = ReadMethodToken(dll, "WorkBag");
+        Assert.True(workBagToken > 0);
+
+        // 停点坐标：WorkBag 循环体语句行（b/n/i 全存活）——与 DB1 脱敏 e2e 同源
+        var doc = DotNetDebugger.Decompiler.Document.DocumentService.GetTypeDocument(dll, "DebugTarget.Program");
+        Assert.True(doc.IsSuccess, doc.Error);
+        var bagFirstLine = DotNetDebugger.Decompiler.Document.DocumentService.GetMethodFirstLine(doc, workBagToken);
+        var entryTarget = DotNetDebugger.Decompiler.Document.DocumentService.GetBreakpointTargetAtLine(doc, bagFirstLine!.Value);
+        Assert.True(entryTarget is not null);
+        DotNetDebugger.Decompiler.Document.SourceLineResolver.SourceLineTarget? loopTarget = null;
+        for (var l = 1; l <= 80 && loopTarget is null; l++)
+        {
+            var t = DotNetDebugger.Decompiler.Document.SourceLineResolver.Resolve(dll, "DebugTarget.cs", l, out _);
+            if (t is not null && t.MethodToken == workBagToken && t.IlOffset != entryTarget.Value.IlOffset) loopTarget = t;
+        }
+        Assert.True(loopTarget is not null, "未找到 WorkBag 循环体源码行");
+
+        const string ph = "[已脱敏:疑似凭据]";
+        const string notice = "疑似凭据已脱敏——用类型/长度/null 判断，勿读原始值";
+
+        await using var mcp = await ConnectAsync();
+
+        // bag 模式：WorkBag(new Bag { A = 7, S = "sx", Password = "hunter2", Token = "Bearer eyJ…" }, 5)
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} bag 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        var set = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["sourcePath"] = "DebugTarget.cs", ["line"] = loopTarget.ActualLine });
+        Assert.True(set.IsError != true, set.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(set.Text()));
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", wait.Text());
+
+        // 敏感路径改写（引用重定向到 b.S：新值内容平凡 "sx"，仍应按路径名脱敏）→ 原/新明文均不得出现在回显
+        var sensitive = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "b.Password", ["value"] = "b.S" });
+        Assert.True(sensitive.IsError != true, sensitive.Text());
+        Assert.Contains("已改", sensitive.Text());
+        Assert.Contains($"原值 {ph}", sensitive.Text());
+        Assert.Contains($"新值 {ph}", sensitive.Text());
+        Assert.Contains(notice, sensitive.Text());
+        Assert.DoesNotContain("hunter2", sensitive.Text()); // 旧值明文不泄露
+        Assert.DoesNotContain("sx", sensitive.Text());       // 新值明文（重定向源值）不泄露
+
+        // 非敏感路径输出照旧、不脱敏
+        var normal = await CallAsync(mcp, "debug_set",
+            new Dictionary<string, object?> { ["path"] = "b.A", ["value"] = "42" });
+        Assert.True(normal.IsError != true, normal.Text());
+        Assert.Contains("原值 7", normal.Text());
+        Assert.Contains("新值 42", normal.Text());
+        Assert.DoesNotContain(ph, normal.Text());
+
+        var disc = await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+        Assert.True(disc.IsError != true, disc.Text());
+    }
+
     /// <summary>时间线文本的每一行行首时间戳须单调不减（格式 [HH:mm:ss.fff] tag 固定宽）。</summary>
     private static void AssertChronologicalRows(string text)
     {

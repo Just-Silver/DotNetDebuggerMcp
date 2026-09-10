@@ -10,7 +10,7 @@ namespace DotNetDebugger.Engine.Tests;
 /// <summary>
 /// W1 引擎路径写原语集成（SetPathValueAsync）：attach DebugTarget probe 模式 → 断点停住 →
 /// 值类型参数/对象字段/数组元素/引用置 null/引用重定向/struct 内层字段写回 + readonly/值类型非法文本降级语义。
-/// 支持矩阵来自 spec §7（Task 1 spike 实测定案）：enum 对象字段直写为 v1 降级（断言中文拒绝文案）。
+/// 支持矩阵来自 spec §7（Task 1 spike 实测定案）：枚举仅底层 GenericValue 形态可写整数值，enum 对象字段直写为 v1 降级（断言中文拒绝文案）。
 /// </summary>
 public sealed class WritePathTests
 {
@@ -108,7 +108,9 @@ public sealed class WritePathTests
             session.SetPathValueAsync(999999, "h", [new PathSegment.Field("N")], new DebugWriteValue.Scalar("1"), ct));
         Assert.Contains("找不到线程", noThread.Message);
 
-        // review round1：0x 十六进制写不被误当 m/f/d 后缀（0x1F 的 F 是数字位）→ 31；引擎防御性接受带符号 hex
+        // review round1（hex 注释校正）：isHex 分支同时豁免 m/f/d 后缀误判与科学计数误判——0x1F 尾 F / 0x1e 的 e
+        // 都是十六进制数字位（不是后缀/指数）→ 31；带符号 hex 仅引擎内部防御（工具面 WriteValueParser 已拒带符号 0x，不可达）。
+        // 此断言依赖前序 h.N 已写为 99，故旧值以 99 开头。
         var hexSet = await session.SetPathValueAsync(tid, "h", [new PathSegment.Field("N")], new DebugWriteValue.Scalar("0x1F"), ct);
         Assert.StartsWith("99", hexSet.OldDisplay);
         var hexBack = await session.EvaluatePathAsync(tid, "h", [new PathSegment.Field("N")], ct);
