@@ -158,6 +158,18 @@ Services/Ui/
 - **debug_verify e2e**：场景文件含 `uiAction`+`uiAssert`，PASS；失败时实际值脱敏。
 - **回归**：宿主全量单测 + `McpSessionConcurrencyTests`。
 
+> **§15 勘误（2026-09-10，实施期修正；复核以本勘误为准）**：
+> ① **不抢前台强断言口径收窄**：仅对 `invoke`/`toggle`/`select`/`expand`/`collapse`/`scroll`/`scrollintoview`/`ui_input` 断言
+> `GetCursorPos()`/`GetForegroundWindow()` 不变；**豁免 `focus`/`windowstate`**（`AutomationElement.Focus` 对带 HWND 控件
+> 可能激活顶层窗口、`SetWindowVisualState(Normal)` 是否激活取决于目标应用——依据 §9，非物理输入）。另：共享交互桌面
+> 上外部鼠标/前台活动会污染断言，实施改为「变化具备物理输入回归强特征（光标移入目标窗口 **且** 目标窗口被抢前台）才失败，
+> 否则跳过」。
+> ② **`UiElementLocator` 测试策略**：宿主测试工程为 `net10.0` 且不引入 WinForms（须保 PackAsTool 的 net10.0），故
+> locator 的**纯逻辑**（条件构造/缓存键/计数判定，若有）走单测；**条件缓存/失效重试/虚拟化实体化**改由**跨进程 e2e**
+> （UiSampleApp 真实控件）覆盖——原「locator 失效重解析/虚拟化实体化单测」不以宿主单测形式落地。
+> ③ **`continue.waitSeconds=0`**：为让 `uiAction` 在 `debug_verify` 的 launch 路径下驱动运行中目标，`continue` 步骤新增
+> `waitSeconds=0` = 放行不等停点（默认仍 10；0 不改变既有语义）。
+
 ## 16. 风险
 
 - **provider 拒后台/最小化**：报中文（不抢前台）；个别自绘控件只能明确「不支持」。

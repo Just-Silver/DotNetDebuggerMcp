@@ -27,7 +27,7 @@
 
 ## UI 自动化主动触发业务操作（U1，**已完成** 2026-09-10，移总览批次历史）
 
-> 来源：CoreMes（WPF 产线软件）实证 + 跨框架通用性探讨（agent 主导触发 UI 业务流，对标截图工具/Snipaste「圈选内部元素」能力）。实现已完成（spec `2026-09-08-u1-ui-automation.md` + 计划 `plans/2026-09-09-u1-ui-automation.md`）：四工具落地 + UiSampleApp 测试目标 + README/CHANGELOG/V4 补录，提交见总览表 P3/U1 行；`ui_input`/`ui_pick`/横向与自动滚动列 v1.5。
+> 来源：CoreMes（WPF 产线软件）实证 + 跨框架通用性探讨（agent 主导触发 UI 业务流，对标截图工具/Snipaste「圈选内部元素」能力）。实现已完成（spec `2026-09-08-u1-ui-automation.md` + 计划 `plans/2026-09-09-u1-ui-automation.md`）：四工具落地 + UiSampleApp 测试目标 + README/CHANGELOG/V4 补录，提交见总览表 P3/U1 行；`ui_input`/`ui_pick`/横向与自动滚动列 v1.5。**2026-09-10：工具面（`ui_invoke`/`ui_scroll`）已被 U1A 全 UIA 化取代（见下方 follow-up U1A 条目）——U1 连接/语义标注设计保留。**
 
 - [x] **UI 自动化触发（UIA 通用层）**（宿主新组件｜中-大）——实施于 2026-09-10（详总览 P3/U1 行）。遗留（spec §4.1 排期）：`ui_input`（ValuePattern 输入）/`ui_pick`（人类指认）/横向滚动/ScrollPattern 自动滚动列 **v1.5**。
 
@@ -75,7 +75,7 @@
 
 ## 实施后 follow-up（2026-09-10，review 循环收集，低优先）
 
-- [ ] **U1A 全 UIA 化（2026-09-10 新 spec，处理中）**：`docs/planning/specs/2026-09-10-u1a-uia-only-ui-automation.md`（已冻结；取代 U1 工具面）→ 计划 `docs/planning/plans/2026-09-10-u1a-uia-only-ui-automation.md`：删 `ui_invoke`/`ui_scroll`、增 `ui_action`/`ui_input`/`ui_get`、组件化 Ui*、verify uiAction/uiAssert、去一切物理输入。
+- [x] **U1A 全 UIA 化（2026-09-10 已完成）**：`docs/planning/specs/2026-09-10-u1a-uia-only-ui-automation.md`（取代 U1 工具面）→ 计划 `docs/planning/plans/2026-09-10-u1a-uia-only-ui-automation.md` 已实施：删 `ui_invoke`/`ui_scroll`、增 `ui_action`/`ui_input`/`ui_get`、`Services/Ui/` 组件化、`ui_find` 能力清单、`ui_wait` 事件化、去一切物理输入、verify `uiAction`/`uiAssert`；Engine/Session 零改动（本地 commit，未合并/未 push）。
 
 - [ ] **D2 根因下沉 Engine**：dbgshim `EnumerateCLRs` 对无 CLR 进程返回 S_OK+空枚举，`ClrProcessFinder` 把本机全部非 .NET 进程记为 `CLR <unknown>`（Engine 注释语义与实测不符）；D2 在宿主按 `ClrVersion != "<unknown>"` 过滤绕过（review Ruling Accept + CHANGELOG Fixed）。**正确修法**：Engine `ClrProcessFinder.List` 改判「枚举 0 项跳过」而非返回 `<unknown>` 哨兵，补 Engine 单测；宿主过滤随之可去。
 - [x] **W1 收口（review deferred minors）**：README/DebugSetTool Description「枚举给底层整数值」口径与 enum 对象字段 v1 实测降级不一致，统一为「枚举仅底层 GenericValue 形态可写整数值，enum 对象字段 v1 降级」；`WritePathTests` hex 注释校正（isHex 同时豁免后缀/科学计数误判、带符号 hex 工具面不可达）；引擎 `ParseCharBytes` 单引号路径注记经工具不可达（防御性保留）。**终审 fix wave 一并补齐 debug_set 回显值脱敏（DB1 出口）。**
