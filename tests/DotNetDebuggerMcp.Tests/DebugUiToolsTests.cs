@@ -197,13 +197,27 @@ public sealed class DebugUiToolsTests
             // R6：只读控件误写「已 input」不得当 PASS——必须中文只读提示
             Assert.Contains("只读", rangeReadOnly.Text());
 
-            // VScrollBar 的 RangeValuePattern 可写（WinForms ScrollBarAccessibleObject.IsReadOnly=false）——正路径写值
-            var vscroll = await WriteWithEffectAsync(mcp, "ui_input",
-                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "77", ["name"] = "vscrollBar" },
-                "已 input（RangeValuePattern）",
-                async () => (await UiGetAsync(mcp, new() { ["what"] = "rangevalue", ["name"] = "vscrollBar" })).Text().Contains("77", StringComparison.Ordinal),
-                retryOnTimeout: true);
-            AssertActionOutcome(vscroll, "已 input（RangeValuePattern）");
+            // VScrollBar 可写：provider 可能暴露 ValuePattern 或 RangeValuePattern（ChooseInput 契约是 Value 优先；
+            // Win11 与 Server 2022 的 MSAA-UIA 桥对滚动条暴露的 pattern 不同）——断言「写入成功 + 值确实变化」，
+            // 不锁死具体 pattern（锁死会在跨 OS 的 CI 上误报）。
+            var vscrollText = "";
+            var vscrollApplied = false;
+            for (var i = 0; i < 3 && !vscrollApplied; i++)
+            {
+                var r = await DebugMcpToolsTests.CallAsync(mcp, "ui_input",
+                    new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "77", ["name"] = "vscrollBar" });
+                vscrollText = r.Text();
+                if (vscrollText.Contains("已 input（ValuePattern）", StringComparison.Ordinal)
+                    || vscrollText.Contains("已 input（RangeValuePattern）", StringComparison.Ordinal))
+                    vscrollApplied = await PollAnyValueAsync(mcp, "vscrollBar", "77");
+                else if (!vscrollText.Contains(UiaTimeoutMarker, StringComparison.Ordinal))
+                    break; // 明确失败（如只读/无 pattern）
+                if (!vscrollApplied) await Task.Delay(400, TestContext.Current.CancellationToken);
+            }
+            Assert.True(vscrollText.Contains("已 input（ValuePattern）", StringComparison.Ordinal)
+                || vscrollText.Contains("已 input（RangeValuePattern）", StringComparison.Ordinal),
+                $"vscrollBar 写入未命中可写 pattern（Value/RangeValue）：{vscrollText}");
+            Assert.True(vscrollApplied, $"vscrollBar 写入 77 未生效（Value/RangeValue 读回均未确认 77）：{vscrollText}");
 
             // ValuePattern 只读拒绝：必须报只读
             var readOnly = await DebugMcpToolsTests.CallAsync(mcp, "ui_input", new Dictionary<string, object?>
@@ -344,7 +358,18 @@ public sealed class DebugUiToolsTests
                 "已 invoke（InvokePattern）",
                 () => FindContainsAsync(mcp, "自动"), retryOnTimeout: false);
             AssertActionOutcome(first, "已 invoke（InvokePattern）");
-            await WaitFindAsync(mcp, "自动"); // 确认 UIA Name 已更新为 自动
+            // 确认 UIA Name 已更新为 自动：用 name 定位 ui_get（ResolveByName 不触碰 index 条件缓存）。
+            // 注意不可用 WaitFindAsync/ui_find——它会刷新 _lastFind 里该 index 的 descriptor（Name→自动），
+            // 使下面「旧条件不再匹配 → stale」的前提被自己破坏（2026-09-10 CI 实证）。
+            var nameNow = "";
+            var nameDeadline = DateTime.UtcNow.AddSeconds(30);
+            while (DateTime.UtcNow < nameDeadline)
+            {
+                nameNow = (await UiGetAsync(mcp, new() { ["what"] = "name", ["name"] = "toggleState" })).Text();
+                if (nameNow.Contains("自动", StringComparison.Ordinal)) break;
+                await Task.Delay(300, TestContext.Current.CancellationToken);
+            }
+            Assert.Contains("自动", nameNow);
 
             // 同一 index 的定位条件（Name=手动）已不再匹配 → 重解析 3 次失败 → 中文「目标已变化」（stale 重解析路径）。
             var staleText = "";
@@ -516,6 +541,21 @@ public sealed class DebugUiToolsTests
         var args = new Dictionary<string, object?> { ["process"] = "UiSampleApp" };
         foreach (var (k, v) in extra) args[k] = v;
         return UiReadAsync(mcp, "ui_get", args);
+    }
+
+    /// <summary>按 name 读回值并确认含 expected：provider 可能暴露 Value 或 RangeValue，两者都试（跨 OS 稳定；读重试）。</summary>
+    private static async Task<bool> PollAnyValueAsync(McpClient mcp, string name, string expected)
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            foreach (var what in new[] { "rangevalue", "value" })
+            {
+                var r = await UiGetAsync(mcp, new() { ["what"] = what, ["name"] = name });
+                if (r.IsError != true && r.Text().Contains(expected, StringComparison.Ordinal)) return true;
+            }
+            await Task.Delay(300, TestContext.Current.CancellationToken);
+        }
+        return false;
     }
 
     // ===== UIA 5s 护栏下的环境容错（共享机器负载高时读重试、写按效果确认/重试） =====
