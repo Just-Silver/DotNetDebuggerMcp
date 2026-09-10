@@ -1,5 +1,10 @@
 # Spec · U1 UI 自动化主动触发业务操作（FlaUI）
 
+> **⚠️ Superseded（2026-09-10）**：本 spec 正文保留作历史依据，但其**工具面（`ui_invoke` / `ui_scroll` 四件套）已被
+>  `docs/planning/specs/2026-09-10-u1a-uia-only-ui-automation.md`（U1A）取代**——U1A 弃用一切物理输入、改语义动词
+> `ui_action`/`ui_input`/`ui_get` + 事件化 `ui_wait`。U1 的**连接/语义标注/无视觉清单**等设计继续有效（U1A 沿用）。
+> 实施 U1A 时请勿按本 spec 的工具参数/物理鼠标措辞复核。
+
 > 状态：**已立项**（2026-09-09 拍板）——① ui_* **不需活动 debug 会话**（支持先操作 UI 再 attach）；② 副作用护栏 = AgentActionLog + Description 明示（Consent 列 v2）；③ 自动语义标注 **v1 做 = 务实成员反查**（不解析 XAML/BAML，ui_find 命中后用现有 Decompiler 元数据反查与 Name/Text 同名成员候选，无候选提示手动 decompile）；④ U1 先行（V1 复验闭环待 W1/U1/V3 落地后再计划）。**2026-09-09 追加：v1 = ui_find + ui_invoke(action=click/rightClick/doubleClick) + ui_wait + ui_scroll(滚轮) 四件套**（FlaUI main 源码已核实 Mouse.RightClick/DoubleClick/Scroll）。实施计划见 `docs/planning/plans/2026-09-09-u1-ui-automation.md`，规格冻结。
 > 关联：宿主 TODO U1/UI 自动化条目；调试侧联动依赖 W1/V1（复验闭环是 U1 的验收载体）；会话模型复用现有 `DebugSessionManager` 单活动会话。
 > 参考实现（已实读源码）：`ChrisPulman/UIInspect.MCP`（MIT）——`FlaUiAutomationBackend.cs`/`FlaUiAutomationSession.cs`；`sbroenne/mcp-windows`（MIT，91★，工具面命名参照）。
