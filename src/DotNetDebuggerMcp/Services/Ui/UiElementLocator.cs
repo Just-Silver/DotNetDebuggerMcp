@@ -10,6 +10,13 @@ using System.Text;
 namespace DotNetDebuggerMcp.Services.Ui;
 
 /// <summary>
+/// index 缓存的身份条件（纯数据）：AutoId/Name/ControlType 三元组精确锁定同一实体，Ordinal 为该三元组在
+/// 全树遍历中的出现序号（0 起）。重解析时必须用<b>三者全部</b>一致判定（<see cref="UiElementLocator.SameIdentity"/>），
+/// 否则「同名跨类型且无 AutomationId」会命中错误控件。
+/// </summary>
+internal sealed record TargetDescriptor(string AutoId, string Name, string ControlType, int Ordinal);
+
+/// <summary>
 /// U1A 元素定位（spec §8）：进程/窗口解析、条件过滤 + 能力探测 + 语义标注、**定位条件缓存**（index 映射到
 /// pid + 窗口标题 + AutoId/Name/ControlType + 序号），动作前按条件重解析 + 有限重试；虚拟化项经
 /// ItemContainerPattern → VirtualizedItemPattern.Realize → ScrollItemPattern.ScrollIntoView 实体化。
@@ -18,19 +25,34 @@ namespace DotNetDebuggerMcp.Services.Ui;
 [SupportedOSPlatform("windows7.0")]
 internal sealed class UiElementLocator
 {
-    private sealed record TargetDescriptor(string AutoId, string Name, string ControlType, int Ordinal);
-
     private sealed record CachedEntry(int Pid, string WindowTitle, TargetDescriptor Descriptor);
 
     private readonly List<CachedEntry> _lastFind = new();
     private int _lastFindPid = -1;
     private string _lastFindWindowTitle = "";
+    private bool _lastFindTruncated;
 
     /// <summary>最近一次 ui_find 的目标 pid（供工具头部展示）。</summary>
     public int LastFindPid => _lastFindPid;
 
     /// <summary>最近一次 ui_find 命中的窗口标题（供工具头部展示）。</summary>
     public string LastFindWindowTitle => _lastFindWindowTitle;
+
+    /// <summary>最近一次 ui_find 是否因 limit 截断（供工具层如实报告总量）。</summary>
+    public bool LastFindTruncated => _lastFindTruncated;
+
+    /// <summary>
+    /// 重解析身份匹配（纯函数，可单测）：AutoId、Name、ControlType 三者<b>全部</b>一致才算同一实体——
+    /// 与 <see cref="Find"/> 的 ordinal 计数口径一致（计数键同由这三个字段构成）。
+    /// </summary>
+    internal static bool SameIdentity(TargetDescriptor descriptor, string autoId, string name, string controlType)
+        => string.Equals(autoId, descriptor.AutoId, StringComparison.Ordinal)
+        && string.Equals(name, descriptor.Name, StringComparison.Ordinal)
+        && string.Equals(controlType, descriptor.ControlType, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>ordinal 计数键（纯函数，可单测）：同 AutoId+Name+ControlType 三元组内按遍历顺序计数。</summary>
+    internal static string OrdinalKey(string autoId, string name, string controlType)
+        => autoId + "\u001F" + name + "\u001F" + controlType;
 
     /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。</summary>
     public IReadOnlyList<UiElementInfo> Find(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit)
@@ -51,17 +73,19 @@ internal sealed class UiElementLocator
         var semanticModule = TryGetMetadataModule(pid);
         var semanticByName = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         var ordinals = new Dictionary<string, int>(StringComparer.Ordinal);
+        var truncated = false;
 
         foreach (var el in all)
         {
-            if (infos.Count >= cap) break;
+            if (infos.Count >= cap) { truncated = true; break; }
 
             var elType = SafeRead(() => el.ControlType.ToString(), "");
             var name = SafeRead(() => el.Name ?? "", "");
             var autoId = SafeRead(() => el.Properties.AutomationId.ValueOrDefault ?? "", "");
 
-            // 序号按「全部后代」累计（重解析时同样遍历全树）——过滤掉同名先前项也不会错位。
-            var key = autoId + "\u001F" + name + "\u001F" + elType;
+            // 序号按「全部后代」累计（重解析时同样遍历全树）；键与重解析的 SameIdentity 完全同源（AutoId+Name+ControlType），
+            // 过滤掉同名先前项也不会错位。
+            var key = OrdinalKey(autoId, name, elType);
             ordinals.TryGetValue(key, out var ordinal);
             ordinals[key] = ordinal + 1;
 
@@ -99,6 +123,7 @@ internal sealed class UiElementLocator
         _lastFind.AddRange(entries);
         _lastFindPid = pid;
         _lastFindWindowTitle = entries.Count > 0 ? entries[0].WindowTitle : SafeRead(() => window.Name ?? "", "");
+        _lastFindTruncated = truncated;
 
         return infos;
     }
@@ -264,13 +289,11 @@ internal sealed class UiElementLocator
     }
 
     private static bool Matches(AutomationElement el, TargetDescriptor descriptor)
-    {
-        if (!string.IsNullOrEmpty(descriptor.AutoId))
-            return string.Equals(SafeRead(() => el.Properties.AutomationId.ValueOrDefault ?? "", ""), descriptor.AutoId, StringComparison.Ordinal);
-        if (!string.IsNullOrEmpty(descriptor.Name))
-            return string.Equals(SafeRead(() => el.Name ?? "", ""), descriptor.Name, StringComparison.Ordinal);
-        return string.Equals(SafeRead(() => el.ControlType.ToString(), ""), descriptor.ControlType, StringComparison.OrdinalIgnoreCase);
-    }
+        => SameIdentity(
+            descriptor,
+            SafeRead(() => el.Properties.AutomationId.ValueOrDefault ?? "", ""),
+            SafeRead(() => el.Name ?? "", ""),
+            SafeRead(() => el.ControlType.ToString(), ""));
 
     private CachedEntry GetCachedEntry(int pid, int index)
     {
