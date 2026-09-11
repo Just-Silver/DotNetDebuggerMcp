@@ -21,11 +21,19 @@
 - Windows（反编译/静态分析跨平台可用；`debug_*` 动态调试与 `ui_*` UI 自动化需 Windows——ui_* 全 UIA 语义 pattern，**不移动光标/不注入输入/不抢前台**，只要求目标窗口在 UIA 树里可见；远程/服务会话可能读不到目标窗口）
 
 ## 安装
-
+### 安装
 ```bash
-dotnet tool install --global DotNetDebuggerMcp   # 安装
-dotnet tool update --global DotNetDebuggerMcp    # 升级
-dotnet tool uninstall --global DotNetDebuggerMcp # 卸载
+dotnet tool install --global DotNetDebuggerMcp 
+```
+
+### 升级
+```bash
+dotnet tool update --global DotNetDebuggerMcp
+```
+
+### 卸载
+```bash
+dotnet tool uninstall --global DotNetDebuggerMcp
 ```
 
 查看版本 / 帮助：`DotNetDebuggerMcp -v` / `DotNetDebuggerMcp -h`
