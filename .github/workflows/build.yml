@@ -12,42 +12,41 @@ env:
   DOTNET_NOLOGO: '1'
 
 # 宿主测试套件内 UiTools / AppServices 两个集合标了 DisableParallelization（进程内互斥、不与其他集合并行），
-# 单 job 串行跑约 10 分钟。这里按集合拆到并行 job（各占独立 runner），墙钟取决于最长分片。
+# 单 job 串行跑宿主测试约 8 分钟（CI 总时长 10 分半 ≈ 78% 在此）。这里按「类 + 方法前缀」拆成分片并行
+# （各占独立 runner），墙钟取决于最长分片 + 固定启动开销。
+#
+# 分片不变式：每个分片都带「兜底」视角（--filter-not-* 取补集）——新增测试类默认落 core 分片、
+# 新增方法默认落对应类的兜底分片，不会漏跑；分片间互斥，用例不重复执行。
 jobs:
-  test-host-ui:
-    # UI 自动化（UiTools 集合：DebugUiToolsTests + DebugVerifyToolTests）：真实桌面 UIA 驱动，独占桌面
+  test-host:
+    name: test-host (${{ matrix.shard }})
     runs-on: windows-latest
     timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-      - name: Generate test data
-        shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
-      - name: Test (UI)
-        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- --filter-class "DotNetDebuggerMcp.Tests.DebugUiToolsTests" --filter-class "DotNetDebuggerMcp.Tests.DebugVerifyToolTests"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- UI 自动化（UiTools 集合：真实桌面 UIA 驱动，独占桌面）----
+          # ui-a：两个写值长用例 + 按 index 重解析的 stale 用例；ui-b：其余 Ui* 用例（互为补集）
+          - shard: ui-a
+            filters: --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiInput_* --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiAction_ByIndex_* --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiActionInvoke_Button_*
+          - shard: ui-b
+            filters: --filter-class DotNetDebuggerMcp.Tests.DebugUiToolsTests --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiInput_* --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiAction_ByIndex_* --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiActionInvoke_Button_*
+          # ui-verify：debug_verify 场景（重编译 + 启动 + UIA 断言，同样吃桌面）
+          - shard: ui-verify
+            filters: --filter-class DotNetDebuggerMcp.Tests.DebugVerifyToolTests
 
-  test-host-debug:
-    # 动态调试端到端（真实 launch/attach 目标进程；单活动调试会话）——独立 runner，不与 UI 分片抢桌面
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-      - name: Generate test data
-        shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
-      - name: Test (debug)
-        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- --filter-class "DotNetDebuggerMcp.Tests.DebugMcpToolsTests" --filter-class "DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests"
+          # ---- 动态调试端到端（真实 launch/attach 目标进程；单活动调试会话）----
+          # debug-a：断点系（运行到光标/行断点/成员断点/条件断点/源码行断点/异常过滤/异步状态机/trace）
+          - shard: debug-a
+            filters: --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.RunTo_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.LineBreakpoints_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.MemberBreakpoint_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.DebugConditionalBreakpoint_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.SourceLineBreakpoint_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.ExceptionFilter_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.AsyncStateMachine_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.DebugTools_*
+          # debug-b：检查/改值/时间线/进程/状态/终止（与 debug-a 互为补集）+ 变量名白名单
+          - shard: debug-b
+            filters: --filter-class DotNetDebuggerMcp.Tests.DebugMcpToolsTests --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.RunTo_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.LineBreakpoints_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.MemberBreakpoint_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.DebugConditionalBreakpoint_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.SourceLineBreakpoint_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.ExceptionFilter_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.AsyncStateMachine_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.DebugTools_* --filter-class DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests
 
-  test-host-core:
-    # 其余宿主测试（含 AppServices 集合与纯逻辑用例）。--filter-not-class 兜底：新增测试类默认落本分片
-    runs-on: windows-latest
-    timeout-minutes: 30
+          # ---- 兜底分片：其余全部宿主测试（AppServices 集合 + 纯逻辑用例；新增测试类默认落此片）----
+          - shard: core
+            filters: --filter-not-class DotNetDebuggerMcp.Tests.DebugUiToolsTests --filter-not-class DotNetDebuggerMcp.Tests.DebugVerifyToolTests --filter-not-class DotNetDebuggerMcp.Tests.DebugMcpToolsTests --filter-not-class DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v5
@@ -56,8 +55,8 @@ jobs:
       - name: Generate test data
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
-      - name: Test (core)
-        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- --filter-not-class "DotNetDebuggerMcp.Tests.DebugUiToolsTests" --filter-not-class "DotNetDebuggerMcp.Tests.DebugVerifyToolTests" --filter-not-class "DotNetDebuggerMcp.Tests.DebugMcpToolsTests" --filter-not-class "DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests"
+      - name: Test (${{ matrix.shard }})
+        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- ${{ matrix.filters }}
 
   test-lib:
     # 库级测试（反编译/文档服务；含「反编译后不残留依赖程序集句柄」回归护栏 AssemblyFileHandleTests）
@@ -77,7 +76,7 @@ jobs:
   release:
     # 仅版本标签（v*）时打包并发布；需全部分片测试通过
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [test-host-ui, test-host-debug, test-host-core, test-lib]
+    needs: [test-host, test-lib]
     runs-on: windows-latest
     permissions:
       contents: write # 创建 GitHub Release 并上传 nupkg 资产
