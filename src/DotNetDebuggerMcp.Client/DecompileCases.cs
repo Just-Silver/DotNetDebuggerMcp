@@ -37,4 +37,15 @@ public static class DecompileCases
             new Dictionary<string, object?>(),
             ExpectedContains: "请指定 assembly", MustNotContain: "at System", ExpectSuccess: false),
     };
+
+    /// <summary>
+    /// Ext 程序集场景：ExtCaller 方法体引用主样本 Callee → server 反编译时会解析并加载同目录的 TestSamples.dll。
+    /// 供 Program 的「文件句柄释放」断言验证反编译返回后依赖程序集不被 server 进程占用（回归：MCP 锁定 dll 导致 dotnet build 报 MSB3061/MSB3021）。
+    /// </summary>
+    public static IReadOnlyList<ToolCallCase> CrossAssembly(string extDll) => new[]
+    {
+        new ToolCallCase("decompile", "Ext 类型（解析同目录依赖）",
+            new Dictionary<string, object?> { ["assembly"] = extDll, ["typeName"] = TestDataHelper.SamplesExtNamespace + ".ExtCaller" },
+            ExpectedContains: "Callee", MustNotContain: "at System"),
+    };
 }

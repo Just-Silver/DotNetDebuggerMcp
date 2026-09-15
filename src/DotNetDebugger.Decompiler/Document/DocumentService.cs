@@ -3,6 +3,7 @@ using ICSharpCode.Decompiler.CSharp;
 using ICSharpCode.Decompiler.CSharp.OutputVisitor;
 using ICSharpCode.Decompiler.CSharp.Syntax;
 using ICSharpCode.Decompiler.Metadata;
+using DotNetDebugger.Decompiler.Configuration;
 using DotNetDebugger.Decompiler.Metadata;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
@@ -29,7 +30,8 @@ public static class DocumentService
         try
         {
             using var module = OpenModule(assemblyPath);
-            var resolver = new UniversalAssemblyResolver(assemblyPath, false, module.Metadata.DetectTargetFrameworkId());
+            var resolver = new UniversalAssemblyResolver(assemblyPath, false, module.Metadata.DetectTargetFrameworkId(),
+                streamOptions: DecompilerConfig.DependencyStreamOptions);
             var settings = new DecompilerSettings { ThrowOnAssemblyResolveErrors = false };
             var decompiler = new CSharpDecompiler(assemblyPath, resolver, settings);
 
@@ -233,10 +235,10 @@ public static class DocumentService
         return entries.OrderBy(e => e.MethodToken).ThenBy(e => e.IlOffset).ToList();
     }
 
-    /// <summary>安全打开程序集（自建 FileStream 传给 PEFile；解析失败抛异常由调用方 catch）。</summary>
+    /// <summary>安全打开程序集（自建 FileStream 传给 PEFile；解析失败抛异常由调用方 catch）。共享模式放宽为 ReadWrite|Delete：反编译耗时期间允许构建工具删除/替换该文件。</summary>
     private static PEFile OpenModule(string assemblyPath)
     {
-        var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         return new PEFile(assemblyPath, stream);
     }
 }

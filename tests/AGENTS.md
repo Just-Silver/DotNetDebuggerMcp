@@ -6,7 +6,7 @@
 
 | 测试项目 | 被测 | 关键点 |
 |---|---|---|
-| `DotNetDebugger.Decompiler.Tests` | Decompiler 库 | DocumentService 三套（语句级映射）+ 经库 internals；其余组件单测在宿主测试项目 |
+| `DotNetDebugger.Decompiler.Tests` | Decompiler 库 | DocumentService 三套（语句级映射）+ 反编译后文件句柄释放回归（`AssemblyFileHandleTests`）+ 经库 internals；其余组件单测在宿主测试项目 |
 | `DotNetDebugger.Engine.Tests` | Engine | 真实 attach DebugTarget 子进程；**必须串行**（AssemblyInfo.cs ParallelMode.None） |
 | `DotNetDebugger.Session.Tests` | Session | 真实 attach；**必须串行**；AgentActionLogTests 纯内存可快跑 |
 | `DotNetDebugger.Web.Tests` | Web 库 | TypeTreeData/DocumentStore/AgentViewContext 纯服务端（razor/JS 人工验收） |
