@@ -7,17 +7,81 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+# 宿主测试套件内 UiTools / AppServices 两个集合标了 DisableParallelization（进程内互斥、不与其他集合并行），
+# 单 job 串行跑约 10 分钟。这里按集合拆到并行 job（各占独立 runner），墙钟取决于最长分片。
 jobs:
-  build:
+  test-host-ui:
+    # UI 自动化（UiTools 集合：DebugUiToolsTests + DebugVerifyToolTests）：真实桌面 UIA 驱动，独占桌面
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Generate test data
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+      - name: Test (UI)
+        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- --filter-class "DotNetDebuggerMcp.Tests.DebugUiToolsTests" --filter-class "DotNetDebuggerMcp.Tests.DebugVerifyToolTests"
+
+  test-host-debug:
+    # 动态调试端到端（真实 launch/attach 目标进程；单活动调试会话）——独立 runner，不与 UI 分片抢桌面
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Generate test data
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+      - name: Test (debug)
+        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- --filter-class "DotNetDebuggerMcp.Tests.DebugMcpToolsTests" --filter-class "DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests"
+
+  test-host-core:
+    # 其余宿主测试（含 AppServices 集合与纯逻辑用例）。--filter-not-class 兜底：新增测试类默认落本分片
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Generate test data
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+      - name: Test (core)
+        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- --filter-not-class "DotNetDebuggerMcp.Tests.DebugUiToolsTests" --filter-not-class "DotNetDebuggerMcp.Tests.DebugVerifyToolTests" --filter-not-class "DotNetDebuggerMcp.Tests.DebugMcpToolsTests" --filter-not-class "DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests"
+
+  test-lib:
+    # 库级测试（反编译/文档服务；含「反编译后不残留依赖程序集句柄」回归护栏 AssemblyFileHandleTests）
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Generate test data
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+      - name: Test (Decompiler)
+        run: dotnet test --project tests/DotNetDebugger.Decompiler.Tests/DotNetDebugger.Decompiler.Tests.csproj -c Release
+
+  release:
+    # 仅版本标签（v*）时打包并发布；需全部分片测试通过
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test-host-ui, test-host-debug, test-host-core, test-lib]
     runs-on: windows-latest
     permissions:
       contents: write # 创建 GitHub Release 并上传 nupkg 资产
       id-token: write # 允许 GitHub 为本 job 颁发 OIDC 令牌（NuGet 受信任发布用，无需 API key）
-
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
-      DOTNET_NOLOGO: '1'
-
     steps:
       - uses: actions/checkout@v5
 
@@ -28,22 +92,9 @@ jobs:
       - name: Build
         run: dotnet build -c Release src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj
 
-      # 测试数据 dll（tests/TestData/*.dll）被 git 忽略，CI 上需先用仓库内脚本再生产供单测使用
-      - name: Generate test data
-        shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
-
-      - name: Test
-        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release
-
-      # 库级测试（反编译/文档服务；含「反编译后不残留依赖程序集句柄」回归护栏 AssemblyFileHandleTests）
-      - name: Test (Decompiler)
-        run: dotnet test --project tests/DotNetDebugger.Decompiler.Tests/DotNetDebugger.Decompiler.Tests.csproj -c Release
-
-      # 仅版本标签（v*）时打包并发布。先从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]）作为 GitHub Release 正文
-      # 写入 release-body.md（缺失则构建失败，防止静默无说明发布）；NuGet 包本身不再内嵌日志，PackageReleaseNotes 改为指向 GitHub Release 页链接。
+      # 从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]）作为 GitHub Release 正文写入 release-body.md
+      # （缺失则构建失败，防止静默无说明发布）；NuGet 包本身不再内嵌日志，PackageReleaseNotes 改为指向 GitHub Release 页链接。
       - name: Extract release notes
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
@@ -59,7 +110,6 @@ jobs:
 
       # 框架依赖打包，无需 -r。
       - name: Pack
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
@@ -67,14 +117,12 @@ jobs:
 
       # OIDC 交换出短期 NuGet API 密钥（有效期 1 小时，勿提前获取）
       - name: NuGet login (OIDC -> temp API key)
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: NuGet/login@v1
         id: login
         with:
           user: Silver # nuget.org 用户名（profile name，非邮箱）
 
       - name: NuGet push
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $nupkg = Get-ChildItem artifacts/*.nupkg | Select-Object -First 1
@@ -82,7 +130,6 @@ jobs:
 
       # NuGet 发布成功后创建 GitHub Release：正文复用 CHANGELOG 当前版本段，资产携带 nupkg，正式版（不标记 prerelease）
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
