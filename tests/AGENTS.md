@@ -6,7 +6,7 @@
 
 | 测试项目 | 被测 | 关键点 |
 |---|---|---|
-| `DotNetDebugger.Decompiler.Tests` | Decompiler 库 | DocumentService 三套（语句级映射）+ 经库 internals；其余组件单测在宿主测试项目 |
+| `DotNetDebugger.Decompiler.Tests` | Decompiler 库 | DocumentService 三套（语句级映射）+ 反编译后文件句柄释放回归（`AssemblyFileHandleTests`）+ 经库 internals；其余组件单测在宿主测试项目 |
 | `DotNetDebugger.Engine.Tests` | Engine | 真实 attach DebugTarget 子进程；**必须串行**（AssemblyInfo.cs ParallelMode.None） |
 | `DotNetDebugger.Session.Tests` | Session | 真实 attach；**必须串行**；AgentActionLogTests 纯内存可快跑 |
 | `DotNetDebugger.Web.Tests` | Web 库 | TypeTreeData/DocumentStore/AgentViewContext 纯服务端（razor/JS 人工验收） |
@@ -18,4 +18,5 @@
 - 改 TestSamples/DebugTarget 源码后需重跑脚本；**token 随源码变化，断点/成员定位类断言会漂移**——不 rename/remove 既有类型保 token 稳定。
 - 各测试项目的 `TestDataPaths.cs`/`TestPaths.cs` 都从测试进程 CWD 上溯找 `DotNetDebuggerMcp.slnx` 再拼 dll 路径——路径解析基准是测试进程 CWD（`bin/Debug/net10.0`）。
 - 宿主测试里串行化使用 `AppServices` 静态状态的测试类（`CheckToolTests`/`ToolPipelineTests`/`CacheStatsToolTests`/各 ToolTests 等）标注 `[Collection("AppServices")]`——新增改静态单例注入的测试时加入同集合，避免并行竞态。
+- **CI 测试分片（`.github/workflows/build.yml`）**：宿主套件用 matrix 拆成 6 片（`ui-a`/`ui-b`/`ui-verify`/`debug-a`/`debug-b`/`core`）并行，墙钟 ≈ 最长分片 + 固定开销。分片靠 `--filter-class`/`--filter-method` 组合，且**每片都带 `--filter-not-*` 兜底视角**——新增测试类默认落 `core` 分片、新增方法默认落所属类的兜底分片，不会漏跑；分片间互斥，用例不重复。**改过滤串必须保持「互斥 + 覆盖完整」不变式**（本地验证方法：`dotnet test --project tests/DotNetDebuggerMcp.Tests/... -c Release --no-build --list-tests -- <分片过滤串>` 看「已发现 N 个测试」，各片相加 = 全量）。
 - 真实调试/子进程套件（Engine.Tests、Session.Tests、宿主 `McpSessionConcurrencyTests`/`DebugMcpToolsTests`/`McpWebCoexistTests`）相对慢，改相关代码时定向跑即可；全量测试前先 build + 生成 TestData。

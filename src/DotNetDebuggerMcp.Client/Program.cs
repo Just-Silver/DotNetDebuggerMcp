@@ -13,6 +13,10 @@ try
 {
     await runner.ListToolsAsync();
     await runner.RunAsync(DecompileCases.All(dll));
+    await runner.RunAsync(DecompileCases.CrossAssembly(TestDataHelper.ExtDll));
+    // 文件句柄释放断言（server 进程仍存活，紧随 Ext 反编译之后）：Ext 反编译让 server 解析了同目录依赖 TestSamples.dll——
+    // 两个 dll 都必须可独占打开；残留句柄会锁住构建输出目录，用户侧 dotnet build/clean 报 MSB3061/MSB3021
+    artifactFailures += LockProbe(TestDataHelper.ExtDll, TestDataHelper.Dll);
     await runner.RunAsync(DecompileMemberCases.All(dll));
     await runner.RunAsync(DecompileIlCases.All(dll));
     await runner.RunAsync(ListTypesCases.All(dll));
@@ -62,4 +66,25 @@ if (totalFailures > 0)
 else
 {
     Console.WriteLine($"{Environment.NewLine}全部场景通过。");
+}
+
+// 独占打开探测：任何未释放的句柄（含 FileShare.Read 共享读）都会让本次读写打开抛 IOException。
+// 探测在 Client 进程执行，命中即说明 server 进程仍持有该文件句柄。
+static int LockProbe(params string[] paths)
+{
+    var failures = 0;
+    foreach (var path in paths)
+    {
+        try
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            Console.WriteLine($"{Environment.NewLine}[PASS] 文件句柄释放：{Path.GetFileName(path)} 可独占打开（server 进程仍存活）");
+        }
+        catch (IOException ex)
+        {
+            Console.WriteLine($"{Environment.NewLine}[FAIL] 文件句柄释放：{Path.GetFileName(path)} 仍被 server 进程占用（{ex.Message}）");
+            failures++;
+        }
+    }
+    return failures;
 }

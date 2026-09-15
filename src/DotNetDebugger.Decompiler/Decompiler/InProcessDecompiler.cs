@@ -241,7 +241,8 @@ public sealed class InProcessDecompiler
             var projectFileName = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(assemblyPath) + ".csproj");
 
             using var module = OpenModule(assemblyPath);
-            var resolver = new UniversalAssemblyResolver(assemblyPath, false, module.Metadata.DetectTargetFrameworkId());
+            var resolver = new UniversalAssemblyResolver(assemblyPath, false, module.Metadata.DetectTargetFrameworkId(),
+                streamOptions: DecompilerConfig.DependencyStreamOptions);
             var settings = new DecompilerSettings
             {
                 ThrowOnAssemblyResolveErrors = false,
@@ -303,13 +304,14 @@ public sealed class InProcessDecompiler
 
     /// <summary>
     /// 安全打开程序集：自建 FileStream 传给 PEFile（成功接管所有权由 using 释放）。 直接 new PEFile(path) 在解析失败（如非程序集文件）抛异常时
-    /// FileStream 句柄会泄漏到 GC，这里显式兜底释放。
+    /// FileStream 句柄会泄漏到 GC，这里显式兜底释放。共享模式放宽为 ReadWrite|Delete：反编译大程序集可能耗时较久，
+    /// 期间允许构建工具删除/替换该文件（否则 dotnet build/clean 会因共享冲突失败，用户侧表现为「MCP 锁定 dll」）。
     /// </summary>
     /// <param name="assemblyPath">程序集文件路径。</param>
     /// <returns>构造成功的 PEFile（调用方负责 using 释放）。</returns>
     private static PEFile OpenModule(string assemblyPath)
     {
-        var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.Read);
+        var stream = new FileStream(assemblyPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         try
         {
             return new PEFile(assemblyPath, stream);
@@ -336,7 +338,8 @@ public sealed class InProcessDecompiler
         try
         {
             using var module = OpenModule(assemblyPath);
-            var resolver = new UniversalAssemblyResolver(assemblyPath, false, module.Metadata.DetectTargetFrameworkId());
+            var resolver = new UniversalAssemblyResolver(assemblyPath, false, module.Metadata.DetectTargetFrameworkId(),
+                streamOptions: DecompilerConfig.DependencyStreamOptions);
             var settings = new DecompilerSettings { ThrowOnAssemblyResolveErrors = false };
             var decompiler = new CSharpDecompiler(assemblyPath, resolver, settings);
             decompiler.CancellationToken = cancellationToken;

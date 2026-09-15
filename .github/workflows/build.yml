@@ -7,17 +7,80 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+  DOTNET_NOLOGO: '1'
+
+# 宿主测试套件内 UiTools / AppServices 两个集合标了 DisableParallelization（进程内互斥、不与其他集合并行），
+# 单 job 串行跑宿主测试约 8 分钟（CI 总时长 10 分半 ≈ 78% 在此）。这里按「类 + 方法前缀」拆成分片并行
+# （各占独立 runner），墙钟取决于最长分片 + 固定启动开销。
+#
+# 分片不变式：每个分片都带「兜底」视角（--filter-not-* 取补集）——新增测试类默认落 core 分片、
+# 新增方法默认落对应类的兜底分片，不会漏跑；分片间互斥，用例不重复执行。
 jobs:
-  build:
+  test-host:
+    name: test-host (${{ matrix.shard }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- UI 自动化（UiTools 集合：真实桌面 UIA 驱动，独占桌面）----
+          # ui-a：两个写值长用例 + 按 index 重解析的 stale 用例；ui-b：其余 Ui* 用例（互为补集）
+          - shard: ui-a
+            filters: --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiInput_* --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiAction_ByIndex_* --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiActionInvoke_Button_*
+          - shard: ui-b
+            filters: --filter-class DotNetDebuggerMcp.Tests.DebugUiToolsTests --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiInput_* --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiAction_ByIndex_* --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiActionInvoke_Button_*
+          # ui-verify：debug_verify 场景（重编译 + 启动 + UIA 断言，同样吃桌面）
+          - shard: ui-verify
+            filters: --filter-class DotNetDebuggerMcp.Tests.DebugVerifyToolTests
+
+          # ---- 动态调试端到端（真实 launch/attach 目标进程；单活动调试会话）----
+          # debug-a：断点系（运行到光标/行断点/成员断点/条件断点/源码行断点/异常过滤/异步状态机/trace）
+          - shard: debug-a
+            filters: --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.RunTo_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.LineBreakpoints_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.MemberBreakpoint_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.DebugConditionalBreakpoint_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.SourceLineBreakpoint_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.ExceptionFilter_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.AsyncStateMachine_* --filter-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.DebugTools_*
+          # debug-b：检查/改值/时间线/进程/状态/终止（与 debug-a 互为补集）+ 变量名白名单
+          - shard: debug-b
+            filters: --filter-class DotNetDebuggerMcp.Tests.DebugMcpToolsTests --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.RunTo_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.LineBreakpoints_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.MemberBreakpoint_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.DebugConditionalBreakpoint_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.SourceLineBreakpoint_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.ExceptionFilter_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.AsyncStateMachine_* --filter-not-method DotNetDebuggerMcp.Tests.DebugMcpToolsTests.DebugTools_* --filter-class DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests
+
+          # ---- 兜底分片：其余全部宿主测试（AppServices 集合 + 纯逻辑用例；新增测试类默认落此片）----
+          - shard: core
+            filters: --filter-not-class DotNetDebuggerMcp.Tests.DebugUiToolsTests --filter-not-class DotNetDebuggerMcp.Tests.DebugVerifyToolTests --filter-not-class DotNetDebuggerMcp.Tests.DebugMcpToolsTests --filter-not-class DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Generate test data
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+      - name: Test (${{ matrix.shard }})
+        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- ${{ matrix.filters }}
+
+  test-lib:
+    # 库级测试（反编译/文档服务；含「反编译后不残留依赖程序集句柄」回归护栏 AssemblyFileHandleTests）
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Generate test data
+        shell: pwsh
+        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+      - name: Test (Decompiler)
+        run: dotnet test --project tests/DotNetDebugger.Decompiler.Tests/DotNetDebugger.Decompiler.Tests.csproj -c Release
+
+  release:
+    # 仅版本标签（v*）时打包并发布；需全部分片测试通过
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test-host, test-lib]
     runs-on: windows-latest
     permissions:
       contents: write # 创建 GitHub Release 并上传 nupkg 资产
       id-token: write # 允许 GitHub 为本 job 颁发 OIDC 令牌（NuGet 受信任发布用，无需 API key）
-
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
-      DOTNET_NOLOGO: '1'
-
     steps:
       - uses: actions/checkout@v5
 
@@ -28,18 +91,9 @@ jobs:
       - name: Build
         run: dotnet build -c Release src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj
 
-      # 测试数据 dll（tests/TestData/*.dll）被 git 忽略，CI 上需先用仓库内脚本再生产供单测使用
-      - name: Generate test data
-        shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
-
-      - name: Test
-        run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release
-
-      # 仅版本标签（v*）时打包并发布。先从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]）作为 GitHub Release 正文
-      # 写入 release-body.md（缺失则构建失败，防止静默无说明发布）；NuGet 包本身不再内嵌日志，PackageReleaseNotes 改为指向 GitHub Release 页链接。
+      # 从 CHANGELOG.md 提取当前 tag 对应段落（## [<version>]）作为 GitHub Release 正文写入 release-body.md
+      # （缺失则构建失败，防止静默无说明发布）；NuGet 包本身不再内嵌日志，PackageReleaseNotes 改为指向 GitHub Release 页链接。
       - name: Extract release notes
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
@@ -55,7 +109,6 @@ jobs:
 
       # 框架依赖打包，无需 -r。
       - name: Pack
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $tag = $env:GITHUB_REF -replace '^refs/tags/v', ''
@@ -63,14 +116,12 @@ jobs:
 
       # OIDC 交换出短期 NuGet API 密钥（有效期 1 小时，勿提前获取）
       - name: NuGet login (OIDC -> temp API key)
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: NuGet/login@v1
         id: login
         with:
           user: Silver # nuget.org 用户名（profile name，非邮箱）
 
       - name: NuGet push
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $nupkg = Get-ChildItem artifacts/*.nupkg | Select-Object -First 1
@@ -78,7 +129,6 @@ jobs:
 
       # NuGet 发布成功后创建 GitHub Release：正文复用 CHANGELOG 当前版本段，资产携带 nupkg，正式版（不标记 prerelease）
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}

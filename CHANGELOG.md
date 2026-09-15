@@ -6,6 +6,12 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Fixed
+
+- **反编译/静态分析不再长期占用被分析程序集所在目录的 dll**：此前反编译工具（`decompile`/`decompile_member`/`decompile_to_dir`/`decompile_to_project` 及 Web 代码视图）解析引用程序集时，会给每个依赖程序集开文件句柄并持有到 GC 回收——期间在另一进程执行 `dotnet build`（`--no-incremental`/`clean`/首次复制）会因共享冲突报 `MSB3061`/`MSB3021`/`MSB3027`，点名占用进程为 DotNetDebuggerMcp；反编译返回后文件仍被占用 30 秒以上，需等 GC 或终止 MCP 才释放。现依赖程序集在解析时一次读入元数据并立即关闭句柄，工具返回后构建工具即可删除/替换这些 dll
+
 ## [1.9.0] - 2026-09-10
 
 ### Added
