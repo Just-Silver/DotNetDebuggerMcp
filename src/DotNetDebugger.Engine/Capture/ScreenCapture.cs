@@ -1,3 +1,4 @@
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -94,5 +95,88 @@ public static class ScreenCapture
         return new WindowHandleInfo(hwnd, tsb.ToString(),
             new System.Drawing.Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top),
             IsIconic(hwnd), (int)pid, MatchCount: 1);
+    }
+
+    /// <summary>
+    /// screen/region：GDI BitBlt 虚拟屏（spec §4.3-3：screen/region 不开 WGC）。
+    /// clipInImageSpace=「mode=screen 返回图像素空间」坐标（宿主仅解析字符串格式，换算唯一在此）：
+    /// 图像空间求交——空交集抛 spec §5.2 屏外约定错误（W/H 用图像空间尺寸，agent 可自查口径，
+    /// 由 Engine 回传、宿主不触碰坐标换算）；非空交 → round 换算原生空间裁剪（BitBlt 只抓交集）；
+    /// 交 ≠ 原始输入即 ClippedToScreen（部分越界=已裁交集，头部注明）。
+    /// </summary>
+    public static CaptureResult CaptureScreen(Rectangle? clipInImageSpace, int maxDimension, string format, int quality)
+    {
+        EnsureDpi();
+        var native = GdiCapture.VirtualScreenRect();
+        var k = Math.Min(1.0, (double)maxDimension / Math.Max(native.Width, native.Height));
+        var imgW = Math.Max(1, (int)Math.Round(native.Width * k));
+        var imgH = Math.Max(1, (int)Math.Round(native.Height * k));
+
+        Rectangle nativeClip;
+        var clipped = false;
+        if (clipInImageSpace is { } c)
+        {
+            (nativeClip, clipped) = ResolveRegionClip(c, native, k, imgW, imgH);
+        }
+        else
+        {
+            nativeClip = native;
+        }
+
+        using var bmp = GdiCapture.CaptureScreenBits(nativeClip);
+        return ImagePipeline.Process(bmp, native.Size, maxDimension, format, quality,
+            windowTitle: null, sourceName: "BitBlt", clippedToScreen: clipped);
+    }
+
+    /// <summary>
+    /// region 换算纯函数（自 CaptureScreen 提取——锁屏/无桌面环境下屏幕 BitBlt 不可用时，
+    /// 换算逻辑仍可经此单测覆盖；spec §3.1 k 换算、§5.2 屏外/交集语义）：
+    /// 图像空间求交（空=屏外抛约定错误，W/H 用图像空间尺寸）→ round 换算原生空间 → 夹紧虚拟屏
+    /// → 交 ≠ 原输入即部分越界（ClippedToScreen）。
+    /// </summary>
+    internal static (Rectangle NativeClip, bool Clipped) ResolveRegionClip(
+        Rectangle clip, Rectangle native, double k, int imgW, int imgH)
+    {
+        var inter = Rectangle.Intersect(clip, new Rectangle(0, 0, imgW, imgH));
+        if (inter.IsEmpty)
+            throw new CaptureException($"region ({clip.X},{clip.Y},{clip.Width},{clip.Height}) 完全在屏幕范围 ({imgW}x{imgH}) 之外。");
+        var clipped = inter != clip;
+        var nativeClip = new Rectangle(
+            native.X + (int)Math.Round(inter.X / k),
+            native.Y + (int)Math.Round(inter.Y / k),
+            Math.Max(1, (int)Math.Round(inter.Width / k)),
+            Math.Max(1, (int)Math.Round(inter.Height / k)));
+        nativeClip.Intersect(native);   // round 兜底夹紧（最多溢出 1px）
+        if (nativeClip.Width <= 0 || nativeClip.Height <= 0)
+            throw new CaptureException($"region ({clip.X},{clip.Y},{clip.Width},{clip.Height}) 完全在屏幕范围 ({imgW}x{imgH}) 之外。");
+        return (nativeClip, clipped);
+    }
+
+    /// <summary>
+    /// window 抓取编排（T4 版=GDI 两道；T5 在链首插入 WGC，spec §4.3 回退链）：
+    /// PrintWindow → 采样纯黑则丢弃 → BitBlt（最小化窗口跳过）→ 全失败抛约定错误。
+    /// </summary>
+    public static CaptureResult CaptureWindow(IntPtr hwnd, int maxDimension, string format, int quality)
+    {
+        EnsureDpi();
+        const string failMsg = "窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。";
+        var info = GetWindowInfo(hwnd) ?? throw new CaptureException(failMsg);
+
+        // 第 2 道：PrintWindow → 黑图回退
+        Bitmap? bmp = GdiCapture.TryPrintWindow(hwnd);
+        var source = "PrintWindow";
+        if (bmp is not null && ImagePipeline.IsAllBlack(bmp)) { bmp.Dispose(); bmp = null; }
+
+        // 第 3 道：BitBlt（最小化窗口屏幕无内容，不回退——spec §4.2 IsIconic 规则）
+        if (bmp is null && !info.IsIconic)
+        {
+            bmp = GdiCapture.TryBitBltWindow(hwnd);
+            source = "BitBlt";
+        }
+
+        if (bmp is null) throw new CaptureException(failMsg);
+
+        using (bmp)
+            return ImagePipeline.Process(bmp, bmp.Size, maxDimension, format, quality, info.Title, source);
     }
 }
