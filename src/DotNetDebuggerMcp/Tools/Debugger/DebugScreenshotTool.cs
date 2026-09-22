@@ -21,6 +21,7 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 [McpServerToolType]
 public static class DebugScreenshotTool
 {
+    /// <summary>截取窗口/屏幕画面返回图片（window/screen/region 三模式；参数语义与默认值见各参数 <c>[Description]</c>）。</summary>
     [McpServerTool]
     [Description("截取窗口/屏幕画面返回图片，供多态模型观察 UI 状态做自动化冒烟。独立工具，不要求调试会话。" +
         "mode=window（默认）按 processId 或 windowTitle 定位目标主窗口（窗口未出现会等 timeoutSeconds 秒，默认 5）；" +

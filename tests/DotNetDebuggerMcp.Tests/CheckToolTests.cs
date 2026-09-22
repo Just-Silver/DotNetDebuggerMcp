@@ -32,12 +32,14 @@ public class CheckToolTests
     [Fact]
     public async Task NuGet有新版本_报告升级提示()
     {
+        // 假新版本须恒大于 csproj 当前 <Version>（曾写死 2.0.0，发 2.0.0 时撞车：缓存 latest==当前
+        // → 判定已是最新 → 断言挂 CI）——取 99.0.0 遥远领先，后续 bump 不再撞。
         await RunWithAsync(
-            cachedLatest: "2.0.0",
+            cachedLatest: "99.0.0",
             async text =>
             {
                 Assert.Contains("DotNetDebuggerMcp: 当前", text);
-                Assert.Contains("NuGet 最新 2.0.0", text);
+                Assert.Contains("NuGet 最新 99.0.0", text);
                 Assert.Contains("dotnet tool update --global DotNetDebuggerMcp", text);
             });
     }
