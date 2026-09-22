@@ -1,7 +1,7 @@
 # screenshot 截图工具设计（2026-09-22）
 
 > 目标：为多态模型提供**独立于调试会话**的截图 MCP 工具，用于 GUI 观察与自动化冒烟。
-> 状态：设计经用户逐节评审通过（architectural 路径），待用户终审本 spec 后转 writing-plans。
+> 状态：经用户逐节评审 + 独立审查（r4-coder/deepseek-v4.1-flash，Issues Found 三阻断五建议已全部修复落档）+ PackAsTool 打包 spike 实证（2026-09-22）；待用户终审后转 writing-plans。
 
 ## 1. 背景与定位
 
@@ -20,12 +20,13 @@
 | D4 | 作用范围 | **独立于调试会话**：三模式均不要求会话；window 定位用 `processId`+`windowTitle` 双选择器，两者皆空时若有活动会话则兜底取其目标 pid |
 | D5 | 局部坐标系 | **屏幕坐标空间**（= mode=screen 返回图像素空间，原点左上，Anthropic 规范同款） |
 | D6 | 窗口未就绪 | `timeoutSeconds` 带超时轮询等窗口出现（默认 5s） |
-| D7 | 抓取策略 | **WGC 优先 + GDI 回退**（甲案）；Engine「只引 ClrDebug+DbgShim」纪律**移除**（用户：从未要求过） |
+| D7 | 抓取策略 | **WGC 优先 + GDI 回退**（甲案）；Engine「只引 ClrDebug+DbgShim」纪律**移除**（用户：从未要求过）。WGC 依赖 WinRT 投影 → 全链升 windows TFM；宿主 PackAsTool 的 NETSDK1146 限制经 **spike 实测**（2026-09-22，SDK 10.0.401）用两段 MSBuild Target hack 解决（pack/install/run 三关全过；官方 RID-specific 新路实测同样报错、不可用） |
 | D8 | 超限落盘位置 | `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\`，`filePath` 可覆盖 |
 | D9 | 缓存 | 不入缓存、不过 ToolPipeline（独立工具、缓存无意义）——`IsErrorResult` 七类前缀**不涉及** |
-| D10 | GUI 测试来源 | **测试进程自建 WinForms 窗口**（方案 a），不改 `generate-testdata.ps1` |
+| D10 | GUI 测试来源 | **复用既有 `tests/TestData/UiSampleApp`**（U1A UI 自动化的 WinForms 目标，源码受版本控制、`generate-testdata.ps1` 已构建）——独立审查发现原"自建窗口"方案与之重复，改为复用；不改生成脚本 |
 | D11 | 测试形态 | **以单测为主**（Engine 能力单测 + 宿主工具单测），不新增 e2e 闭环 |
 | D12 | 工具命名 | `screenshot`（不带 debug_ 前缀，强调独立性） |
+| D13 | 打包路线 | 宿主 csproj 加两段 MSBuild Target（`_PackToolValidation` 前清空/后恢复 `TargetPlatformIdentifier`）——spike 实测 pack→install→run 全过；官方 docs（NETSDK1146 错误列表 2026-05 仍在、dotnet/sdk#52716 官方支持进行中）与 SDK 源码核对一致；**不新增 CLI 参数、豁免 Client e2e Cases 约定（依 D11）** |
 
 ## 3. 工具面契约（agent 可见）
 
@@ -38,7 +39,7 @@
 | `mode` | `string = "window"` | `window`（目标主窗口）/ `screen`（全屏）/ `region`（局部） |
 | `processId` | `int = 0` | window 定位：按进程 pid（0=未提供）；**优先于 windowTitle** |
 | `windowTitle` | `string = ""` | window 定位：窗口标题子串（忽略大小写） |
-| `region` | `string = ""` | `mode=region` 必填，`"x,y,w,h"`，**坐标=mode=screen 返回图像素空间**（原点左上）。换算规则无状态确定性：screen 返回前若原生维 >2000px 会等比缩到 2000 内（缩放比 k=min(1, 2000/max(W,H))，W/H=虚拟屏原生尺寸，可由 GetSystemMetrics 现算），宿主收到 region 坐标后除以 k 换回原生像素再交 Engine 裁剪——同屏幕下同一会话内 screen 与 region 空间恒一致 |
+| `region` | `string = ""` | `mode=region` 必填，`"x,y,w,h"`，**坐标=mode=screen 返回图像素空间**（原点左上）。换算规则无状态确定性：screen 返回前若原生维 >2000px 会等比缩到 2000 内（缩放比 k=min(1, 2000/max(W,H))，W/H=虚拟屏原生尺寸，可由 GetSystemMetrics 现算），宿主收到 region 坐标后除以 k 换回原生像素（**四舍五入 round 取整**）再交 Engine 裁剪——同屏幕下 screen 与 region 空间恒一致 |
 | `format` | `string = "png"` | `png` \| `jpeg` |
 | `quality` | `int = 80` | jpeg 质量 0-100（越界 clamp），png 忽略 |
 | `timeoutSeconds` | `int = 5` | 仅 window：等窗口出现秒数（clamp 0-30，0=立即试一次） |
@@ -70,13 +71,27 @@
 
 **铁律修订**：根 `AGENTS.md` 与宿主 `AGENTS.md`「工具返回 `Task<string>`」增加例外条款：图片类工具（当前仅 `screenshot`）返回 `CallToolResult`，错误仍为纯文本内容。
 
-**SDK 验证点（实现首日）**：确认 ModelContextProtocol C# SDK 当前版本支持工具方法返回 `Task<CallToolResult>`；若不支持，回来找用户改走纯落盘路线。
+**SDK 验证点**：csharp-sdk 源码已确认支持（`Protocol/CallToolResult.cs` + `McpServerTool`，测试覆盖返回 CallToolResult/IsError/StructuredContent 场景）；实现首日用本仓库锁定的 ModelContextProtocol 包版本跑通最小样例即可，若版本行为不符再回来找用户改走纯落盘路线。
+
+**边界（显式声明）**：`screenshot` **不新增 CLI 入口**（`DotNetDebuggerMcpCmd` 不加截图参数，CLI 调试 `-dbg` 体系与本工具无关）；**豁免 Client e2e Cases 约定**（依 D11 不新增 e2e，单测覆盖）。
 
 ## 4. Engine 截图能力
 
 ### 4.1 工程变更
 
-- **TFM 全链升级**：`net10.0` → `net10.0-windows10.0.19041.0`。凡直接/间接引用 Engine 的项目同步（Engine、Session、Web、宿主、各相关测试项目；Client 若不引用则不动）。理由：WGC 需 WinRT 投影（随 windows TFM 自带零 NuGet）；非 windows TFM 不能引用 windows TFM 项目。本项目本就 win-x64 only（DbgShim 决定），属形式变更但波及全部 csproj。
+- **TFM 全链升级**：`net10.0` → `net10.0-windows10.0.22621.0`（22621 起 `GraphicsCaptureSession.IsBorderRequired` 等 API 进入编译期投影，ApiInformation 运行时探测兼容老系统）。凡直接/间接引用 Engine 的项目同步（Engine、Session、Web、各相关测试项目；Client 不引用则不动）。非 windows TFM 不能引用 windows TFM 项目（NU1201）。
+- **宿主 PackAsTool 限制与解法（spike 已实证）**：宿主是 `PackAsTool` 打包的 dotnet tool，NETSDK1146 禁止带平台标签（官方错误列表 2026-05 仍在；dotnet/sdk#52716 官方支持进行中）。**实测结论**（SDK 10.0.401，2026-09-22）：原样 pack ❌ / 官方 RID-specific（`RuntimeIdentifiers=win-x64`）❌ 同样报错 / **两段 MSBuild Target hack ✅ pack→tool install→run 全过**。宿主 csproj 采用：
+
+  ```xml
+  <Target Name="HackBeforePackToolValidation" BeforeTargets="_PackToolValidation">
+    <PropertyGroup><TargetPlatformIdentifier></TargetPlatformIdentifier><TargetPlatformMoniker></TargetPlatformMoniker></PropertyGroup>
+  </Target>
+  <Target Name="HackAfterPackToolValidation" AfterTargets="_PackToolValidation" BeforeTargets="PackTool">
+    <PropertyGroup><TargetPlatformIdentifier>Windows</TargetPlatformIdentifier></PropertyGroup>
+  </Target>
+  ```
+
+  附注：装机端无平台过滤（装到非 Windows 会跑不起来）——本包本就 win-x64 only，README/NuGet 描述注明 Windows-only 即可。
 - **新增依赖**：`System.Drawing.Common` 进 Engine（编码 PNG/JPEG、缩放、裁剪）。
 - **Engine AGENTS.md 纪律修订**：边界条款改为「NuGet 限 ClrDebug + DbgShim + System.Drawing.Common，无宿主依赖」。
 
@@ -95,7 +110,7 @@ record CaptureResult(byte[] Image, int Width, int Height,
 ```
 
 - **DPI**：截图入口首次调用 `SetProcessDpiAwarenessContext(PROCESS_PER_MONITOR_DPI_AWARE_V2)`（幂等，已设置容忍 ERROR_ACCESS_DENIED）——全链物理像素，与 region 坐标空间定义一致。运行时调用，不用 manifest。
-- **缩放/编码/裁剪**：Engine 内用 System.Drawing 完成（2000px 等比上限、format/quality 编码、region 裁剪、纯黑采样检测），直接产出编码后 `byte[]`。
+- **缩放/编码/裁剪（职责唯一归属 Engine，宿主不碰）**：Engine 内用 System.Drawing 完成 2000px 等比缩放（上限常量由宿主 `AppConfig` 定义、经参数传入 Engine）、format/quality 编码、region 裁剪（含 §3.1 的 k 换算与 round 取整）、纯黑采样检测，直接产出编码后 `byte[]`；宿主只做参数校验、等窗口轮询、头部组装、落盘与 CallToolResult 组装。
 
 ### 4.3 抓取回退链（window 模式）
 
@@ -119,7 +134,7 @@ record CaptureResult(byte[] Image, int Width, int Height,
 
 ### 5.1 体积与落盘
 
-1. 任一维 >2000px → 等比缩放（`AppConfig` 常量，对齐 opencode `media.image` 默认）；
+1. 缩放由 Engine 按 `AppConfig` 上限执行（见 §4.2，职责唯一归 Engine）；宿主只消费结果的 `NativeWidth/Height` 与缩放后尺寸填头部；
 2. base64 后 ≥2MB（`AppConfig` 常量，chrome-devtools 阈值）或 `filePath` 非空 → 落盘：
    - 默认目录 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\screenshot-{yyyyMMdd-HHmmssfff}-{pid}.{ext}`；
    - `filePath` 指定则 `Directory.CreateDirectory` 保证父目录后写入；
@@ -149,17 +164,17 @@ record CaptureResult(byte[] Image, int Width, int Height,
 
 ## 6. 测试策略（单测为主，D10/D11）
 
-### 6.1 GUI 来源：测试进程自建窗口
+### 6.1 GUI 来源：复用既有 UiSampleApp（D10）
 
-- 相关测试项目升 windows TFM 后引 WinForms：`new Form(){ BackColor = Color.Tomato }.Show()`，按**测试进程自身 pid** 走 window 模式。
-- **已知坑（测试内注释）**：Form 创建线程须 **STA + 消息泵**（专用 STA 线程 `Application.Run`，或 `Show()` 后 `Application.DoEvents()` 保证绘制完成）。
-- 不改 `generate-testdata.ps1` → 无 token 漂移。
+- 直接起 `tests/TestData/UiSampleApp/UiSampleApp.exe`（U1A 的 WinForms 测试目标，`generate-testdata.ps1` 已构建、源码受版本控制），按其 **pid** 走 window 模式断言——不自建窗口（STA/消息泵坑不复存在）、不改生成脚本（零 token 漂移）。
+- 测试起子进程遵循既有铁律：**排空 stdout/stderr**（UiSampleApp 虽无控制台输出，仍按 `DebugTargetProcess` 同款防御）；结束 kill 清理。
+- 已知注意：UiSampleApp 主窗内容与尺寸在脚本/源码中固定，断言窗口标题、非纯黑、尺寸与窗口 rect 一致即可。
 
 ### 6.2 Engine 单测
 
-- `FindMainWindow`：自建窗口按 pid 命中；标题子串命中/未命中；多可见窗口取 Z 序最前。
-- GDI：BitBlt 全屏 → 尺寸=虚拟屏 + PNG 头合法（**不断言非纯黑**——CI 桌面可能纯色）；PrintWindow/回退链抓自建番茄红窗 → 非纯黑 + 采样含红色调。
-- WGC：`IsSupported()` 探测，不支持 → `Assert.Skip`；支持 → 抓自建窗非纯黑。
+- `FindMainWindow`：起 UiSampleApp 按 pid 命中；标题子串命中/未命中；多可见窗口取 Z 序最前。
+- GDI：BitBlt 全屏 → 尺寸=虚拟屏 + PNG 头合法（**不断言非纯黑**——CI 桌面可能纯色）；PrintWindow/回退链抓 UiSampleApp 主窗 → 非纯黑 + 尺寸与窗口 rect 一致。
+- WGC：`IsSupported()` 探测，不支持 → `Assert.Skip`；支持 → 抓 UiSampleApp 主窗非纯黑。
 - region：正常 / 部分越界（裁交集）/ 完全越界（约定错误）。
 - 缩放：>2000px 等比、纵横比守恒；纯黑检测探针。
 
@@ -183,11 +198,14 @@ record CaptureResult(byte[] Image, int Width, int Height,
 
 | 项 | 动作 |
 |---|---|
+| `docs/planning/specs/README.md` | 状态表登记本 spec（仓库惯例：每 spec 一行状态） |
+| `docs/planning/README.md` | 文档地图同步登记 |
 | 根 `README.md` | 工具清单加 `screenshot`（铁律：同 commit 改到位） |
 | 根/宿主 `AGENTS.md` | ① `Task<string>` 加 CallToolResult 例外条款；② 调试工具计数/清单更新 |
 | `src/DotNetDebugger.Engine/AGENTS.md` | 边界纪律修订（NuGet 清单 + Capture/ 结构 + TFM 说明） |
 | `CHANGELOG.md` `[Unreleased]` | 记 `screenshot` 新工具（使用者可见） |
 | `src/DotNetDebugger.Web/TODO.md` | 冻结记录已写入（2026-09-22） |
+| `src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` | ① TFM 升级；② PackAsTool 两段 hack Target（§4.1，spike 实证写法） |
 | `AppConfig` | 新增缩放上限 / 2MB 阈值 / 落盘目录常量 |
 | 握手 `HandshakeFeatureIntro` | 实现时检查现有 debug 工具是否在列，在则同步 `screenshot` |
 | 版本三处同步 | 发布时（csproj `<Version>` + `.mcp/server.json`×2 + CHANGELOG 段转换），本设计不动 |
@@ -207,7 +225,8 @@ record CaptureResult(byte[] Image, int Width, int Height,
 | 风险 | 处置 |
 |---|---|
 | Win10 WGC 捕获黄框关不掉（Win11 22H2+ 可关） | 接受（截图瞬时）；手工验收确认表现，若不可接受再评估仅 Win11 关/Win10 走 GDI 的开关 |
-| SDK 不支持 `Task<CallToolResult>` | 实现首日验证；不支持则回退纯落盘路线并重新报批 |
+| SDK 不支持 `Task<CallToolResult>` | csharp-sdk 源码已确认支持；实现首日按锁定包版本跑最小样例，不符则回退纯落盘路线并重新报批 |
+| **PackAsTool hack 属社区方案**（NETSDK1146 未官方解除，dotnet/sdk#52716 进行中；SDK 升级可能破坏 hack） | spike 已在 SDK 10.0.401 实证；**升 SDK 版本后必须重验 `dotnet pack` + tool install**；官方支持落地后撤掉 hack（改官方姿势） |
 | CI 无头/远程会话截图不可用 | 探测 + Skip（6.4），不阻塞流水线 |
-| TFM 全链升级引发兼容问题 | 本就 win-x64 only；升级后全量 build + 全量单测回归 |
-| 番茄红窗在高对比主题/DPI 下采样断言不稳 | 断言用宽容色域（含红色调）而非精确 RGB；失败信息带采样值便于排查 |
+| TFM 全链升级引发兼容问题 | 本就 win-x64 only；升级后全量 build + 全量单测回归 + 宿主打包三关重验（pack/install/run） |
+| 番茄红窗在高对比主题/DPI 下采样断言不稳 | 已改用 UiSampleApp（D10），断言基于其固定窗口内容/尺寸；失败信息带采样值便于排查 |
