@@ -6,7 +6,7 @@
 ## 1. 背景与定位
 
 - 现有 10+ 个 debug_* 工具全部输出 `Task<string>` 文本；观察 UI 状态需要图片通道。
-- **截图是独立工具**：不要求活动调试会话（用户明确决定），与 debug_* 只共享落盘目录与文案风格。
+- **截图是独立工具**：不要求活动调试会话（用户明确决定），与 debug_* 仅共享文案风格；落盘用宿主既有本地数据目录 `%LOCALAPPDATA%\DotNetDebuggerMcp`（与 `update-check.json` 同根）。
 - **Web 展示面整体冻结**（2026-09-22，已记入 `src/DotNetDebugger.Web/TODO.md`）：本工具只做 MCP 工具面，不为 Web 设计任何展示/回放。
 - 业界参考（高星/官方）：Anthropic computer-use（`zoom.region` 屏幕坐标空间规范）、chrome-devtools-mcp 52k★（≥2MB 落盘降级、format/quality/filePath、image+文本双轨）、playwright-mcp 37k★（scale 降采样、Description 写能力边界）、mcp-screenshot-server（`mode: fullscreen|window|region` 单工具多模式）。
 
@@ -16,7 +16,7 @@
 |---|---|---|
 | D1 | 截图对象 | 被调试/任意目标进程的**主窗口**为核心，另支持全局屏幕与局部区域 |
 | D2 | 工具面形状 | **单工具多模式** `mode=window\|screen\|region`（非多工具） |
-| D3 | 输出形态 | **MCP image 块直返**，修订为**条件双轨**：≤2MB 附 image 块，超限/指定 filePath 落盘返回路径（chrome-devtools 先例） |
+| D3 | 输出形态 | **MCP image 块直返**，修订为**条件双轨**：<2MB 附 image 块，≥2MB/指定 filePath 落盘返回路径（chrome-devtools 先例） |
 | D4 | 作用范围 | **独立于调试会话**：三模式均不要求会话；window 定位用 `processId`+`windowTitle` 双选择器，两者皆空时若有活动会话则兜底取其目标 pid |
 | D5 | 局部坐标系 | **屏幕坐标空间**（= mode=screen 返回图像素空间，原点左上，Anthropic 规范同款） |
 | D6 | 窗口未就绪 | `timeoutSeconds` 带超时轮询等窗口出现（默认 5s） |
@@ -39,7 +39,7 @@
 | `mode` | `string = "window"` | `window`（目标主窗口）/ `screen`（全屏）/ `region`（局部） |
 | `processId` | `int = 0` | window 定位：按进程 pid（0=未提供）；**优先于 windowTitle** |
 | `windowTitle` | `string = ""` | window 定位：窗口标题子串（忽略大小写） |
-| `region` | `string = ""` | `mode=region` 必填，`"x,y,w,h"`，**坐标=mode=screen 返回图像素空间**（原点左上）。换算规则无状态确定性：screen 返回前若原生维 >2000px 会等比缩到 2000 内（缩放比 k=min(1, 2000/max(W,H))，W/H=虚拟屏原生尺寸，可由 GetSystemMetrics 现算），宿主收到 region 坐标后除以 k 换回原生像素（**四舍五入 round 取整**）再交 Engine 裁剪——同屏幕下 screen 与 region 空间恒一致 |
+| `region` | `string = ""` | `mode=region` 必填，`"x,y,w,h"`，**坐标=mode=screen 返回图像素空间**（原点左上）。换算规则无状态确定性：screen 返回前若原生维 >2000px 会等比缩到 2000 内（缩放比 k=min(1, 2000/max(W,H))，W/H=虚拟屏原生尺寸），**由 Engine 按 §4.2 职责换算为原生像素后裁剪**（round 取整）——同屏幕下 screen 与 region 空间恒一致，宿主只透传解析后的坐标 |
 | `format` | `string = "png"` | `png` \| `jpeg` |
 | `quality` | `int = 80` | jpeg 质量 0-100（越界 clamp），png 忽略 |
 | `timeoutSeconds` | `int = 5` | 仅 window：等窗口出现秒数（clamp 0-30，0=立即试一次） |
@@ -54,8 +54,8 @@
 ### 3.3 返回契约（`Task<CallToolResult>`，铁律例外）
 
 ```
-成功 ≤2MB(base64后):  content[0]=文本头部；content[1]=image 块(base64+mime)
-成功 >2MB / 指定filePath: content[0]=文本头部 +「已落盘: <绝对路径>」，无 image 块
+成功 <2MB(base64后):   content[0]=文本头部；content[1]=image 块(base64+mime)
+成功 ≥2MB / 指定filePath: content[0]=文本头部 +「已落盘: <绝对路径>」，无 image 块
 失败:                  纯文本中文提示，不抛异常
 ```
 
@@ -102,8 +102,9 @@ WindowHandleInfo? FindMainWindow(int processId, string titleSubstring)
     // EnumWindows：可见 + 属主 pid + 标题匹配（忽略大小写），Z 序最前；返回 hwnd/标题/rect/IsIconic
 CaptureResult CaptureWindow(IntPtr hwnd)
     // WGC 优先 → 回退链（见 4.3）；最小化(IsIconic)只走 WGC/PrintWindow，不回退 BitBlt
-CaptureResult CaptureScreen(Rectangle? clip)
-    // GDI BitBlt 虚拟屏幕（GetSystemMetrics SM_X/Y/CX/CY），clip=原生像素裁剪（region 复用；宿主已按 §3.1 规则把返回图像素坐标换算为原生像素）
+CaptureResult CaptureScreen(Rectangle? clipInImageSpace)
+    // GDI BitBlt 虚拟屏幕（GetSystemMetrics SM_X/Y/CX/CY）；clip 为「screen 返回图像素空间」坐标，
+    // Engine 内部按 §3.1 的 k 公式换算为原生像素（round）后裁剪——region 模式复用本方法
 record CaptureResult(byte[] Image, int Width, int Height,
                      int NativeWidth, int NativeHeight, string? WindowTitle,
                      string Source /* WGC|PrintWindow|BitBlt */, bool FellBack, bool WasAllBlack)
@@ -135,19 +136,19 @@ record CaptureResult(byte[] Image, int Width, int Height,
 ### 5.1 体积与落盘
 
 1. 缩放由 Engine 按 `AppConfig` 上限执行（见 §4.2，职责唯一归 Engine）；宿主只消费结果的 `NativeWidth/Height` 与缩放后尺寸填头部；
-2. base64 后 ≥2MB（`AppConfig` 常量，chrome-devtools 阈值）或 `filePath` 非空 → 落盘：
-   - 默认目录 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\screenshot-{yyyyMMdd-HHmmssfff}-{pid}.{ext}`；
+2. base64 后 **≥2MB**（`AppConfig` 常量，chrome-devtools 阈值）或 `filePath` 非空 → 落盘：
+   - 默认目录 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\screenshot-{yyyyMMdd-HHmmssfff}-{mode}[-{pid}].{ext}`（pid 仅 window 模式有，screen/region 省略段）；
    - `filePath` 指定则 `Directory.CreateDirectory` 保证父目录后写入；
    - 返回文本头部 + `已落盘: <绝对路径>`，无 image 块；
    - 落盘失败 → 回退附 image 块（若可附）+ 注明失败原因。
-- 落盘文件不自动清理（YAGNI），README 注明位置。
+3. 落盘文件不自动清理（YAGNI），README 注明位置。
 
 ### 5.2 错误语义全表（中文、不抛异常）
 
 | 场景 | 返回 |
 |---|---|
 | mode/format 非法 | `mode 仅支持 window/screen/region（当前 "x"）。` / 同款 format 提示 |
-| region 格式错 | `region 格式应为 "x,y,w,h"（屏幕像素，原点左上）。` |
+| region 格式错 | `region 格式应为 "x,y,w,h"（mode=screen 返回图像素空间，原点左上）。` |
 | region 完全在屏外 | `region (x,y,w,h) 完全在屏幕范围 (WxH) 之外。`（部分越界=裁交集+头部注明，不报错） |
 | window 双选择器皆空且无会话 | `请提供 processId 或 windowTitle 定位窗口（两者皆空时也可先 debug_launch 建立会话自动取目标 pid）。` |
 | 超时未找到窗口 | `{N} 秒内未找到匹配的可见窗口（processId=… / 标题含 "…"）。` |
@@ -182,7 +183,7 @@ record CaptureResult(byte[] Image, int Width, int Height,
 
 - 参数校验全表逐条对错误文案；
 - 返回结构：`content[0]` 头部含 `目标/尺寸/来源`、`content[1]` image 块 base64 可解码为合法 PNG；
-- 落盘分支：`filePath` 强制落盘 → 文件存在 + 返回含路径 + 无 image 块；默认目录分支用测试小阈值常量触发；
+- 落盘分支：`filePath` 强制落盘 → 文件存在 + 返回含路径 + 无 image 块；默认目录分支触发需 2MB 阈值常量具备测试可替换 seam（internal/参数注入，实现时定）；
 - 超时 / 双选择器皆空的中文提示。
 
 ### 6.4 CI 风险预案
@@ -229,4 +230,4 @@ record CaptureResult(byte[] Image, int Width, int Height,
 | **PackAsTool hack 属社区方案**（NETSDK1146 未官方解除，dotnet/sdk#52716 进行中；SDK 升级可能破坏 hack） | spike 已在 SDK 10.0.401 实证；**升 SDK 版本后必须重验 `dotnet pack` + tool install**；官方支持落地后撤掉 hack（改官方姿势） |
 | CI 无头/远程会话截图不可用 | 探测 + Skip（6.4），不阻塞流水线 |
 | TFM 全链升级引发兼容问题 | 本就 win-x64 only；升级后全量 build + 全量单测回归 + 宿主打包三关重验（pack/install/run） |
-| 番茄红窗在高对比主题/DPI 下采样断言不稳 | 已改用 UiSampleApp（D10），断言基于其固定窗口内容/尺寸；失败信息带采样值便于排查 |
+| UiSampleApp 窗口断言在 CI/高对比主题/DPI 下不稳 | 断言基于其固定窗口标题/尺寸与非纯黑（不比精确像素）；失败信息带采样值与窗口 rect 便于排查 |
