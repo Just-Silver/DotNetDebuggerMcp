@@ -6,6 +6,9 @@ internal static class TestPaths
     /// <summary>从测试 CWD 上溯仓库根（含 DotNetDebuggerMcp.slnx）拼 tests/TestData/DebugTarget.exe。</summary>
     public static string DebugTargetExe { get; } = Locate("tests", "TestData", "DebugTarget.exe");
 
+    /// <summary>UiSampleApp.exe（U1A WinForms 目标；screenshot Capture 测试同用）。</summary>
+    public static string UiSampleAppExe { get; } = Locate("tests", "TestData", "UiSampleApp", "UiSampleApp.exe");
+
     private static string Locate(params string[] segments)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
