@@ -42,9 +42,9 @@
 dotnet build -c Release src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj
 dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj    # 单测（含 debug 工具端到端 / MCP+Web 共存 / 会话级并发回归）
 dotnet run -c Release --project src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.Client.csproj   # 端到端（自启动 server，覆盖反编译/元数据工具面）
-./src/DotNetDebuggerMcp/bin/Debug/net10.0/DotNetDebuggerMcp.exe -dbg tests/TestData/DebugTarget.exe -dbg-bp 0x06000003   # CLI 一次性调试（改引擎后手动验证）
+./src/DotNetDebuggerMcp/bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe -dbg tests/TestData/DebugTarget.exe -dbg-bp 0x06000003   # CLI 一次性调试（改引擎后手动验证）
 ```
 
 - 测试需先 `generate-testdata.ps1` 生成 `tests/TestData/*.dll`（git 忽略，CI 已自动跑脚本）。
 - 关键回归：`McpSessionConcurrencyTests`（stdout 零噪声护栏）、`DebugMcpToolsTests`（真实子进程 debug_launch→断点→continue→state→stack/variables→disconnect 闭环）、`McpWebCoexistTests`（MCP+Web 同进程）、`CacheStatsToolTests`/`ToolPipelineTests` 等 AppServices collection 串行。
-- 本地调试注意：根 `opencode.json` 把本仓库 MCP server 绑定到 `bin/Debug/net10.0/DotNetDebuggerMcp.exe`（带 `--web` 仅为联调），改代码需重新 build + 重启 opencode 才生效；会话内 `dotnetdebugger_*` 反映旧二进制，验证新行为以 Client/CLI 输出为准。
+- 本地调试注意：根 `opencode.json` 把本仓库 MCP server 绑定到 `bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe`（带 `--web` 仅为联调），改代码需重新 build + 重启 opencode 才生效；会话内 `dotnetdebugger_*` 反映旧二进制，验证新行为以 Client/CLI 输出为准。

@@ -4,7 +4,7 @@
 
 ## 边界纪律
 
-- net10.0，ProjectReference 仅 **Engine + Decompiler**（Decompiler 目前实际未用，仅保留依赖面）。无第三方包、无宿主反向依赖。
+- net10.0-windows10.0.22621.0，ProjectReference 仅 **Engine + Decompiler**（Decompiler 目前实际未用，仅保留依赖面）。无第三方包、无宿主反向依赖。
 - 本层是「会话语义」而非「引擎细节」：不直接碰 ICorDebug/ClrDebug，一切经 Engine `DebugSession`。Engine 的模型类型（`DebugSessionState` 等）会被宿主工具直接引用作输出格式来源——改 Engine 枚举时留意宿主 `Tools/Debugger/`。
 - 宿主与 Web 共享**同一个** `DebugSessionManager` 单例：宿主侧包装在 `DotNetDebuggerMcp.Services.DebugSessionService.Manager`，经 `WebHostBootstrap.Configure` 注入 Web。**勿在各处 new 独立 Manager**。
 

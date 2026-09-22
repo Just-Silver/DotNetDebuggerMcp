@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -45,20 +45,13 @@
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
   </ItemGroup>
 
-  <!-- U1 UI 自动化（FlaUI）：PackAsTool 拒绝 platform-qualified TFM，宿主必须保持 net10.0；
-       FlaUI 5.0 只发布 net8.0-windows7.0 现代档，net10.0 无法经 PackageReference 消费该资产
-       （平台不匹配，只能靠 AssetTargetFallback/压制 NU1701）→ PackageDownload 把 FlaUI 当 path-only
-       输入、HintPath 显式绑定兼容程序集（Private=true 保证 dll 随 tool 输出）。
-       另显式引用 FlaUI.UIA3 依赖的 Interop.UIAutomationClient 与 System.Management（本仓库无中央包管理，故带版本）。 -->
+  <!-- U1 UI 自动化（FlaUI）：宿主升 windows TFM（screenshot 计划 T1，2026-09-22）后 FlaUI 5.0 的
+       net8.0-windows7.0 资产平台匹配（TFM 10 > 包 8 同平台族，NU1202/NU1701 均不触发），
+       回归直引。此前 PackageDownload+HintPath 绕行为「PackAsTool 必须纯 net10.0」时代产物，
+       该约束已由 csproj 尾部两段 PackAsTool hack 取代（NETSDK1146）。 -->
   <ItemGroup>
-    <PackageDownload Include="FlaUI.Core" Version="[$(FlaUIVersion)]" />
-    <PackageDownload Include="FlaUI.UIA3" Version="[$(FlaUIVersion)]" />
-    <PackageReference Include="Interop.UIAutomationClient" Version="10.19041.0" />
-    <PackageReference Include="System.Management" Version="10.0.11" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="FlaUI.Core" HintPath="$(NuGetPackageRoot)flaui.core\$(FlaUIVersion)\lib\net8.0-windows7.0\FlaUI.Core.dll" Private="true" />
-    <Reference Include="FlaUI.UIA3" HintPath="$(NuGetPackageRoot)flaui.uia3\$(FlaUIVersion)\lib\net8.0-windows7.0\FlaUI.UIA3.dll" Private="true" />
+    <PackageReference Include="FlaUI.Core" Version="$(FlaUIVersion)" />
+    <PackageReference Include="FlaUI.UIA3" Version="$(FlaUIVersion)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -72,5 +65,16 @@
   <ItemGroup>
     <InternalsVisibleTo Include="DotNetDebuggerMcp.Tests" />
   </ItemGroup>
+
+  <!-- PackAsTool 的 NETSDK1146：dotnet tool 禁止带平台标签的 TFM（官方错误列表 2026-05 仍在，
+       dotnet/sdk#52716 官方支持进行中）。spike 实测（SDK 10.0.401，2026-09-22）：原样 pack ❌、
+       官方 RID-specific 路 ❌、两段 Target 清空/恢复平台标识 ✅ pack→install→run 全过。
+       升 SDK 版本后必须重验 dotnet pack + tool install；官方支持落地后删除本 hack。 -->
+  <Target Name="HackBeforePackToolValidation" BeforeTargets="_PackToolValidation">
+    <PropertyGroup><TargetPlatformIdentifier></TargetPlatformIdentifier><TargetPlatformMoniker></TargetPlatformMoniker></PropertyGroup>
+  </Target>
+  <Target Name="HackAfterPackToolValidation" AfterTargets="_PackToolValidation" BeforeTargets="PackTool">
+    <PropertyGroup><TargetPlatformIdentifier>Windows</TargetPlatformIdentifier></PropertyGroup>
+  </Target>
 
 </Project>
