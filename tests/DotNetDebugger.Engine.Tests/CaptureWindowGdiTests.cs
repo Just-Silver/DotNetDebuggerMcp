@@ -10,19 +10,19 @@ namespace DotNetDebugger.Engine.Tests;
 public sealed class CaptureWindowGdiTests
 {
     [Fact]
-    public void CaptureWindow_UiSample_NonBlack_SizeMatchesWindowRect()
+    public void PrintWindow_UiSample_NonBlack_MatchesWindowRect()
     {
+        // T5 接入 WGC 后 CaptureWindow 编排的 Source 恒为 WGC（成功时），GDI 路径改为直测
+        // GdiCapture.TryPrintWindow 保持独立覆盖；编排/来源语义由 CaptureWindowWgcTests 承担。
         using var app = UiSampleAppProcess.Start();
         var w = CaptureTestHelpers.WaitFound(app.Process.Id, TimeSpan.FromSeconds(5));
         Assert.NotNull(w);
 
-        var r = ScreenCapture.CaptureWindow(w!.Hwnd, 2000, "png", 80);
-
-        Assert.False(r.WasAllBlack);
-        Assert.Contains(r.Source, new[] { "PrintWindow", "BitBlt" });   // T4 尚无 WGC；不断言 WGC（spec §6.2）
-        Assert.Equal(r.NativeWidth, r.Width);                            // UiSampleApp ~762px < 2000，不缩放
-        Assert.True(Math.Abs(r.Width - w.Rect.Width) <= 2 && Math.Abs(r.Height - w.Rect.Height) <= 2,
-            $"尺寸 {r.Width}x{r.Height} vs 窗口 {w.Rect.Width}x{w.Rect.Height}（±2 容差：DWM 阴影/边框取整）");
-        Assert.Equal("UiSample", r.WindowTitle);
+        using var bmp = GdiCapture.TryPrintWindow(w!.Hwnd);
+        Assert.NotNull(bmp);
+        Assert.False(ImagePipeline.IsAllBlack(bmp));
+        // PrintWindow 按 GetWindowRect 精确作画（含边框带），±2 容差仅留取整余量
+        Assert.True(Math.Abs(bmp.Width - w.Rect.Width) <= 2 && Math.Abs(bmp.Height - w.Rect.Height) <= 2,
+            $"尺寸 {bmp.Width}x{bmp.Height} vs 窗口 {w.Rect.Width}x{w.Rect.Height}");
     }
 }

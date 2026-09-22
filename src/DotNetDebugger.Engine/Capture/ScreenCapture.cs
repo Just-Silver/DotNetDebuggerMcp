@@ -153,8 +153,10 @@ public static class ScreenCapture
     }
 
     /// <summary>
-    /// window 抓取编排（T4 版=GDI 两道；T5 在链首插入 WGC，spec §4.3 回退链）：
-    /// PrintWindow → 采样纯黑则丢弃 → BitBlt（最小化窗口跳过）→ 全失败抛约定错误。
+    /// window 抓取编排（spec §4.3 三道回退链）：
+    /// WGC（DWM 取帧不黑图、被遮挡可截、无需置顶；出图即用——黑=真黑由头部备注）
+    /// → PrintWindow → 采样纯黑则继续回退 → BitBlt（最小化窗口屏幕无内容，不回退）
+    /// → 全失败抛约定错误。
     /// </summary>
     public static CaptureResult CaptureWindow(IntPtr hwnd, int maxDimension, string format, int quality)
     {
@@ -162,10 +164,17 @@ public static class ScreenCapture
         const string failMsg = "窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。";
         var info = GetWindowInfo(hwnd) ?? throw new CaptureException(failMsg);
 
-        // 第 2 道：PrintWindow → 黑图回退
-        Bitmap? bmp = GdiCapture.TryPrintWindow(hwnd);
-        var source = "PrintWindow";
-        if (bmp is not null && ImagePipeline.IsAllBlack(bmp)) { bmp.Dispose(); bmp = null; }
+        // 第 1 道：WGC（正确性主力）
+        Bitmap? bmp = WgcCapture.TryCaptureWindow(hwnd);
+        var source = "WGC";
+
+        // 第 2 道：PrintWindow → 采样纯黑则继续回退（spec §4.3-2）
+        if (bmp is null)
+        {
+            bmp = GdiCapture.TryPrintWindow(hwnd);
+            source = "PrintWindow";
+            if (bmp is not null && ImagePipeline.IsAllBlack(bmp)) { bmp.Dispose(); bmp = null; }
+        }
 
         // 第 3 道：BitBlt（最小化窗口屏幕无内容，不回退——spec §4.2 IsIconic 规则）
         if (bmp is null && !info.IsIconic)
