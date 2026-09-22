@@ -30,6 +30,25 @@ internal static class AppConfig
     public const int DefaultStopContextBudgetLines = 100;
 
     /// <summary>
+    /// screenshot 输出图单边最大像素：超过则等比缩到限内（region/screen 同一 k，spec §3.1）。
+    /// 经参数传入 Engine，缩放实现唯一在 Engine（spec §4.2）。
+    /// </summary>
+    public const int ScreenshotMaxDimension = 2000;
+
+    /// <summary>
+    /// screenshot 内联返回阈值（base64 后字节数，chrome-devtools 先例 2MB）：达到即改落盘返回绝对路径。
+    /// </summary>
+    public const long InlineImageBase64Bytes = 2 * 1024 * 1024;
+
+    /// <summary>
+    /// screenshot 超限落盘目录（%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots，与 update-check.json 同根；
+    /// filePath 参数非空时按其指定路径覆盖）。落盘文件不自动清理（YAGNI，README 注明位置）。
+    /// </summary>
+    public static readonly string ScreenshotsDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        NuGetPackageId, "screenshots");
+
+    /// <summary>
     /// 本工具发布的 NuGet 包 id，环境自检（CLI -c/握手注入）用它查询是否有新版本。
     /// </summary>
     public const string NuGetPackageId = "DotNetDebuggerMcp";
