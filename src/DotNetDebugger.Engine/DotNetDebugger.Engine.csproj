@@ -4,6 +4,8 @@
     <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- ImagePipeline.IsAllBlack 的指针逐像素扫描（比逐 GetPixel 快一个量级） -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>DotNetDebugger.Engine</RootNamespace>
   </PropertyGroup>
 
@@ -17,6 +19,9 @@
          官方注明 "not meant for direct consumption"，勿直引）。ClrDebug 的 DbgShim 类封装其调用，
          本包只负责把 runtimes/win-x64/native/dbgshim.dll 带到输出目录。 -->
     <PackageReference Include="Microsoft.Diagnostics.DbgShim.win-x64" Version="10.0.731102" />
+    <!-- 截图编码/缩放/裁剪/纯黑采样（screenshot 计划 T3，spec §4.1 新增依赖）。
+         版本实测：10.0.0 在 nuget.org 不存在（10.x 起始更晚），取当前 10.x 最新稳定 10.0.12 -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
   </ItemGroup>
 
 </Project>
