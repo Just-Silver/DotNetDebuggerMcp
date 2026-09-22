@@ -6,6 +6,16 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Added
+
+- **`screenshot` 窗口/屏幕截图工具**：`mode=window`（按 `processId`/`windowTitle` 定位主窗口，窗口未出现自动等待）/ `screen`（全屏）/ `region`（按 screen 返回图像素裁局部）三模式，直接返回图片（供多态模型观察 UI 状态做自动化冒烟）；抓取链 **WGC 优先**（被遮挡/后台窗口照截，无需置顶、无需抢前台）→ PrintWindow → BitBlt 兜底，头部如实标注来源；`format` 默认 png、jpeg+quality 可压体积，单边超 2000px 自动等比缩放；base64 后 ≥2MB 或指定 `filePath` 自动改为**落盘返回绝对路径**（默认 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\`，不自动清理）。独立于调试会话，不要求 `debug_launch`/`debug_attach`
+
+### Changed
+
+- **平台基线升级为 Windows（破坏性）**：全链目标框架升至 `net10.0-windows10.0.22621.0`（WGC 的 WinRT 投影需要）——**NuGet 包自本版本起仅支持 Windows**（装到非 Windows 环境会无法运行）
+
 ## [1.9.1] - 2026-09-15
 
 ### Fixed

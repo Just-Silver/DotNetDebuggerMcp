@@ -16,7 +16,7 @@
 | `src/DotNetDebuggerMcp.Client/` | 端到端验证客户端 | `src/DotNetDebuggerMcp.Client/AGENTS.md` |
 | `tests/` | 5 个测试项目 + TestData | `tests/AGENTS.md` |
 
-**依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）与 `Engine`（只依赖 ClrDebug + DbgShim.win-x64）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部四库。各库**均不得反向引用宿主**。
+**依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）与 `Engine`（只依赖 ClrDebug + DbgShim.win-x64 + System.Drawing.Common）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部四库。各库**均不得反向引用宿主**。
 
 **文档导航**：`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-2 已完成、P5 发布进行中、specs/research 导航）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `../../Externals/DebuggerExternals/`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
 
@@ -31,7 +31,7 @@
 
 - **所有 MCP 工具参数必须带默认值**（如 `string assembly = ""`，不声明可空）。SDK 依据是否有默认值判断必填：无默认值缺参在绑定阶段抛 Tool Error，agent 拿不到原因；带默认值后缺参进入方法体由校验返回中文提示。`[Description]` 用中文、面向 agent（MCP 调用方）、**注明默认值**、必填标「（必填）」、不写实现细节措辞。
 - **每个工具方法带 `CancellationToken cancellationToken = default`**（反编译类放 `timeoutSeconds` 后、元数据类放末尾；SDK 识别为取消令牌、不暴露为 MCP 参数、不写 `[Description]`）。超时/取消按「放弃等待」处理：返回提示、结果不入缓存可重试、后台任务协作式中断。
-- 工具方法返回 `Task<string>`，一切错误（参数校验/反编译/调试失败）返回中文提示文本，**不抛异常**。
+- 工具方法返回 `Task<string>`，一切错误（参数校验/反编译/调试失败）返回中文提示文本，**不抛异常**。——**图片类工具例外**：`screenshot` 返回 `Task<CallToolResult>`（<2MB 附 image 块、≥2MB/指定 filePath 落盘返回路径），错误仍为纯文本 content、不设 IsError（spec `docs/planning/specs/2026-09-22-screenshot-tool-design.md` §3.3）。
 - **stdout 只承载 MCP 协议消息；日志必须走 stderr**——配置在 `DotNetDebuggerMcpCmd.OnExecuteAsync` MCP 启动分支（`ClearProviders` + `AddConsole(LogToStandardErrorThreshold = Trace)`），Web host 同款（`WebHostBootstrap.Build`），**严禁删除或改动**。历史教训：`Host.CreateApplicationBuilder` 默认 Console 日志写 stdout，并发请求下日志行与 JSON-RPC 响应字节交错会撕坏协议帧（agent 客户端 12 路并发 100% 挂死）。改启动逻辑/升级 Hosting 包后重验：裸 stdio 握手后 stdout 噪声行应为 0；回归护栏 `McpSessionConcurrencyTests`。另注意：日志走 stderr 后，凡自起子进程（Engine/Session/宿主测试、`-dbg`、`LaunchAndAttachAsync`）**必须持续排空子进程 stdout/stderr**，否则把子进程卡死在日志/输出写入上。
 - **更新版本号同步三处**：`src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` `<Version>`、`.mcp/server.json`（顶层 + `packages[0].version`）、`CHANGELOG.md`（发布前把 `[Unreleased]` 转 `## [<version>] - <date>`）。CI 从 CHANGELOG 提取版本段作 GitHub Release 正文，缺段发布失败。CHANGELOG 面向包使用者，只记使用者可见变更。
 - **改 MCP 工具（新增/删除/改名/加参/改默认值/改行为）必须把根 `README.md` 一并改到位**再提交——README 打包为 `PackageReadmeFile`（用户看到的是打包时快照），且与代码改动同 commit。

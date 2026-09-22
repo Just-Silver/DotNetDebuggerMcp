@@ -1,10 +1,10 @@
 # DotNetDebugger.Engine 开发指南
 
-进程内 .NET 动态调试**引擎**（`DotNetDebugger.Engine`，v1）：ICorDebug 通道（ClrDebug + dbgshim），支持启动/附加目标进程、按 模块名+方法 token+IL offset 下断点、continue、单步、读线程/调用栈/局部变量（标量）、first-chance 异常断点，统一对外暴露 `DebugEvent` 事件流。设计来源见 `docs/planning/specs/2026-09-05-overview-design.md` §4-5 与 `docs/planning/research/06-clrdebug-api-reference.md` §7（文件头注释均引 spec/research 段落）。
+进程内 .NET 动态调试**引擎**（`DotNetDebugger.Engine`，v1）：ICorDebug 通道（ClrDebug + dbgshim），支持启动/附加目标进程、按 模块名+方法 token+IL offset 下断点、continue、单步、读线程/调用栈/局部变量（标量）、first-chance 异常断点，统一对外暴露 `DebugEvent` 事件流；并提供**窗口/屏幕截图捕捉**（`Capture/`：WGC 优先 + GDI 回退三道链，供宿主 `screenshot` 工具，spec 2026-09-22-screenshot-tool-design §4）。设计来源见 `docs/planning/specs/2026-09-05-overview-design.md` §4-5 与 `docs/planning/research/06-clrdebug-api-reference.md` §7（文件头注释均引 spec/research 段落）。
 
 ## 边界纪律
 
-- net10.0，**只引 NuGet**：`ClrDebug 0.4.2` + `Microsoft.Diagnostics.DbgShim.win-x64 10.0.731102`。无 ProjectReference、无 MCP/DI/日志/Decompiler 依赖。
+- net10.0-windows10.0.22621.0，**只引 NuGet**：`ClrDebug 0.4.2` + `Microsoft.Diagnostics.DbgShim.win-x64 10.0.731102` + `System.Drawing.Common 10.0.12`（截图编码/缩放/裁剪/纯黑采样，screenshot 计划 T3；版本实测 10.0.0 不存在故取 10.x 最新稳定）。无 ProjectReference、无 MCP/DI/日志/Decompiler 依赖。
 - **dbgshim 必引 RID 子包 `win-x64`**：主包 `Microsoft.Diagnostics.DbgShim` 是空壳内部元包（官方注明 not meant for direct consumption，勿直引）；子包只负责把 `runtimes/win-x64/native/dbgshim.dll` 带到输出目录，ClrDebug 的 `DbgShim` 类封装其调用。
 - 引擎是纯能力层：**不反编译、不解析类型名**（栈帧/断点定位全用 token），供 Session 库 / 宿主 / Web 在之上叠加。不得反向引用它们。
 
@@ -17,6 +17,8 @@ Engine/    DebugEngineCore / CorDebugBootstrap / DbgShimLoader /
 Session/   DebugSession(根命名空间 DotNetDebugger.Engine!) / DebugBreakpoint / ExceptionBreakpointFilter /
            IBreakpointConditionEvaluator(P7 条件求值契约，Session 库实现注入)
 Stepping/  StepperManager
+Capture/   ScreenCapture(门面：FindMainWindow+DPI+三道抓取编排+region 换算) / WgcCapture+WgcInterop /
+           GdiCapture / ImagePipeline(缩放/编码/纯黑) / CaptureModels(WindowHandleInfo/CaptureResult/CaptureException)
 Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
            DebugValue / DebugVariable / FrameLocation / BreakpointSnapshot /
            PathSegment / DebugEvalResult   （纯数据 record）
