@@ -1,7 +1,7 @@
 # screenshot 截图工具设计（2026-09-22）
 
 > 目标：为多态模型提供**独立于调试会话**的截图 MCP 工具，用于 GUI 观察与自动化冒烟。
-> 状态：经用户逐节评审 + 独立审查（r4-coder/deepseek-v4.1-flash，Issues Found 三阻断五建议已全部修复落档）+ PackAsTool 打包 spike 实证（2026-09-22）；待用户终审后转 writing-plans。
+> 状态：**三轮审查通过（第三轮 Approved 终轮验收）**——逐节评审 + Round1（3 阻断 5 建议）+ 自审 7 处 + Round2（4 阻断 4 建议）+ Round3 Approved（含 3 条 advisory 已落档）+ PackAsTool 打包 spike 实证（2026-09-22）；按用户授权转 writing-plans。
 
 ## 1. 背景与定位
 
@@ -45,7 +45,7 @@
 | `timeoutSeconds` | `int = 5` | 仅 window：等窗口出现秒数（clamp 0-30，0=立即试一次） |
 | `filePath` | `string = ""` | 非空=强制落盘该路径；空=仅超限落默认目录 |
 
-**window 定位规则**：`processId` > `windowTitle` > 活动会话目标 pid 兜底 > 中文提示二选一。命中多个可见窗口 → 取 Z 序最前主窗口，头部注明「命中 N 个可见窗口，已截主窗口」。
+**window 定位规则**（语义钉死，按 D4 拍板原意「pid 优先、标题兜底」）：`processId` 非 0 → 仅按 pid 匹配（`windowTitle` 被忽略）；`processId=0` 且 `windowTitle` 非空 → 仅按标题子串；两者皆空 → 活动会话目标 pid 兜底 → 仍无则中文提示二选一。即 `FindMainWindow` 择一传入，非 AND 组合。命中多个可见窗口 → 取 Z 序最前主窗口，头部注明「命中 N 个可见窗口，已截主窗口」。
 
 ### 3.2 Description 草稿（中文、注明默认值、写死坐标规则、含能力边界）
 
@@ -55,7 +55,7 @@
 
 ```
 成功 <2MB(base64后):   content[0]=文本头部；content[1]=image 块(base64+mime)
-成功 ≥2MB / 指定filePath: content[0]=文本头部 +「已落盘: <绝对路径>」，无 image 块
+成功 ≥2MB / 指定filePath: content[0]=文本头部 +「已落盘: <绝对路径>」，无 image 块（落盘失败例外见 §5.1：仍附块）
 失败:                  纯文本中文提示，不抛异常
 ```
 
@@ -151,7 +151,7 @@ record CaptureResult(byte[] Image, int Width, int Height,
 |---|---|
 | mode/format 非法 | `mode 仅支持 window/screen/region（当前 "x"）。` / 同款 format 提示 |
 | region 格式错 | `region 格式应为 "x,y,w,h"（mode=screen 返回图像素空间，原点左上）。` |
-| region 完全在屏外 | `region (x,y,w,h) 完全在屏幕范围 (WxH) 之外。`（部分越界=裁交集+头部注明，不报错） |
+| region 完全在屏外 | `region (x,y,w,h) 完全在屏幕范围 (WxH) 之外。`（部分越界=裁交集+头部注明，不报错；**屏外判定由 Engine 在换算/裁剪时执行并回传约定错误，宿主不触碰坐标换算**） |
 | window 双选择器皆空且无会话 | `请提供 processId 或 windowTitle 定位窗口（两者皆空时也可先 debug_launch 建立会话自动取目标 pid）。` |
 | 超时未找到窗口 | `{N} 秒内未找到匹配的可见窗口（processId=… / 标题含 "…"）。` |
 | WGC/GDI 全失败、GetDC 失败 | `窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。` |

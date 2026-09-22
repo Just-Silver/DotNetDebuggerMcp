@@ -38,6 +38,6 @@
 | `specs/2026-09-05-overview-design.md` | **总览设计 spec**（已确认） |
 | `specs/2026-09-05-p4-webui.md` | **P4 WebUI 细化 spec**（已冻结） |
 | `specs/2026-09-08-w1-set-value.md` 等 10 份 | **全部待办批次 spec**（已冻结）：W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3（导航与状态见 specs/README；W2/V2 已转 ROADMAP） |
-| `specs/2026-09-22-screenshot-tool-design.md` | **screenshot 截图工具 spec**（独立截图工具，WGC+GDI、image 块双轨；待终审 → writing-plans） |
+| `specs/2026-09-22-screenshot-tool-design.md` | **screenshot 截图工具 spec**（独立截图工具，WGC+GDI、image 块双轨；三轮审查通过 → writing-plans） |
 
 > 规划文档配套 Git 历史与已完成计划见 `archive/plans/`；归档材料移出主目录以免导航误读为进行中。
