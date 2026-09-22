@@ -39,7 +39,7 @@
 | `mode` | `string = "window"` | `window`（目标主窗口）/ `screen`（全屏）/ `region`（局部） |
 | `processId` | `int = 0` | window 定位：按进程 pid（0=未提供）；**优先于 windowTitle** |
 | `windowTitle` | `string = ""` | window 定位：窗口标题子串（忽略大小写） |
-| `region` | `string = ""` | `mode=region` 必填，`"x,y,w,h"`，**坐标=mode=screen 返回图像素空间**（原点左上）。换算规则无状态确定性：screen 返回前若原生维 >2000px 会等比缩到 2000 内（缩放比 k=min(1, 2000/max(W,H))，W/H=虚拟屏原生尺寸），**由 Engine 按 §4.2 职责换算为原生像素后裁剪**（round 取整）——同屏幕下 screen 与 region 空间恒一致，宿主只透传解析后的坐标 |
+| `region` | `string = ""` | `mode=region` 必填，`"x,y,w,h"`，**坐标=mode=screen 返回图像素空间**（原点左上）。换算规则无状态确定性：screen 返回前若原生维超过缩放上限（**当前 2000，AppConfig 常量经参数传入 Engine**）会等比缩到限内（缩放比 k=min(1, 上限/max(W,H))，W/H=虚拟屏原生尺寸），**由 Engine 按 §4.2 职责换算为原生像素后裁剪**（round 取整）——同屏幕下 screen 与 region 空间恒一致，宿主只透传解析后的坐标 |
 | `format` | `string = "png"` | `png` \| `jpeg` |
 | `quality` | `int = 80` | jpeg 质量 0-100（越界 clamp），png 忽略 |
 | `timeoutSeconds` | `int = 5` | 仅 window：等窗口出现秒数（clamp 0-30，0=立即试一次） |
@@ -49,7 +49,7 @@
 
 ### 3.2 Description 草稿（中文、注明默认值、写死坐标规则、含能力边界）
 
-> 截取窗口/屏幕画面返回图片，供多态模型观察 UI 状态做自动化冒烟。独立工具，不要求调试会话。mode=window（默认）按 processId 或 windowTitle 定位目标主窗口（窗口未出现会等 timeoutSeconds 秒，默认 5）；mode=screen 截全屏；mode=region 按 region="x,y,w,h" 截局部，坐标以 mode=screen 返回的图像素为准（原点左上）——建议先 screen 看全景再裁局部。format 默认 png，jpeg+quality 可压体积；图片过大自动改为落盘返回绝对路径。坐标/状态判断仍以 debug_state/debug_stack 为准，本工具只提供视觉观察。
+> 截取窗口/屏幕画面返回图片，供多态模型观察 UI 状态做自动化冒烟。独立工具，不要求调试会话。mode=window（默认）按 processId 或 windowTitle 定位目标主窗口（窗口未出现会等 timeoutSeconds 秒，默认 5）；mode=screen 截全屏；mode=region 按 region="x,y,w,h"（mode=region 时必填）截局部，坐标以 mode=screen 返回的图像素为准（原点左上）——建议先 screen 看全景再裁局部。format 默认 png，jpeg+quality 可压体积；图片过大自动改为落盘返回绝对路径。坐标/状态判断仍以 debug_state/debug_stack 为准，本工具只提供视觉观察。
 
 ### 3.3 返回契约（`Task<CallToolResult>`，铁律例外）
 
@@ -63,8 +63,8 @@
 
 ```
 目标:   窗口 "标题" (pid=12345)     ← screen 为「屏幕」，region 为「屏幕区域 (x,y,w,h)」
-尺寸:   原生 1920x1080 → 1600x900 (83%)   ← 无缩放省略；region 注明与屏幕交集
-来源:   WGC                          ← 仅 window：WGC / PrintWindow / BitBlt
+尺寸:   原生 3840x2160 → 2000x1125 (52%)   ← 仅实际缩放时出现（原生任一维 >2000 才触发）；region 注明与屏幕交集
+来源:   WGC                          ← 仅 window：WGC / PrintWindow / BitBlt（回退链结果即来源，不再单列回退标记）
 备注:   画面为纯黑（目标可能未渲染）  ← 仅全黑时出现
 ---
 ```
@@ -92,6 +92,7 @@
   ```
 
   附注：装机端无平台过滤（装到非 Windows 会跑不起来）——本包本就 win-x64 only，README/NuGet 描述注明 Windows-only 即可。
+- **宿主 csproj 既有 FlaUI 段复核（TFM 升级的连带，实现时执行）**：L48-52「PackAsTool 拒绝 platform-qualified TFM，宿主必须保持 net10.0」注释在本变更后**过期，须改写**（hack Target 取代其结论）；且宿主升 windows TFM 后 FlaUI（`net8.0-windows7.0` 资产）**平台从不匹配变为匹配**——`PackageDownload`+`HintPath` 绕行可能可撤销、回归直接 `PackageReference`，实现时验证一次（若直引可行则简化、连带删掉 AssetTargetFallback/NU1701 压制与 Interop.UIAutomationClient/System.Management 显式引用的注释依据），不可行则保留现状仅改注释。
 - **新增依赖**：`System.Drawing.Common` 进 Engine（编码 PNG/JPEG、缩放、裁剪）。
 - **Engine AGENTS.md 纪律修订**：边界条款改为「NuGet 限 ClrDebug + DbgShim + System.Drawing.Common，无宿主依赖」。
 
@@ -107,7 +108,8 @@ CaptureResult CaptureScreen(Rectangle? clipInImageSpace)
     // Engine 内部按 §3.1 的 k 公式换算为原生像素（round）后裁剪——region 模式复用本方法
 record CaptureResult(byte[] Image, int Width, int Height,
                      int NativeWidth, int NativeHeight, string? WindowTitle,
-                     string Source /* WGC|PrintWindow|BitBlt */, bool FellBack, bool WasAllBlack)
+                     string Source /* WGC|PrintWindow|BitBlt —— 回退链结果，头部「来源」行即此值 */,
+                     bool WasAllBlack /* 纯黑采样，头部「备注」行数据源；回退与否已由 Source 表达，不单列 FellBack */)
 ```
 
 - **DPI**：截图入口首次调用 `SetProcessDpiAwarenessContext(PROCESS_PER_MONITOR_DPI_AWARE_V2)`（幂等，已设置容忍 ERROR_ACCESS_DENIED）——全链物理像素，与 region 坐标空间定义一致。运行时调用，不用 manifest。
@@ -140,7 +142,7 @@ record CaptureResult(byte[] Image, int Width, int Height,
    - 默认目录 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\screenshot-{yyyyMMdd-HHmmssfff}-{mode}[-{pid}].{ext}`（pid 仅 window 模式有，screen/region 省略段）；
    - `filePath` 指定则 `Directory.CreateDirectory` 保证父目录后写入；
    - 返回文本头部 + `已落盘: <绝对路径>`，无 image 块；
-   - 落盘失败 → 回退附 image 块（若可附）+ 注明失败原因。
+   - 落盘失败 → **仍附 image 块**（即使 ≥2MB——两害相权保 agent 能看到画面）+ 注明 `已尝试落盘失败: {原因}`。
 3. 落盘文件不自动清理（YAGNI），README 注明位置。
 
 ### 5.2 错误语义全表（中文、不抛异常）
@@ -154,7 +156,7 @@ record CaptureResult(byte[] Image, int Width, int Height,
 | 超时未找到窗口 | `{N} 秒内未找到匹配的可见窗口（processId=… / 标题含 "…"）。` |
 | WGC/GDI 全失败、GetDC 失败 | `窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。` |
 | 抓到但纯黑 | 不报错，正常返回 + 头部 `备注: 画面为纯黑…` |
-| 落盘失败 | 回退 image 块 + `已尝试落盘失败: {原因}` |
+| 落盘失败 | 仍附 image 块（≥2MB 也附，保结果可见）+ `已尝试落盘失败: {原因}` |
 | 取消 | `screenshot 已取消（可重试）。` |
 
 ### 5.3 明确不涉及
@@ -201,12 +203,13 @@ record CaptureResult(byte[] Image, int Width, int Height,
 |---|---|
 | `docs/planning/specs/README.md` | 状态表登记本 spec（仓库惯例：每 spec 一行状态） |
 | `docs/planning/README.md` | 文档地图同步登记 |
+| **TFM 输出目录连带路径**（全链升 windows TFM 后 `bin/Debug/net10.0/` → `bin/Debug/net10.0-windows10.0.22621.0/`） | 根 `opencode.json`（本仓库 MCP 绑定 exe 路径）、根 `AGENTS.md`、宿主 `AGENTS.md`、`tests/AGENTS.md`（测试 CWD 基准）中的 `bin/Debug/net10.0` 路径全部同步 |
 | 根 `README.md` | 工具清单加 `screenshot`（铁律：同 commit 改到位） |
-| 根/宿主 `AGENTS.md` | ① `Task<string>` 加 CallToolResult 例外条款；② 调试工具计数/清单更新 |
+| 根/宿主 `AGENTS.md` | ① `Task<string>` 加 CallToolResult 例外条款；② 调试工具计数/清单更新；③ **根 AGENTS.md「`Engine`（只依赖 ClrDebug + DbgShim.win-x64）」依赖方向句改为含 System.Drawing.Common** |
+| `src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` | ① TFM 升级；② PackAsTool 两段 hack Target（§4.1，spike 实证写法）；③ **FlaUI 段注释改写 + 直引可行性复核（§4.1）** |
 | `src/DotNetDebugger.Engine/AGENTS.md` | 边界纪律修订（NuGet 清单 + Capture/ 结构 + TFM 说明） |
 | `CHANGELOG.md` `[Unreleased]` | 记 `screenshot` 新工具（使用者可见） |
 | `src/DotNetDebugger.Web/TODO.md` | 冻结记录已写入（2026-09-22） |
-| `src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` | ① TFM 升级；② PackAsTool 两段 hack Target（§4.1，spike 实证写法） |
 | `AppConfig` | 新增缩放上限 / 2MB 阈值 / 落盘目录常量 |
 | 握手 `HandshakeFeatureIntro` | 实现时检查现有 debug 工具是否在列，在则同步 `screenshot` |
 | 版本三处同步 | 发布时（csproj `<Version>` + `.mcp/server.json`×2 + CHANGELOG 段转换），本设计不动 |
