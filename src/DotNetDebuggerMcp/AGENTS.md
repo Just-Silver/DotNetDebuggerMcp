@@ -35,7 +35,7 @@
 - **所有 MCP 工具参数必须带默认值**（`string x = ""`，不声明可空）——SDK 按是否有默认值判断必填，缺默认值缺参会返回 Tool Error 而非中文提示。`[Description]` 用中文、面向 agent、**注明默认值**、不写实现细节措辞。
 - **每个工具方法带 `CancellationToken cancellationToken = default`**（SDK 识别并注入、不暴露为参数、不写 Description）。反编译类放 timeoutSeconds 后、元数据类放末尾。
 - 工具返回 `Task<string>`，一切错误返回中文提示文本，不抛异常。——**图片类工具例外**：`screenshot` 返回 `Task<CallToolResult>`（<2MB 附 image 块、≥2MB/指定 filePath 落盘返回路径），错误仍为纯文本 content、不设 IsError（spec §3.3，见 `docs/planning/specs/2026-09-22-screenshot-tool-design.md`）。
-- 更新版本号同步三处：csproj `<Version>` + `.mcp/server.json`（顶层与 packages[0] 两处）+ CHANGELOG `[Unreleased]`。改工具面同步改根 `README.md`（打包为 PackageReadmeFile）。
+- 更新版本号同步三处：csproj `<Version>` + `.mcp/server.json`（顶层与 packages[0] 两处）+ CHANGELOG `[Unreleased]`。改工具面同步改根 `README.md`（打包为 PackageReadmeFile）**与握手简介 `AppText.HandshakeFeatureIntro`**（新增/删除能力族或独立工作流必须补/删对应触发条件；配合扩 `HandshakeFeatureIntro_覆盖全部能力族触发条件` 回归断言）——握手是客户端常驻 agent 的「何时用」唯一通道，漏改等于新能力不可被发现。
 
 ## 验证
 

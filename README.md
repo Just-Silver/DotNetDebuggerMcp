@@ -1,6 +1,6 @@
 # DotNet Debugger MCP（DotNetDebuggerMcp）
 
-内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量），开箱即用。另提供 **Web 网页调试展示面**（Blazor Server：反编译代码视图 + 调用栈/变量/线程面板，与 MCP agent 共享调试会话，可实时观看 agent 调试）——agent 按需调 `web_open` 工具开启（幂等），或启动时带 `--web` 手动开启。
+内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量、现场改值、一键复验），以及**UI 自动化**（`ui_*` 全 UIA 语义操控桌面控件，不移动光标 / 不注入输入 / 不抢前台）与**窗口截图**（`screenshot`），开箱即用。另提供 **Web 网页调试展示面**（Blazor Server：反编译代码视图 + 调用栈/变量/线程面板，与 MCP agent 共享调试会话，可实时观看 agent 调试）——agent 按需调 `web_open` 工具开启（幂等），或启动时带 `--web` 手动开启。
 
 ## 目录
 

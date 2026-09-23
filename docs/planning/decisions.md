@@ -2,6 +2,13 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D27 · 握手 ServerInstructions 恢复覆盖全部能力族（fix wave，2026-09-24）
+- 背景：`docs/planning/reviews/2026-09-24-handshake-coverage-review.md` 审查发现，自 D12 把握手改为「触发条件导向、去掉工具一览」后，工具面已从「两类」扩到四族（静态分析 / 动态调试 / UI 自动化 / 视觉监视）却未同步握手——UI 自动化 `ui_*` 与一键复验 `debug_verify` 在握手中无任何触发条件、agent 无从发现；简介句也仍写死「两类能力」。
+- 决策①（握手正文）：恢复覆盖全部能力族——简介句改为「四族能力」；「## 何时使用」补齐 UI 自动化（`ui_find`→`ui_action`/`ui_input`→`ui_wait`→`ui_get`）、`debug_verify` 一键复验、`debug_set` 现场改值、`debug_run_to` 运行到目标、`debug_evaluate`/`debug_object`/`debug_timeline` 等触发条件；兜底前缀句补齐 `ui`/`screenshot` 及未带前缀的静态工具。
+- 决策②（纪律）：**改 MCP 工具面（新增/删除能力族或独立工作流）必须同步握手 `AppText.HandshakeFeatureIntro` 与回归断言** `DotNetDebuggerMcpCmdTests.HandshakeFeatureIntro_覆盖全部能力族触发条件`——已写入根 `AGENTS.md`「关键约束」。
+- 覆盖关系：本项**扩展 D12②**（握手触发条件导向的适用范围由「反编译 / 调试两类」扩为全部能力族），D12 其余决策不变。
+- 日期：2026-09-24。来源：审查 `docs/planning/reviews/2026-09-24-handshake-coverage-review.md`（P0-1 / P0-2 / P0-3 / P1-1 / P1-2 / P2-1 / P2-2）。
+
 ## D26 · DB1 停点 message 内容脱敏（fix wave，2026-09-10）
 - 决策：停点 `message`（异常 Message）**改按内容形态脱敏**——`SensitiveValueRedactor.Redact(null, stop.Message)` 仅内容判定（name=null，不按名），命中给占位符；普通 message 原样。影响 `debug_state`/`debug_wait`/`debug_continue` 的停点现场输出。
 - 覆盖关系：本项**覆盖 D17①「异常 Message 不脱敏」**的旧决定——安全审查（P0-1）指出异常文本常内嵌连接串/Token（`Password=…`、`Authorization: Bearer …`），与 `$exception` 变量脱敏行为不一致。

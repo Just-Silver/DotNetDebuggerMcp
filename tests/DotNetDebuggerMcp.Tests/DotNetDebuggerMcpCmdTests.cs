@@ -114,12 +114,20 @@ public class DotNetDebuggerMcpCmdTests
     }
 
     [Fact]
-    public void HandshakeFeatureIntro_含反编译与调试触发条件()
+    public void HandshakeFeatureIntro_覆盖全部能力族触发条件()
     {
         var text = AppText.HandshakeFeatureIntro;
-        // 触发条件导向：含两类能力的「何时使用」，不逐条列工具
-        Assert.Contains("反编译", text);
-        Assert.Contains("动态调试", text);
+        // 触发条件导向：逐族断言「何时使用」，新增能力族漏进握手时本测试失败；仍不逐条列工具
+        Assert.Contains("反编译", text);       // 静态分析族
+        Assert.Contains("动态调试", text);     // 调试核心
+        Assert.Contains("debug_run_to", text); // 调试扩展：运行到目标
+        Assert.Contains("debug_set", text);    // 调试扩展：现场改值
+        Assert.Contains("debug_evaluate", text);
+        Assert.Contains("debug_verify", text); // 独立工作流：一键复验
+        Assert.Contains("ui_find", text);      // UI 自动化族
+        Assert.Contains("ui_action", text);
+        Assert.Contains("screenshot", text);   // 视觉/监视
+        Assert.Contains("web_open", text);
         Assert.Contains("## 何时使用", text);
         Assert.DoesNotContain("## 工具一览", text);
     }
