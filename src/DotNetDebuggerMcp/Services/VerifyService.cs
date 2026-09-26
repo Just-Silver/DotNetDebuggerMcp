@@ -388,14 +388,14 @@ internal static class VerifyService
     {
         var svc = UiAutomationService.Instance;
         if (step.Verb.Trim().Equals("input", StringComparison.OrdinalIgnoreCase))
-            return () => svc.InputAsync(step.Process, step.UiValue, step.UiIndex, step.UiName, step.UiType, ct);
-        return () => svc.ActionAsync(step.Process, step.Verb, step.UiIndex, step.UiName, step.UiType, step.Direction, step.Lines, step.WindowState, ct);
+            return () => svc.InputAsync(step.Process, step.UiValue, step.UiIndex, step.UiName, step.UiType, UiAutomationService.DefaultTimeoutSeconds, ct);
+        return () => svc.ActionAsync(step.Process, step.Verb, step.UiIndex, step.UiName, step.UiType, step.Direction, step.Lines, step.WindowState, UiAutomationService.DefaultTimeoutSeconds, ct);
     }
 
     /// <summary>构造 uiAssert 的延迟调用（同上，隔离 CA1416）。</summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows7.0")]
     private static Func<Task<UiStateResult>> MakeUiGet(VerifyStep step, CancellationToken ct)
-        => () => UiAutomationService.Instance.GetAsync(step.Process, step.What, step.UiIndex, step.UiName, step.UiType, ct);
+        => () => UiAutomationService.Instance.GetAsync(step.Process, step.What, step.UiIndex, step.UiName, step.UiType, UiAutomationService.DefaultTimeoutSeconds, ct);
 
     /// <summary>
     /// 是否可重试：窗口未就绪/元素瞬时失效总是可重试；5s 超时仅幂等动作可重试

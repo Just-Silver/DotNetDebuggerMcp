@@ -45,7 +45,7 @@ internal static class AppText
         "- **当需要弄清程序运行期行为（为何抛异常、某条件分支是否执行、变量当前值、调用路径）时**，使用动态调试：反编译定位目标方法取 token → 下断点 → 运行至命中 → 观察调用栈与变量 → 单步；想省去反复设断点可直接 debug_run_to 运行到目标位置。\n" +
         "- **当需要验证某个运行期假设（强制走某分支 / 置空 / 换引用）时**，停点后用 debug_set 改写现场变量或字段再继续；取表达式值用 debug_evaluate、下钻对象结构用 debug_object、复盘整段经过用 debug_timeline。\n" +
         "- **当改完 bug 需要自证修复、或回归一段运行期场景时**，用 debug_verify 按场景 JSON（可选重编译 + 断点/求值/输出断言序列）一键跑到 PASS/FAIL。\n" +
-        "- **当需要操作桌面 GUI 到某状态（点按钮 / 勾选 / 切下拉 / 填输入框 / 滚动）时**，使用 UI 自动化工具 ui_find（列控件与能力）→ ui_action/ui_input（语义动作/写值）→ ui_wait（等状态变化）→ ui_get（读值）；全 UIA 语义，不移动光标、不注入输入、不抢前台，且不要求活动调试会话（可先摆好 UI 状态再 debug_attach）。\n" +
+        "- **当需要操作桌面 GUI 到某状态（点按钮 / 勾选 / 切下拉 / 填输入框 / 滚动）时**，使用 UI 自动化工具 ui_find（列控件与能力）→ ui_action/ui_input（语义动作/写值）→ ui_wait（等状态变化）→ ui_get（读值）；全 UIA 语义，不移动光标、不注入输入、不抢前台，且不要求活动调试会话（可先摆好 UI 状态再 debug_attach）。单次 UIA 调用默认 5s 护栏，目标响应慢时用 timeoutSeconds 调大（超时≠环境 UIA 不可用）。\n" +
         "- **当需要向用户或自己实时展示调试现场（网页监视器：断点/单步/变量/动作时间线）时**，调用 web_open 打开（幂等；仅为可选展示，不影响 agent 独立完成调试）。\n" +
         "- **当需要观察 GUI 窗口/屏幕画面（看控件状态、布局冒烟）时**，调用 screenshot 截图（window/screen/region 三模式，返回图片；图片过大会改为落盘返回路径）。\n" +
         "具体工具清单见 MCP 工具目录（`decompile`/`debug`/`ui` 等语义前缀，静态工具另有 `signature`/`list_types`/`call_*`/`hierarchy`/`dependencies`/`interface_usage`/`field_access`/`search_string`，视觉另有 `screenshot`）。\n\n" +

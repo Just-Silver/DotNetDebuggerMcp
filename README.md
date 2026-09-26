@@ -385,11 +385,11 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 
 | 工具 | 参数 | 说明 |
 | ---- | ---- | ---- |
-| `ui_find` | `process`（必填）+ `title` + `text` + `type` + `automationId` + `limit` | `process`=pid 或进程名子串（空返回提示）；`title`=窗口标题精确匹配，空=该进程首个顶层窗口；`text`=控件 Name 子串忽略大小写（也匹配 AutomationId）；`type`=UIA 类型名（TextBlock→Text 等别名自动归一）；`automationId`=精确匹配；`limit` 返回上限（默认 50，1-500）。返回 `[index] Type Name=… AutoId=… patterns=… Rect=(x,y w x h)` 行 + 同名成员语义候选 |
-| `ui_action` | `process`（必填）+ `verb`（必填）+ `index` + `name` + `type` + `direction` + `lines` + `windowstate` | `verb`=invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate；`index`=上次 ui_find 序号（默认 -1=用 name/type）；`name`/`type`=即时唯一·歧义回候选；`direction`=up/down（scroll 用）；`lines` 行数（scroll 用，默认 3，1-100）；`windowstate`=normal/maximized/minimized（按进程定位顶层窗口，忽略 index/name/type）。**无右键/双击**（传 rightclick/doubleclick 明确中文拒绝）。返回注明命中的 pattern；写 AgentActionLog |
-| `ui_input` | `process`（必填）+ `value`（必填）+ `index` + `name` + `type` | 按 Value→RangeValue→LegacyIAccessible 写值；定位同 ui_action。只读/无 pattern 中文提示；写 AgentActionLog |
-| `ui_get` | `process`（必填）+ `what`（必填）+ `index` + `name` + `type` | `what`=value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext；定位同 ui_action。读值展示前经 DB1 敏感脱敏 |
-| `ui_wait` | `process`（必填）+ `text` + `type` + `textChangedFrom` + `textChangedTo` + `timeoutSeconds` | `text` 与 `textChangedFrom/To` 二选一（前者等控件文本出现，后者等文本从 X 变 Y，可配 `type` 限定）；事件化 + 200ms 轮询兜底；`timeoutSeconds` 最长等待（默认 30，1-300）。命中返回 出现/已变化；超时返回当前状态提示、不报错 |
+| `ui_find` | `process`（必填）+ `title` + `text` + `type` + `automationId` + `limit` + `timeoutSeconds` | `process`=pid 或进程名子串（空返回提示）；`title`=窗口标题精确匹配，空=该进程首个顶层窗口；`text`=控件 Name 子串忽略大小写（也匹配 AutomationId）；`type`=UIA 类型名（TextBlock→Text 等别名自动归一）；`automationId`=精确匹配；`limit` 返回上限（默认 50，1-500）；`timeoutSeconds`=单次 UIA 调用超时（默认 5，1-300，目标响应慢可调大）。返回 `[index] Type Name=… AutoId=… patterns=… Rect=(x,y w x h)` 行 + 同名成员语义候选 |
+| `ui_action` | `process`（必填）+ `verb`（必填）+ `index` + `name` + `type` + `direction` + `lines` + `windowstate` + `timeoutSeconds` | `verb`=invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate；`index`=上次 ui_find 序号（默认 -1=用 name/type）；`name`/`type`=即时唯一·歧义回候选；`direction`=up/down（scroll 用）；`lines` 行数（scroll 用，默认 3，1-100）；`windowstate`=normal/maximized/minimized（按进程定位顶层窗口，忽略 index/name/type）；`timeoutSeconds`=单次 UIA 调用超时（默认 5，1-300）。**无右键/双击**（传 rightclick/doubleclick 明确中文拒绝）。返回注明命中的 pattern；写 AgentActionLog |
+| `ui_input` | `process`（必填）+ `value`（必填）+ `index` + `name` + `type` + `timeoutSeconds` | 按 Value→RangeValue→LegacyIAccessible 写值；定位同 ui_action；`timeoutSeconds`=单次 UIA 调用超时（默认 5，1-300）。只读/无 pattern 中文提示；写 AgentActionLog |
+| `ui_get` | `process`（必填）+ `what`（必填）+ `index` + `name` + `type` + `timeoutSeconds` | `what`=value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext；定位同 ui_action；`timeoutSeconds`=单次 UIA 调用超时（默认 5，1-300）。读值展示前经 DB1 敏感脱敏 |
+| `ui_wait` | `process`（必填）+ `text` + `type` + `textChangedFrom` + `textChangedTo` + `timeoutSeconds` | `text` 与 `textChangedFrom/To` 二选一（前者等控件文本出现，后者等文本从 X 变 Y，可配 `type` 限定）；事件化 + 200ms 轮询兜底；`timeoutSeconds` 最长等待（默认 30，1-300），同时作单次 UIA 调用护栏。命中返回 出现/已变化；超时返回当前状态提示、不报错 |
 
 > 输出捕获仅 `debug_launch` 会话可用（attach 已运行进程无法重定向）；缓冲保留最近 2000 行，被高频日志淹没时用 `filter` 筛关键行。
 

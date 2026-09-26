@@ -7,16 +7,20 @@ using System.Runtime.Versioning;
 namespace DotNetDebuggerMcp.Services.Ui;
 
 /// <summary>
-/// U1A UI 自动化 facade（spec §13）：gate + 5s 双层超时 + 编排 Find/Action/Input/Get/Wait。纯 UIA 语义 pattern
+/// U1A UI 自动化 facade（spec §13）：gate + 按调用超时（默认 5s，agent 可经 timeoutSeconds 调大）双层护栏 +
+/// 编排 Find/Action/Input/Get/Wait。纯 UIA 语义 pattern
 /// （无光标移动 / 无输入注入 / 不抢前台；仅窗口最小化时经 WindowPattern 还原）。单 UIA3Automation 实例 +
-/// SemaphoreSlim(1,1) 串行；跨进程调用 5s 兜底（Invoke 阻塞按「放弃等待」）。写操作由调用方打 AgentActionLog。
+/// SemaphoreSlim(1,1) 串行；跨进程调用按调用超时兜底（Invoke 阻塞按「放弃等待」）。写操作由调用方打 AgentActionLog。
 /// </summary>
 [SupportedOSPlatform("windows7.0")]
 internal sealed class UiAutomationService
 {
     internal static UiAutomationService Instance { get; } = new();
 
-    private static readonly TimeSpan UiaTimeout = TimeSpan.FromSeconds(5);
+    /// <summary>单次 UIA 调用默认超时（秒）——工具未显式给 timeoutSeconds 时使用；agent 可按需调大。</summary>
+    internal const int DefaultTimeoutSeconds = 5;
+    private const int MinTimeoutSeconds = 1;
+    private const int MaxTimeoutSeconds = 300;
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly UiElementLocator _locator = new();
@@ -37,20 +41,20 @@ internal sealed class UiAutomationService
     public bool LastFindTruncated => _locator.LastFindTruncated;
 
     /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。</summary>
-    public Task<IReadOnlyList<UiElementInfo>> FindAsync(string process, string title, string text, string type, string automationId, int limit, CancellationToken ct)
-        => RunGateAsync(() => _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit), ct);
+    public Task<IReadOnlyList<UiElementInfo>> FindAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct)
+        => RunGateAsync(() => _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit), timeoutSeconds, ct);
 
     /// <summary>对目标控件执行语义动作（verb；windowstate 忽略 index/name/type 定位顶层窗口）。</summary>
-    public Task<UiActionResult> ActionAsync(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate, CancellationToken ct)
-        => RunGateAsync(() => ActionCore(process, verb, index, name, type, direction, lines, windowstate), ct);
+    public Task<UiActionResult> ActionAsync(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate, int timeoutSeconds, CancellationToken ct)
+        => RunGateAsync(() => ActionCore(process, verb, index, name, type, direction, lines, windowstate), timeoutSeconds, ct);
 
     /// <summary>对目标控件写入值（Value → RangeValue → LegacyIAccessible）。</summary>
-    public Task<UiActionResult> InputAsync(string process, string value, int index, string name, string type, CancellationToken ct)
-        => RunGateAsync(() => InputCore(process, value, index, name, type), ct);
+    public Task<UiActionResult> InputAsync(string process, string value, int index, string name, string type, int timeoutSeconds, CancellationToken ct)
+        => RunGateAsync(() => InputCore(process, value, index, name, type), timeoutSeconds, ct);
 
     /// <summary>读取目标控件状态（what 映射；返回未脱敏原始值，脱敏由调用方输出层做）。</summary>
-    public Task<UiStateResult> GetAsync(string process, string what, int index, string name, string type, CancellationToken ct)
-        => RunGateAsync(() => GetCore(process, what, index, name, type), ct);
+    public Task<UiStateResult> GetAsync(string process, string what, int index, string name, string type, int timeoutSeconds, CancellationToken ct)
+        => RunGateAsync(() => GetCore(process, what, index, name, type), timeoutSeconds, ct);
 
     /// <summary>事件化等待控件出现/文本变化（事件订阅 + 200ms 轮询兜底；超时返回当前状态不报错）。</summary>
     public async Task<UiWaitResult> WaitAsync(string process, string text, string type, string textChangedFrom, string textChangedTo, int timeoutSeconds, CancellationToken ct)
@@ -62,13 +66,13 @@ internal sealed class UiAutomationService
 
         var probeText = modeText ? text : textChangedTo;
 
-        // 1) 解析窗口 + 类型过滤 + 首次探测（gate 内 + 5s 兜底）。
+        // 1) 解析窗口 + 类型过滤 + 首次探测（gate 内 + timeout 兜底）。
         var (window, typeFilter, immediate) = await RunGateAsync(() =>
         {
             var w = UiElementLocator.ResolveTopWindow(GetAutomation(), process);
             var tf = UiElementLocator.ResolveControlType(type);
             return (w, tf, FindFirstName(w, probeText, tf));
-        }, ct);
+        }, timeout, ct);
         if (immediate is not null)
             return HitResult(modeText, immediate, typeFilter, textChangedFrom);
 
@@ -78,13 +82,13 @@ internal sealed class UiAutomationService
         var signal = NewSignal();
         try
         {
-            subscription = await RunGateAsync(() => _waiter.Subscribe(window, () => signal.TrySetResult(true)), ct);
+            subscription = await RunGateAsync(() => _waiter.Subscribe(window, () => signal.TrySetResult(true)), timeout, ct);
 
             var deadline = DateTime.UtcNow.AddSeconds(timeout);
             while (true)
             {
                 string? hit;
-                try { hit = await RunGateAsync(() => FindFirstName(window, probeText, typeFilter), ct); }
+                try { hit = await RunGateAsync(() => FindFirstName(window, probeText, typeFilter), timeout, ct); }
                 catch (UiException) { hit = null; } // 单轮探测超时视为未命中（继续等，整体受 timeout 约束）
                 if (hit is not null)
                     return HitResult(modeText, hit, typeFilter, textChangedFrom);
@@ -102,13 +106,13 @@ internal sealed class UiAutomationService
             if (subscription is not null)
             {
                 var sub = subscription;
-                try { await RunGateAsync(() => { sub.Dispose(); return true; }, CancellationToken.None); } catch { /* 退订失败忽略 */ }
+                try { await RunGateAsync(() => { sub.Dispose(); return true; }, timeout, CancellationToken.None); } catch { /* 退订失败忽略 */ }
             }
         }
 
-        // 3) 超时：读一次当前状态（gate 内 + 5s 兜底；失败不报错）。
+        // 3) 超时：读一次当前状态（gate 内 + timeout 兜底；失败不报错）。
         string? still = null;
-        try { still = await RunGateAsync(() => FindFirstName(window, probeText, typeFilter), ct); } catch { }
+        try { still = await RunGateAsync(() => FindFirstName(window, probeText, typeFilter), timeout, ct); } catch { }
         return new UiWaitResult("超时", still is null
             ? $"等待 {timeout}s 未命中（事件化等待 + 200ms 轮询兜底）。"
             : $"等待 {timeout}s 未命中（当前仍: {still}）。");
@@ -312,13 +316,14 @@ internal sealed class UiAutomationService
 
     // ===== 共享底座 =====
 
-    /// <summary>gate 内串行执行核心逻辑并套 5s 兜底。</summary>
-    private async Task<T> RunGateAsync<T>(Func<T> core, CancellationToken ct)
+    /// <summary>gate 内串行执行核心逻辑并按 timeoutSeconds 套兜底（clamp 到 1-300s，默认 5s）。</summary>
+    private async Task<T> RunGateAsync<T>(Func<T> core, int timeoutSeconds, CancellationToken ct)
     {
+        var timeout = ResolveTimeout(timeoutSeconds);
         await _gate.WaitAsync(ct);
         try
         {
-            return await UiaBoundAsync(core, ct);
+            return await UiaBoundAsync(core, timeout, ct);
         }
         finally
         {
@@ -326,28 +331,29 @@ internal sealed class UiAutomationService
         }
     }
 
-    private static async Task<T> UiaBoundAsync<T>(Func<T> core, CancellationToken ct)
+    /// <summary>超时秒数 → TimeSpan（&lt;=0 取默认 5s，clamp 到 1-300s）；纯函数，供工具层/verify 复用。</summary>
+    internal static TimeSpan ResolveTimeout(int timeoutSeconds)
+        => TimeSpan.FromSeconds(Math.Clamp(
+            timeoutSeconds <= 0 ? DefaultTimeoutSeconds : timeoutSeconds, MinTimeoutSeconds, MaxTimeoutSeconds));
+
+    private async Task<T> UiaBoundAsync<T>(Func<T> core, TimeSpan timeout, CancellationToken ct)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var task = Task.Run(core, cts.Token);
-        var winner = await Task.WhenAny(task, Task.Delay(UiaTimeout, cts.Token)).ConfigureAwait(false);
+        var task = Task.Run(() =>
+        {
+            // 单 UIA3Automation 实例按调用设置 COM 超时（_gate 已串行，无并发写）；否则 COM 层仍按旧值截断。
+            var aut = GetAutomation();
+            aut.ConnectionTimeout = timeout;
+            aut.TransactionTimeout = timeout;
+            return core();
+        }, cts.Token);
+        var winner = await Task.WhenAny(task, Task.Delay(timeout, cts.Token)).ConfigureAwait(false);
         if (winner != task)
-            throw new UiException($"UIA 调用超过 {UiaTimeout.TotalSeconds:0}s 未响应（目标进程可能挂起或 UIA 繁忙）。可稍后重试。");
+            throw new UiException($"UIA 调用超过 {timeout.TotalSeconds:0}s 未响应。这是单次 UIA 调用护栏（不代表环境 UIA 不可用）——若目标确实响应慢，可增大 timeoutSeconds 后重试。");
         return await task;
     }
 
-    private UIA3Automation GetAutomation()
-    {
-        if (_automation is null)
-        {
-            _automation = new UIA3Automation
-            {
-                ConnectionTimeout = UiaTimeout,
-                TransactionTimeout = UiaTimeout,
-            };
-        }
-        return _automation;
-    }
+    private UIA3Automation GetAutomation() => _automation ??= new UIA3Automation();
 
     private static T SafeRead<T>(Func<T> f, T fallback)
     {

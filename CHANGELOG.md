@@ -6,6 +6,12 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Added
+
+- **`ui_*` 工具新增可调超时 `timeoutSeconds`**：`ui_find`/`ui_action`/`ui_input`/`ui_get` 新增 `timeoutSeconds`（默认 5，1-300），`ui_wait` 的 `timeoutSeconds` 同时驱动单次 UIA 调用护栏。此前单次 UIA 调用固定 5s 护栏**不可调**，目标响应慢时 agent 只能看到「UIA 调用超过 5s 未响应」而无处加大超时，易误判为「环境 UIA 不可用」。超时提示现明确「这是单次调用护栏、不代表环境 UIA 不可用，可增大 timeoutSeconds 重试」
+
 ## [2.0.2] - 2026-09-27
 
 ### Fixed

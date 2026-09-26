@@ -30,14 +30,15 @@ public static class UiTools
         [Description("控件类型（UIA 类型名，如 Button/Text/Edit/List/ListItem/CheckBox/Window；TextBlock 等框架别名自动归一）。")] string type = "",
         [Description("AutomationId 精确匹配（可为空——WPF 常不设）。")] string automationId = "",
         [Description("返回条数上限，默认 50，范围 1-500。")] int limit = 50,
+        [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
-        var argsText = $"process={process} title={title} text={text} type={type} autoId={automationId} limit={limit}";
+        var argsText = $"process={process} title={title} text={text} type={type} autoId={automationId} limit={limit} timeout={timeoutSeconds}";
         try
         {
             if (string.IsNullOrWhiteSpace(process))
                 return Fail("ui_find", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
-            var elements = await UiAutomationService.Instance.FindAsync(process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, cancellationToken);
+            var elements = await UiAutomationService.Instance.FindAsync(process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, timeoutSeconds, cancellationToken);
 
             var pid = UiAutomationService.Instance.LastFindPid;
             var winTitle = UiAutomationService.Instance.LastFindWindowTitle;
@@ -84,9 +85,10 @@ public static class UiTools
         [Description("滚动方向（verb=scroll 时必填）：up / down。")] string direction = "",
         [Description("滚动行数（verb=scroll 用，默认 0=3，范围 1-100）。")] int lines = 0,
         [Description("窗口状态（verb=windowstate 时必填）：normal / maximized / minimized。")] string windowstate = "",
+        [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
-        var argsText = $"process={process} verb={verb} index={index} name={name} type={type} direction={direction} lines={lines} windowstate={windowstate}";
+        var argsText = $"process={process} verb={verb} index={index} name={name} type={type} direction={direction} lines={lines} windowstate={windowstate} timeout={timeoutSeconds}";
         try
         {
             if (string.IsNullOrWhiteSpace(process))
@@ -96,7 +98,7 @@ public static class UiTools
             if (verb.Trim().Equals("rightclick", StringComparison.OrdinalIgnoreCase)
                 || verb.Trim().Equals("doubleclick", StringComparison.OrdinalIgnoreCase))
                 return Fail("ui_action", argsText, "UIA 无该语义入口，物理输入已移除；请改用等价菜单/命令的 ui_action verb=invoke。");
-            var result = await UiAutomationService.Instance.ActionAsync(process.Trim(), verb.Trim(), index, name.Trim(), type.Trim(), direction.Trim(), lines, windowstate.Trim(), cancellationToken);
+            var result = await UiAutomationService.Instance.ActionAsync(process.Trim(), verb.Trim(), index, name.Trim(), type.Trim(), direction.Trim(), lines, windowstate.Trim(), timeoutSeconds, cancellationToken);
             return Done("ui_action", argsText, result.Message);
         }
         catch (OperationCanceledException)
@@ -116,16 +118,17 @@ public static class UiTools
         [Description("上次 ui_find 返回序号（&gt;=0 优先于 name/type 定位；默认 -1 用 name/type）。")] int index = -1,
         [Description("控件名/文本（Name/AutomationId 子串忽略大小写）。")] string name = "",
         [Description("控件类型（UIA 类型名）。")] string type = "",
+        [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
-        var argsText = $"process={process} value={value} index={index} name={name} type={type}";
+        var argsText = $"process={process} value={value} index={index} name={name} type={type} timeout={timeoutSeconds}";
         try
         {
             if (string.IsNullOrWhiteSpace(process))
                 return Fail("ui_input", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
             if (string.IsNullOrEmpty(value))
                 return Fail("ui_input", argsText, "value 不能为空：ui_input 需给出要写入的值。");
-            var result = await UiAutomationService.Instance.InputAsync(process.Trim(), value, index, name.Trim(), type.Trim(), cancellationToken);
+            var result = await UiAutomationService.Instance.InputAsync(process.Trim(), value, index, name.Trim(), type.Trim(), timeoutSeconds, cancellationToken);
             return Done("ui_input", argsText, result.Message);
         }
         catch (OperationCanceledException)
@@ -145,16 +148,17 @@ public static class UiTools
         [Description("上次 ui_find 返回序号（&gt;=0 优先于 name/type 定位；默认 -1 用 name/type）。")] int index = -1,
         [Description("控件名/文本（Name/AutomationId 子串忽略大小写）。")] string name = "",
         [Description("控件类型（UIA 类型名）。")] string type = "",
+        [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
-        var argsText = $"process={process} what={what} index={index} name={name} type={type}";
+        var argsText = $"process={process} what={what} index={index} name={name} type={type} timeout={timeoutSeconds}";
         try
         {
             if (string.IsNullOrWhiteSpace(process))
                 return Fail("ui_get", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
             if (string.IsNullOrWhiteSpace(what))
                 return Fail("ui_get", argsText, "what 不能为空：value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext。");
-            var state = await UiAutomationService.Instance.GetAsync(process.Trim(), what.Trim(), index, name.Trim(), type.Trim(), cancellationToken);
+            var state = await UiAutomationService.Instance.GetAsync(process.Trim(), what.Trim(), index, name.Trim(), type.Trim(), timeoutSeconds, cancellationToken);
             var (safe, redacted) = SensitiveValueRedactor.Redact(state.ControlName, state.Value);
             var text = $"what={what.Trim()} → {safe}";
             if (redacted) text += $"（{SensitiveValueRedactor.Notice}）";
@@ -170,14 +174,14 @@ public static class UiTools
 
     /// <summary>等待 UI 状态变化/控件出现（事件化 + 轮询兜底，只读；超时返回当前状态不报错）。</summary>
     [McpServerTool]
-    [Description("等待 UI 状态变化/控件出现（只读：对目标窗口订阅结构/属性变化事件，命中即返回；无事件时每 200ms 轮询兜底，到 timeoutSeconds 止；超时返回当前状态提示不报错）。用法：text=期望出现的控件文本（等出现）；或 textChangedFrom + textChangedTo 成对（控件文本从 X 变 Y——动作后的状态确认，如 手动→自动）。type 可限定控件类型。不移动光标、不注入输入。")]
+    [Description("等待 UI 状态变化/控件出现（只读：对目标窗口订阅结构/属性变化事件，命中即返回；无事件时每 200ms 轮询兜底，到 timeoutSeconds 止；超时返回当前状态提示不报错）。用法：text=期望出现的控件文本（等出现）；或 textChangedFrom + textChangedTo 成对（控件文本从 X 变 Y——动作后的状态确认，如 手动→自动）。type 可限定控件类型。timeoutSeconds 既是最长等待，也作单次 UIA 调用护栏。不移动光标、不注入输入。")]
     public static async Task<string> UiWait(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("期望出现的控件文本（Name 子串忽略大小写；与 textChangedFrom/To 二选一）。")] string text = "",
         [Description("限定控件类型（UIA 类型名，可空）。")] string type = "",
         [Description("状态切换起点文本（text 模式之外用成对 From/To 等文本变化）。")] string textChangedFrom = "",
         [Description("状态切换目标文本（成对使用）。")] string textChangedTo = "",
-        [Description("最长等待秒数，默认 30，范围 1-300。")] int timeoutSeconds = 30,
+        [Description("最长等待秒数，默认 30，范围 1-300；同时作为单次 UIA 调用的超时护栏（目标响应慢时可调大）。")] int timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
     {
         var argsText = $"process={process} text={text} type={type} from={textChangedFrom} to={textChangedTo} timeout={timeoutSeconds}";

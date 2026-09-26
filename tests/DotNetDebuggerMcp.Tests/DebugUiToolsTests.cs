@@ -44,6 +44,26 @@ public sealed class DebugUiToolsTests
     }
 
     [Fact]
+    public async Task UiFind_AcceptsTimeoutSecondsParameter()
+    {
+        Assert.True(File.Exists(UiSampleAppExe), "UiSampleApp.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            // timeoutSeconds 端到端贯通：显式给 2s 仍应成功（快速路径 ~30ms）——证明参数被接受且不破坏 UIA。
+            var found = await WaitUiFindAsync(mcp,
+                new Dictionary<string, object?> { ["type"] = "Button", ["timeoutSeconds"] = 2 }, "手动");
+            Assert.Contains("手动", found);
+        }
+        finally
+        {
+            KillUiSampleApp(app);
+        }
+    }
+
+    [Fact]
     public async Task UiActionInvoke_Button_TogglesState_ThenWaitEvent()
     {
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();
