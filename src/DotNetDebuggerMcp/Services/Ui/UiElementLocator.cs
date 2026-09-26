@@ -359,21 +359,49 @@ internal sealed class UiElementLocator
         return (best.Id, best.ProcessName);
     }
 
+    /// <summary>
+    /// 定位目标进程的顶层窗口（title 空=首个；非空=标题精确匹配）。**不遍历 UIA 桌面根**：
+    /// 桌面全量枚举必须走完全部顶层窗口，会跨过 shell 的 Progman 窗口——本机实测单次阻塞 ~7.5s（超 5s 护栏，
+    /// 曾致 ui_find 全族超时失败）。改为「Win32 主窗口句柄直转 UIA 元素」（O(1)）优先，退回「桌面取首个匹配」
+    /// （<c>FindFirstChild</c> 命中即返回，不像 FindAllChildren 必须走完）。
+    /// </summary>
     private static AutomationElement? FindWindow(UIA3Automation automation, int pid, string title)
     {
+        // 快速路径（无标题）：Win32 主窗口句柄直接包成 UIA 元素，跳过任何桌面枚举。
+        if (title.Length == 0)
+        {
+            var byHandle = TryFromMainWindowHandle(automation, pid);
+            if (byHandle is not null) return byHandle;
+        }
+
         try
         {
             var desktop = automation.GetDesktop();
-            var windows = title.Length == 0
-                ? desktop.FindAllChildren(cf => cf.ByControlType(ControlType.Window).And(cf.ByProcessId(pid)))
-                : desktop.FindAllChildren(cf => cf.ByControlType(ControlType.Window)
+            return title.Length == 0
+                ? desktop.FindFirstChild(cf => cf.ByControlType(ControlType.Window).And(cf.ByProcessId(pid)))
+                : desktop.FindFirstChild(cf => cf.ByControlType(ControlType.Window)
                     .And(cf.ByProcessId(pid))
                     .And(cf.ByName(title)));
-            return windows.Length == 0 ? null : windows[0];
         }
         catch (Exception ex)
         {
             throw new UiException($"读取窗口失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>Win32 主窗口句柄 → UIA 元素（无句柄/转换失败返回 null，由调用方回退桌面查询）。</summary>
+    private static AutomationElement? TryFromMainWindowHandle(UIA3Automation automation, int pid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById(pid);
+            var hwnd = p.MainWindowHandle;
+            if (hwnd == IntPtr.Zero) return null;
+            return automation.FromHandle(hwnd);
+        }
+        catch
+        {
+            return null;
         }
     }
 
