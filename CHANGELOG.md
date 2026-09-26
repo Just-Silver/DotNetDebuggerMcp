@@ -10,7 +10,7 @@
 
 ### Fixed
 
-- **`ui_*` 工具在「桌面顶层窗口枚举慢」的机器上全族超时失败**：窗口定位此前经 UIA 桌面根全量枚举（`FindAllChildren`），必须走完所有顶层窗口——当桌面存在响应慢的 shell 窗口（如 `Progman`/Program Manager）时会阻塞数秒，超过 5s 护栏后 `ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait` 一律报「UIA 调用超过 5s 未响应」。现改为 Win32 主窗口句柄直转 UIA 元素（O(1)）优先、桌面查询退化为「取首个匹配」（`FindFirstChild` 命中即返回），不再遍历整个桌面
+- **`ui_*` 工具在「桌面顶层窗口枚举慢」的机器上全族超时失败**：窗口定位此前经 UIA 桌面根全量枚举（`FindAllChildren`），必须走完所有顶层窗口——当桌面存在响应慢的 shell 窗口（如 `Progman`/Program Manager）时会阻塞数秒，超过 5s 护栏后 `ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait` 一律报「UIA 调用超过 5s 未响应」。现改为在桌面取「首个匹配」（`FindFirstChild` 命中即返回），不再遍历整个桌面；匹配条件（`ControlType.Window` + 进程 + 标题）与「取首个匹配」的语义保持不变
 
 ## [2.0.1] - 2026-09-24
 
