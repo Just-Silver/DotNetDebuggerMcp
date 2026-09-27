@@ -10,20 +10,20 @@
 
 ### Added
 
-- **`screenshot` 工具通用化（阶段一）**：新增寻址模式 `display`（指定显示器，含 `primary`/`left`/`right` 邻屏）、`foreground`（当前前台窗口）、`element`（按 UIA 元素引用截单个控件）、`hwnd`（按窗口句柄）、`clientArea`（窗口客户区）；新增参数 `maxDimension`（默认 1568）、`maxWidth`/`maxHeight`（双轴上限）、`includeCursor`（叠加鼠标光标）；返回头部新增 `原点`/`缩放`/`帧` 坐标元数据（`screen_x=原点x+图像x/缩放`；`帧` 配合 `ui_find`/`ui_*` 的 `frameId` 做旧画面护栏）。`mode` 默认 `auto`（按其它参数推断），`windowTitle=@active` 指当前前台窗口
+- **`screenshot` 工具通用化（阶段一）**：新增寻址模式 `display`（指定显示器，含 `primary`/`left`/`right` 邻屏）、`foreground`（当前前台窗口）、`element`（按 UIA 元素引用截单个控件）、`hwnd`（按窗口句柄）、`clientArea`（窗口客户区）；新增参数 `includeCursor`（叠加鼠标光标）；返回头部新增 `原点`/`帧` 坐标元数据（`screen_x=原点x+图像x`，图像恒为原生 1:1；`帧` 配合 `ui_find`/`ui_*` 的 `frameId` 做旧画面护栏）。`mode` 默认 `auto`（按其它参数推断），`windowTitle=@active` 指当前前台窗口
 - 新增可复用能力库 **`SharpSight.Capture`**（WGC+GDI 截图/图像管线）与 **`SharpSight.UiAutomation`**（FlaUI/UIA 元素模型与定位），拆自宿主/Engine，行为不变
 - `ui_find` 返回值头部含 `帧: frameId=N`；`ui_action`/`ui_input`/`ui_get` 新增可选 `frameId`（旧帧护栏：非当前帧拒绝并提示重新 `ui_find`/`screenshot`，0=不校验）
 - 新增两个**只读发现工具**，补齐 `screenshot` 寻址参数的取值来源（此前无处可查）：**`screenshot_displays`** 列显示器清单（1 基编号/主屏/物理边界/缩放 → 喂 `display`）；**`screenshot_windows`** 列可见顶层窗口（`hwnd`/`pid`/标题/前台，**不限 .NET 进程** → 喂 `hwnd`/`windowTitle`/`processId`；只列**有标题且尺寸 > 0**的窗口——系统 shell 助手/阴影层/零尺寸停车窗等不可寻址目标已过滤）
 
 ### Changed
 
-- **`screenshot` 默认缩放上限由 2000 改为 1568**（长边）；`maxDimension=0`（且未做单轴覆盖）可关闭缩放、返回 1:1 原图
 - **`ui_find` 不再列出离屏（`IsOffscreen=true`）控件**（与 `screenshot element` 共用同一过滤、两者 index 保持同源）：清单中既有控件的 `index` 可能因过滤位移，请以新的 `ui_find` 输出为准
 - **`screenshot` 落盘位置改为系统临时目录**：默认落盘目录由 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\` 改为 `%TEMP%\DotNetDebuggerMcp\screenshots\`；`filePath` 传**相对路径**时也以该临时目录为基准（此前按进程当前工作目录解析——会把图片写进调用方项目目录）
 
 ### Removed
 
 - **`screenshot` 的 `format`/`quality` 参数已移除（破坏性）**：输出**固定 PNG**；传入这两个参数将被忽略
+- **`screenshot` 的缩放能力已移除（破坏性）**：`maxDimension`/`maxWidth`/`maxHeight` 三个参数删除，图像**恒按抓取区域原生像素 1:1 输出**（尺寸处理交模型侧，避免"服务器缩一次、模型侧再处理一次"造成坐标口径混乱）；头部随之去掉 `缩放` 行，`原点` 是唯一坐标换算量（`screen_x=原点x+图像x`）
 
 ## [2.1.0] - 2026-09-27
 

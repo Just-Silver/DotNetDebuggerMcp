@@ -30,14 +30,6 @@ internal static class AppConfig
     public const int DefaultStopContextBudgetLines = 100;
 
     /// <summary>
-    /// screenshot 输出单边最大像素（长边上限）：超过则双轴等比缩到限内（spec §6.2）。
-    /// 1568 为经验保守值（各模型视觉预算不一，模型侧仍可能再缩放），非官方统一标准；
-    /// 留余量以避免超限后被缩放导致坐标漂移。
-    /// 经参数传入捕获库（`SharpSight.Capture`），缩放实现唯一在库侧（spec §4.2）。
-    /// </summary>
-    public const int ScreenshotMaxDimension = 1568;
-
-    /// <summary>
     /// screenshot 内联返回阈值默认值（base64 后字节数，chrome-devtools 先例 2MB）：达到即改落盘返回绝对路径。
     /// 实际判定读 <see cref="InlineImageBase64Bytes"/>（测试可注入，见 <see cref="ConfigureForTest"/>）。
     /// </summary>

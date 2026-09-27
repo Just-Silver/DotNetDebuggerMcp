@@ -204,12 +204,11 @@ public static class ScreenCapture
     /// <summary>
     /// 指定显示器逐屏捕获（spec §4.2 mode=display）：<paramref name="index"/> 为库侧 0 基枚举序
     /// （<see cref="DisplayInfo.Index"/>）；1 基对外编号与 primary/left/right 解析属宿主，库侧不参与。
-    /// 透传 <paramref name="options"/> 的 <see cref="CaptureOptions.MaxWidth"/>/<see cref="CaptureOptions.MaxHeight"/>/
-    /// <see cref="CaptureOptions.IncludeCursor"/>。
+    /// 透传 <paramref name="options"/> 的 <see cref="CaptureOptions.IncludeCursor"/>。
     /// <para><b>display 与 region 是不同入口（不可混用坐标口径）</b>：本方法<b>直接按该显示器矩形 <c>d.Bounds</c>
-    /// 抓取</b>，<c>k</c> 的基数是<b>显示器原生尺寸</b>（spec §6.2），结果 origin=显示器左上、DisplayIndex=库侧 0 基。
+    /// 抓取</b>（原生 1:1），结果 origin=显示器左上、DisplayIndex=库侧 0 基。
     /// 而 <see cref="CaptureScreen(CaptureOptions)"/> 的 <see cref="CaptureOptions.Clip"/> 是「<b>虚拟屏</b>图像空间」
-    /// 坐标——若把显示器原生矩形当 Clip 传入，多显示器下会被按虚拟屏为 kBase 的换算夹回整屏或判为屏外（R21 前的缺陷），
+    /// 坐标——若把显示器原生矩形当 Clip 传入，多显示器下会被按虚拟屏坐标夹回整屏或判为屏外（R21 前的缺陷），
     /// 故本方法<b>不经</b> <see cref="CaptureScreen(CaptureOptions)"/>。</para>
     /// <b>忽略 <see cref="CaptureOptions.Clip"/>/<see cref="CaptureOptions.ClientArea"/></b>（显示器几何由自身决定）。
     /// 索引越界抛约定错误。
@@ -221,36 +220,32 @@ public static class ScreenCapture
         if ((uint)index >= (uint)displays.Length)
             throw new CaptureException($"显示器序号 {index} 不存在（共 {displays.Length} 台，库侧 0 基索引 0..{displays.Length - 1}）。");
         var d = displays[index];
-        // 直接抓该显示器屏幕矩形；kBase = 显示器原生尺寸（非虚拟屏），故 origin 即显示器左上、无虚拟屏偏移换算。
+        // 直接抓该显示器屏幕矩形（原生 1:1）：origin 即显示器左上，无虚拟屏偏移换算。
         using var bmp = GdiCapture.CaptureScreenBits(d.Bounds);
         var cursorNote = OverlayCursorNote(bmp, options.IncludeCursor, d.Bounds.X, d.Bounds.Y);
-        return ImagePipeline.Process(bmp, bmp.Size, options.MaxWidth, options.MaxHeight,
-            windowTitle: null, sourceName: "BitBlt" + cursorNote,
+        return ImagePipeline.Process(bmp, windowTitle: null, sourceName: "BitBlt" + cursorNote,
             originX: d.Bounds.X, originY: d.Bounds.Y) with { DisplayIndex = d.Index };
     }
 
     /// <summary>
     /// screen/region：GDI BitBlt 虚拟屏（spec §4.3-3：screen/region 不开 WGC）。
     /// <see cref="CaptureOptions.Clip"/>=「mode=screen 返回图像素空间」坐标（宿主仅解析字符串格式，换算唯一在此）：
-    /// 图像空间求交——空交集抛 spec §5.2 屏外约定错误（W/H 用图像空间尺寸，agent 可自查口径，
-    /// 由 Engine 回传、宿主不触碰坐标换算）；非空交 → round 换算原生空间裁剪（BitBlt 只抓交集）；
+    /// 不缩放后图像空间与虚拟屏物理像素只差一个 origin 平移（图像 (0,0) 对应 native 左上）。
+    /// 图像空间求交——空交集抛 spec §5.2 屏外约定错误（W/H 用虚拟屏尺寸，agent 可自查口径，
+    /// 由库回传、宿主不触碰坐标换算）；非空交 → 平移为原生空间裁剪（BitBlt 只抓交集）；
     /// 交 ≠ 原始输入即 ClippedToScreen（部分越界=已裁交集，头部注明）。
-    /// 坐标模型（spec §5）：origin=抓取矩形左上（虚拟屏物理像素，即 nativeClip 左上）、
-    /// scale=Width/NativeWidth（由 ImagePipeline 回填）。
+    /// 坐标模型（spec §5）：origin=抓取矩形左上（虚拟屏物理像素，即 nativeClip 左上）；输出恒为原生 1:1。
     /// </summary>
     public static CaptureResult CaptureScreen(CaptureOptions options)
     {
         EnsureDpi();
         var native = GdiCapture.VirtualScreenRect();
-        var k = ImagePipeline.ScaleFactor(native.Size, options.MaxWidth, options.MaxHeight);
-        var imgW = Math.Max(1, (int)Math.Round(native.Width * k));
-        var imgH = Math.Max(1, (int)Math.Round(native.Height * k));
 
         Rectangle nativeClip;
         var clipped = false;
         if (options.Clip is { } c)
         {
-            (nativeClip, clipped) = ResolveRegionClip(c, native, k, imgW, imgH);
+            (nativeClip, clipped) = ResolveRegionClip(c, native);
         }
         else
         {
@@ -259,13 +254,12 @@ public static class ScreenCapture
 
         using var bmp = GdiCapture.CaptureScreenBits(nativeClip);
         var cursorNote = OverlayCursorNote(bmp, options.IncludeCursor, nativeClip.X, nativeClip.Y);
-        return ImagePipeline.Process(bmp, native.Size, options.MaxWidth, options.MaxHeight,
-            windowTitle: null, sourceName: "BitBlt" + cursorNote, clippedToScreen: clipped,
-            originX: nativeClip.X, originY: nativeClip.Y);
+        return ImagePipeline.Process(bmp, windowTitle: null, sourceName: "BitBlt" + cursorNote,
+            clippedToScreen: clipped, originX: nativeClip.X, originY: nativeClip.Y);
     }
 
     /// <summary>
-    /// GDI 源的光标叠加（Task 9）：仅 <c>IncludeCursor</c> 时尝试（scale/encode 之前 → 光标随图一起缩放）；
+    /// GDI 源的光标叠加（Task 9）：仅 <c>IncludeCursor</c> 时尝试（在编码之前叠加；本库不缩放，无「随图缩放」一说）；
     /// 成功/无需叠加返回空串，失败返回「（光标未叠加）」备注（失败不计为错误，保持「来源行如实标注」口径）。
     /// WGC 源不走此处（<c>IsCursorCaptureEnabled</c> 已内建）。
     /// </summary>
@@ -274,25 +268,24 @@ public static class ScreenCapture
 
     /// <summary>
     /// region 换算纯函数（自 CaptureScreen 提取——锁屏/无桌面环境下屏幕 BitBlt 不可用时，
-    /// 换算逻辑仍可经此单测覆盖；spec §3.1 k 换算、§5.2 屏外/交集语义）：
-    /// 图像空间求交（空=屏外抛约定错误，W/H 用图像空间尺寸）→ round 换算原生空间 → 夹紧虚拟屏
-    /// → 交 ≠ 原输入即部分越界（ClippedToScreen）。
+    /// 换算逻辑仍可经此单测覆盖；spec §5.2 屏外/交集语义）：
+    /// 图像空间与虚拟屏求交（空=屏外抛约定错误，W/H 用虚拟屏尺寸）→ 平移回原生空间 → 夹紧虚拟屏
+    /// → 交 ≠ 原输入即部分越界（ClippedToScreen）。本库不缩放，故无 k 换算（图像空间=原生空间平移 origin）。
     /// </summary>
-    internal static (Rectangle NativeClip, bool Clipped) ResolveRegionClip(
-        Rectangle clip, Rectangle native, double k, int imgW, int imgH)
+    internal static (Rectangle NativeClip, bool Clipped) ResolveRegionClip(Rectangle clip, Rectangle native)
     {
-        var inter = Rectangle.Intersect(clip, new Rectangle(0, 0, imgW, imgH));
+        var inter = Rectangle.Intersect(clip, new Rectangle(0, 0, native.Width, native.Height));
         if (inter.IsEmpty)
-            throw new CaptureException($"region ({clip.X},{clip.Y},{clip.Width},{clip.Height}) 完全在屏幕范围 ({imgW}x{imgH}) 之外。");
+            throw new CaptureException($"region ({clip.X},{clip.Y},{clip.Width},{clip.Height}) 完全在屏幕范围 ({native.Width}x{native.Height}) 之外。");
         var clipped = inter != clip;
         var nativeClip = new Rectangle(
-            native.X + (int)Math.Round(inter.X / k),
-            native.Y + (int)Math.Round(inter.Y / k),
-            Math.Max(1, (int)Math.Round(inter.Width / k)),
-            Math.Max(1, (int)Math.Round(inter.Height / k)));
-        nativeClip.Intersect(native);   // round 兜底夹紧（最多溢出 1px）
+            native.X + inter.X,
+            native.Y + inter.Y,
+            Math.Max(1, inter.Width),
+            Math.Max(1, inter.Height));
+        nativeClip.Intersect(native);   // 兜底夹紧
         if (nativeClip.Width <= 0 || nativeClip.Height <= 0)
-            throw new CaptureException($"region ({clip.X},{clip.Y},{clip.Width},{clip.Height}) 完全在屏幕范围 ({imgW}x{imgH}) 之外。");
+            throw new CaptureException($"region ({clip.X},{clip.Y},{clip.Width},{clip.Height}) 完全在屏幕范围 ({native.Width}x{native.Height}) 之外。");
         return (nativeClip, clipped);
     }
 
@@ -323,15 +316,13 @@ public static class ScreenCapture
             if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw new CaptureException(WindowCaptureFailMsg);
             using var cbmp = GdiCapture.CaptureScreenBits(bounds.ClientArea);
             var cursorNote = OverlayCursorNote(cbmp, options.IncludeCursor, bounds.ClientArea.X, bounds.ClientArea.Y);
-            return ImagePipeline.Process(cbmp, cbmp.Size, options.MaxWidth, options.MaxHeight,
-                info.Title, "BitBlt" + cursorNote,
+            return ImagePipeline.Process(cbmp, info.Title, "BitBlt" + cursorNote,
                 originX: bounds.ClientArea.X, originY: bounds.ClientArea.Y) with { IsClientArea = true };
         }
 
         var (bmp, source, originX, originY) = CaptureWindowBits(hwnd, info, bounds, options.IncludeCursor);
         using (bmp)
-            return ImagePipeline.Process(bmp, bmp.Size, options.MaxWidth, options.MaxHeight,
-                info.Title, source, originX: originX, originY: originY);
+            return ImagePipeline.Process(bmp, info.Title, source, originX: originX, originY: originY);
     }
 
     private const string WindowCaptureFailMsg = "窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。";
@@ -370,7 +361,7 @@ public static class ScreenCapture
 
         if (bmp is null) throw new CaptureException(WindowCaptureFailMsg);
 
-        // GDI 源无内建光标开关：缩放/编码前手动叠加（失败仅在 Source 备注，不计错误）；WGC 已内建、不重复叠加
+        // GDI 源无内建光标开关：编码前手动叠加（失败仅在 Source 备注，不计错误）；WGC 已内建、不重复叠加
         if (source != "WGC") source += OverlayCursorNote(bmp, includeCursor, originX, originY);
         return (bmp, source, originX, originY);
     }
@@ -382,8 +373,8 @@ public static class ScreenCapture
     /// 元素属另一顶层窗口（ComboBox 弹层/popup/tooltip）时，调用方须传元素自身
     /// <c>GetAncestor(GA_ROOT)</c> 的 <paramref name="topLevelHwnd"/>（见 <c>UiElementInfo.TopLevelHwnd</c>）。
     /// <para>裁剪 = <paramref name="elementRectPx"/> 与窗口帧求交：空交集抛约定错误；部分越界则裁至交集且
-    /// <see cref="CaptureResult.ClippedToScreen"/>=true。origin=实际抓取交集左上（spec §5）；scale=图像/原生。</para>
-    /// <para>缩放/编码选项语义同 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>。</para>
+    /// <see cref="CaptureResult.ClippedToScreen"/>=true。origin=实际抓取交集左上（spec §5）；输出原生 1:1。</para>
+    /// <para>编码选项语义同 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>。</para>
     /// </summary>
     public static CaptureResult CaptureElement(IntPtr topLevelHwnd, Rectangle elementRectPx, CaptureOptions options)
     {
@@ -403,8 +394,8 @@ public static class ScreenCapture
                 throw new CaptureException($"元素矩形 ({elementRectPx.X},{elementRectPx.Y},{elementRectPx.Width},{elementRectPx.Height}) 不在顶层窗口帧 ({frame.X},{frame.Y},{frame.Width},{frame.Height}) 内。");
             var local = new Rectangle(inter.X - originX, inter.Y - originY, inter.Width, inter.Height);
             using var cropped = bmp.Clone(local, bmp.PixelFormat);
-            return ImagePipeline.Process(cropped, cropped.Size, options.MaxWidth, options.MaxHeight,
-                info.Title, source, clippedToScreen: inter != elementRectPx, originX: inter.X, originY: inter.Y);
+            return ImagePipeline.Process(cropped, info.Title, source,
+                clippedToScreen: inter != elementRectPx, originX: inter.X, originY: inter.Y);
         }
     }
 }

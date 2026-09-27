@@ -238,20 +238,6 @@ public sealed class ScreenshotToolTests
         Assert.Contains("需提供 element", r.Text());
     }
 
-    [Theory]
-    [InlineData(1568, 0, 0, 1568, 1568)]      // 默认：双轴 1568
-    [InlineData(0, 0, 0, 0, 0)]               // maxDimension=0 且无覆盖 → 不缩放（1:1）
-    [InlineData(1568, 500, 0, 500, 1568)]     // maxWidth 覆盖一轴
-    [InlineData(1568, 0, 300, 1568, 300)]     // maxHeight 覆盖一轴
-    [InlineData(0, 500, 0, 500, 0)]           // 关闭缩放 + 单轴覆盖
-    [InlineData(-5, -1, 0, 0, 0)]             // 负值按 0（不缩放）
-    public void ResolveMaxDimensions_Matrix(int dim, int w, int h, int ew, int eh)
-    {
-        var (effW, effH) = ScreenshotTool.ResolveMaxDimensions(dim, w, h);
-        Assert.Equal(ew, effW);
-        Assert.Equal(eh, effH);
-    }
-
     // ===== 代际护栏（ui_* frameId，spec §7.4；无 GUI，校验先于进程解析）=====
 
     [Fact]

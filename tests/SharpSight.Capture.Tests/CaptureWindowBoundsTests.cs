@@ -104,9 +104,7 @@ public sealed class CaptureWindowBoundsTests
         Assert.True(r.IsClientArea);
         Assert.Equal("BitBlt", r.Source);
         Assert.Equal("UiSample", r.WindowTitle);
-        Assert.Equal(b!.ClientArea.Width, r.NativeWidth);
-        Assert.Equal(b.ClientArea.Height, r.NativeHeight);
-        Assert.Equal(b.ClientArea.Width, r.Width);    // 默认 maxW/H=0 ⇒ 不缩放
+        Assert.Equal(b!.ClientArea.Width, r.Width);   // 不缩放：输出=客户区原生尺寸
         Assert.Equal(b.ClientArea.Height, r.Height);
         Assert.Equal(b.ClientArea.X, r.OriginX);      // origin=客户区屏幕左上（spec §5）
         Assert.Equal(b.ClientArea.Y, r.OriginY);
@@ -137,7 +135,7 @@ public sealed class CaptureWindowBoundsTests
         Assert.False(r.IsClientArea);
         Assert.Equal(b!.ExtendedFrame.X, r.OriginX);
         Assert.Equal(b.ExtendedFrame.Y, r.OriginY);
-        Assert.Equal(b.ExtendedFrame.Width, r.NativeWidth);
-        Assert.Equal(b.ExtendedFrame.Height, r.NativeHeight);
+        Assert.Equal(b.ExtendedFrame.Width, r.Width);
+        Assert.Equal(b.ExtendedFrame.Height, r.Height);
     }
 }

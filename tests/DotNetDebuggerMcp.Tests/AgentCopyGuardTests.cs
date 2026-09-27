@@ -49,8 +49,8 @@ public sealed class AgentCopyGuardTests
         // 阶段一 screenshot 通用化补录（agent 唯一直接可见的契约面：固定 PNG / 模式推断 / 坐标元数据）
         { nameof(ScreenshotTool.Screenshot), "固定 PNG" },         // 输出格式恒为 PNG（无 format/quality）
         { nameof(ScreenshotTool.Screenshot), "auto" },             // mode 默认 auto 按参数推断
-        { nameof(ScreenshotTool.Screenshot), "原点" },             // 头部 origin/scale 坐标元数据
-        { nameof(ScreenshotTool.Screenshot), "缩放" },
+        { nameof(ScreenshotTool.Screenshot), "原点" },             // 头部 origin 坐标元数据（图像恒原生 1:1）
+        { nameof(ScreenshotTool.Screenshot), "不做任何缩放" },     // 「不缩放」= agent 必须知道的行为（尺寸交模型侧，防双重处理）
         // 视觉族发现工具（只为 screenshot 寻址服务；只读）
         { nameof(ScreenshotDisplaysTool.ScreenshotDisplays), "显示器" },              // 列显示器清单
         { nameof(ScreenshotWindowsTool.ScreenshotWindows), "可见顶层窗口" },          // 列窗口清单
@@ -61,8 +61,6 @@ public sealed class AgentCopyGuardTests
     public static TheoryData<string, string, string> ParamContractData => new()
     {
         { nameof(ScreenshotTool.Screenshot), "mode", "auto" },             // 模式推断默认值
-        { nameof(ScreenshotTool.Screenshot), "maxDimension", "1568" },     // 默认上限（铁律：改默认值须改 Description）
-        { nameof(ScreenshotTool.Screenshot), "maxDimension", "0=不缩放" }, // 「不缩放」逃生门必须对 agent 可见
         { nameof(ScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
         { nameof(ScreenshotTool.Screenshot), "includeCursor", "光标" },
         { nameof(ScreenshotTool.Screenshot), "filePath", "临时目录" },          // 落盘基准=临时目录（防污染调用方项目）
