@@ -39,6 +39,13 @@ internal sealed record UiElementInfo(
 internal sealed record UiActionResult(bool Ok, string Message);
 
 /// <summary>
+/// 元素采集中间结果（<c>ui_find</c> / <c>screenshot element</c> 共用）：<see cref="Elements"/> 为本次清单，
+/// <see cref="FrameId"/> 为本次采集产出的代际号（<see cref="FrameRegistry.Next"/>，spec §7.4）。工具层把
+/// <see cref="FrameId"/> 回显给 agent；消费侧（ui_action/ui_input/ui_get/screenshot element）带旧帧号 → 拒绝。
+/// </summary>
+internal sealed record UiFindResult(IReadOnlyList<UiElementInfo> Elements, int FrameId);
+
+/// <summary>
 /// ui_get 结果：Value=展示值、Raw=原始值兜底、ControlName=目标控件 Name（空则 AutomationId，供输出层
 /// 经 DB1 <c>SensitiveValueRedactor.Redact</c> 脱敏）。三值均**未脱敏**——脱敏由工具/verify 输出层做。
 /// </summary>

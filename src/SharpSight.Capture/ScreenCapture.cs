@@ -182,6 +182,16 @@ public static class ScreenCapture
     /// origin=显示器左上（虚拟屏物理像素），回填 <see cref="CaptureResult.DisplayIndex"/>。索引越界抛约定错误。
     /// </summary>
     public static CaptureResult CaptureDisplay(int index)
+        => CaptureDisplay(index, new CaptureOptions());
+
+    /// <summary>
+    /// 指定显示器逐屏捕获（带抓取选项，Task 10/R18）：语义同 <see cref="CaptureDisplay(int)"/>，另透传
+    /// <paramref name="options"/> 的 <see cref="CaptureOptions.MaxWidth"/>/<see cref="CaptureOptions.MaxHeight"/>/
+    /// <see cref="CaptureOptions.IncludeCursor"/>（避免 display 模式的光标/缩放请求被静默丢弃）。
+    /// <b>忽略 <see cref="CaptureOptions.Clip"/></b>——显示器几何由目标显示器自身 Bounds 决定（此处覆盖为
+    /// Bounds 偏移）；<see cref="CaptureOptions.ClientArea"/> 对 display 无意义、同样忽略。
+    /// </summary>
+    public static CaptureResult CaptureDisplay(int index, CaptureOptions options)
     {
         EnsureDpi();
         var displays = EnumerateDisplays();
@@ -191,7 +201,7 @@ public static class ScreenCapture
         // CaptureOptions.Clip 是 spec §5 的「图像空间」坐标（相对虚拟屏左上）；k=1 时与原生空间重合，故 Clip = Bounds 偏移（无缩放）。
         var native = GdiCapture.VirtualScreenRect();
         var clipInImageSpace = new Rectangle(d.Bounds.X - native.X, d.Bounds.Y - native.Y, d.Bounds.Width, d.Bounds.Height);
-        return CaptureScreen(new CaptureOptions(Clip: clipInImageSpace)) with { DisplayIndex = index };
+        return CaptureScreen(options with { Clip = clipInImageSpace }) with { DisplayIndex = index };
     }
 
     /// <summary>
@@ -238,9 +248,8 @@ public static class ScreenCapture
         => !includeCursor || GdiCapture.TryOverlayCursor(bmp, originX, originY) ? "" : "（光标未叠加）";
 
     /// <summary>
-    /// 旧签名（宿主当前调用点，Task 10 切换）：委托到 <see cref="CaptureScreen(CaptureOptions)"/>，
-    /// maxDimension 同时作 maxWidth/maxHeight。宿主恒传正数（<c>AppConfig.ScreenshotMaxDimension</c>），
-    /// 故缩放/裁剪与切换前逐位一致；若传 0/负则两轴皆不限、不缩放（k=1，spec §4.1「0=不缩放」）。
+    /// 旧签名（宿主已切到 <see cref="CaptureScreen(CaptureOptions)"/>，保留供库单测/兼容；Task 10 未删除）：
+    /// 委托到 <see cref="CaptureScreen(CaptureOptions)"/>，maxDimension 同时作 maxWidth/maxHeight。
     /// </summary>
     public static CaptureResult CaptureScreen(Rectangle? clipInImageSpace, int maxDimension)
         => CaptureScreen(new CaptureOptions(clipInImageSpace, maxDimension, maxDimension));
@@ -353,9 +362,8 @@ public static class ScreenCapture
         => CaptureWindow(hwnd, new CaptureOptions(ClientArea: clientArea));
 
     /// <summary>
-    /// 旧签名（宿主当前调用点，Task 10 切换）：委托到 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>，
-    /// maxDimension 同时作 maxWidth/maxHeight、整窗（clientArea=false）。宿主恒传正数
-    /// （<c>AppConfig.ScreenshotMaxDimension</c>），故缩放/回退链与切换前一致；若传 0/负则两轴皆不限、不缩放（k=1）。
+    /// 旧签名（宿主已切到 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>，保留供库单测/兼容；Task 10 未删除）：
+    /// 委托到 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>，maxDimension 同时作 maxWidth/maxHeight、整窗。
     /// </summary>
     public static CaptureResult CaptureWindow(IntPtr hwnd, int maxDimension)
         => CaptureWindow(hwnd, new CaptureOptions(MaxWidth: maxDimension, MaxHeight: maxDimension));

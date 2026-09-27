@@ -53,7 +53,7 @@ public sealed record CaptureResult(
 
 /// <summary>
 /// CaptureScreen 入参（T3 引入；spec §5 坐标模型 / §6.2 降采样）。旧
-/// <c>CaptureScreen(clip, maxDimension)</c> 重载委托到此，行为不变（宿主切换见 Task 10）。
+/// <c>CaptureScreen(clip, maxDimension)</c> 重载委托到此（宿主已切到本重载，旧签名保留供单测）。
 /// **输出固定 PNG**（spec §6.1，用户裁定 2026-09-28）：不提供 format/quality。
 /// </summary>
 /// <param name="Clip">裁剪矩形（mode=screen 返回图像素空间）；null=全屏。

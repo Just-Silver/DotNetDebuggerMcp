@@ -113,6 +113,44 @@ public sealed class UiFrameRegistryTests
         }
     }
 
+    // ===== R13：ui_find 与 screenshot element 共用同一采集路径（离屏过滤/ordinal 同源）=====
+
+    [Fact]
+    public void Find_And_FindForCapture_ShareSameIndexSequence()
+    {
+        Assert.True(File.Exists(UiSampleAppExe), "UiSampleApp.exe 不存在，请先运行 generate-testdata.ps1");
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            using var automation = new UIA3Automation();
+            var locator = new UiElementLocator();
+
+            IReadOnlyList<UiElementInfo>? listed = null;
+            IReadOnlyList<UiElementInfo>? capture = null;
+            var deadline = DateTime.UtcNow.AddSeconds(60);
+            while (DateTime.UtcNow < deadline)
+            {
+                try
+                {
+                    listed = locator.Find(automation, app.Id.ToString(), "", "", "", "", 500);
+                    capture = locator.FindForCapture(automation, app.Id.ToString(), "", "", "", "", 500);
+                    break;
+                }
+                catch (UiException) { Thread.Sleep(300); }
+            }
+            if (listed is null || capture is null)
+                Assert.Skip("UIA 目标窗口 60s 内不可用（共享桌面/无头/争用环境）");
+
+            // 两条路径过滤/ordinal 同源 ⇒ 元素身份序列逐项一致（离屏过滤只加在共用 FindCore 一处）。
+            static string Id(UiElementInfo e) => $"{e.AutoId}\u001F{e.Name}\u001F{e.Type}";
+            Assert.Equal(listed!.Select(Id), capture!.Select(Id));
+        }
+        finally
+        {
+            KillUiSampleApp(app);
+        }
+    }
+
     // ===== 起停辅助（与 DebugUiToolsTests 同口径；UiSampleApp 进程名全局唯一，串行 Collection） =====
 
     private static Process LaunchUiSampleApp()

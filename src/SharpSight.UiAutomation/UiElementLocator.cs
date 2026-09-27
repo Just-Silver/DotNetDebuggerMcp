@@ -60,6 +60,12 @@ internal sealed class UiElementLocator
     internal static string OrdinalKey(string autoId, string name, string controlType)
         => autoId + "\u001F" + name + "\u001F" + controlType;
 
+    /// <summary>
+    /// R13 共用离屏过滤谓词（spec §4.4/§7.1）：<c>ui_find</c> 与 <c>screenshot element</c> 走同一采集路径，此谓词
+    /// 只有一处调用点，两路径行为必然一致；读取失败由调用方兜底为 false（未确认离屏不筛）。
+    /// </summary>
+    internal static bool SkipBecauseOffscreen(bool isOffscreen) => isOffscreen;
+
     /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。</summary>
     public IReadOnlyList<UiElementInfo> Find(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit)
         => FindCore(automation, process, title, text, type, automationId, limit, forCapture: false);
@@ -107,6 +113,12 @@ internal sealed class UiElementLocator
             var key = OrdinalKey(autoId, name, elType);
             ordinals.TryGetValue(key, out var ordinal);
             ordinals[key] = ordinal + 1;
+
+            // R13（spec §4.4/§7.1）：离屏元素不进清单——ui_find（Find）与 screenshot element（FindForCapture）共用本采集
+            // 路径，过滤只在此一处，保证两条路径 index 同源。过滤在 ordinal 计数之后（与 type/text 过滤同位），使计数仍按
+            // 「全部后代」累计、与重解析 ResolveByDescriptor 的匹配序号一致；读取失败视为「未确认离屏」（fallback false）不筛，
+            // 避免属性瞬时不可读时清空整份清单。
+            if (SkipBecauseOffscreen(SafeRead(() => el.IsOffscreen, false))) continue;
 
             if (typeFilter is not null && !string.Equals(elType, typeFilter, StringComparison.OrdinalIgnoreCase)) continue;
             if (!string.IsNullOrEmpty(automationId) && !string.Equals(autoId, automationId, StringComparison.Ordinal)) continue;

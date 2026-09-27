@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using System.Drawing;
 using DotNetDebuggerMcp.Tools.Debugger;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using SharpSight.Capture;
+using SharpSight.UiAutomation;
 using Xunit;
 
 namespace DotNetDebuggerMcp.Tests;
@@ -84,14 +87,14 @@ public sealed class ScreenshotToolTests
             ["mode"] = "box",
         });
         Assert.True(r.IsError != true, r.Text());
-        Assert.Equal("mode 仅支持 window/screen/region（当前 \"box\"）。", r.Text());
+        Assert.Equal("mode 无效：\"box\"（可选 auto/screen/display/window/foreground/region/element）。", r.Text());
     }
 
     [Fact]
     public async Task RegionMalformed_AllThreeForms_ReturnSpecMessage()
     {
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();
-        const string msg = "region 格式应为 \"x,y,w,h\"（mode=screen 返回图像素空间，原点左上）。";
+        const string msg = "region 格式应为 \"x,y,w,h\"（坐标为 mode=screen 返回图像素，原点左上）。";
         foreach (var bad in new[] { "1,2,3", "a,b,c,d", "1,2,-3,4", "" })
         {
             var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
@@ -108,9 +111,156 @@ public sealed class ScreenshotToolTests
     public async Task Window_NoSelector_NoSession_ReturnsPrompt()
     {
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();   // 新连接默认无活动会话
-        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>());
+        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+        {
+            ["mode"] = "window",   // 默认已改为 auto；此处显式 window 验证无选择器提示
+        });
         Assert.True(r.IsError != true, r.Text());
         Assert.Contains("请提供 processId 或 windowTitle 定位窗口", r.Text());
+    }
+
+    // ===== 模式推断 / 显示器映射 / 兼容性（纯逻辑 + MCP 校验，无 GUI）=====
+
+    [Theory]
+    [InlineData("element", "", "", "", "", "element")]
+    [InlineData("auto", "", "123456", "", "", "window")]
+    [InlineData("auto", "primary", "", "", "", "display")]
+    [InlineData("auto", "", "", "", "10,10,50,50", "region")]
+    [InlineData("auto", "", "", "", "", "screen")]
+    [InlineData("auto", "", "", "notepad", "", "window")]
+    [InlineData("auto", "2", "", "", "", "display")]
+    public void ResolveMode_Matrix(string mode, string display, string hwnd, string title, string region, string expected)
+        => Assert.Equal(expected, DebugScreenshotTool.ResolveMode(mode, display, hwnd, title, region));
+
+    [Fact]
+    public void ResolveMode_ElementAndProcessId_AndPriority()
+    {
+        Assert.Equal("element", DebugScreenshotTool.ResolveMode("auto", "", "", "", "", "7"));
+        Assert.Equal("window", DebugScreenshotTool.ResolveMode("auto", "", "", "", "", processId: 42));
+        // element 优先级最高（即使同时给了 display/hwnd）
+        Assert.Equal("element", DebugScreenshotTool.ResolveMode("auto", "primary", "123", "", "", "7"));
+        // 显式 mode 覆盖推断
+        Assert.Equal("screen", DebugScreenshotTool.ResolveMode("screen", "primary", "123", "", "", "7"));
+    }
+
+    [Fact]
+    public void TryParseRegion_FourInts_PositiveSizes()
+    {
+        Assert.True(DebugScreenshotTool.TryParseRegion("10,20,30,40", out var rect));
+        Assert.Equal(new Rectangle(10, 20, 30, 40), rect);
+        Assert.True(DebugScreenshotTool.TryParseRegion(" 1 , 2 , 3 , 4 ", out var trimmed));
+        Assert.Equal(new Rectangle(1, 2, 3, 4), trimmed);
+        Assert.False(DebugScreenshotTool.TryParseRegion("1,2,3", out _));
+        Assert.False(DebugScreenshotTool.TryParseRegion("1,2,0,4", out _));
+        Assert.False(DebugScreenshotTool.TryParseRegion("1,2,3,-4", out _));
+        Assert.False(DebugScreenshotTool.TryParseRegion("a,b,c,d", out _));
+    }
+
+    private static DisplayInfo Display(int index, bool primary, int x, int y, int w, int h)
+        => new(index, $@"\\.\DISPLAY{index + 1}", primary,
+            new Rectangle(x, y, w, h), new Rectangle(x, y, w, h), 1.0);
+
+    [Fact]
+    public void ResolveDisplayIndex_PrimaryLeftRightOneBasedAndErrors()
+    {
+        var displays = new[]
+        {
+            Display(0, true, 0, 0, 1920, 1080),
+            Display(1, false, 1920, 0, 1280, 1024),
+            Display(2, false, -1280, 0, 1280, 1024),
+        };
+
+        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "", out var i, out _));
+        Assert.Equal(0, i);                                        // 空 = 主屏
+        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "primary", out i, out _));
+        Assert.Equal(0, i);
+        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "2", out i, out _));
+        Assert.Equal(1, i);                                        // 1 基对外编号 → 0 基库索引
+        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "3", out i, out _));
+        Assert.Equal(2, i);
+        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "right", out i, out _));
+        Assert.Equal(1, i);
+        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "left", out i, out _));
+        Assert.Equal(2, i);
+
+        Assert.False(DebugScreenshotTool.TryResolveDisplayIndex(displays, "0", out _, out var err0));
+        Assert.Contains("display 无效", err0);
+        Assert.False(DebugScreenshotTool.TryResolveDisplayIndex(displays, "9", out _, out var err9));
+        Assert.Contains("display 无效", err9);
+        Assert.False(DebugScreenshotTool.TryResolveDisplayIndex(displays, "abc", out _, out var errA));
+        Assert.Contains("display 无效", errA);
+    }
+
+    [Fact]
+    public void ResolveDisplayIndex_LeftRightWithoutAdjacent_ReturnsError()
+    {
+        var single = new[] { Display(0, true, 0, 0, 800, 600) };
+        Assert.False(DebugScreenshotTool.TryResolveDisplayIndex(single, "left", out _, out var err));
+        Assert.Contains("没有相邻显示器", err);
+    }
+
+    [Fact]
+    public async Task IncompatibleCombos_ReturnError_NotSilentDrop()
+    {
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var cases = new (Dictionary<string, object?> Args, string Expect)[]
+        {
+            (new() { ["element"] = "保存", ["clientArea"] = true }, "clientArea"),
+            (new() { ["mode"] = "window", ["region"] = "1,2,3,4" }, "region"),
+            (new() { ["mode"] = "display", ["region"] = "1,2,3,4" }, "region"),
+            (new() { ["mode"] = "screen", ["hwnd"] = "123" }, "hwnd"),
+            (new() { ["mode"] = "screen", ["processId"] = 123 }, "processId"),
+            (new() { ["mode"] = "display", ["clientArea"] = true }, "clientArea"),
+            (new() { ["mode"] = "screen", ["element"] = "x" }, "element"),
+        };
+        foreach (var (args, expect) in cases)
+        {
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", args);
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("参数不兼容", r.Text());
+            Assert.Contains(expect, r.Text());
+        }
+    }
+
+    // ===== 代际护栏（ui_* frameId，spec §7.4；无 GUI，校验先于进程解析）=====
+
+    [Fact]
+    public async Task StaleFrameId_IsRejected_WithTeachingMessage()
+    {
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var frames = UiAutomationService.Instance.Frames;
+        var stale = frames.Next();
+        frames.Next();                                   // 推进代际：stale 变旧帧
+
+        var argsByTool = new Dictionary<string, Dictionary<string, object?>>
+        {
+            ["ui_action"] = new() { ["process"] = "no-such-proc", ["verb"] = "invoke", ["frameId"] = stale },
+            ["ui_input"] = new() { ["process"] = "no-such-proc", ["value"] = "x", ["frameId"] = stale },
+            ["ui_get"] = new() { ["process"] = "no-such-proc", ["what"] = "name", ["frameId"] = stale },
+        };
+        foreach (var (tool, args) in argsByTool)
+        {
+            var r = await DebugMcpToolsTests.CallAsync(mcp, tool, args);
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("旧", r.Text());
+            Assert.Contains("ui_find", r.Text());
+        }
+    }
+
+    [Fact]
+    public async Task Screenshot_StaleFrameId_IsRejected()
+    {
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var frames = UiAutomationService.Instance.Frames;
+        var stale = frames.Next();
+        frames.Next();
+        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+        {
+            ["mode"] = "screen", ["frameId"] = stale,
+        });
+        Assert.True(r.IsError != true, r.Text());
+        Assert.Contains("旧", r.Text());
+        Assert.Contains("ui_find", r.Text());
     }
 
     // ===== window 模式（WGC/PrintWindow 锁屏可用，恒跑）=====

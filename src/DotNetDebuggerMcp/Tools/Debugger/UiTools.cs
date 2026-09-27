@@ -38,13 +38,14 @@ public static class UiTools
         {
             if (string.IsNullOrWhiteSpace(process))
                 return Fail("ui_find", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
-            var elements = await UiAutomationService.Instance.FindAsync(process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, timeoutSeconds, cancellationToken);
+            var find = await UiAutomationService.Instance.FindAsync(process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, timeoutSeconds, cancellationToken);
+            var elements = find.Elements;
 
             var pid = UiAutomationService.Instance.LastFindPid;
             var winTitle = UiAutomationService.Instance.LastFindWindowTitle;
             var truncated = UiAutomationService.Instance.LastFindTruncated;
             var sb = new StringBuilder();
-            sb.Append($"UI 控件清单 进程 {process.Trim()}(pid={pid}) 窗口「{winTitle}」共 {elements.Count} 个控件{(truncated ? "（已达上限，可能还有更多）" : "")}:");
+            sb.Append($"UI 控件清单 进程 {process.Trim()}(pid={pid}) 窗口「{winTitle}」共 {elements.Count} 个控件{(truncated ? "（已达上限，可能还有更多）" : "")}（帧: frameId={find.FrameId}）:");
             if (elements.Count == 0)
             {
                 sb.Append("未找到符合条件的控件。可放宽条件（去掉 type/text）或用 ui_find process 只带进程名看全量。");
@@ -82,15 +83,17 @@ public static class UiTools
         [Description("上次 ui_find 返回序号（&gt;=0 优先于 name/type 定位；默认 -1 用 name/type）。")] int index = -1,
         [Description("控件名/文本（Name/AutomationId 子串忽略大小写）。")] string name = "",
         [Description("控件类型（UIA 类型名）。")] string type = "",
+        [Description("可交互性护栏（可省略；填写后用 ui_find 返回的帧号校验目标是否来自旧画面：0=不校验，非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
         [Description("滚动方向（verb=scroll 时必填）：up / down。")] string direction = "",
         [Description("滚动行数（verb=scroll 用，默认 0=3，范围 1-100）。")] int lines = 0,
         [Description("窗口状态（verb=windowstate 时必填）：normal / maximized / minimized。")] string windowstate = "",
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
-        var argsText = $"process={process} verb={verb} index={index} name={name} type={type} direction={direction} lines={lines} windowstate={windowstate} timeout={timeoutSeconds}";
+        var argsText = $"process={process} verb={verb} index={index} name={name} type={type} frameId={frameId} direction={direction} lines={lines} windowstate={windowstate} timeout={timeoutSeconds}";
         try
         {
+            UiAutomationService.Instance.Frames.Validate(frameId);
             if (string.IsNullOrWhiteSpace(process))
                 return Fail("ui_action", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
             if (string.IsNullOrWhiteSpace(verb))
@@ -105,6 +108,7 @@ public static class UiTools
         {
             return Fail("ui_action", argsText, "已取消。");
         }
+        catch (StaleFrameException ex) { return Fail("ui_action", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_action", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_action", argsText, $"UI 操作失败：{ex.Message}"); }
     }
@@ -118,12 +122,14 @@ public static class UiTools
         [Description("上次 ui_find 返回序号（&gt;=0 优先于 name/type 定位；默认 -1 用 name/type）。")] int index = -1,
         [Description("控件名/文本（Name/AutomationId 子串忽略大小写）。")] string name = "",
         [Description("控件类型（UIA 类型名）。")] string type = "",
+        [Description("可交互性护栏（可省略；填写后用 ui_find 返回的帧号校验目标是否来自旧画面：0=不校验，非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
-        var argsText = $"process={process} value={value} index={index} name={name} type={type} timeout={timeoutSeconds}";
+        var argsText = $"process={process} value={value} index={index} name={name} type={type} frameId={frameId} timeout={timeoutSeconds}";
         try
         {
+            UiAutomationService.Instance.Frames.Validate(frameId);
             if (string.IsNullOrWhiteSpace(process))
                 return Fail("ui_input", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
             if (string.IsNullOrEmpty(value))
@@ -135,6 +141,7 @@ public static class UiTools
         {
             return Fail("ui_input", argsText, "已取消。");
         }
+        catch (StaleFrameException ex) { return Fail("ui_input", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_input", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_input", argsText, $"UI 写值失败：{ex.Message}"); }
     }
@@ -148,12 +155,14 @@ public static class UiTools
         [Description("上次 ui_find 返回序号（&gt;=0 优先于 name/type 定位；默认 -1 用 name/type）。")] int index = -1,
         [Description("控件名/文本（Name/AutomationId 子串忽略大小写）。")] string name = "",
         [Description("控件类型（UIA 类型名）。")] string type = "",
+        [Description("可交互性护栏（可省略；填写后用 ui_find 返回的帧号校验目标是否来自旧画面：0=不校验，非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
-        var argsText = $"process={process} what={what} index={index} name={name} type={type} timeout={timeoutSeconds}";
+        var argsText = $"process={process} what={what} index={index} name={name} type={type} frameId={frameId} timeout={timeoutSeconds}";
         try
         {
+            UiAutomationService.Instance.Frames.Validate(frameId);
             if (string.IsNullOrWhiteSpace(process))
                 return Fail("ui_get", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
             if (string.IsNullOrWhiteSpace(what))
@@ -168,6 +177,7 @@ public static class UiTools
         {
             return Fail("ui_get", argsText, "已取消。");
         }
+        catch (StaleFrameException ex) { return Fail("ui_get", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_get", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_get", argsText, $"UI 读值失败：{ex.Message}"); }
     }

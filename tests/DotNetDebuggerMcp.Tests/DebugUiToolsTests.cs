@@ -36,6 +36,7 @@ public sealed class DebugUiToolsTests
             Assert.Contains("语义候选", found);
             Assert.Contains("UiSampleApp.MainForm", found);
             Assert.Contains("OnToggleState", found);
+            Assert.Contains("帧: frameId=", found);   // 代际号回显（spec §7.4）
         }
         finally
         {

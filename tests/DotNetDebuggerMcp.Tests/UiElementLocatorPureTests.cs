@@ -49,6 +49,14 @@ public sealed class UiElementLocatorPureTests
     }
 
     [Fact]
+    public void SkipBecauseOffscreen_OnlyForConfirmedOffscreen()
+    {
+        // R13：ui_find 与 screenshot element 共用的离屏过滤谓词——true 才跳过；读取失败由调用方兜底 false（不筛）。
+        Assert.True(UiElementLocator.SkipBecauseOffscreen(isOffscreen: true));
+        Assert.False(UiElementLocator.SkipBecauseOffscreen(isOffscreen: false));
+    }
+
+    [Fact]
     public void OrdinalMatching_SameNameCrossType_SelectsCorrectElement()
     {
         // 遍历顺序：先 Button「保存」，再 MenuItem「保存」，再 Button「保存」；三者 AutoId 均为空（WPF 常见）。

@@ -127,6 +127,15 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("ui_find", text);      // UI 自动化族
         Assert.Contains("ui_action", text);
         Assert.Contains("screenshot", text);   // 视觉/监视
+        // 视觉族细分触发条件（阶段一 screenshot 通用化：漏一族即失败，spec §9/R20）
+        Assert.Contains("显示器", text);        // 多显示器寻址
+        Assert.Contains("前台", text);          // foreground / windowTitle=@active
+        Assert.Contains("客户区", text);        // clientArea
+        Assert.Contains("句柄", text);          // hwnd
+        Assert.Contains("元素", text);          // mode=element（UIA 元素级截图）
+        Assert.Contains("includeCursor", text); // 光标
+        Assert.Contains("原点", text);          // origin/scale 坐标元数据
+        Assert.Contains("frameId", text);       // 代际护栏（ui_find ↔ ui_action/screenshot）
         Assert.Contains("web_open", text);
         Assert.Contains("## 何时使用", text);
         Assert.DoesNotContain("## 工具一览", text);
