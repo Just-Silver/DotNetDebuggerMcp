@@ -24,7 +24,7 @@ public sealed class ImagePipelineTests
     public void Scale_DownAboveMax_KeepsAspectRatio()
     {
         using var src = Make(4000, 2000, Color.SteelBlue);
-        var r = ImagePipeline.Process(src, src.Size, maxDimension: 2000, "png", 80, "t", "WGC");
+        var r = ImagePipeline.Process(src, src.Size, 2000, 2000, "png", 80, "t", "WGC");
         Assert.Equal(2000, r.Width);
         Assert.Equal(1000, r.Height);           // 2:1 纵横比守恒
         Assert.Equal(4000, r.NativeWidth);      // 原生保留
@@ -39,7 +39,7 @@ public sealed class ImagePipelineTests
     public void Scale_BelowMax_NoScale_OutputEqualsNative()
     {
         using var src = Make(800, 600, Color.White);
-        var r = ImagePipeline.Process(src, src.Size, 2000, "png", 80, "t", "WGC");
+        var r = ImagePipeline.Process(src, src.Size, 2000, 2000, "png", 80, "t", "WGC");
         Assert.Equal(800, r.Width);
         Assert.Equal(800, r.NativeWidth);
     }
@@ -48,7 +48,7 @@ public sealed class ImagePipelineTests
     public void Jpeg_Encodes_JpegMagic()
     {
         using var src = Make(300, 200, Color.Coral);
-        var r = ImagePipeline.Process(src, src.Size, 2000, "jpeg", 50, null, "BitBlt");
+        var r = ImagePipeline.Process(src, src.Size, 2000, 2000, "jpeg", 50, null, "BitBlt");
         Assert.Equal(0xFF, r.Image[0]);
         Assert.Equal(0xD8, r.Image[1]);          // JPEG SOI
     }
@@ -58,12 +58,12 @@ public sealed class ImagePipelineTests
     {
         using (var black = Make(64, 64, Color.FromArgb(255, 0, 0, 0)))
         {
-            var r = ImagePipeline.Process(black, black.Size, 2000, "png", 80, null, "BitBlt");
+            var r = ImagePipeline.Process(black, black.Size, 2000, 2000, "png", 80, null, "BitBlt");
             Assert.True(r.WasAllBlack);
         }
         using (var nearly = Make(64, 64, Color.FromArgb(255, 1, 1, 1)))   // 任一通道非 0 即非黑
         {
-            var r = ImagePipeline.Process(nearly, nearly.Size, 2000, "png", 80, null, "BitBlt");
+            var r = ImagePipeline.Process(nearly, nearly.Size, 2000, 2000, "png", 80, null, "BitBlt");
             Assert.False(r.WasAllBlack);
         }
     }
@@ -72,7 +72,7 @@ public sealed class ImagePipelineTests
     public void WindowTitle_PassedThrough_And_ClippedDefault_False()
     {
         using var src = Make(50, 50, Color.Red);
-        var r = ImagePipeline.Process(src, src.Size, 2000, "png", 80, "UiSample", "PrintWindow");
+        var r = ImagePipeline.Process(src, src.Size, 2000, 2000, "png", 80, "UiSample", "PrintWindow");
         Assert.Equal("UiSample", r.WindowTitle);
         Assert.False(r.ClippedToScreen);
     }
@@ -81,7 +81,26 @@ public sealed class ImagePipelineTests
     public void UnknownFormat_Throws_NotSilentlyFallsBack()
     {
         using var src = Make(10, 10, Color.Red);
-        Assert.ThrowsAny<Exception>(() => ImagePipeline.Process(src, src.Size, 2000, "gif", 80, null, "WGC"));
+        Assert.ThrowsAny<Exception>(() => ImagePipeline.Process(src, src.Size, 2000, 2000, "gif", 80, null, "WGC"));
+    }
+
+    // ===== 双轴降采样（T7；spec §6.2：k = min(1, maxW/W, maxH/H)，W/H=原生物理像素）=====
+
+    [Theory]
+    [InlineData(4000, 3000, 1568, 1568, 1568, 1176)]   // 长边受限（宽受限，等比、纵横比守恒）
+    [InlineData(1000, 500, 1568, 1568, 1000, 500)]     // 未超限不放大
+    [InlineData(4000, 1000, 1568, 600, 1568, 392)]     // 不等两轴取 min：宽受限，高按同一 k
+    [InlineData(1000, 4000, 600, 1568, 392, 1568)]     // 不等两轴取 min 镜像：高受限
+    [InlineData(4000, 2000, 0, 1000, 2000, 1000)]      // maxWidth=0 视为该轴不限，仅高受限
+    [InlineData(4000, 2000, 1000, 0, 1000, 500)]       // maxHeight=0 视为该轴不限，仅宽受限
+    [InlineData(800, 600, 0, 0, 800, 600)]             // 两轴皆 0 ⇒ 不缩放（k=1）
+    [InlineData(800, 600, -1, -5, 800, 600)]           // 两轴皆负 ⇒ 不缩放
+    public void Process_DualAxis(int w, int h, int mw, int mh, int ew, int eh)
+    {
+        using var src = Make(w, h, Color.SteelBlue);
+        var r = ImagePipeline.Process(src, src.Size, mw, mh, "png", 80, null, "test");
+        Assert.Equal(ew, r.Width);
+        Assert.Equal(eh, r.Height);
     }
 
     // ===== 坐标模型（T3；spec §5 screen = origin + image / scale）=====
@@ -90,7 +109,7 @@ public sealed class ImagePipelineTests
     public void Origin_PassedThrough_And_Scale_FilledFromOutputOverNative()
     {
         using var src = Make(400, 300, Color.SteelBlue);
-        var r = ImagePipeline.Process(src, src.Size, maxDimension: 200, "png", 80, null, "BitBlt",
+        var r = ImagePipeline.Process(src, src.Size, 200, 200, "png", 80, null, "BitBlt",
             clippedToScreen: false, originX: 120, originY: 45);
         Assert.Equal(120, r.OriginX);
         Assert.Equal(45, r.OriginY);
@@ -102,7 +121,7 @@ public sealed class ImagePipelineTests
     public void Origin_DefaultsZero_ScaleOne_NewMetadataDefaults()
     {
         using var src = Make(50, 50, Color.Red);
-        var r = ImagePipeline.Process(src, src.Size, 2000, "png", 80, null, "WGC");
+        var r = ImagePipeline.Process(src, src.Size, 2000, 2000, "png", 80, null, "WGC");
         Assert.Equal(0, r.OriginX);
         Assert.Equal(0, r.OriginY);
         Assert.Equal(1.0, r.Scale, 3);

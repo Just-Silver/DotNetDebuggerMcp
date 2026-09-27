@@ -58,8 +58,8 @@ public sealed record CaptureResult(
 /// <param name="Clip">裁剪矩形（mode=screen 返回图像素空间）；null=全屏。
 /// <b>适用模式：screen / display /（将来 element）</b>；<b>window 模式忽略本参数</b>——窗口几何由目标窗口自身
 /// 决定（WGC 源取 <c>DWMWA_EXTENDED_FRAME_BOUNDS</c>、GDI 回退源取 <c>GetWindowRect</c>），不套用裁剪。</param>
-/// <param name="MaxWidth">输出长边上限（原生物理像素）；0/负=不限。两轴皆 0/负 ⇒ 不缩放（k=1，R10）。R8 临时映射，见 ScreenCapture.ResolveMaxDimension。</param>
-/// <param name="MaxHeight">输出长边上限；0/负=不限，语义同 <paramref name="MaxWidth"/>。</param>
+/// <param name="MaxWidth">输出宽上限（原生物理像素，spec §6.2）；≤0 视为该轴不限制。两轴皆 ≤0 ⇒ 不缩放（k=1）。</param>
+/// <param name="MaxHeight">输出高上限（原生物理像素）；≤0 视为该轴不限制，语义同 <paramref name="MaxWidth"/>。</param>
 /// <param name="Format">输出编码 "png" | "jpeg"（默认 png）。</param>
 /// <param name="Quality">jpeg 质量 0-100（默认 80）。</param>
 /// <param name="ClientArea">window 模式是否抓客户区（<see cref="ScreenCapture.CaptureWindow(IntPtr, CaptureOptions)"/> 消费；

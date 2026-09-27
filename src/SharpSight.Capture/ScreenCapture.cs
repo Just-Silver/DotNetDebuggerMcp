@@ -207,10 +207,7 @@ public static class ScreenCapture
     {
         EnsureDpi();
         var native = GdiCapture.VirtualScreenRect();
-        // R8 临时映射（Task 7 撤除）：双轴 maxWidth/maxHeight 暂压成单轴 maxDimension；
-        // 两轴皆 0/负 ⇒ 不缩放（R10，与 spec §4.1「0=不缩放」一致）。
-        var maxDimension = ResolveMaxDimension(options.MaxWidth, options.MaxHeight);
-        var k = Math.Min(1.0, (double)maxDimension / Math.Max(native.Width, native.Height));
+        var k = ImagePipeline.ScaleFactor(native.Size, options.MaxWidth, options.MaxHeight);
         var imgW = Math.Max(1, (int)Math.Round(native.Width * k));
         var imgH = Math.Max(1, (int)Math.Round(native.Height * k));
 
@@ -226,29 +223,18 @@ public static class ScreenCapture
         }
 
         using var bmp = GdiCapture.CaptureScreenBits(nativeClip);
-        return ImagePipeline.Process(bmp, native.Size, maxDimension, options.Format, options.Quality,
+        return ImagePipeline.Process(bmp, native.Size, options.MaxWidth, options.MaxHeight, options.Format, options.Quality,
             windowTitle: null, sourceName: "BitBlt", clippedToScreen: clipped,
             originX: nativeClip.X, originY: nativeClip.Y);
     }
 
     /// <summary>
     /// 旧签名（宿主当前调用点，Task 10 切换）：委托到 <see cref="CaptureScreen(CaptureOptions)"/>，
-    /// maxDimension 同时作 maxWidth/maxHeight。宿主恒传正数（2000），故缩放/裁剪与切换前逐位一致；
-    /// 若传 0/负则按 R10 语义不缩放（k=1，spec §4.1「0=不缩放」）。
+    /// maxDimension 同时作 maxWidth/maxHeight。宿主恒传正数（<c>AppConfig.ScreenshotMaxDimension</c>），
+    /// 故缩放/裁剪与切换前逐位一致；若传 0/负则两轴皆不限、不缩放（k=1，spec §4.1「0=不缩放」）。
     /// </summary>
     public static CaptureResult CaptureScreen(Rectangle? clipInImageSpace, int maxDimension, string format, int quality)
         => CaptureScreen(new CaptureOptions(clipInImageSpace, maxDimension, maxDimension, format, quality));
-
-    // R8 临时映射（Task 7 撤除）：真·双轴应为 k=min(1, maxW/W, maxH/H)；
-    // 暂取正值中最小者作单轴 maxDimension 交给现有 ImagePipeline——仅当 MaxWidth==MaxHeight 与双轴等价，
-    // 故 T3 测试恒用相等两轴；两轴皆 0/负 ⇒ 不缩放（返回 int.MaxValue，k=1，与 spec §4.1「0=不缩放」一致）。
-    internal static int ResolveMaxDimension(int maxWidth, int maxHeight)
-    {
-        var m = int.MaxValue;
-        if (maxWidth > 0) m = Math.Min(m, maxWidth);
-        if (maxHeight > 0) m = Math.Min(m, maxHeight);
-        return m;
-    }
 
     /// <summary>
     /// region 换算纯函数（自 CaptureScreen 提取——锁屏/无桌面环境下屏幕 BitBlt 不可用时，
@@ -294,21 +280,20 @@ public static class ScreenCapture
         // 不支持再叠加外部裁剪；元素级裁剪是独立入口 CaptureElement(hwnd, elementRectPx)（不走本方法）。
         var info = GetWindowInfo(hwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
         var bounds = GetWindowBounds(hwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
-        var maxDimension = ResolveMaxDimension(options.MaxWidth, options.MaxHeight);
 
         // 客户区：GDI BitBlt 客户区屏幕矩形（spec §4.2；无 WGC——客户区本就是屏幕可见区）。
         if (options.ClientArea)
         {
             if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw new CaptureException(WindowCaptureFailMsg);
             using var cbmp = GdiCapture.CaptureScreenBits(bounds.ClientArea);
-            return ImagePipeline.Process(cbmp, cbmp.Size, maxDimension, options.Format, options.Quality,
+            return ImagePipeline.Process(cbmp, cbmp.Size, options.MaxWidth, options.MaxHeight, options.Format, options.Quality,
                 info.Title, "BitBlt",
                 originX: bounds.ClientArea.X, originY: bounds.ClientArea.Y) with { IsClientArea = true };
         }
 
         var (bmp, source, originX, originY) = CaptureWindowBits(hwnd, info, bounds);
         using (bmp)
-            return ImagePipeline.Process(bmp, bmp.Size, maxDimension, options.Format, options.Quality,
+            return ImagePipeline.Process(bmp, bmp.Size, options.MaxWidth, options.MaxHeight, options.Format, options.Quality,
                 info.Title, source, originX: originX, originY: originY);
     }
 
@@ -356,8 +341,8 @@ public static class ScreenCapture
 
     /// <summary>
     /// 旧签名（宿主当前调用点，Task 10 切换）：委托到 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>，
-    /// maxDimension 同时作 maxWidth/maxHeight、整窗（clientArea=false）。宿主恒传正数（2000），
-    /// 故缩放/回退链与切换前一致；若传 0/负则按 R10 语义不缩放。
+    /// maxDimension 同时作 maxWidth/maxHeight、整窗（clientArea=false）。宿主恒传正数
+    /// （<c>AppConfig.ScreenshotMaxDimension</c>），故缩放/回退链与切换前一致；若传 0/负则两轴皆不限、不缩放（k=1）。
     /// </summary>
     public static CaptureResult CaptureWindow(IntPtr hwnd, int maxDimension, string format, int quality)
         => CaptureWindow(hwnd, new CaptureOptions(MaxWidth: maxDimension, MaxHeight: maxDimension,
@@ -384,7 +369,6 @@ public static class ScreenCapture
         var info = FindWindowByHwnd(topLevelHwnd)
             ?? throw new CaptureException($"顶层窗口句柄无效或不可见（hwnd={topLevelHwnd}）：元素截图需传元素自身 GetAncestor(GA_ROOT) 的顶层窗口。");
         var bounds = GetWindowBounds(topLevelHwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
-        var maxDimension = ResolveMaxDimension(options.MaxWidth, options.MaxHeight);
 
         var (bmp, source, originX, originY) = CaptureWindowBits(topLevelHwnd, info, bounds);
         using (bmp)
@@ -395,7 +379,7 @@ public static class ScreenCapture
                 throw new CaptureException($"元素矩形 ({elementRectPx.X},{elementRectPx.Y},{elementRectPx.Width},{elementRectPx.Height}) 不在顶层窗口帧 ({frame.X},{frame.Y},{frame.Width},{frame.Height}) 内。");
             var local = new Rectangle(inter.X - originX, inter.Y - originY, inter.Width, inter.Height);
             using var cropped = bmp.Clone(local, bmp.PixelFormat);
-            return ImagePipeline.Process(cropped, cropped.Size, maxDimension, options.Format, options.Quality,
+            return ImagePipeline.Process(cropped, cropped.Size, options.MaxWidth, options.MaxHeight, options.Format, options.Quality,
                 info.Title, source, clippedToScreen: inter != elementRectPx, originX: inter.X, originY: inter.Y);
         }
     }

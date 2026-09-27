@@ -91,16 +91,4 @@ public sealed class DisplayEnumeratorTests
         Assert.Contains("不存在", ex.Message);
         Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(-1));
     }
-
-    // ===== R10：两轴皆 0/负 ⇒ 不缩放（k=1），去掉 Task 3 的「兜底 2000」=====
-
-    [Fact]
-    public void ResolveMaxDimension_BothAxesNonPositive_MeansUnbounded_NoScale()
-    {
-        Assert.Equal(int.MaxValue, ScreenCapture.ResolveMaxDimension(0, 0));
-        Assert.Equal(int.MaxValue, ScreenCapture.ResolveMaxDimension(-1, -5));
-        Assert.Equal(800, ScreenCapture.ResolveMaxDimension(800, 0));     // 单轴正值仍作单值上限
-        Assert.Equal(600, ScreenCapture.ResolveMaxDimension(0, 600));
-        Assert.Equal(800, ScreenCapture.ResolveMaxDimension(800, 900));   // R8 临时：双轴正值取 min
-    }
 }

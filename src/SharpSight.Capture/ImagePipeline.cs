@@ -6,19 +6,32 @@ namespace SharpSight.Capture;
 
 /// <summary>
 /// 截图后处理唯一归属（spec §4.2：缩放/编码/裁剪/纯黑检测职责在 Engine，宿主不碰）：
-/// k 等比缩放 → 纯黑采样 → 格式编码。裁剪（region 换算）在 CaptureScreen 入口完成，本类只消费裁好的源图。
-/// k = min(1, maxDimension / max(kBase 宽, 高))；kBase 由调用方给定——window 模式=源图（窗口）自身尺寸，
+/// 双轴等比缩放 → 纯黑采样 → 格式编码。裁剪（region 换算）在 CaptureScreen 入口完成，本类只消费裁好的源图。
+/// k = min(1, maxWidth/kBase 宽, maxHeight/kBase 高)（spec §6.2；某轴上界 ≤0 视为该轴不限制，
+/// 两轴皆 ≤0 ⇒ k=1 不缩放）；kBase 由调用方给定——window 模式=源图（窗口）自身尺寸，
 /// screen/region 模式=虚拟屏原生尺寸（region 与 screen 用同一 k，保证两图空间恒一致，spec §3.1）。
 /// </summary>
 internal static class ImagePipeline
 {
+    /// <summary>双轴降采样系数（spec §6.2，region 换算与 <see cref="Process"/> 共用同一来源避免漂移）：
+    /// k = min(1, maxW/w, maxH/h)，maxW/maxH≤0 视为该轴不限制；两轴皆≤0 ⇒ k=1（不缩放）。</summary>
+    internal static double ScaleFactor(Size kBase, int maxWidth, int maxHeight)
+    {
+        var k = 1.0;
+        if (maxWidth > 0) k = Math.Min(k, (double)maxWidth / kBase.Width);
+        if (maxHeight > 0) k = Math.Min(k, (double)maxHeight / kBase.Height);
+        return k;
+    }
+
+    /// <param name="maxWidth">输出宽上限（原生物理像素）；≤0 视为该轴不限制。</param>
+    /// <param name="maxHeight">输出高上限（原生物理像素）；≤0 视为该轴不限制。</param>
     /// <param name="originX">抓取矩形左上角 X（虚拟屏物理像素，spec §5）；直接回填结果。</param>
     /// <param name="originY">抓取矩形左上角 Y；直接回填结果。</param>
-    public static CaptureResult Process(Bitmap source, Size kBase, int maxDimension,
+    public static CaptureResult Process(Bitmap source, Size kBase, int maxWidth, int maxHeight,
         string format, int quality, string? windowTitle, string sourceName, bool clippedToScreen = false,
         int originX = 0, int originY = 0)
     {
-        var k = Math.Min(1.0, (double)maxDimension / Math.Max(kBase.Width, kBase.Height));
+        var k = ScaleFactor(kBase, maxWidth, maxHeight);
         var outW = Math.Max(1, (int)Math.Round(source.Width * k));
         var outH = Math.Max(1, (int)Math.Round(source.Height * k));
 

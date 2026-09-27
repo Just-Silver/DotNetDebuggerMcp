@@ -84,7 +84,7 @@ public sealed class CaptureScreenTests
     }
 
     // ===== ①b 坐标模型（T3；spec §5 screen = origin + image / scale）=====
-    // R8 临时映射（Task 7 撤除）：测试恒用 MaxWidth == MaxHeight，使单轴/双轴语义结果一致。
+    // T7 起 Process 为真双轴：MaxWidth/MaxHeight 各自限制（≤0=该轴不限），region 与 screen 共用同一 k。
 
     [Fact]
     public void Region_NoScale_ReportsNativeOriginAndUnitScale()
@@ -92,7 +92,7 @@ public sealed class CaptureScreenTests
         SkipIfScreenUnavailable();
         var nx = GetSystemMetrics(76);   // SM_XVIRTUALSCREEN（多屏可为负）
         var ny = GetSystemMetrics(77);
-        // MaxWidth==MaxHeight 且极大 → k=1，图像空间与原生空间重合，断言直白
+        // 两轴上界极大 → k=1，图像空间与原生空间重合，断言直白
         var r = ScreenCapture.CaptureScreen(new CaptureOptions
         {
             Clip = new Rectangle(100, 100, 400, 300), MaxWidth = 100000, MaxHeight = 100000 });

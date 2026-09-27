@@ -30,10 +30,11 @@ internal static class AppConfig
     public const int DefaultStopContextBudgetLines = 100;
 
     /// <summary>
-    /// screenshot 输出图单边最大像素：超过则等比缩到限内（region/screen 同一 k，spec §3.1）。
+    /// screenshot 输出单边最大像素（长边上限）：超过则双轴等比缩到限内（spec §6.2）。
+    /// 1568 对齐官方 vision 长边上限（超限会被服务端二次 resize 导致坐标漂移）。
     /// 经参数传入 Engine，缩放实现唯一在 Engine（spec §4.2）。
     /// </summary>
-    public const int ScreenshotMaxDimension = 2000;
+    public const int ScreenshotMaxDimension = 1568;
 
     /// <summary>
     /// screenshot 内联返回阈值（base64 后字节数，chrome-devtools 先例 2MB）：达到即改落盘返回绝对路径。
