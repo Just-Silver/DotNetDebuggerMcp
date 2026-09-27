@@ -27,7 +27,7 @@ public sealed class CaptureElementTests
         var elementRect = new Rectangle(bounds.ClientArea.X + 10, bounds.ClientArea.Y + 10, 40, 40);
 
         CaptureResult r;
-        try { r = ScreenCapture.CaptureElement(w.Hwnd, elementRect); }
+        try { r = ScreenCapture.CaptureElement(w.Hwnd, elementRect, new CaptureOptions()); }
         catch (CaptureException ex)
         {
             Assert.Skip("元素抓取不可用（锁屏/无头/遮挡/回退链全失败），spec §6.4 预案：" + ex.Message);
@@ -59,7 +59,7 @@ public sealed class CaptureElementTests
         var elementRect = new Rectangle(bounds!.WindowRect.Right - 20, bounds.WindowRect.Bottom - 20, 200, 200);
 
         CaptureResult r;
-        try { r = ScreenCapture.CaptureElement(w.Hwnd, elementRect); }
+        try { r = ScreenCapture.CaptureElement(w.Hwnd, elementRect, new CaptureOptions()); }
         catch (CaptureException ex)
         {
             Assert.Skip("元素抓取不可用（锁屏/无头/遮挡/回退链全失败），spec §6.4 预案：" + ex.Message);
@@ -79,15 +79,15 @@ public sealed class CaptureElementTests
         Assert.NotNull(w);
 
         // 空矩形在抓屏前即拒绝（确定性，不依赖环境）。
-        Assert.Throws<CaptureException>(() => ScreenCapture.CaptureElement(w!.Hwnd, Rectangle.Empty));
+        Assert.Throws<CaptureException>(() => ScreenCapture.CaptureElement(w!.Hwnd, Rectangle.Empty, new CaptureOptions()));
     }
 
     [Fact]
     public void CaptureElement_InvalidHwnd_Throws()
     {
         Assert.Throws<CaptureException>(() =>
-            ScreenCapture.CaptureElement(IntPtr.Zero, new Rectangle(0, 0, 10, 10)));
+            ScreenCapture.CaptureElement(IntPtr.Zero, new Rectangle(0, 0, 10, 10), new CaptureOptions()));
         Assert.Throws<CaptureException>(() =>
-            ScreenCapture.CaptureElement(unchecked((IntPtr)0xDEAD0000), new Rectangle(0, 0, 10, 10)));
+            ScreenCapture.CaptureElement(unchecked((IntPtr)0xDEAD0000), new Rectangle(0, 0, 10, 10), new CaptureOptions()));
     }
 }

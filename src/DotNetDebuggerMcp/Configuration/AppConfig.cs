@@ -37,17 +37,49 @@ internal static class AppConfig
     public const int ScreenshotMaxDimension = 1568;
 
     /// <summary>
-    /// screenshot 内联返回阈值（base64 后字节数，chrome-devtools 先例 2MB）：达到即改落盘返回绝对路径。
+    /// screenshot 内联返回阈值默认值（base64 后字节数，chrome-devtools 先例 2MB）：达到即改落盘返回绝对路径。
+    /// 实际判定读 <see cref="InlineImageBase64Bytes"/>（测试可注入，见 <see cref="ConfigureForTest"/>）。
     /// </summary>
-    public const long InlineImageBase64Bytes = 2 * 1024 * 1024;
+    public const long DefaultInlineImageBase64Bytes = 2 * 1024 * 1024;
 
     /// <summary>
-    /// screenshot 超限落盘目录（%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots，与 update-check.json 同根；
-    /// filePath 参数非空时按其指定路径覆盖）。落盘文件不自动清理（YAGNI，README 注明位置）。
+    /// screenshot 内联返回阈值（默认 <see cref="DefaultInlineImageBase64Bytes"/>；测试经
+    /// <see cref="ConfigureForTest"/> 注入，使「超限自动落盘」分支可测）。
     /// </summary>
-    public static readonly string ScreenshotsDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        NuGetPackageId, "screenshots");
+    internal static long InlineImageBase64Bytes = DefaultInlineImageBase64Bytes;
+
+    /// <summary>
+    /// screenshot 落盘根目录默认值：**临时目录**（%TEMP%\DotNetDebuggerMcp\screenshots）。
+    /// 截图是临时产物——绝不落进程工作目录（那会污染调用方的项目目录），也不占用本地应用数据目录。
+    /// 落盘文件不自动清理（YAGNI，README 注明位置）。
+    /// </summary>
+    private static readonly string DefaultScreenshotsDir = Path.Combine(
+        Path.GetTempPath(), NuGetPackageId, "screenshots");
+
+    /// <summary>测试注入的落盘根目录覆盖（见 <see cref="ConfigureForTest"/>）。</summary>
+    internal static string? ScreenshotsDirOverride;
+
+    /// <summary>
+    /// screenshot 落盘根目录：超限自动落盘、以及**相对 <c>filePath</c>** 均以此为基准（绝对 <c>filePath</c> 按原样）。
+    /// </summary>
+    public static string ScreenshotsDir => ScreenshotsDirOverride ?? DefaultScreenshotsDir;
+
+    /// <summary>
+    /// 测试注入（对齐 <c>AppServices.ConfigureForTest</c> 范式）：阈值/落盘目录是运行时不可控点，
+    /// 由此可替换。参数传 null = 该项恢复默认值。用完须 <see cref="ResetForTest"/>。
+    /// </summary>
+    internal static void ConfigureForTest(long? inlineImageBase64Bytes = null, string? screenshotsDirOverride = null)
+    {
+        InlineImageBase64Bytes = inlineImageBase64Bytes ?? DefaultInlineImageBase64Bytes;
+        ScreenshotsDirOverride = screenshotsDirOverride;
+    }
+
+    /// <summary>恢复 <see cref="ConfigureForTest"/> 造成的替换。</summary>
+    internal static void ResetForTest()
+    {
+        InlineImageBase64Bytes = DefaultInlineImageBase64Bytes;
+        ScreenshotsDirOverride = null;
+    }
 
     /// <summary>
     /// 本工具发布的 NuGet 包 id，环境自检（CLI -c/握手注入）用它查询是否有新版本。

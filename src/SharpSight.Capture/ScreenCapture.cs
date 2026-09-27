@@ -10,7 +10,7 @@ namespace SharpSight.Capture;
 /// 首次调用统一设进程 DPI 为 Per-Monitor V2（全链物理像素，与 region 坐标空间定义一致；
 /// 运行时调用、不用 manifest，已设置时容忍 ERROR_ACCESS_DENIED）。
 /// T2 范围：DPI + FindMainWindow + GetWindowInfo；CaptureScreen（T4）/CaptureWindow（T5）随后追加。
-/// T5：FindWindowByHwnd/FindForegroundWindow/GetWindowBounds + CaptureWindow(hwnd,clientArea)。
+/// T5：FindWindowByHwnd/FindForegroundWindow/GetWindowBounds + CaptureWindow(hwnd, CaptureOptions)。
 /// </summary>
 public static class ScreenCapture
 {
@@ -177,16 +177,8 @@ public static class ScreenCapture
 
     /// <summary>
     /// 指定显示器逐屏捕获（spec §4.2 mode=display）：<paramref name="index"/> 为库侧 0 基枚举序
-    /// （<see cref="DisplayInfo.Index"/>）；1 基对外编号与 primary/left/right 解析属宿主（Task 10），库侧不参与。
-    /// 复用 screen 的 GDI BitBlt（不开 WGC，spec §4.3-3），把该显示器 Bounds 作为裁剪区（无缩放，k=1）；
-    /// origin=显示器左上（虚拟屏物理像素），回填 <see cref="CaptureResult.DisplayIndex"/>。索引越界抛约定错误。
-    /// </summary>
-    public static CaptureResult CaptureDisplay(int index)
-        => CaptureDisplay(index, new CaptureOptions());
-
-    /// <summary>
-    /// 指定显示器逐屏捕获（带抓取选项，Task 10/R18；R21 修正 k 基数）：语义同 <see cref="CaptureDisplay(int)"/>，
-    /// 另透传 <paramref name="options"/> 的 <see cref="CaptureOptions.MaxWidth"/>/<see cref="CaptureOptions.MaxHeight"/>/
+    /// （<see cref="DisplayInfo.Index"/>）；1 基对外编号与 primary/left/right 解析属宿主，库侧不参与。
+    /// 透传 <paramref name="options"/> 的 <see cref="CaptureOptions.MaxWidth"/>/<see cref="CaptureOptions.MaxHeight"/>/
     /// <see cref="CaptureOptions.IncludeCursor"/>。
     /// <para><b>display 与 region 是不同入口（不可混用坐标口径）</b>：本方法<b>直接按该显示器矩形 <c>d.Bounds</c>
     /// 抓取</b>，<c>k</c> 的基数是<b>显示器原生尺寸</b>（spec §6.2），结果 origin=显示器左上、DisplayIndex=库侧 0 基。
@@ -253,13 +245,6 @@ public static class ScreenCapture
     /// </summary>
     private static string OverlayCursorNote(Bitmap bmp, bool includeCursor, int originX, int originY)
         => !includeCursor || GdiCapture.TryOverlayCursor(bmp, originX, originY) ? "" : "（光标未叠加）";
-
-    /// <summary>
-    /// 旧签名（宿主已切到 <see cref="CaptureScreen(CaptureOptions)"/>，保留供库单测/兼容；Task 10 未删除）：
-    /// 委托到 <see cref="CaptureScreen(CaptureOptions)"/>，maxDimension 同时作 maxWidth/maxHeight。
-    /// </summary>
-    public static CaptureResult CaptureScreen(Rectangle? clipInImageSpace, int maxDimension)
-        => CaptureScreen(new CaptureOptions(clipInImageSpace, maxDimension, maxDimension));
 
     /// <summary>
     /// region 换算纯函数（自 CaptureScreen 提取——锁屏/无桌面环境下屏幕 BitBlt 不可用时，
@@ -364,17 +349,6 @@ public static class ScreenCapture
         return (bmp, source, originX, originY);
     }
 
-    /// <summary>整窗/客户区抓取便捷重载：<paramref name="clientArea"/>=true 抓客户区；否则整窗（默认不缩放、png）。</summary>
-    public static CaptureResult CaptureWindow(IntPtr hwnd, bool clientArea = false)
-        => CaptureWindow(hwnd, new CaptureOptions(ClientArea: clientArea));
-
-    /// <summary>
-    /// 旧签名（宿主已切到 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>，保留供库单测/兼容；Task 10 未删除）：
-    /// 委托到 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>，maxDimension 同时作 maxWidth/maxHeight、整窗。
-    /// </summary>
-    public static CaptureResult CaptureWindow(IntPtr hwnd, int maxDimension)
-        => CaptureWindow(hwnd, new CaptureOptions(MaxWidth: maxDimension, MaxHeight: maxDimension));
-
     /// <summary>
     /// element 模式抓取（Task 6，spec §7.1）：先取元素所属<b>顶层窗口</b>自身的窗口帧（与
     /// <see cref="CaptureWindow"/> 同一条 WGC→PrintWindow→BitBlt 回退链），再把 <paramref name="elementRectPx"/>
@@ -383,11 +357,8 @@ public static class ScreenCapture
     /// <c>GetAncestor(GA_ROOT)</c> 的 <paramref name="topLevelHwnd"/>（见 <c>UiElementInfo.TopLevelHwnd</c>）。
     /// <para>裁剪 = <paramref name="elementRectPx"/> 与窗口帧求交：空交集抛约定错误；部分越界则裁至交集且
     /// <see cref="CaptureResult.ClippedToScreen"/>=true。origin=实际抓取交集左上（spec §5）；scale=图像/原生。</para>
+    /// <para>缩放/编码选项语义同 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>。</para>
     /// </summary>
-    public static CaptureResult CaptureElement(IntPtr topLevelHwnd, Rectangle elementRectPx)
-        => CaptureElement(topLevelHwnd, elementRectPx, new CaptureOptions());
-
-    /// <summary>带抓取选项的 element 实现（缩放/编码选项语义同 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>）。</summary>
     public static CaptureResult CaptureElement(IntPtr topLevelHwnd, Rectangle elementRectPx, CaptureOptions options)
     {
         EnsureDpi();

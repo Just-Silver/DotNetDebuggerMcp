@@ -9,7 +9,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Text;
 
-namespace DotNetDebuggerMcp.Tools.Debugger;
+namespace DotNetDebuggerMcp.Tools.Screenshot;
 
 /// <summary>
 /// screenshot 独立截图工具（spec：docs/planning/specs/2026-09-27-screenshot-generalization-design.md §4）：
@@ -20,7 +20,7 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 /// 错误仍为纯文本 content 且不设 IsError（与现有工具行为一致，agent 按文案识别）。
 /// </summary>
 [McpServerToolType]
-public static class DebugScreenshotTool
+public static class ScreenshotTool
 {
     /// <summary>截取窗口/屏幕画面返回图片（spec §4.1 参数面 / §4.2 寻址 / §4.3 头部；默认值见各参数 <c>[Description]</c>）。</summary>
     [McpServerTool]
@@ -44,7 +44,7 @@ public static class DebugScreenshotTool
         [Description("输出高上限（像素；0=用 maxDimension；语义同 maxWidth）。")] int maxHeight = 0,
         [Description("是否在截图中包含鼠标光标（默认 false；WGC 源内建开关，GDI 源手动叠加、失败时来源行注明「光标未叠加」）。")] bool includeCursor = false,
         [Description("window/foreground 等窗口出现的秒数（默认 5，范围 0-30；0=立即试一次）。")] int timeoutSeconds = 5,
-        [Description("非空=强制落盘到该路径；空=仅图片超 2MB 时落盘到本地 screenshots 目录。")] string filePath = "",
+        [Description("非空=强制落盘到该路径（相对路径以临时目录 %TEMP%\\DotNetDebuggerMcp\\screenshots 为基准，绝对路径按原样，均不会写入当前工作目录）；空=仅图片超 2MB 时自动落盘到该临时目录。")] string filePath = "",
         CancellationToken cancellationToken = default)
     {
         try
@@ -444,9 +444,14 @@ public static class DebugScreenshotTool
     {
         if (!string.IsNullOrWhiteSpace(filePath))
         {
-            var dir = Path.GetDirectoryName(Path.GetFullPath(filePath));
+            // 相对路径以截图根目录（临时目录）为基准——绝不按进程工作目录解析
+            // （否则会写进使用者项目目录造成污染）；绝对路径按原样。
+            var full = Path.IsPathRooted(filePath)
+                ? Path.GetFullPath(filePath)
+                : Path.GetFullPath(Path.Combine(AppConfig.ScreenshotsDir, filePath));
+            var dir = Path.GetDirectoryName(full);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            return Path.GetFullPath(filePath);
+            return full;
         }
         Directory.CreateDirectory(AppConfig.ScreenshotsDir);
         var pidSeg = mode == "window" ? $"-{processId}" : "";

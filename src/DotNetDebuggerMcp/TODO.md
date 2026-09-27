@@ -21,4 +21,6 @@
 
 ## 实施后遗留观察项（低优先）
 
+- screenshot `display=left`/`right` 的**多显示器真机验证**待补（2026-09-28 记录）：邻屏解析逻辑已有构造数据单测（`ScreenshotToolTests.ResolveDisplayIndex_PrimaryLeftRightOneBasedAndErrors`），但真实 `EnumerateDisplays()` 在多屏下的坐标/主屏判定（负坐标、各屏 DPI 不一、主屏不在最左等）尚缺端到端验证；`SharpSight.Capture.Tests.DisplayEnumeratorTests.CaptureDisplay_SecondMonitor_*` 在单显示器机器上 Skip。**待有双屏机器时手工跑一次 `screenshot display=left` 与 `display=right` 确认。**
+
 - U1A：① locator 严格 Name 全等使「UIA Name 随内容变化」控件同 index 二次操作判 stale（既定契约）；② `ui_wait` 释放 gate 后 `window` 跨操作复用（降级轮询，无崩溃证据）。

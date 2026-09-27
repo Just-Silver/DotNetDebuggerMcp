@@ -34,7 +34,7 @@
 
 - 现有 `screenshot` 是**独立工具**（不入缓存/不过 ToolPipeline、不写 AgentView），`Task<CallToolResult>`（图片类铁律例外），WGC→PrintWindow→BitBlt 回退链已落地并有三轮审查 + 单测。
 - 能力边界（旧 spec §8 冻结）：无多显示器选择、无 `includeCursor`、无 `delay`、无元素级截图、region 固定「screen 图像素空间」。
-- 消费者：宿主 `Tools/Debugger/DebugScreenshotTool.cs`（唯一）。
+- 消费者：宿主 `Tools/Screenshot/ScreenshotTool.cs`（唯一）。
 - 相关既有能力：宿主 `Services/Ui/*`（U1A：`ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait`，FlaUI UIA3、语义动作、元素缓存 + 重解析）。
 - 痛点：可见性只能看「窗口/屏/区域」三档，无法**精确寻址**（副屏/前台/客户区/hwnd/元素）、无法**控制图像成本**（只有 png/jpeg + 单一 2000 上限）、没有**语义通道**（读文本须另调 `ui_find`，且截图与元素编号不闭环）。
 
@@ -135,7 +135,7 @@ Rect GetBoundingRectangle(int index, int frameId);  // 带代际校验；失配 
 | `grayscale` | `bool = false` | 灰度（默认关） |
 | `diff` | `bool = false` | 无变化检测：与上一帧比对，未变化只回文本 |
 | `includeCursor` | `bool = false` | 叠加光标（**解冻**旧 spec §8） |
-| `filePath` | `string = ""` | 非空=强制落盘该路径 |
+| `filePath` | `string = ""` | 非空=强制落盘该路径（**相对路径以临时目录 `%TEMP%\DotNetDebuggerMcp\screenshots\` 为基准**，绝对路径按原样；均不写当前工作目录） |
 
 **语义桥**
 | 参数 | 类型/默认 | 语义 |
@@ -263,7 +263,7 @@ OCR:    zh-Hans-CN（可用: en-US, zh-Hans-CN）  MaxImageDimension=10000
 | `src/DotNetDebugger.Engine/Capture/*` | **迁出**至 `SharpSight.Capture`；Engine 去掉 System.Drawing.Common（§11 待实测） |
 | `src/DotNetDebuggerMcp/Services/Ui/*` | **迁出**至 `SharpSight.UiAutomation`；宿主改为引用 |
 | `src/DotNetDebuggerMcp/Tools/Debugger/UiTools.cs` | `ui_find` 输出增 `frameId`；`ui_action`/`ui_input`/`ui_get` 增**可选 `frameId`**（`int = 0`，0=不校验，**向后兼容**）——旧帧引用拒绝 + 教学提示（§7.4）。**这是 `ui_*` 工具面变更 → 触发 §9 的 README/握手/回归同步** |
-| `src/DotNetDebuggerMcp/Tools/Debugger/DebugScreenshotTool.cs` | 扩展参数/头部/编排；改引用新库命名空间 |
+| `src/DotNetDebuggerMcp/Tools/Screenshot/ScreenshotTool.cs` | 扩展参数/头部/编排；改引用新库命名空间（原 `Tools/Debugger/DebugScreenshotTool.cs`，2026-09-28 独立成 `Tools/Screenshot/`） |
 | `DotNetDebuggerMcp.slnx` | 增两个项目 |
 | `src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` | 增对两新库的 ProjectReference；TFM/PackAsTool hack 不变 |
 | `Configuration/AppConfig.cs` | 新增 `ScreenshotMaxDimension=1568`（原 2000）、`ScreenshotMaxMarks=120`、`OcrDefaultLanguage=""`；保留 `InlineImageBase64Bytes`/`ScreenshotsDir` |

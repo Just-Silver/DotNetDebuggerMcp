@@ -57,7 +57,7 @@ public sealed class CaptureCursorTests
     {
         if (_screenAvailable is null)
         {
-            try { _ = ScreenCapture.CaptureScreen(null, 2000); _screenAvailable = true; }
+            try { _ = ScreenCapture.CaptureScreen(new CaptureOptions(MaxWidth: 2000, MaxHeight: 2000)); _screenAvailable = true; }
             catch (CaptureException) { _screenAvailable = false; }
         }
         if (_screenAvailable == false)

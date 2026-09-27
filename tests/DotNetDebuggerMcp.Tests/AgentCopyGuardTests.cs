@@ -1,4 +1,5 @@
 using DotNetDebuggerMcp.Tools.Debugger;
+using DotNetDebuggerMcp.Tools.Screenshot;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Reflection;
@@ -46,21 +47,22 @@ public sealed class AgentCopyGuardTests
         { nameof(UiTools.UiGet), "what" },                               // ui_get 读取状态
         { nameof(UiTools.UiWait), "超时返回当前状态" },                 // ui_wait 超时不报错
         // 阶段一 screenshot 通用化补录（agent 唯一直接可见的契约面：固定 PNG / 模式推断 / 坐标元数据）
-        { nameof(DebugScreenshotTool.Screenshot), "固定 PNG" },         // 输出格式恒为 PNG（无 format/quality）
-        { nameof(DebugScreenshotTool.Screenshot), "auto" },             // mode 默认 auto 按参数推断
-        { nameof(DebugScreenshotTool.Screenshot), "原点" },             // 头部 origin/scale 坐标元数据
-        { nameof(DebugScreenshotTool.Screenshot), "缩放" },
+        { nameof(ScreenshotTool.Screenshot), "固定 PNG" },         // 输出格式恒为 PNG（无 format/quality）
+        { nameof(ScreenshotTool.Screenshot), "auto" },             // mode 默认 auto 按参数推断
+        { nameof(ScreenshotTool.Screenshot), "原点" },             // 头部 origin/scale 坐标元数据
+        { nameof(ScreenshotTool.Screenshot), "缩放" },
     };
 
     // 每项 = (工具方法名, 参数名, 该参数 Description 必含关键片段) —— 参数级契约。
     // 锁「agent 据以正确调用」的关键事实：默认值、取值域、护栏语义；改参数说明必须同步改此处。
     public static TheoryData<string, string, string> ParamContractData => new()
     {
-        { nameof(DebugScreenshotTool.Screenshot), "mode", "auto" },             // 模式推断默认值
-        { nameof(DebugScreenshotTool.Screenshot), "maxDimension", "1568" },     // 默认上限（铁律：改默认值须改 Description）
-        { nameof(DebugScreenshotTool.Screenshot), "maxDimension", "0=不缩放" }, // 「不缩放」逃生门必须对 agent 可见
-        { nameof(DebugScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
-        { nameof(DebugScreenshotTool.Screenshot), "includeCursor", "光标" },
+        { nameof(ScreenshotTool.Screenshot), "mode", "auto" },             // 模式推断默认值
+        { nameof(ScreenshotTool.Screenshot), "maxDimension", "1568" },     // 默认上限（铁律：改默认值须改 Description）
+        { nameof(ScreenshotTool.Screenshot), "maxDimension", "0=不缩放" }, // 「不缩放」逃生门必须对 agent 可见
+        { nameof(ScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
+        { nameof(ScreenshotTool.Screenshot), "includeCursor", "光标" },
+        { nameof(ScreenshotTool.Screenshot), "filePath", "临时目录" },          // 落盘基准=临时目录（防污染调用方项目）
         { nameof(UiTools.UiAction), "frameId", "旧画面" },
         { nameof(UiTools.UiInput), "frameId", "旧画面" },
         { nameof(UiTools.UiGet), "frameId", "旧画面" },

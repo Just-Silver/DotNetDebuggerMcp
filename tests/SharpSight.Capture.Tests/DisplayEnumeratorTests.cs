@@ -22,7 +22,7 @@ public sealed class DisplayEnumeratorTests
     {
         if (_screenAvailable is null)
         {
-            try { _ = ScreenCapture.CaptureDisplay(0); _screenAvailable = true; }
+            try { _ = ScreenCapture.CaptureDisplay(0, new CaptureOptions()); _screenAvailable = true; }
             catch (CaptureException) { _screenAvailable = false; }
         }
         if (_screenAvailable == false)
@@ -68,7 +68,7 @@ public sealed class DisplayEnumeratorTests
     {
         SkipIfScreenUnavailable();
         var d0 = ScreenCapture.EnumerateDisplays()[0];
-        var r = ScreenCapture.CaptureDisplay(0);
+        var r = ScreenCapture.CaptureDisplay(0, new CaptureOptions());
         Assert.Equal(0, r.DisplayIndex);
         Assert.Equal(d0.Bounds.X, r.OriginX);
         Assert.Equal(d0.Bounds.Y, r.OriginY);
@@ -87,9 +87,9 @@ public sealed class DisplayEnumeratorTests
     {
         // 越界判定在 BitBlt 之前（纯校验），锁屏下亦恒跑
         var n = ScreenCapture.EnumerateDisplays().Length;
-        var ex = Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(n));
+        var ex = Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(n, new CaptureOptions()));
         Assert.Contains("不存在", ex.Message);
-        Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(-1));
+        Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(-1, new CaptureOptions()));
     }
 
     // ===== R21 回归：display 的 k 基数=显示器原生尺寸（非虚拟屏图像空间）=====
@@ -125,7 +125,7 @@ public sealed class DisplayEnumeratorTests
         if (ds.Length < 2)
             Assert.Skip("单显示器环境：display=2 的 R21 回归（旧实现会抛「完全在屏幕范围之外」）需多屏才可复现");
         var d = ds[1];
-        var r = ScreenCapture.CaptureDisplay(1);
+        var r = ScreenCapture.CaptureDisplay(1, new CaptureOptions());
         Assert.Equal(1, r.DisplayIndex);
         Assert.Equal(d.Bounds.X, r.OriginX);
         Assert.Equal(d.Bounds.Y, r.OriginY);

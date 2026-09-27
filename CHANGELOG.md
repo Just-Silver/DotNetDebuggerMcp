@@ -18,6 +18,7 @@
 
 - **`screenshot` 默认缩放上限由 2000 改为 1568**（长边）；`maxDimension=0`（且未做单轴覆盖）可关闭缩放、返回 1:1 原图
 - **`ui_find` 不再列出离屏（`IsOffscreen=true`）控件**（与 `screenshot element` 共用同一过滤、两者 index 保持同源）：清单中既有控件的 `index` 可能因过滤位移，请以新的 `ui_find` 输出为准
+- **`screenshot` 落盘位置改为系统临时目录**：默认落盘目录由 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\` 改为 `%TEMP%\DotNetDebuggerMcp\screenshots\`；`filePath` 传**相对路径**时也以该临时目录为基准（此前按进程当前工作目录解析——会把图片写进调用方项目目录）
 
 ### Removed
 
