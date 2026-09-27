@@ -291,22 +291,39 @@ public static class ScreenCapture
         EnsureDpi();
         // options.Clip 在 window 模式被忽略（非静默丢参，见 CaptureOptions.Clip 文档）：窗口几何由目标窗口自身
         // 决定——WGC 源取 DWMWA_EXTENDED_FRAME_BOUNDS、GDI 回退源取 GetWindowRect（Spike A 实测口径），
-        // 不支持再叠加外部裁剪；将来 element 模式复用 Clip 语义做元素级裁剪。
-        const string failMsg = "窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。";
-        var info = GetWindowInfo(hwnd) ?? throw new CaptureException(failMsg);
-        var bounds = GetWindowBounds(hwnd) ?? throw new CaptureException(failMsg);
+        // 不支持再叠加外部裁剪；元素级裁剪是独立入口 CaptureElement(hwnd, elementRectPx)（不走本方法）。
+        var info = GetWindowInfo(hwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
+        var bounds = GetWindowBounds(hwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
         var maxDimension = ResolveMaxDimension(options.MaxWidth, options.MaxHeight);
 
         // 客户区：GDI BitBlt 客户区屏幕矩形（spec §4.2；无 WGC——客户区本就是屏幕可见区）。
         if (options.ClientArea)
         {
-            if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw new CaptureException(failMsg);
+            if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw new CaptureException(WindowCaptureFailMsg);
             using var cbmp = GdiCapture.CaptureScreenBits(bounds.ClientArea);
             return ImagePipeline.Process(cbmp, cbmp.Size, maxDimension, options.Format, options.Quality,
                 info.Title, "BitBlt",
                 originX: bounds.ClientArea.X, originY: bounds.ClientArea.Y) with { IsClientArea = true };
         }
 
+        var (bmp, source, originX, originY) = CaptureWindowBits(hwnd, info, bounds);
+        using (bmp)
+            return ImagePipeline.Process(bmp, bmp.Size, maxDimension, options.Format, options.Quality,
+                info.Title, source, originX: originX, originY: originY);
+    }
+
+    private const string WindowCaptureFailMsg = "窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。";
+
+    /// <summary>
+    /// 整窗原生位图回退链 + 帧原点（Spike A 口径）：WGC（首帧几何 == <c>DWMWA_EXTENDED_FRAME_BOUNDS</c>，
+    /// origin=扩展边框左上）→ PrintWindow（以 GetWindowRect 原点自画；采样纯黑则继续回退）→
+    /// BitBlt（最小化窗口屏幕无内容，不回退；采 GetWindowRect 区域）。全失败抛约定错误。
+    /// <b>不处置位图</b>——调用方 using。<see cref="CaptureWindow"/> 与 <see cref="CaptureElement"/> 共用
+    /// （元素裁剪与整窗同源，避免对屏幕直接 BitBlt 裁元素而截到遮挡物）。
+    /// </summary>
+    private static (Bitmap Bitmap, string Source, int OriginX, int OriginY) CaptureWindowBits(
+        IntPtr hwnd, WindowHandleInfo info, WindowBounds bounds)
+    {
         // 第 1 道：WGC（正确性主力）——首帧几何 == 扩展边框（Spike A 实测）
         Bitmap? bmp = WgcCapture.TryCaptureWindow(hwnd);
         var source = "WGC";
@@ -329,11 +346,8 @@ public static class ScreenCapture
             originX = bounds.WindowRect.X; originY = bounds.WindowRect.Y;
         }
 
-        if (bmp is null) throw new CaptureException(failMsg);
-
-        using (bmp)
-            return ImagePipeline.Process(bmp, bmp.Size, maxDimension, options.Format, options.Quality,
-                info.Title, source, originX: originX, originY: originY);
+        if (bmp is null) throw new CaptureException(WindowCaptureFailMsg);
+        return (bmp, source, originX, originY);
     }
 
     /// <summary>整窗/客户区抓取便捷重载：<paramref name="clientArea"/>=true 抓客户区；否则整窗（默认不缩放、png）。</summary>
@@ -348,4 +362,41 @@ public static class ScreenCapture
     public static CaptureResult CaptureWindow(IntPtr hwnd, int maxDimension, string format, int quality)
         => CaptureWindow(hwnd, new CaptureOptions(MaxWidth: maxDimension, MaxHeight: maxDimension,
             Format: format, Quality: quality));
+
+    /// <summary>
+    /// element 模式抓取（Task 6，spec §7.1）：先取元素所属<b>顶层窗口</b>自身的窗口帧（与
+    /// <see cref="CaptureWindow"/> 同一条 WGC→PrintWindow→BitBlt 回退链），再把 <paramref name="elementRectPx"/>
+    /// （虚拟屏物理像素）换算为帧内坐标后裁剪——<b>不对屏幕直接 BitBlt 裁元素</b>（否则截到的是遮挡物）。
+    /// 元素属另一顶层窗口（ComboBox 弹层/popup/tooltip）时，调用方须传元素自身
+    /// <c>GetAncestor(GA_ROOT)</c> 的 <paramref name="topLevelHwnd"/>（见 <c>UiElementInfo.TopLevelHwnd</c>）。
+    /// <para>裁剪 = <paramref name="elementRectPx"/> 与窗口帧求交：空交集抛约定错误；部分越界则裁至交集且
+    /// <see cref="CaptureResult.ClippedToScreen"/>=true。origin=实际抓取交集左上（spec §5）；scale=图像/原生。</para>
+    /// </summary>
+    public static CaptureResult CaptureElement(IntPtr topLevelHwnd, Rectangle elementRectPx)
+        => CaptureElement(topLevelHwnd, elementRectPx, new CaptureOptions());
+
+    /// <summary>带抓取选项的 element 实现（缩放/编码选项语义同 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>）。</summary>
+    public static CaptureResult CaptureElement(IntPtr topLevelHwnd, Rectangle elementRectPx, CaptureOptions options)
+    {
+        EnsureDpi();
+        if (elementRectPx.IsEmpty)
+            throw new CaptureException("元素矩形为空：无法裁剪（目标元素不可见/无几何）。");
+        var info = FindWindowByHwnd(topLevelHwnd)
+            ?? throw new CaptureException($"顶层窗口句柄无效或不可见（hwnd={topLevelHwnd}）：元素截图需传元素自身 GetAncestor(GA_ROOT) 的顶层窗口。");
+        var bounds = GetWindowBounds(topLevelHwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
+        var maxDimension = ResolveMaxDimension(options.MaxWidth, options.MaxHeight);
+
+        var (bmp, source, originX, originY) = CaptureWindowBits(topLevelHwnd, info, bounds);
+        using (bmp)
+        {
+            var frame = new Rectangle(originX, originY, bmp.Width, bmp.Height);
+            var inter = Rectangle.Intersect(elementRectPx, frame);
+            if (inter.IsEmpty)
+                throw new CaptureException($"元素矩形 ({elementRectPx.X},{elementRectPx.Y},{elementRectPx.Width},{elementRectPx.Height}) 不在顶层窗口帧 ({frame.X},{frame.Y},{frame.Width},{frame.Height}) 内。");
+            var local = new Rectangle(inter.X - originX, inter.Y - originY, inter.Width, inter.Height);
+            using var cropped = bmp.Clone(local, bmp.PixelFormat);
+            return ImagePipeline.Process(cropped, cropped.Size, maxDimension, options.Format, options.Quality,
+                info.Title, source, clippedToScreen: inter != elementRectPx, originX: inter.X, originY: inter.Y);
+        }
+    }
 }

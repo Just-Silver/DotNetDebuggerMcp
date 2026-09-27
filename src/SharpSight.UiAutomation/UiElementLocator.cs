@@ -4,6 +4,7 @@ using FlaUI.UIA3;
 
 using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 
@@ -25,6 +26,11 @@ internal sealed record TargetDescriptor(string AutoId, string Name, string Contr
 [SupportedOSPlatform("windows7.0")]
 internal sealed class UiElementLocator
 {
+    private const uint GaRoot = 2;   // GetAncestor flags
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
     private sealed record CachedEntry(int Pid, string WindowTitle, TargetDescriptor Descriptor);
 
     private readonly List<CachedEntry> _lastFind = new();
@@ -56,6 +62,19 @@ internal sealed class UiElementLocator
 
     /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。</summary>
     public IReadOnlyList<UiElementInfo> Find(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit)
+        => FindCore(automation, process, title, text, type, automationId, limit, forCapture: false);
+
+    /// <summary>
+    /// 元素级截图定位（spec §7.1）：与 <see cref="Find"/> <b>完全同一套</b>进程/窗口身份、过滤与 ordinal 计数，
+    /// 并<b>共用</b> <c>_lastFind</c> index 条件缓存（同一 <c>ui_find</c> 清单）；唯一区别是返回值额外填充结构化
+    /// <see cref="UiElementInfo.RectPx"/>（物理像素）与 <see cref="UiElementInfo.TopLevelHwnd"/>
+    /// （元素自身 <c>GetAncestor(GA_ROOT)</c>），供宿主交给 <c>SharpSight.Capture</c> 从窗口帧裁剪。
+    /// 元素属另一顶层窗口（ComboBox 弹层/popup/tooltip）时即由其 <c>TopLevelHwnd</c> 体现。
+    /// </summary>
+    public IReadOnlyList<UiElementInfo> FindForCapture(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit)
+        => FindCore(automation, process, title, text, type, automationId, limit, forCapture: true);
+
+    private IReadOnlyList<UiElementInfo> FindCore(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit, bool forCapture)
     {
         var (pid, _) = ResolveProcess(process);
         var typeFilter = ResolveControlType(type); // 先校验类型（fail-fast，不触碰 UIA）
@@ -115,7 +134,17 @@ internal sealed class UiElementLocator
             }
 
             var index = infos.Count;
-            infos.Add(new UiElementInfo(index, name, elType, autoId, rectText, caps.Describe(), semantic));
+            // 仅元素级截图路径读取结构化几何 + 顶层 hwnd（ui_find 热路径不加这两次 UIA/Win32 调用）。
+            var rectPx = Rectangle.Empty;
+            var topLevel = IntPtr.Zero;
+            if (forCapture && !rect.IsEmpty)
+            {
+                rectPx = rect;
+                var hwnd = SafeRead(() => el.Properties.NativeWindowHandle.ValueOrDefault, IntPtr.Zero);
+                if (hwnd != IntPtr.Zero)
+                    topLevel = SafeRead(() => GetAncestor(hwnd, GaRoot), hwnd);
+            }
+            infos.Add(new UiElementInfo(index, name, elType, autoId, rectText, caps.Describe(), semantic, rectPx, topLevel));
             entries.Add(new CachedEntry(pid, SafeRead(() => window.Name ?? "", ""), new TargetDescriptor(autoId, name, elType, ordinal)));
         }
 
