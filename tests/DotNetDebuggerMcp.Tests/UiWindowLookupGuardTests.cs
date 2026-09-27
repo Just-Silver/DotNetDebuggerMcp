@@ -16,7 +16,7 @@ public sealed class UiWindowLookupGuardTests
     public void LocatorSource_DoesNotFullEnumerateDesktop()
     {
         var file = Path.Combine(TestDataPaths.RepositoryRoot,
-            "src", "DotNetDebuggerMcp", "Services", "Ui", "UiElementLocator.cs");
+            "src", "SharpSight.UiAutomation", "UiElementLocator.cs");
         Assert.True(File.Exists(file), $"定位器源码不存在：{file}");
 
         var text = File.ReadAllText(file);

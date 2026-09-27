@@ -3,7 +3,7 @@ using DotNetDebugger.Engine.Models;
 using DotNetDebugger.Engine.Session;
 using DotNetDebugger.Session;
 using DotNetDebugger.Session.Models;
-using DotNetDebuggerMcp.Services.Ui;
+using SharpSight.UiAutomation;
 using System.Reflection.Metadata;
 using System.Reflection.Metadata.Ecma335;
 using System.Reflection.PortableExecutable;

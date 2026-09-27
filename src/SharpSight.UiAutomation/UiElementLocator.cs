@@ -7,7 +7,7 @@ using System.Drawing;
 using System.Runtime.Versioning;
 using System.Text;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// index 缓存的身份条件（纯数据）：AutoId/Name/ControlType 三元组精确锁定同一实体，Ordinal 为该三元组在

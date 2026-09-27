@@ -4,7 +4,7 @@ using FlaUI.Core.Patterns;
 
 using System.Runtime.Versioning;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// U1A verb → pattern 分派（spec §6）。决策与执行分离：<see cref="Choose"/>/<see cref="ChooseInput"/> 为纯函数

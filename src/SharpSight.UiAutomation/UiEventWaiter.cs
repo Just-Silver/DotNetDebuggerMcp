@@ -4,7 +4,7 @@ using FlaUI.Core.EventHandlers;
 
 using System.Runtime.Versioning;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// U1A 事件订阅（spec §10）：对目标窗口订阅 StructureChanged（控件出现/消失）+ PropertyChanged（Name/Value，

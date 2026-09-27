@@ -2,7 +2,7 @@ using FlaUI.Core.AutomationElements;
 
 using System.Runtime.Versioning;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 // ===== U1A UI 自动化模型（组件共享，集中定义） =====
 

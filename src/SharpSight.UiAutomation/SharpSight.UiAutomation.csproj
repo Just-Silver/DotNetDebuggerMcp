@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>SharpSight.UiAutomation</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>SharpSight.UiAutomation</PackageId>
+    <Version>0.1.0</Version>
+    <FlaUIVersion>5.0.0</FlaUIVersion>
+    <Authors>Just-Silver</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>SharpSight UI 自动化能力库（FlaUI/UIA 元素模型与定位）；Windows-only。</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="FlaUI.Core" Version="$(FlaUIVersion)" />
+    <PackageReference Include="FlaUI.UIA3" Version="$(FlaUIVersion)" />
+  </ItemGroup>
+  <!-- 现有 UI 类型全部为 internal（迁出前即如此，本任务保持「公开面原样」不改可见性）：
+       宿主与其测试项目经 IVT 继续使用；是否公开（库对外 API 面）留待 Task 6 新增公开 API 时一并定。 -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="DotNetDebuggerMcp" />
+    <InternalsVisibleTo Include="DotNetDebuggerMcp.Tests" />
+  </ItemGroup>
+</Project>

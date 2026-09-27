@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\DotNetDebuggerMcp\DotNetDebuggerMcp.csproj" />
     <ProjectReference Include="..\..\src\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
+    <ProjectReference Include="..\..\src\SharpSight.UiAutomation\SharpSight.UiAutomation.csproj" />
   </ItemGroup>
 
 </Project>

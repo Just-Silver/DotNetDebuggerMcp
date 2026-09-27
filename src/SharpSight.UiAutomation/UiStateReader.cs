@@ -2,7 +2,7 @@ using FlaUI.Core.AutomationElements;
 
 using System.Runtime.Versioning;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// U1A ui_get 读取（spec §6 what 映射）。决策与执行分离：<see cref="Choose"/> 为纯函数（吃能力快照，

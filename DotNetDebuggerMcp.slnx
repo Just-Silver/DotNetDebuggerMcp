@@ -7,6 +7,7 @@
     <Project Path="src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj" />
     <Project Path="src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.Client.csproj" Id="f3860b2b-4192-4565-a126-d506da738ec3" />
     <Project Path="src/SharpSight.Capture/SharpSight.Capture.csproj" />
+    <Project Path="src/SharpSight.UiAutomation/SharpSight.UiAutomation.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/DotNetDebugger.Decompiler.Tests/DotNetDebugger.Decompiler.Tests.csproj" />

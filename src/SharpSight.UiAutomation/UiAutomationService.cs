@@ -4,7 +4,7 @@ using FlaUI.UIA3;
 
 using System.Runtime.Versioning;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// U1A UI 自动化 facade（spec §13）：gate + 按调用超时（默认 5s，agent 可经 timeoutSeconds 调大）双层护栏 +
