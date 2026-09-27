@@ -10,24 +10,35 @@ namespace SharpSight.Capture;
 /// 首次调用统一设进程 DPI 为 Per-Monitor V2（全链物理像素，与 region 坐标空间定义一致；
 /// 运行时调用、不用 manifest，已设置时容忍 ERROR_ACCESS_DENIED）。
 /// T2 范围：DPI + FindMainWindow + GetWindowInfo；CaptureScreen（T4）/CaptureWindow（T5）随后追加。
+/// T5：FindWindowByHwnd/FindForegroundWindow/GetWindowBounds + CaptureWindow(hwnd,clientArea)。
 /// </summary>
 public static class ScreenCapture
 {
     private static int _dpiSet;   // 0=未设 1=已设（幂等）
     private const int ProcessPerMonitorDpiAwareV2 = 4;
+    private const int DwmwaExtendedFrameBounds = 9;   // DwmGetWindowAttribute 属性号（DWM 可见帧，去阴影）
+    private const uint GaRoot = 2;
 
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr extra);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Rect { public int Left, Top, Right, Bottom; }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint { public int X, Y; }
+
     [DllImport("user32.dll")] private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc cb, IntPtr extra);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);   // 2=GA_ROOT
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+    [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr hwnd, out Rect rect);
+    [DllImport("user32.dll")] private static extern bool ClientToScreen(IntPtr hwnd, ref NativePoint point);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern int GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out Rect value, int size);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
 
@@ -55,7 +66,7 @@ public static class ScreenCapture
         var count = 0;
         EnumWindows((h, _) =>
         {
-            if (!IsWindowVisible(h) || GetAncestor(h, 2 /*GA_ROOT*/) != h) return true;
+            if (!IsWindowVisible(h) || GetAncestor(h, GaRoot) != h) return true;
             // 注意：返回值是线程 id，进程 id 只能取 out 参数（spike 实录 bug：拿返回值比 pid 会漏窗口）
             GetWindowThreadProcessId(h, out var pid);
             if (processId > 0)
@@ -95,6 +106,62 @@ public static class ScreenCapture
         return new WindowHandleInfo(hwnd, tsb.ToString(),
             new System.Drawing.Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top),
             IsIconic(hwnd), (int)pid, MatchCount: 1);
+    }
+
+    /// <summary>
+    /// 按 hwnd 定位窗口（Task 5，spec §4.1 寻址校验）：<c>IsWindow</c> + <c>IsWindowVisible</c> +
+    /// <c>GetAncestor(hwnd, GA_ROOT)==hwnd</c>（必须是可见的顶层主窗）全部通过才返回，否则 null。
+    /// 语义与 <see cref="FindMainWindow"/> 一致（同一 <see cref="WindowHandleInfo"/>、MatchCount=1）。
+    /// </summary>
+    public static WindowHandleInfo? FindWindowByHwnd(IntPtr hwnd)
+    {
+        EnsureDpi();
+        if (hwnd == IntPtr.Zero || !IsWindow(hwnd) || !IsWindowVisible(hwnd) || GetAncestor(hwnd, GaRoot) != hwnd)
+            return null;
+        return GetWindowInfo(hwnd);
+    }
+
+    /// <summary>
+    /// 取当前前台窗口（Task 5，spec §4.1 <c>windowTitle=@active</c> 的库侧支撑）。
+    /// <c>GetForegroundWindow</c> 返回 NULL（无头/服务会话）→ null（宿主转中文原因）；
+    /// 否则交 <see cref="GetWindowInfo"/> 填 hwnd/标题/矩形/IsIconic/pid。
+    /// </summary>
+    public static WindowHandleInfo? FindForegroundWindow()
+    {
+        EnsureDpi();
+        var hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero) return null;
+        return GetWindowInfo(hwnd);
+    }
+
+    /// <summary>
+    /// 取窗口几何三元组（Task 5，spec §5 坐标模型）：<c>GetWindowRect</c>（含阴影）+
+    /// <c>DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)</c>（可见帧，失败回退窗口矩形）+
+    /// 客户区屏幕矩形（<c>GetClientRect</c> 左上恒 (0,0) + <c>ClientToScreen</c>）；
+    /// 均为虚拟屏物理像素。hwnd 无效/取矩失败返回 null。
+    /// </summary>
+    public static WindowBounds? GetWindowBounds(IntPtr hwnd)
+    {
+        EnsureDpi();
+        if (hwnd == IntPtr.Zero || !IsWindow(hwnd)) return null;
+        if (!GetWindowRect(hwnd, out var wr)) return null;
+        var windowRect = new Rectangle(wr.Left, wr.Top, wr.Right - wr.Left, wr.Bottom - wr.Top);
+
+        // DWM 可见帧（去阴影/不可见 resize 边框）；失败或退化（空矩形）即回退窗口矩形（与 §Step 3 一致）。
+        var extended = windowRect;
+        if (DwmGetWindowAttribute(hwnd, DwmwaExtendedFrameBounds, out var ef, Marshal.SizeOf<Rect>()) == 0
+            && ef.Right > ef.Left && ef.Bottom > ef.Top)
+            extended = new Rectangle(ef.Left, ef.Top, ef.Right - ef.Left, ef.Bottom - ef.Top);
+
+        // 客户区：GetClientRect 左上恒 (0,0)，其宽高即客户区；ClientToScreen((0,0)) 得客户区屏幕原点。
+        var client = Rectangle.Empty;
+        if (GetClientRect(hwnd, out var cr) && cr.Right > cr.Left && cr.Bottom > cr.Top)
+        {
+            var pt = new NativePoint { X = 0, Y = 0 };
+            if (ClientToScreen(hwnd, ref pt))
+                client = new Rectangle(pt.X, pt.Y, cr.Right - cr.Left, cr.Bottom - cr.Top);
+        }
+        return new WindowBounds(extended, windowRect, client);
     }
 
     /// <summary>
@@ -208,41 +275,74 @@ public static class ScreenCapture
     }
 
     /// <summary>
-    /// window 抓取编排（spec §4.3 三道回退链）：
-    /// WGC（DWM 取帧不黑图、被遮挡可截、无需置顶；出图即用——黑=真黑由头部备注）
-    /// → PrintWindow → 采样纯黑则继续回退 → BitBlt（最小化窗口屏幕无内容，不回退）
-    /// → 全失败抛约定错误。
+    /// window 抓取编排（Task 5，spec §4.2/§4.3）：
+    /// <para><paramref name="options"/>.ClientArea=true → GDI BitBlt 客户区屏幕矩形（<see cref="GetWindowBounds"/> 的
+    /// <see cref="WindowBounds.ClientArea"/>；被遮挡处截到遮挡物 = best-effort，Source=BitBlt）。</para>
+    /// <para>否则整窗回退链：WGC（DWM 取帧不黑图、被遮挡可截、无需置顶；出图即用——黑=真黑由头部备注）
+    /// → PrintWindow → 采样纯黑则继续回退 → BitBlt（最小化窗口屏幕无内容，不回退）→ 全失败抛约定错误。</para>
+    /// <para><b>整窗 origin 口径（Spike A 实测，docs/planning/research/screenshot-generalization/spike-2026-09-27.md）</b>：
+    /// WGC 首帧尺寸与 <c>DWMWA_EXTENDED_FRAME_BOUNDS</c> <b>逐像素相等</b>（UiSampleApp 实测 762x552，
+    /// 而 GetWindowRect 为 776x559，含约 7px 的 DWM 阴影/不可见 resize 边框），且 PrintWindow 相关性证实
+    /// WGC 帧原点 = 扩展边框左上。故 <b>WGC 源 origin=扩展边框左上</b>；PrintWindow/BitBlt 按 <c>GetWindowRect</c>
+    /// 作画/采样，origin=窗口矩形左上。因此本方法不做「裁掉扩展边框偏移」的裁剪（那是 WGC 帧==GetWindowRect 时才需要）。</para>
     /// </summary>
-    public static CaptureResult CaptureWindow(IntPtr hwnd, int maxDimension, string format, int quality)
+    public static CaptureResult CaptureWindow(IntPtr hwnd, CaptureOptions options)
     {
         EnsureDpi();
         const string failMsg = "窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。";
         var info = GetWindowInfo(hwnd) ?? throw new CaptureException(failMsg);
+        var bounds = GetWindowBounds(hwnd) ?? throw new CaptureException(failMsg);
+        var maxDimension = ResolveMaxDimension(options.MaxWidth, options.MaxHeight);
 
-        // 第 1 道：WGC（正确性主力）
+        // 客户区：GDI BitBlt 客户区屏幕矩形（spec §4.2；无 WGC——客户区本就是屏幕可见区）。
+        if (options.ClientArea)
+        {
+            if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw new CaptureException(failMsg);
+            using var cbmp = GdiCapture.CaptureScreenBits(bounds.ClientArea);
+            return ImagePipeline.Process(cbmp, cbmp.Size, maxDimension, options.Format, options.Quality,
+                info.Title, "BitBlt",
+                originX: bounds.ClientArea.X, originY: bounds.ClientArea.Y) with { IsClientArea = true };
+        }
+
+        // 第 1 道：WGC（正确性主力）——首帧几何 == 扩展边框（Spike A 实测）
         Bitmap? bmp = WgcCapture.TryCaptureWindow(hwnd);
         var source = "WGC";
+        int originX = bounds.ExtendedFrame.X, originY = bounds.ExtendedFrame.Y;
 
-        // 第 2 道：PrintWindow → 采样纯黑则继续回退（spec §4.3-2）
+        // 第 2 道：PrintWindow → 采样纯黑则继续回退（spec §4.3-2）；以 GetWindowRect 原点自画
         if (bmp is null)
         {
             bmp = GdiCapture.TryPrintWindow(hwnd);
             source = "PrintWindow";
+            originX = bounds.WindowRect.X; originY = bounds.WindowRect.Y;
             if (bmp is not null && ImagePipeline.IsAllBlack(bmp)) { bmp.Dispose(); bmp = null; }
         }
 
-        // 第 3 道：BitBlt（最小化窗口屏幕无内容，不回退——spec §4.2 IsIconic 规则）
+        // 第 3 道：BitBlt（最小化窗口屏幕无内容，不回退——spec §4.2 IsIconic 规则）；采 GetWindowRect 区域
         if (bmp is null && !info.IsIconic)
         {
             bmp = GdiCapture.TryBitBltWindow(hwnd);
             source = "BitBlt";
+            originX = bounds.WindowRect.X; originY = bounds.WindowRect.Y;
         }
 
         if (bmp is null) throw new CaptureException(failMsg);
 
         using (bmp)
-            // origin 暂用 GetWindowRect 左上（虚拟屏物理像素）；WGC 帧几何与客户区精化见 Task 5。
-            return ImagePipeline.Process(bmp, bmp.Size, maxDimension, format, quality, info.Title, source,
-                originX: info.Rect.X, originY: info.Rect.Y);
+            return ImagePipeline.Process(bmp, bmp.Size, maxDimension, options.Format, options.Quality,
+                info.Title, source, originX: originX, originY: originY);
     }
+
+    /// <summary>整窗/客户区抓取便捷重载：<paramref name="clientArea"/>=true 抓客户区；否则整窗（默认不缩放、png）。</summary>
+    public static CaptureResult CaptureWindow(IntPtr hwnd, bool clientArea = false)
+        => CaptureWindow(hwnd, new CaptureOptions(ClientArea: clientArea));
+
+    /// <summary>
+    /// 旧签名（宿主当前调用点，Task 10 切换）：委托到 <see cref="CaptureWindow(IntPtr, CaptureOptions)"/>，
+    /// maxDimension 同时作 maxWidth/maxHeight、整窗（clientArea=false）。宿主恒传正数（2000），
+    /// 故缩放/回退链与切换前一致；若传 0/负则按 R10 语义不缩放。
+    /// </summary>
+    public static CaptureResult CaptureWindow(IntPtr hwnd, int maxDimension, string format, int quality)
+        => CaptureWindow(hwnd, new CaptureOptions(MaxWidth: maxDimension, MaxHeight: maxDimension,
+            Format: format, Quality: quality));
 }

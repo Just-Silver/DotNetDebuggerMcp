@@ -16,6 +16,19 @@ namespace SharpSight.Capture;
 public sealed record WindowHandleInfo(
     IntPtr Hwnd, string Title, Rectangle Rect, bool IsIconic, int Pid, int MatchCount);
 
+/// <summary>
+/// 窗口几何三元组（<see cref="ScreenCapture.GetWindowBounds"/> 返回；Task 5，spec §5 坐标模型）：
+/// <see cref="ExtendedFrame"/> 为 DWM 可见帧（去阴影/不可见 resize 边框，
+/// <c>DWMWA_EXTENDED_FRAME_BOUNDS</c>，失败回退窗口矩形）；<see cref="WindowRect"/> 为
+/// <c>GetWindowRect</c>（含不可见边框/阴影余量）；<see cref="ClientArea"/> 为客户区的
+/// <b>屏幕坐标矩形</b>（<c>GetClientRect</c> 左上恒 (0,0) + <c>ClientToScreen</c> 换算）。
+/// 三者均为虚拟屏物理像素。
+/// </summary>
+/// <param name="ExtendedFrame">DWM 扩展边框（可见帧，不含阴影）。</param>
+/// <param name="WindowRect">GetWindowRect 窗口矩形（含阴影/不可见边框）。</param>
+/// <param name="ClientArea">客户区屏幕坐标矩形（宽高=客户区，左上=客户区屏幕原点）。</param>
+public sealed record WindowBounds(Rectangle ExtendedFrame, Rectangle WindowRect, Rectangle ClientArea);
+
 /// <summary>截图结果（Engine 唯一产出形状；宿主只消费字段拼头部/双轨，不做任何坐标与图像处理）。</summary>
 /// <param name="Image">编码后字节（png/jpeg，按入参 format）。</param>
 /// <param name="Width">输出（缩放后）宽。</param>
@@ -47,12 +60,15 @@ public sealed record CaptureResult(
 /// <param name="MaxHeight">输出长边上限；0/负=不限，语义同 <paramref name="MaxWidth"/>。</param>
 /// <param name="Format">输出编码 "png" | "jpeg"（默认 png）。</param>
 /// <param name="Quality">jpeg 质量 0-100（默认 80）。</param>
+/// <param name="ClientArea">window 模式是否抓客户区（<see cref="ScreenCapture.CaptureWindow(IntPtr, CaptureOptions)"/> 消费；
+/// screen/display/region 忽略）。默认 false=整窗。Task 5 引入。</param>
 public sealed record CaptureOptions(
     Rectangle? Clip = null,
     int MaxWidth = 0,
     int MaxHeight = 0,
     string Format = "png",
-    int Quality = 80);
+    int Quality = 80,
+    bool ClientArea = false);
 
 /// <summary>截图失败（约定中文文案由 Engine 生成，宿主 catch 后原样返回——spec §5.2
 /// 「屏外判定由 Engine 执行并回传约定错误，宿主不触碰坐标换算」的落地通道）。</summary>
