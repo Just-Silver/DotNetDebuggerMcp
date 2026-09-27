@@ -223,10 +223,19 @@ public static class ScreenCapture
         }
 
         using var bmp = GdiCapture.CaptureScreenBits(nativeClip);
+        var cursorNote = OverlayCursorNote(bmp, options.IncludeCursor, nativeClip.X, nativeClip.Y);
         return ImagePipeline.Process(bmp, native.Size, options.MaxWidth, options.MaxHeight,
-            windowTitle: null, sourceName: "BitBlt", clippedToScreen: clipped,
+            windowTitle: null, sourceName: "BitBlt" + cursorNote, clippedToScreen: clipped,
             originX: nativeClip.X, originY: nativeClip.Y);
     }
+
+    /// <summary>
+    /// GDI 源的光标叠加（Task 9）：仅 <c>IncludeCursor</c> 时尝试（scale/encode 之前 → 光标随图一起缩放）；
+    /// 成功/无需叠加返回空串，失败返回「（光标未叠加）」备注（失败不计为错误，保持「来源行如实标注」口径）。
+    /// WGC 源不走此处（<c>IsCursorCaptureEnabled</c> 已内建）。
+    /// </summary>
+    private static string OverlayCursorNote(Bitmap bmp, bool includeCursor, int originX, int originY)
+        => !includeCursor || GdiCapture.TryOverlayCursor(bmp, originX, originY) ? "" : "（光标未叠加）";
 
     /// <summary>
     /// 旧签名（宿主当前调用点，Task 10 切换）：委托到 <see cref="CaptureScreen(CaptureOptions)"/>，
@@ -286,12 +295,13 @@ public static class ScreenCapture
         {
             if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw new CaptureException(WindowCaptureFailMsg);
             using var cbmp = GdiCapture.CaptureScreenBits(bounds.ClientArea);
+            var cursorNote = OverlayCursorNote(cbmp, options.IncludeCursor, bounds.ClientArea.X, bounds.ClientArea.Y);
             return ImagePipeline.Process(cbmp, cbmp.Size, options.MaxWidth, options.MaxHeight,
-                info.Title, "BitBlt",
+                info.Title, "BitBlt" + cursorNote,
                 originX: bounds.ClientArea.X, originY: bounds.ClientArea.Y) with { IsClientArea = true };
         }
 
-        var (bmp, source, originX, originY) = CaptureWindowBits(hwnd, info, bounds);
+        var (bmp, source, originX, originY) = CaptureWindowBits(hwnd, info, bounds, options.IncludeCursor);
         using (bmp)
             return ImagePipeline.Process(bmp, bmp.Size, options.MaxWidth, options.MaxHeight,
                 info.Title, source, originX: originX, originY: originY);
@@ -307,10 +317,10 @@ public static class ScreenCapture
     /// （元素裁剪与整窗同源，避免对屏幕直接 BitBlt 裁元素而截到遮挡物）。
     /// </summary>
     private static (Bitmap Bitmap, string Source, int OriginX, int OriginY) CaptureWindowBits(
-        IntPtr hwnd, WindowHandleInfo info, WindowBounds bounds)
+        IntPtr hwnd, WindowHandleInfo info, WindowBounds bounds, bool includeCursor)
     {
-        // 第 1 道：WGC（正确性主力）——首帧几何 == 扩展边框（Spike A 实测）
-        Bitmap? bmp = WgcCapture.TryCaptureWindow(hwnd);
+        // 第 1 道：WGC（正确性主力）——首帧几何 == 扩展边框（Spike A 实测）；光标按 includeCursor 内建开关
+        Bitmap? bmp = WgcCapture.TryCaptureWindow(hwnd, includeCursor);
         var source = "WGC";
         int originX = bounds.ExtendedFrame.X, originY = bounds.ExtendedFrame.Y;
 
@@ -332,6 +342,9 @@ public static class ScreenCapture
         }
 
         if (bmp is null) throw new CaptureException(WindowCaptureFailMsg);
+
+        // GDI 源无内建光标开关：缩放/编码前手动叠加（失败仅在 Source 备注，不计错误）；WGC 已内建、不重复叠加
+        if (source != "WGC") source += OverlayCursorNote(bmp, includeCursor, originX, originY);
         return (bmp, source, originX, originY);
     }
 
@@ -369,7 +382,7 @@ public static class ScreenCapture
             ?? throw new CaptureException($"顶层窗口句柄无效或不可见（hwnd={topLevelHwnd}）：元素截图需传元素自身 GetAncestor(GA_ROOT) 的顶层窗口。");
         var bounds = GetWindowBounds(topLevelHwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
 
-        var (bmp, source, originX, originY) = CaptureWindowBits(topLevelHwnd, info, bounds);
+        var (bmp, source, originX, originY) = CaptureWindowBits(topLevelHwnd, info, bounds, options.IncludeCursor);
         using (bmp)
         {
             var frame = new Rectangle(originX, originY, bmp.Width, bmp.Height);

@@ -63,11 +63,15 @@ public sealed record CaptureResult(
 /// <param name="MaxHeight">输出高上限（原生物理像素）；≤0 视为该轴不限制，语义同 <paramref name="MaxWidth"/>。</param>
 /// <param name="ClientArea">window 模式是否抓客户区（<see cref="ScreenCapture.CaptureWindow(IntPtr, CaptureOptions)"/> 消费；
 /// screen/display/region 忽略）。默认 false=整窗。Task 5 引入。</param>
+/// <param name="IncludeCursor">是否在截图中包含鼠标光标（默认 false）。WGC 路径经 <c>IsCursorCaptureEnabled</c> 开关
+/// （需 <c>ApiInformation</c> 探测、兼容老系统）；GDI 路径（screen/region、window 客户区、PrintWindow/BitBlt 回退）
+/// 在缩放/编码前手动叠加光标，叠加失败不报错、仅在 <see cref="CaptureResult.Source"/> 备注「光标未叠加」。Task 9 引入。</param>
 public sealed record CaptureOptions(
     Rectangle? Clip = null,
     int MaxWidth = 0,
     int MaxHeight = 0,
-    bool ClientArea = false);
+    bool ClientArea = false,
+    bool IncludeCursor = false);
 
 /// <summary>截图失败（约定中文文案由 Engine 生成，宿主 catch 后原样返回——spec §5.2
 /// 「屏外判定由 Engine 执行并回传约定错误，宿主不触碰坐标换算」的落地通道）。</summary>
