@@ -66,6 +66,7 @@ public sealed class AgentCopyGuardTests
         { nameof(ScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
         { nameof(ScreenshotTool.Screenshot), "includeCursor", "光标" },
         { nameof(ScreenshotTool.Screenshot), "filePath", "临时目录" },          // 落盘基准=临时目录（防污染调用方项目）
+        { nameof(ScreenshotTool.Screenshot), "filePath", "不再附图片" },        // 落盘后不内联返回图片（需自行读文件）——agent 必须知道
         // 寻址参数的「取值来源」必须对 agent 可见（跨工具指路；漏改等于 agent 又回到靠猜）
         { nameof(ScreenshotTool.Screenshot), "display", "screenshot_displays" },
         { nameof(ScreenshotTool.Screenshot), "hwnd", "screenshot_windows" },
