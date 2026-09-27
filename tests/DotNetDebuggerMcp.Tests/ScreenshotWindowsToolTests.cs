@@ -21,7 +21,10 @@ public sealed class ScreenshotWindowsToolTests
         Assert.Matches(@"可见顶层窗口: \d+ 个", text);
         Assert.Contains("hwnd=", text);
         Assert.Contains("pid=", text);
-        Assert.Contains("\"", text);   // 标题以双引号包裹
+        Assert.Contains("\"", text);        // 标题以双引号包裹
+        Assert.DoesNotContain("\"\"", text); // 无标题窗口已被过滤（前台无标题时渲染为 (无标题)，不会出现空串）
+        if (text.Contains("另有"))
+            Assert.Matches(@"另有 \d+ 个无标题或零尺寸窗口未列出", text);   // 过滤计数提示格式
     }
 
     /// <summary>agent 是靠 MCP 工具名发现它的——名字必须是 snake_case 的 `screenshot_windows`（SDK 由方法名派生）。</summary>
@@ -40,7 +43,9 @@ public sealed class ScreenshotWindowsToolTests
             "__no_such_window_title__", TestContext.Current.CancellationToken);
 
         Assert.True(
-            text.StartsWith("未找到标题含") || text.StartsWith("未枚举到任何可见顶层窗口"),
+            text.StartsWith("未找到标题含")
+            || text.StartsWith("未枚举到任何可见顶层窗口")
+            || text.StartsWith("未找到可列出的窗口"),
             text);
     }
 
@@ -55,7 +60,7 @@ public sealed class ScreenshotWindowsToolTests
         var row = all.Split('\n').First(l => l.Contains("hwnd="));
         var title = row[(row.IndexOf('"') + 1)..];
         title = title[..title.LastIndexOf('"')];
-        if (title.Length == 0)
+        if (title.Length == 0 || title == "(无标题)")
             Assert.Skip("首个窗口无标题，跳过 filter 阳性用例");
 
         var filtered = await ScreenshotWindowsTool.ScreenshotWindows(title, TestContext.Current.CancellationToken);

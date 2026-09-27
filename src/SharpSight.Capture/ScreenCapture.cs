@@ -97,10 +97,11 @@ public static class ScreenCapture
     }
 
     /// <summary>
-    /// 枚举全部可见顶层窗口（Z 序，顶→底）：仅 <c>IsWindowVisible</c> 且为根窗口（<c>GetAncestor(GA_ROOT)==self</c>，
-    /// 排除 owned 弹层/工具窗）。供宿主「可截窗口清单」工具与调用方选择 hwnd/标题寻址——枚举**不限进程**（任意进程），
-    /// 与 <see cref="FindMainWindow"/> 的「按 pid/标题择一取首个」互补。
-    /// 空标题窗口也返回（由调用方过滤/展示）；<see cref="WindowHandleInfo.MatchCount"/> 恒 1（无选择器语义）。
+    /// 枚举全部可见顶层窗口（Z 序，顶→底）：仅 <c>IsWindowVisible</c> 且为根窗口。供宿主「可截窗口清单」工具与
+    /// 调用方选择 hwnd/标题寻址——枚举**不限进程**（任意进程），与 <see cref="FindMainWindow"/> 的「按 pid/标题择一取首个」互补。
+    /// <b>本方法不做可用性过滤</b>（<c>EnumWindows</c> 本身只枚举顶层窗口；实测对顶层窗 <c>GetAncestor(GA_ROOT)==self</c>
+    /// 恒成立、不排除 owned/工具窗）——「有标题 + 尺寸&gt;0」这类可截判定由调用方（宿主工具）负责。
+    /// 空标题/零尺寸窗口也返回；<see cref="WindowHandleInfo.MatchCount"/> 恒 1（无选择器语义）。
     /// </summary>
     public static WindowHandleInfo[] EnumerateVisibleWindows()
     {
