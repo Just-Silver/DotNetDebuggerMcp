@@ -114,7 +114,8 @@ public static class DebugScreenshotTool
                     var fg = ScreenCapture.FindForegroundWindow();
                     if (fg is null) return TextOnly(CaptureText.ForegroundUnavailable);
                     targetLine = $"目标:   前台窗口 \"{fg.Title}\" (pid={fg.Pid})";
-                    result = CaptureWindow(fg, clientArea, maxW, maxH, includeCursor);
+                    // clientArea 仅 mode=window 适用（ValidateCompatibility 已拒绝 foreground+clientArea），此处不透传。
+                    result = CaptureWindow(fg, clientArea: false, maxW, maxH, includeCursor);
                     break;
                 }
                 case "window":
@@ -266,7 +267,8 @@ public static class DebugScreenshotTool
     }
 
     /// <summary>region 字符串解析（纯函数，可单测）：四段整数且 w/h 为正；坐标口径见 <c>[Description]</c>。</summary>
-    internal static bool TryParseRegion(string region, out Rectangle rect)    {
+    internal static bool TryParseRegion(string region, out Rectangle rect)
+    {
         rect = default;
         var parts = (region ?? "").Split(',');
         if (parts.Length != 4 || !parts.All(p => int.TryParse(p.Trim(), out _))) return false;
@@ -288,7 +290,7 @@ public static class DebugScreenshotTool
         error = "";
         if (displays.Length == 0)
         {
-            error = "未枚举到任何显示器（可能处于无桌面会话）。";
+            error = CaptureText.NoDisplays;
             return false;
         }
 
@@ -378,7 +380,7 @@ public static class DebugScreenshotTool
             if (sessionPid > 0) { byPid = true; processId = sessionPid; }
         }
         if (!byPid && !byTitle)
-            return (null, "请提供 processId 或 windowTitle 定位窗口（两者皆空时也可先 debug_launch 建立会话自动取目标 pid）。");
+            return (null, CaptureText.WindowSelectorRequired);
 
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
         WindowHandleInfo? hit;

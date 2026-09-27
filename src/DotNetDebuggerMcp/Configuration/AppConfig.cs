@@ -32,7 +32,7 @@ internal static class AppConfig
     /// <summary>
     /// screenshot 输出单边最大像素（长边上限）：超过则双轴等比缩到限内（spec §6.2）。
     /// 1568 对齐官方 vision 长边上限（超限会被服务端二次 resize 导致坐标漂移）。
-    /// 经参数传入 Engine，缩放实现唯一在 Engine（spec §4.2）。
+    /// 经参数传入捕获库（`SharpSight.Capture`），缩放实现唯一在库侧（spec §4.2）。
     /// </summary>
     public const int ScreenshotMaxDimension = 1568;
 

@@ -14,7 +14,7 @@ namespace DotNetDebuggerMcp.Tests;
 /// 经 MCP 协议真实往返（DebugMcpToolsTests.ConnectAsync/CallAsync 同款基建）。
 /// screen/region 真实抓取在锁屏/安全桌面环境会被系统拒绝 BitBlt——按 spec §6.4 探测 Skip 不红
 /// （window 模式走 WGC/PrintWindow 不受影响，锁屏下仍恒跑）。
-/// [Collection("AppServices")]：类内静态 seam（InlineImageLimitBytes）+ MCP 连接，按 tests/AGENTS 纪律串行。
+/// [Collection("AppServices")]：MCP 连接与 AppServices 静态状态（含 `AppConfig.InlineImageBase64Bytes` 阈值常量），按 tests/AGENTS 纪律串行。
 /// </summary>
 [Collection("AppServices")]
 public sealed class ScreenshotToolTests

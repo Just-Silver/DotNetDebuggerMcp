@@ -57,7 +57,8 @@ public sealed record CaptureResult(
 /// **输出固定 PNG**（spec §6.1，用户裁定 2026-09-28）：不提供 format/quality。
 /// </summary>
 /// <param name="Clip">裁剪矩形（mode=screen 返回图像素空间）；null=全屏。
-/// <b>适用模式：screen / region /（将来 element）</b>；<b>display 与 window 模式忽略本参数</b>——display 走自身入口
+/// <b>适用模式：screen / region</b>（element 走独立入口 <see cref="ScreenCapture.CaptureElement(IntPtr, Rectangle, CaptureOptions)"/>、不消费本参数）；
+/// <b>display 与 window 模式忽略本参数</b>——display 走自身入口
 /// （按显示器尺寸抓取）、window 几何由目标窗口自身决定（WGC 源取 <c>DWMWA_EXTENDED_FRAME_BOUNDS</c>、GDI 回退源取 <c>GetWindowRect</c>），均不套用裁剪。</param>
 /// <param name="MaxWidth">输出宽上限（原生物理像素，spec §6.2）；≤0 视为该轴不限制。两轴皆 ≤0 ⇒ 不缩放（k=1）。</param>
 /// <param name="MaxHeight">输出高上限（原生物理像素）；≤0 视为该轴不限制，语义同 <paramref name="MaxWidth"/>。</param>

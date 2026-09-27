@@ -51,6 +51,14 @@ internal static class CaptureText
     public static string TimeoutNotFound(string selector, int timeoutSeconds)
         => $"{timeoutSeconds} 秒内未找到匹配的可见窗口（{selector}）。";
 
+    /// <summary>display 枚举为空（无桌面会话等）。</summary>
+    public const string NoDisplays =
+        "未枚举到任何显示器（可能处于无桌面会话）。";
+
+    /// <summary>window 定位缺少 processId/windowTitle 选择器。</summary>
+    public const string WindowSelectorRequired =
+        "请提供 processId 或 windowTitle 定位窗口（两者皆空时也可先 debug_launch 建立会话自动取目标 pid）。";
+
     /// <summary>提交给取消令牌的取消提示（放弃等待、可重试，不走缓存）。</summary>
     public const string Canceled = "screenshot 已取消（可重试）。";
 }
