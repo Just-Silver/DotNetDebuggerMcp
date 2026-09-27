@@ -218,6 +218,8 @@ record CaptureResult(byte[] Image, int Width, int Height,
 ## 8. 明确不做（YAGNI / 冻结项）
 
 > **Superseded（部分，2026-09-27）**：本条中「多显示器 `display` 参数」「`includeCursor`」「控件/元素级截图」「region 的 `origin` 坐标系」四项**已被解冻**，改由 `2026-09-27-screenshot-generalization-design.md`（agent 视觉基座）设计。以下原文保留作历史记录，其余（Web 冻结、自动清理、`delay`、e2e 等）继续有效。
+>
+> **另（2026-09-28）**：本 spec 涉及的「**缩放**」已**整条移除**——`screenshot` 现为固定 PNG 且**不做任何缩放**（图像恒为抓取区原生像素 1:1），尺寸处理交模型侧。以下涉及缩放/长边上限（2000）的原文仅作历史记录。
 
 - Web 展示、截图回放、`AgentView` hook（Web 冻结）；
 - 截图缓存、自动清理落盘文件；

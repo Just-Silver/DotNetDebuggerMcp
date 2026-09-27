@@ -295,7 +295,7 @@ public static class ScreenCapture
     /// <see cref="WindowBounds.ClientArea"/>；被遮挡处截到遮挡物 = best-effort，Source=BitBlt）。</para>
     /// <para>否则整窗回退链：WGC（DWM 取帧不黑图、被遮挡可截、无需置顶；出图即用——黑=真黑由头部备注）
     /// → PrintWindow → 采样纯黑则继续回退 → BitBlt（最小化窗口屏幕无内容，不回退）→ 全失败抛约定错误。</para>
-    /// <para><b>整窗 origin 口径（Spike A 实测，docs/planning/research/screenshot-generalization/spike-2026-09-27.md）</b>：
+    /// <para><b>整窗 origin 口径（Spike A 实测）</b>：
     /// WGC 首帧尺寸与 <c>DWMWA_EXTENDED_FRAME_BOUNDS</c> <b>逐像素相等</b>（UiSampleApp 实测 762x552，
     /// 而 GetWindowRect 为 776x559，含约 7px 的 DWM 阴影/不可见 resize 边框），且 PrintWindow 相关性证实
     /// WGC 帧原点 = 扩展边框左上。故 <b>WGC 源 origin=扩展边框左上</b>；PrintWindow/BitBlt 按 <c>GetWindowRect</c>
