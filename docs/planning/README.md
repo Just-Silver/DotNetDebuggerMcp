@@ -34,10 +34,12 @@
 | `research/05-dependency-packages.md` | 依赖包清单（ClrDebug/DbgShim/Roslyn/ICorDebug/ClrMD 概念澄清；WebUI 侧包清单已 Superseded，见 D4） |
 | `research/06-clrdebug-api-reference.md` | ClrDebug 0.4.2 最小调试器 API 参考（源码核对版） |
 | `research/archive/` | 已归档调研：dnSpy 源码结构摸底 / ILSpy 源码结构摸底 |
+| `research/screenshot-generalization/` | **screenshot 通用化调研**（2026-09-27，15 份）：寻址/图像经济/语义桥三目标 + 高星/官方重建的业界范式 + 仓库集成点；源码实录含 FlaUI/ShareX/PowerToys/ImageSharp/OmniParser/**Windows-MCP**/**chrome-devtools-mcp+playwright**/**MCP 规范+computer-use 官方参考**/**ScreenToGif+flameshot+UFO**；含决策点、待实测项、调研仓库取舍。**每份文档带「来源等级」标注（A 源码核实 / B 官方 / C 低星待核）**。导航见该目录 `README.md` |
 | `specs/README.md` | 设计文档目录（specs/ 导航） |
 | `specs/2026-09-05-overview-design.md` | **总览设计 spec**（已确认） |
 | `specs/2026-09-05-p4-webui.md` | **P4 WebUI 细化 spec**（已冻结） |
 | `specs/2026-09-08-w1-set-value.md` 等 10 份 | **全部待办批次 spec**（已冻结）：W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3（导航与状态见 specs/README；W2/V2 已转 ROADMAP） |
-| `specs/2026-09-22-screenshot-tool-design.md` | **screenshot 截图工具 spec**（独立截图工具，WGC+GDI、image 块双轨；**已实现**——计划 `plans/2026-09-22-screenshot-tool.md`） |
+| `specs/2026-09-22-screenshot-tool-design.md` | **screenshot 截图工具 spec**（独立截图工具，WGC+GDI、image 块双轨；**已实现**——计划 `plans/2026-09-22-screenshot-tool.md`）；其 §8 冻结项已由下一条 Superseded（部分） |
+| `specs/2026-09-27-screenshot-generalization-design.md` | **screenshot 通用化设计 spec（agent 视觉基座）**：三目标（寻址通用/图像经济/语义桥）+ 库化重构（`SharpSight.Capture`/`SharpSight.UiAutomation`）；**草案待用户复核**（依据见 `research/screenshot-generalization/`） |
 
 > 规划文档配套 Git 历史与已完成计划见 `archive/plans/`；归档材料移出主目录以免导航误读为进行中。

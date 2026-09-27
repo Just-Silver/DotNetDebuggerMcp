@@ -217,6 +217,8 @@ record CaptureResult(byte[] Image, int Width, int Height,
 
 ## 8. 明确不做（YAGNI / 冻结项）
 
+> **Superseded（部分，2026-09-27）**：本条中「多显示器 `display` 参数」「`includeCursor`」「控件/元素级截图」「region 的 `origin` 坐标系」四项**已被解冻**，改由 `2026-09-27-screenshot-generalization-design.md`（agent 视觉基座）设计。以下原文保留作历史记录，其余（Web 冻结、自动清理、`delay`、e2e 等）继续有效。
+
 - Web 展示、截图回放、`AgentView` hook（Web 冻结）；
 - 截图缓存、自动清理落盘文件；
 - 多显示器 `display` 参数、`includeCursor`、延迟截图 `delay`；
