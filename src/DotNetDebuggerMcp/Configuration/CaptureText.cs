@@ -61,4 +61,7 @@ internal static class CaptureText
 
     /// <summary>提交给取消令牌的取消提示（放弃等待、可重试，不走缓存）。</summary>
     public const string Canceled = "screenshot 已取消（可重试）。";
+
+    /// <summary>发现类只读工具（screenshot_displays / screenshot_windows）的取消提示（不绑定 screenshot 字样）。</summary>
+    public const string CanceledGeneric = "已取消（可重试）。";
 }

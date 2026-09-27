@@ -136,6 +136,8 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("includeCursor", text); // 光标
         Assert.Contains("原点", text);          // origin/scale 坐标元数据
         Assert.Contains("frameId", text);       // 代际护栏（ui_find ↔ ui_action/screenshot）
+        Assert.Contains("screenshot_displays", text); // 视觉族发现：显示器清单（喂 display）
+        Assert.Contains("screenshot_windows", text);  // 视觉族发现：窗口清单（喂 hwnd/windowTitle/processId）
         Assert.Contains("web_open", text);
         Assert.Contains("## 何时使用", text);
         Assert.DoesNotContain("## 工具一览", text);

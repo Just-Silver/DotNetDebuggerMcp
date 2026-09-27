@@ -51,6 +51,9 @@ public sealed class AgentCopyGuardTests
         { nameof(ScreenshotTool.Screenshot), "auto" },             // mode 默认 auto 按参数推断
         { nameof(ScreenshotTool.Screenshot), "原点" },             // 头部 origin/scale 坐标元数据
         { nameof(ScreenshotTool.Screenshot), "缩放" },
+        // 视觉族发现工具（只为 screenshot 寻址服务；只读）
+        { nameof(ScreenshotDisplaysTool.ScreenshotDisplays), "显示器" },              // 列显示器清单
+        { nameof(ScreenshotWindowsTool.ScreenshotWindows), "可见顶层窗口" },          // 列窗口清单
     };
 
     // 每项 = (工具方法名, 参数名, 该参数 Description 必含关键片段) —— 参数级契约。
@@ -63,6 +66,13 @@ public sealed class AgentCopyGuardTests
         { nameof(ScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
         { nameof(ScreenshotTool.Screenshot), "includeCursor", "光标" },
         { nameof(ScreenshotTool.Screenshot), "filePath", "临时目录" },          // 落盘基准=临时目录（防污染调用方项目）
+        // 寻址参数的「取值来源」必须对 agent 可见（跨工具指路；漏改等于 agent 又回到靠猜）
+        { nameof(ScreenshotTool.Screenshot), "display", "screenshot_displays" },
+        { nameof(ScreenshotTool.Screenshot), "hwnd", "screenshot_windows" },
+        { nameof(ScreenshotTool.Screenshot), "windowTitle", "screenshot_windows" },
+        { nameof(ScreenshotTool.Screenshot), "processId", "screenshot_windows" },
+        { nameof(ScreenshotTool.Screenshot), "region", "先截一张" },
+        { nameof(ScreenshotTool.Screenshot), "element", "建议先用 ui_find" },
         { nameof(UiTools.UiAction), "frameId", "旧画面" },
         { nameof(UiTools.UiInput), "frameId", "旧画面" },
         { nameof(UiTools.UiGet), "frameId", "旧画面" },
