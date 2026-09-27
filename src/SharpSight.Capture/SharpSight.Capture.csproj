@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>SharpSight.Capture</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>SharpSight.Capture</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Just-Silver</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Description>SharpSight 截图/图像能力库（捕获 + 图像管线 + 标注 + OCR）；Windows-only。</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="10.0.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SharpSight.Capture.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,10 +1,10 @@
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
-/// <summary>Engine 测试访问 tests/TestData/DebugTarget.exe 的路径解析。</summary>
+/// <summary>Capture 测试访问 tests/TestData 下测试目标的路径解析（迁自 Engine.Tests，仅保留截图用例所需项）。</summary>
 internal static class TestPaths
 {
-    /// <summary>从测试 CWD 上溯仓库根（含 DotNetDebuggerMcp.slnx）拼 tests/TestData/DebugTarget.exe。</summary>
-    public static string DebugTargetExe { get; } = Locate("tests", "TestData", "DebugTarget.exe");
+    /// <summary>UiSampleApp.exe（U1A WinForms 目标；screenshot Capture 测试同用）。</summary>
+    public static string UiSampleAppExe { get; } = Locate("tests", "TestData", "UiSampleApp", "UiSampleApp.exe");
 
     private static string Locate(params string[] segments)
     {

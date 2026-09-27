@@ -6,7 +6,7 @@ using Windows.Graphics.DirectX.Direct3D11;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 
-namespace DotNetDebugger.Engine.Capture;
+namespace SharpSight.Capture;
 
 /// <summary>
 /// Windows Graphics Capture 单帧抓窗（spec §4.3 第 1 道；2026-09-22 spike 实测跑通版本）：
@@ -19,14 +19,14 @@ internal static class WgcCapture
 {
     private static readonly TimeSpan FirstFrameTimeout = TimeSpan.FromMilliseconds(500); // spec §4.3「约 500ms 上限」（实测首帧 38ms）
 
-    public static Bitmap? TryCaptureWindow(IntPtr hwnd)
+    public static Bitmap? TryCaptureWindow(IntPtr hwnd, bool includeCursor = false)
     {
         if (!GraphicsCaptureSession.IsSupported()) return null;   // 老系统/无头 → 直接回退
-        try { return CaptureCore(hwnd); }
+        try { return CaptureCore(hwnd, includeCursor); }
         catch (Exception) { return null; }                        // 回退链消化一切 WGC 异常
     }
 
-    private static Bitmap? CaptureCore(IntPtr hwnd)
+    private static Bitmap? CaptureCore(IntPtr hwnd, bool includeCursor)
     {
         // 1) item（失败且为 owned/无主窗口 → 临时加 WS_EX_APPWINDOW 提升重试，spec §4.3；完成后还原）
         var item = WgcInterop.CreateItemForWindow(hwnd);
@@ -47,16 +47,21 @@ internal static class WgcCapture
             var graphicsDevice = WgcInterop.CreateWinrtDevice();
             if (graphicsDevice is null) return null;
 
-            // 3) framepool（CreateFreeThreaded）+ session：关黄框/光标（ApiInformation 探测兼容老系统）
+            // 3) framepool（CreateFreeThreaded）+ session：关黄框；光标按 includeCursor 开关（ApiInformation 探测兼容老系统）
             framePool = Direct3D11CaptureFramePool.CreateFreeThreaded(
                 graphicsDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 1, item.Size);
             session = framePool.CreateCaptureSession(item);
             if (Windows.Foundation.Metadata.ApiInformation.IsPropertyPresent(
                     "Windows.Graphics.Capture.GraphicsCaptureSession", "IsBorderRequired"))
                 session.IsBorderRequired = false;       // Win11 22H2+ 可关；Win10 黄框关不掉（spec §9 接受）
-            if (Windows.Foundation.Metadata.ApiInformation.IsPropertyPresent(
-                    "Windows.Graphics.Capture.GraphicsCaptureSession", "IsCursorCaptureEnabled"))
-                session.IsCursorCaptureEnabled = false; // Win10 1903+
+            try
+            {
+                // Task 9：属性存在才设（Win10 1903+）；老系统/探测失败则忽略开关、不抛（由 GDI 路径兜底叠加）
+                if (Windows.Foundation.Metadata.ApiInformation.IsPropertyPresent(
+                        "Windows.Graphics.Capture.GraphicsCaptureSession", "IsCursorCaptureEnabled"))
+                    session.IsCursorCaptureEnabled = includeCursor;
+            }
+            catch (Exception) { /* 探测失败：忽略，不打断 WGC（老系统兼容） */ }
 
             // 4) 等首帧（FrameArrived 单次消费）→ nudge（RedrawWindow/DwmFlush）催 DWM 出帧
             var tcs = new TaskCompletionSource<Direct3D11CaptureFrame>(

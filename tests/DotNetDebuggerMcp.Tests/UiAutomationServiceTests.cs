@@ -1,5 +1,5 @@
 using DotNetDebuggerMcp.Services;
-using DotNetDebuggerMcp.Services.Ui;
+using SharpSight.UiAutomation;
 using System.Runtime.Versioning;
 using Xunit;
 

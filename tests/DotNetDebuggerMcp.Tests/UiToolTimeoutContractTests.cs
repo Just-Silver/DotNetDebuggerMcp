@@ -1,4 +1,4 @@
-using DotNetDebuggerMcp.Services.Ui;
+using SharpSight.UiAutomation;
 using DotNetDebuggerMcp.Tools.Debugger;
 using ModelContextProtocol.Server;
 using System.ComponentModel;

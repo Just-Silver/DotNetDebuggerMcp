@@ -6,15 +6,16 @@
 
 ## 目录结构（每目录一个命名空间）
 
-- `Tools/`（`DotNetDebuggerMcp.Tools`）— 反编译 5（Decompile/DecompileMember/DecompileIl/DecompileToDir/DecompileToProject）+ 元数据 13（ListTypes/Signature/Hierarchy/Dependencies/CallGraph/AssemblyInfo/InterfaceUsage/GenericInstantiation/SearchString/FieldAccess/CallChain/CacheStats/…）+ **`Debugger/`（5 个 debug_* 工具类 + screenshot 独立截图工具，见下）**
-- `Tools/Debugger/` — **动态调试 MCP 工具面**（git 状态：整目录 5 文件当时未提交——提交前确认）：
+- `Tools/`（`DotNetDebuggerMcp.Tools`）— 反编译 5（Decompile/DecompileMember/DecompileIl/DecompileToDir/DecompileToProject）+ 元数据 13（ListTypes/Signature/Hierarchy/Dependencies/CallGraph/AssemblyInfo/InterfaceUsage/GenericInstantiation/SearchString/FieldAccess/CallChain/CacheStats/…）+ **`Debugger/`（`debug_*` 工具类 + `UiTools` UI 自动化 + `DebugScreenshotTool` 独立截图工具，见下）**
+- `Tools/Debugger/` — **动态调试 MCP 工具面**：
   - `DebugSessionTool`：`debug_launch`/`debug_attach`/`debug_disconnect`/`debug_state`
   - `DebugBreakpointTool`：`debug_breakpoint_set`(模块名+token+IL offset；模块未加载=登记待绑定)/`_remove`/`_clear`/`_list`(含绑定状态)
   - `DebugControlTool`：`debug_continue`/`debug_step`(into/over/out)/`debug_wait`(等停点 1-300s 直接返回停点现场，超时返回当前状态不报错)
   - `DebugInspectTool`：`debug_stack`/`debug_threads`/`debug_variables`
   - `DebugExceptionTool`：`debug_exceptions`(typeName 空=全部，精确过滤 v2)/`_clear`
   - 全部是 `Services.DebugSessionService.Manager` 的薄包装；**控制工具异步返回（带默认超时），不等停点**（`debug_wait` 例外：其职责就是等停点，同样带超时上限与「超时=放弃等待」约定）；栈/变量读取前置校验 `Buffer.CurrentState == Stopped`（否则提示先 debug_continue 到停点）；缺省 threadId=0 用 `Buffer.StoppedThreadId`。每个工具调用后写 `Manager.Actions.Log(...)` 供 Web 回放。
-  - `DebugScreenshotTool`：`screenshot`（mode=window/screen/region 独立截图，**不要求调试会话**；返回 `CallToolResult` 图片块双轨——铁律「Task<string>」的图片类例外；不走 Manager/缓存/ToolPipeline、不写 Actions，spec `docs/planning/specs/2026-09-22-screenshot-tool-design.md` §3）。
+  - `UiTools`：`ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait`——**全 UIA 语义 pattern，无物理输入**（不移动光标/不注入输入/不抢前台）。元素定位/语义 pattern 分派/状态读取/事件等待/帧登记（`FrameRegistry`）已迁出至 **`SharpSight.UiAutomation`** 能力库，本类为薄包装。`ui_find` 头部返回 `帧: frameId=N`；`ui_action`/`ui_input`/`ui_get` 有可选 `frameId`（= `ui_find` 帧号）**旧帧护栏**——非当前帧即拒绝并提示重新 `ui_find`/`screenshot`（0=不校验）。不要求活动 debug 会话。
+  - `DebugScreenshotTool`：`screenshot`（**独立截图**，**不要求调试会话**；返回 `CallToolResult` 图片块双轨——铁律「Task<string>」的图片类例外；不走 Manager/缓存/ToolPipeline、不写 Actions，spec `docs/planning/specs/2026-09-27-screenshot-generalization-design.md` §3/§4）。`mode=auto` 按参数推断，也可显式 `auto/screen/display/window/foreground/region/element`；寻址 `display`（1 基 / `primary` / `left` / `right` 副屏）、`hwnd`（十进制字符串）、`windowTitle`（`@active`=前台）、`processId`、`clientArea`（客户区）、`region`、`element`（UIA 元素）；`frameId` 旧帧护栏；`maxDimension`（默认 1568）/`maxWidth`/`maxHeight` 双轴上限（`maxDimension=0` 关缩放、1:1 原图）；`includeCursor`。**输出固定 PNG**（无 format/quality）。头部含 `目标/尺寸/缩放/原点/帧/来源` 坐标元数据（其中 `帧` 仅 `FrameId>0`＝element 模式时输出）。抓取链/坐标换算/缩放/编码全在 **`SharpSight.Capture`** 能力库（宿主只做参数校验/模式推断/头部组装/落盘）。
 - `DebugCli/` — `DebugCliRunner`：`-dbg` 一次性调试（**与 MCP debug 工具完全独立**：绕过 Manager，直连 `DebugSession.AttachAsync` + 轮询事件流），供手动验证引擎。
 - `Services/` — `DebugSessionService`（静态单例包装 Session `DebugSessionManager`）、`AgentViewService`（静态包装 Web `AgentViewContext`，Revision 机制）、`CheckTool`（非 MCP 工具，CLI `-c`）、`AppServices`（Cache/Pipeline/NuGet/Updater/StatusReport 单例）、`ToolExecutor`（`ResolveAssembly`/`RunPipelineAsync`/`RunMergedAsync`/`RunToDisk`/`RunMetadata`/`RunMetadataPe`）。**本层不得反向引用 Tools**。反编译管线执行时经 `AgentViewService.Context.Update` 写「agent 正在看什么」（当前仅 hook 反编译类，调试工具尚未写）。
 - `Pipeline/ToolPipeline.cs` — 共享执行管道：缓存命中 → 进程内反编译回源（同 key 并发单飞）→ lines 分页；`IsErrorResult` 为 true 抛异常不入缓存。
@@ -35,7 +36,7 @@
 - **所有 MCP 工具参数必须带默认值**（`string x = ""`，不声明可空）——SDK 按是否有默认值判断必填，缺默认值缺参会返回 Tool Error 而非中文提示。`[Description]` 用中文、面向 agent、**注明默认值**、不写实现细节措辞。
 - **每个工具方法带 `CancellationToken cancellationToken = default`**（SDK 识别并注入、不暴露为参数、不写 Description）。反编译类放 timeoutSeconds 后、元数据类放末尾。
 - 工具返回 `Task<string>`，一切错误返回中文提示文本，不抛异常。——**图片类工具例外**：`screenshot` 返回 `Task<CallToolResult>`（<2MB 附 image 块、≥2MB/指定 filePath 落盘返回路径），错误仍为纯文本 content、不设 IsError（spec §3.3，见 `docs/planning/specs/2026-09-22-screenshot-tool-design.md`）。
-- 更新版本号同步三处：csproj `<Version>` + `.mcp/server.json`（顶层与 packages[0] 两处）+ CHANGELOG `[Unreleased]`。改工具面同步改根 `README.md`（打包为 PackageReadmeFile）**与握手简介 `AppText.HandshakeFeatureIntro`**（新增/删除能力族或独立工作流必须补/删对应触发条件；配合扩 `HandshakeFeatureIntro_覆盖全部能力族触发条件` 回归断言）——握手是客户端常驻 agent 的「何时用」唯一通道，漏改等于新能力不可被发现。
+- 更新版本号同步三处：csproj `<Version>` + `.mcp/server.json`（顶层与 packages[0] 两处）+ CHANGELOG `[Unreleased]`。改工具面必须同步 **工具 `[Description]`（agent 在工具目录看到的唯一说明：参数/默认值/行为一变就改）** 与 **握手简介 `AppText.HandshakeFeatureIntro`（新增/删除能力族或独立工作流必须补/删对应触发条件；配合扩 `HandshakeFeatureIntro_覆盖全部能力族触发条件` 回归断言）**——二者是 agent 的「可见」与「触发」通道，漏改等于新能力不可被发现；根 `README.md`（打包为 PackageReadmeFile）面向包使用者，也一并更新。
 
 ## 验证
 

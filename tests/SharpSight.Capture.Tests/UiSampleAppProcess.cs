@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>
 /// UiSampleApp 起停（screenshot Capture 测试用）。UseShellExecute=true 不重定向即满足

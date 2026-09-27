@@ -4,10 +4,11 @@ using FlaUI.UIA3;
 
 using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// index 缓存的身份条件（纯数据）：AutoId/Name/ControlType 三元组精确锁定同一实体，Ordinal 为该三元组在
@@ -25,6 +26,11 @@ internal sealed record TargetDescriptor(string AutoId, string Name, string Contr
 [SupportedOSPlatform("windows7.0")]
 internal sealed class UiElementLocator
 {
+    private const uint GaRoot = 2;   // GetAncestor flags
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
+
     private sealed record CachedEntry(int Pid, string WindowTitle, TargetDescriptor Descriptor);
 
     private readonly List<CachedEntry> _lastFind = new();
@@ -54,8 +60,27 @@ internal sealed class UiElementLocator
     internal static string OrdinalKey(string autoId, string name, string controlType)
         => autoId + "\u001F" + name + "\u001F" + controlType;
 
+    /// <summary>
+    /// R13 共用离屏过滤谓词（spec §4.4/§7.1）：<c>ui_find</c> 与 <c>screenshot element</c> 走同一采集路径，此谓词
+    /// 只有一处调用点，两路径行为必然一致；读取失败由调用方兜底为 false（未确认离屏不筛）。
+    /// </summary>
+    internal static bool SkipBecauseOffscreen(bool isOffscreen) => isOffscreen;
+
     /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。</summary>
     public IReadOnlyList<UiElementInfo> Find(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit)
+        => FindCore(automation, process, title, text, type, automationId, limit, forCapture: false);
+
+    /// <summary>
+    /// 元素级截图定位（spec §7.1）：与 <see cref="Find"/> <b>完全同一套</b>进程/窗口身份、过滤与 ordinal 计数，
+    /// 并<b>共用</b> <c>_lastFind</c> index 条件缓存（同一 <c>ui_find</c> 清单）；唯一区别是返回值额外填充结构化
+    /// <see cref="UiElementInfo.RectPx"/>（物理像素）与 <see cref="UiElementInfo.TopLevelHwnd"/>
+    /// （元素自身 <c>GetAncestor(GA_ROOT)</c>），供宿主交给 <c>SharpSight.Capture</c> 从窗口帧裁剪。
+    /// 元素属另一顶层窗口（ComboBox 弹层/popup/tooltip）时即由其 <c>TopLevelHwnd</c> 体现。
+    /// </summary>
+    public IReadOnlyList<UiElementInfo> FindForCapture(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit)
+        => FindCore(automation, process, title, text, type, automationId, limit, forCapture: true);
+
+    private IReadOnlyList<UiElementInfo> FindCore(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit, bool forCapture)
     {
         var (pid, _) = ResolveProcess(process);
         var typeFilter = ResolveControlType(type); // 先校验类型（fail-fast，不触碰 UIA）
@@ -89,6 +114,12 @@ internal sealed class UiElementLocator
             ordinals.TryGetValue(key, out var ordinal);
             ordinals[key] = ordinal + 1;
 
+            // R13（spec §4.4/§7.1）：离屏元素不进清单——ui_find（Find）与 screenshot element（FindForCapture）共用本采集
+            // 路径，过滤只在此一处，保证两条路径 index 同源。过滤在 ordinal 计数之后（与 type/text 过滤同位），使计数仍按
+            // 「全部后代」累计、与重解析 ResolveByDescriptor 的匹配序号一致；读取失败视为「未确认离屏」（fallback false）不筛，
+            // 避免属性瞬时不可读时清空整份清单。
+            if (SkipBecauseOffscreen(SafeRead(() => el.IsOffscreen, false))) continue;
+
             if (typeFilter is not null && !string.Equals(elType, typeFilter, StringComparison.OrdinalIgnoreCase)) continue;
             if (!string.IsNullOrEmpty(automationId) && !string.Equals(autoId, automationId, StringComparison.Ordinal)) continue;
             if (!string.IsNullOrEmpty(text)
@@ -115,7 +146,17 @@ internal sealed class UiElementLocator
             }
 
             var index = infos.Count;
-            infos.Add(new UiElementInfo(index, name, elType, autoId, rectText, caps.Describe(), semantic));
+            // 仅元素级截图路径读取结构化几何 + 顶层 hwnd（ui_find 热路径不加这两次 UIA/Win32 调用）。
+            var rectPx = Rectangle.Empty;
+            var topLevel = IntPtr.Zero;
+            if (forCapture && !rect.IsEmpty)
+            {
+                rectPx = rect;
+                var hwnd = SafeRead(() => el.Properties.NativeWindowHandle.ValueOrDefault, IntPtr.Zero);
+                if (hwnd != IntPtr.Zero)
+                    topLevel = SafeRead(() => GetAncestor(hwnd, GaRoot), hwnd);
+            }
+            infos.Add(new UiElementInfo(index, name, elType, autoId, rectText, caps.Describe(), semantic, rectPx, topLevel));
             entries.Add(new CachedEntry(pid, SafeRead(() => window.Name ?? "", ""), new TargetDescriptor(autoId, name, elType, ordinal)));
         }
 

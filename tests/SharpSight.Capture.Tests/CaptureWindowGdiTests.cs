@@ -1,7 +1,7 @@
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 using Xunit;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>
 /// window 抓取（T4 阶段=GDI 两道；T5 接入 WGC 后本断言仍成立）单测

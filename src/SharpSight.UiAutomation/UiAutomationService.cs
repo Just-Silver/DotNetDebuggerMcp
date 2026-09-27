@@ -4,7 +4,7 @@ using FlaUI.UIA3;
 
 using System.Runtime.Versioning;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// U1A UI 自动化 facade（spec §13）：gate + 按调用超时（默认 5s，agent 可经 timeoutSeconds 调大）双层护栏 +
@@ -27,6 +27,13 @@ internal sealed class UiAutomationService
     private readonly UiEventWaiter _waiter = new();
     private UIA3Automation? _automation;
 
+    /// <summary>
+    /// 元素采集代际号登记（spec §7.4）：<c>ui_find</c> 与 <c>screenshot element</c> 每次采集调用
+    /// <see cref="FrameRegistry.Next"/> 产出新帧；消费侧（<c>ui_action</c>/<c>ui_input</c>/<c>ui_get</c>）带旧帧号
+    /// 经 <see cref="FrameRegistry.Validate"/> → 拒绝。0=不校验哨兵（向后兼容）。
+    /// </summary>
+    public FrameRegistry Frames { get; } = new();
+
     private UiAutomationService()
     {
     }
@@ -40,9 +47,21 @@ internal sealed class UiAutomationService
     /// <summary>最近一次 ui_find 是否因 limit 截断（供工具层如实报告总量）。</summary>
     public bool LastFindTruncated => _locator.LastFindTruncated;
 
-    /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。</summary>
-    public Task<IReadOnlyList<UiElementInfo>> FindAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct)
-        => RunGateAsync(() => _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit), timeoutSeconds, ct);
+    /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存 + 产出新帧）。</summary>
+    public Task<UiFindResult> FindAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct)
+        => RunGateAsync(() => new UiFindResult(
+            _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit),
+            Frames.Next()), timeoutSeconds, ct);
+
+    /// <summary>
+    /// 元素级截图定位（spec §7.1）：与 <see cref="UiElementLocator.Find"/> 同一套身份/过滤/ordinal 与同一
+    /// <c>_lastFind</c> 缓存；产出新帧（每次采集一帧，spec §7.4）。供 <c>screenshot mode=element</c> 取
+    /// 结构化几何（RectPx/TopLevelHwnd）后交给 <c>SharpSight.Capture.CaptureElement</c>。
+    /// </summary>
+    public Task<UiFindResult> FindForCaptureAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct)
+        => RunGateAsync(() => new UiFindResult(
+            _locator.FindForCapture(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit),
+            Frames.Next()), timeoutSeconds, ct);
 
     /// <summary>对目标控件执行语义动作（verb；windowstate 忽略 index/name/type 定位顶层窗口）。</summary>
     public Task<UiActionResult> ActionAsync(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate, int timeoutSeconds, CancellationToken ct)

@@ -45,18 +45,75 @@ public sealed class AgentCopyGuardTests
         { nameof(UiTools.UiInput), "value" },                            // ui_input 写入值
         { nameof(UiTools.UiGet), "what" },                               // ui_get 读取状态
         { nameof(UiTools.UiWait), "超时返回当前状态" },                 // ui_wait 超时不报错
+        // 阶段一 screenshot 通用化补录（agent 唯一直接可见的契约面：固定 PNG / 模式推断 / 坐标元数据）
+        { nameof(DebugScreenshotTool.Screenshot), "固定 PNG" },         // 输出格式恒为 PNG（无 format/quality）
+        { nameof(DebugScreenshotTool.Screenshot), "auto" },             // mode 默认 auto 按参数推断
+        { nameof(DebugScreenshotTool.Screenshot), "原点" },             // 头部 origin/scale 坐标元数据
+        { nameof(DebugScreenshotTool.Screenshot), "缩放" },
+    };
+
+    // 每项 = (工具方法名, 参数名, 该参数 Description 必含关键片段) —— 参数级契约。
+    // 锁「agent 据以正确调用」的关键事实：默认值、取值域、护栏语义；改参数说明必须同步改此处。
+    public static TheoryData<string, string, string> ParamContractData => new()
+    {
+        { nameof(DebugScreenshotTool.Screenshot), "mode", "auto" },             // 模式推断默认值
+        { nameof(DebugScreenshotTool.Screenshot), "maxDimension", "1568" },     // 默认上限（铁律：改默认值须改 Description）
+        { nameof(DebugScreenshotTool.Screenshot), "maxDimension", "0=不缩放" }, // 「不缩放」逃生门必须对 agent 可见
+        { nameof(DebugScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
+        { nameof(DebugScreenshotTool.Screenshot), "includeCursor", "光标" },
+        { nameof(UiTools.UiAction), "frameId", "旧画面" },
+        { nameof(UiTools.UiInput), "frameId", "旧画面" },
+        { nameof(UiTools.UiGet), "frameId", "旧画面" },
     };
 
     [Theory]
     [MemberData(nameof(ContractData))]
     public void ToolDescription_KeepsCriticalCopy(string methodName, string fragment)
     {
-        var assembly = typeof(DebugControlTool).Assembly;
-        var method = assembly.GetTypes()
-            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
-            .Single(m => m.Name == methodName && m.GetCustomAttribute<McpServerToolAttribute>() is not null);
+        var method = FindToolMethod(methodName);
         var description = method.GetCustomAttribute<DescriptionAttribute>()?.Description;
         Assert.NotNull(description); // 工具方法必须带 [Description]
         Assert.Contains(fragment, description, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [MemberData(nameof(ParamContractData))]
+    public void ToolParameter_KeepsCriticalCopy(string methodName, string paramName, string fragment)
+    {
+        var parameter = FindToolMethod(methodName).GetParameters().Single(p => p.Name == paramName);
+        var description = parameter.GetCustomAttribute<DescriptionAttribute>()?.Description;
+        Assert.False(string.IsNullOrWhiteSpace(description)); // 参数必须带 [Description]
+        Assert.Contains(fragment, description!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 全工具「参数 Description 非空」底线护栏（对应铁律：agent 只能凭参数 [Description] 知道怎么传参，
+    /// 漏写即该参数语义对 agent 不可见）。取消令牌按约定不写 [Description]、豁免。
+    /// 只查「有没有」，不查内容新旧（内容由 ContractData/ParamContractData 锁）。
+    /// </summary>
+    [Fact]
+    public void ToolParameter_都有Description()
+    {
+        var offenders = new List<string>();
+        foreach (var type in typeof(DebugControlTool).Assembly.GetTypes())
+        {
+            if (type.GetCustomAttribute<McpServerToolTypeAttribute>() is null) continue;
+            foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            {
+                if (method.GetCustomAttribute<McpServerToolAttribute>() is null) continue;
+                foreach (var parameter in method.GetParameters())
+                {
+                    if (parameter.ParameterType == typeof(CancellationToken)) continue; // SDK 注入、按约定不写
+                    if (string.IsNullOrWhiteSpace(parameter.GetCustomAttribute<DescriptionAttribute>()?.Description))
+                        offenders.Add($"{type.Name}.{method.Name}({parameter.Name})");
+                }
+            }
+        }
+        Assert.Empty(offenders);
+    }
+
+    private static MethodInfo FindToolMethod(string methodName)
+        => typeof(DebugControlTool).Assembly.GetTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            .Single(m => m.Name == methodName && m.GetCustomAttribute<McpServerToolAttribute>() is not null);
 }

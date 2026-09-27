@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 
-namespace DotNetDebuggerMcp.Services;
+namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// U1 UI 语义反查：对被控进程主模块（apphost 的同名 dll——现代 .NET 布局元数据在 dll 而非原生 exe）做纯元数据

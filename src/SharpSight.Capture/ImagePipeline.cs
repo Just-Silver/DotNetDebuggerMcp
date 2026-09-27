@@ -2,28 +2,46 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 
-namespace DotNetDebugger.Engine.Capture;
+namespace SharpSight.Capture;
 
 /// <summary>
 /// 截图后处理唯一归属（spec §4.2：缩放/编码/裁剪/纯黑检测职责在 Engine，宿主不碰）：
-/// k 等比缩放 → 纯黑采样 → 格式编码。裁剪（region 换算）在 CaptureScreen 入口完成，本类只消费裁好的源图。
-/// k = min(1, maxDimension / max(kBase 宽, 高))；kBase 由调用方给定——window 模式=源图（窗口）自身尺寸，
+/// 双轴等比缩放 → 纯黑采样 → 格式编码。裁剪（region 换算）在 CaptureScreen 入口完成，本类只消费裁好的源图。
+/// k = min(1, maxWidth/kBase 宽, maxHeight/kBase 高)（spec §6.2；某轴上界 ≤0 视为该轴不限制，
+/// 两轴皆 ≤0 ⇒ k=1 不缩放）；kBase 由调用方给定——window 模式=源图（窗口）自身尺寸，
 /// screen/region 模式=虚拟屏原生尺寸（region 与 screen 用同一 k，保证两图空间恒一致，spec §3.1）。
 /// </summary>
 internal static class ImagePipeline
 {
-    public static CaptureResult Process(Bitmap source, Size kBase, int maxDimension,
-        string format, int quality, string? windowTitle, string sourceName, bool clippedToScreen = false)
+    /// <summary>双轴降采样系数（spec §6.2，region 换算与 <see cref="Process"/> 共用同一来源避免漂移）：
+    /// k = min(1, maxW/w, maxH/h)，maxW/maxH≤0 视为该轴不限制；两轴皆≤0 ⇒ k=1（不缩放）。</summary>
+    internal static double ScaleFactor(Size kBase, int maxWidth, int maxHeight)
     {
-        var k = Math.Min(1.0, (double)maxDimension / Math.Max(kBase.Width, kBase.Height));
+        var k = 1.0;
+        if (maxWidth > 0) k = Math.Min(k, (double)maxWidth / kBase.Width);
+        if (maxHeight > 0) k = Math.Min(k, (double)maxHeight / kBase.Height);
+        return k;
+    }
+
+    /// <param name="maxWidth">输出宽上限（原生物理像素）；≤0 视为该轴不限制。</param>
+    /// <param name="maxHeight">输出高上限（原生物理像素）；≤0 视为该轴不限制。</param>
+    /// <param name="originX">抓取矩形左上角 X（虚拟屏物理像素，spec §5）；直接回填结果。</param>
+    /// <param name="originY">抓取矩形左上角 Y；直接回填结果。</param>
+    public static CaptureResult Process(Bitmap source, Size kBase, int maxWidth, int maxHeight,
+        string? windowTitle, string sourceName, bool clippedToScreen = false,
+        int originX = 0, int originY = 0)
+    {
+        var k = ScaleFactor(kBase, maxWidth, maxHeight);
         var outW = Math.Max(1, (int)Math.Round(source.Width * k));
         var outH = Math.Max(1, (int)Math.Round(source.Height * k));
 
         using Bitmap scaled = k < 1.0 ? Resize(source, outW, outH) : CopyOf(source);
         var allBlack = IsAllBlack(scaled);
-        var bytes = Encode(scaled, format, quality);
+        var bytes = Encode(scaled);
+        // Scale = 图像像素 / 原生物理像素（spec §5）；源图宽恒 >0，无需防零。
         return new CaptureResult(bytes, scaled.Width, scaled.Height,
-            source.Width, source.Height, windowTitle, sourceName, allBlack, clippedToScreen);
+            source.Width, source.Height, windowTitle, sourceName, allBlack, clippedToScreen,
+            originX, originY, (double)scaled.Width / source.Width);
     }
 
     private static Bitmap CopyOf(Bitmap src)
@@ -71,25 +89,12 @@ internal static class ImagePipeline
         finally { bmp.UnlockBits(bd); }
     }
 
-    private static byte[] Encode(Bitmap bmp, string format, int quality)
+    /// <summary>输出**固定 PNG**（唯一格式；spec §6.1，用户裁定 2026-09-28）：无 format/quality，
+    /// 不引入任何第三方图像编码库，PNG 由 <c>System.Drawing</c> 编码。</summary>
+    private static byte[] Encode(Bitmap bmp)
     {
         using var ms = new MemoryStream();
-        switch (format.ToLowerInvariant())
-        {
-            case "png":
-                bmp.Save(ms, ImageFormat.Png);
-                break;
-            case "jpeg":
-            case "jpg":
-                var codec = ImageCodecInfo.GetImageEncoders()
-                    .First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                using (var ep = new EncoderParameter(Encoder.Quality, (long)Math.Clamp(quality, 0, 100)))
-                using (var eps = new EncoderParameters(1) { Param = { [0] = ep } })
-                    bmp.Save(ms, codec, eps);
-                break;
-            default:
-                throw new ArgumentException($"不支持的输出格式: {format}");
-        }
+        bmp.Save(ms, ImageFormat.Png);
         return ms.ToArray();
     }
 }

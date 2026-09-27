@@ -20,8 +20,6 @@
     <PackageId>DotNetDebuggerMcp</PackageId>
     <Version>2.1.0</Version>
     <ToolCommandName>DotNetDebuggerMcp</ToolCommandName>
-    <!-- U1 UI 自动化：FlaUI 5.0（版本号集中一处；见下方 FlaUI 引用段注释的原理说明） -->
-    <FlaUIVersion>5.0.0</FlaUIVersion>
     <Authors>Just-Silver</Authors>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/Just-Silver/DotNetDebuggerMcp.git</RepositoryUrl>
@@ -45,20 +43,15 @@
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
   </ItemGroup>
 
-  <!-- U1 UI 自动化（FlaUI）：宿主升 windows TFM（screenshot 计划 T1，2026-09-22）后 FlaUI 5.0 的
-       net8.0-windows7.0 资产平台匹配（TFM 10 > 包 8 同平台族，NU1202/NU1701 均不触发），
-       回归直引。此前 PackageDownload+HintPath 绕行为「PackAsTool 必须纯 net10.0」时代产物，
-       该约束已由 csproj 尾部两段 PackAsTool hack 取代（NETSDK1146）。 -->
-  <ItemGroup>
-    <PackageReference Include="FlaUI.Core" Version="$(FlaUIVersion)" />
-    <PackageReference Include="FlaUI.UIA3" Version="$(FlaUIVersion)" />
-  </ItemGroup>
-
+  <!-- U1 UI 自动化：FlaUI 引用随 SharpSight.UiAutomation 库（ProjectReference 传递解析），
+       宿主不再直引 FlaUI.Core/FlaUI.UIA3 —— FlaUIVersion 版本号集中在库 csproj。 -->
   <ItemGroup>
     <ProjectReference Include="..\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Engine\DotNetDebugger.Engine.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Session\DotNetDebugger.Session.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Web\DotNetDebugger.Web.csproj" />
+    <ProjectReference Include="..\SharpSight.Capture\SharpSight.Capture.csproj" />
+    <ProjectReference Include="..\SharpSight.UiAutomation\SharpSight.UiAutomation.csproj" />
   </ItemGroup>
 
   <!-- Web SDK 自带 AspNetCore.App 框架引用与 SWA Root 管线（合并 RCL 静态资产到 _content 路由） -->

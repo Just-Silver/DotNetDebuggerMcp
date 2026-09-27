@@ -1,9 +1,9 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 using Xunit;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>
 /// screen/region 抓取与换算单测（screenshot 计划 T4；spec §4.2 CaptureScreen、§3.1 k 换算、§5.2 屏外文案）。
@@ -22,7 +22,7 @@ public sealed class CaptureScreenTests
     {
         if (_screenAvailable is null)
         {
-            try { _ = ScreenCapture.CaptureScreen(null, 2000, "png", 80); _screenAvailable = true; }
+            try { _ = ScreenCapture.CaptureScreen(null, 2000); _screenAvailable = true; }
             catch (CaptureException) { _screenAvailable = false; }
         }
         if (_screenAvailable == false)
@@ -37,7 +37,7 @@ public sealed class CaptureScreenTests
         SkipIfScreenUnavailable();
         var vw = GetSystemMetrics(78);   // SM_CXVIRTUALSCREEN
         var vh = GetSystemMetrics(79);   // SM_CYVIRTUALSCREEN
-        var r = ScreenCapture.CaptureScreen(null, 2000, "png", 80);
+        var r = ScreenCapture.CaptureScreen(null, 2000);
         var k = Math.Min(1.0, 2000.0 / Math.Max(vw, vh));
         Assert.Equal((int)Math.Round(vw * k), r.Width);
         Assert.Equal((int)Math.Round(vh * k), r.Height);
@@ -54,7 +54,7 @@ public sealed class CaptureScreenTests
     {
         SkipIfScreenUnavailable();
         // maxDimension 极大→k=1（任何分辨率下成立），图像空间=原生空间，断言直白
-        var r = ScreenCapture.CaptureScreen(new Rectangle(10, 10, 80, 60), 10000, "png", 80);
+        var r = ScreenCapture.CaptureScreen(new Rectangle(10, 10, 80, 60), 10000);
         Assert.Equal(80, r.Width);
         Assert.Equal(60, r.Height);
         Assert.Equal(80, r.NativeWidth);
@@ -66,8 +66,8 @@ public sealed class CaptureScreenTests
     {
         SkipIfScreenUnavailable();
         // 同参数下 k 恒等：先取 screen 图像空间宽度作越界构造基准
-        var imgW = ScreenCapture.CaptureScreen(null, 2000, "png", 80).Width;
-        var r = ScreenCapture.CaptureScreen(new Rectangle(imgW - 40, 0, 200, 100), 2000, "png", 80);
+        var imgW = ScreenCapture.CaptureScreen(null, 2000).Width;
+        var r = ScreenCapture.CaptureScreen(new Rectangle(imgW - 40, 0, 200, 100), 2000);
         Assert.True(r.ClippedToScreen);                   // 部分越界=裁交集+头部注明（spec §5.2）
         Assert.True(r.Width > 0);
         Assert.True(r.Width <= imgW);                     // 交集不越出图像空间
@@ -78,9 +78,57 @@ public sealed class CaptureScreenTests
     {
         // 屏外判定在 GetDC 之前（纯换算），锁屏下也恒可跑
         var ex = Assert.Throws<CaptureException>(() =>
-            ScreenCapture.CaptureScreen(new Rectangle(99999, 99999, 10, 10), 2000, "png", 80));
+            ScreenCapture.CaptureScreen(new Rectangle(99999, 99999, 10, 10), 2000));
         Assert.Contains("完全在屏幕范围", ex.Message);   // spec §5.2 约定文案（Engine 生成、宿主透传）
         Assert.Contains("之外", ex.Message);
+    }
+
+    // ===== ①b 坐标模型（T3；spec §5 screen = origin + image / scale）=====
+    // T7 起 Process 为真双轴：MaxWidth/MaxHeight 各自限制（≤0=该轴不限），region 与 screen 共用同一 k。
+
+    [Fact]
+    public void Region_NoScale_ReportsNativeOriginAndUnitScale()
+    {
+        SkipIfScreenUnavailable();
+        var nx = GetSystemMetrics(76);   // SM_XVIRTUALSCREEN（多屏可为负）
+        var ny = GetSystemMetrics(77);
+        // 两轴上界极大 → k=1，图像空间与原生空间重合，断言直白
+        var r = ScreenCapture.CaptureScreen(new CaptureOptions
+        {
+            Clip = new Rectangle(100, 100, 400, 300), MaxWidth = 100000, MaxHeight = 100000 });
+        Assert.Equal(nx + 100, r.OriginX);   // origin=抓取矩形左上（虚拟屏物理像素）
+        Assert.Equal(ny + 100, r.OriginY);
+        Assert.Equal(1.0, r.Scale, 3);
+    }
+
+    [Fact]
+    public void FullScreen_EqualMaxWidthMaxHeight_ReportsScaleAndVirtualScreenOrigin()
+    {
+        SkipIfScreenUnavailable();
+        var nx = GetSystemMetrics(76);
+        var ny = GetSystemMetrics(77);
+        var vw = GetSystemMetrics(78);
+        var vh = GetSystemMetrics(79);
+        const int maxDim = 800;
+        var r = ScreenCapture.CaptureScreen(new CaptureOptions { MaxWidth = maxDim, MaxHeight = maxDim });
+        var k = Math.Min(1.0, (double)maxDim / Math.Max(vw, vh));
+        Assert.Equal(nx, r.OriginX);         // 全屏 origin=虚拟屏左上
+        Assert.Equal(ny, r.OriginY);
+        Assert.Equal(k, r.Scale, 3);
+        Assert.Equal((int)Math.Round(vw * k), r.Width);
+    }
+
+    [Fact]
+    public void LegacySignature_Delegates_AndFillsOriginToo()
+    {
+        SkipIfScreenUnavailable();
+        var nx = GetSystemMetrics(76);
+        var ny = GetSystemMetrics(77);
+        // 旧签名（宿主当前调用点）仍可用，且同样回填 origin（全屏=虚拟屏左上）
+        var r = ScreenCapture.CaptureScreen(null, 100000);
+        Assert.Equal(nx, r.OriginX);
+        Assert.Equal(ny, r.OriginY);
+        Assert.Equal(1.0, r.Scale, 3);
     }
 
     // ===== ② 换算纯函数（不碰 GDI，任何环境恒跑；固定假屏幕：原点可为负的双屏纵排形态）=====

@@ -1,7 +1,7 @@
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 using Xunit;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>
 /// WGC 抓取单测（screenshot 计划 T5；spec §4.3 第 1 道、§6.2/§6.4：IsSupported 探测，不支持即 Skip 不红）。
@@ -19,7 +19,7 @@ public sealed class CaptureWindowWgcTests
         var w = CaptureTestHelpers.WaitFound(app.Process.Id, TimeSpan.FromSeconds(5));
         Assert.NotNull(w);
 
-        var r = ScreenCapture.CaptureWindow(w!.Hwnd, 2000, "png", 80);
+        var r = ScreenCapture.CaptureWindow(w!.Hwnd, 2000);
 
         Assert.False(r.WasAllBlack);
         Assert.Equal("WGC", r.Source);          // 支持环境 WGC 必走通；发生回退=链路 bug

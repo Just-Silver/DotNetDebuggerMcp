@@ -28,7 +28,7 @@
 | `open-questions.md` | 开放问题清单（#0-#7 全部已解决折叠） |
 | `plans/2026-09-06-p4-closeout-web-open.md` | **P4-2 收尾计划**（web_open 幂等工具 + 默认去 --web，已完成） |
 | `plans/2026-09-09-w1-set-value.md` / `-v3-timeline.md` / `-db1-sensitive-redaction.md` / `-d1-object-drill.md` / `-d2-child-process.md` / `-db2-named-whitelist.md` / `-v4-copy-guard.md` / `-u1-ui-automation.md` / `-v1-verify-loop.md` / `-w3-data-breakpoint.md` | **实施计划 ×10（2026-09-09 批次）**：W1 debug_set / V3 debug_timeline / DB1 脱敏 / D1 debug_object / D2 子进程标注 / DB2 白名单 / V4 语料护栏 / U1 ui_* / V1 debug_verify / W3 数据断点(spike)；**前 9 份已实施完成（2026-09-09/10）；W3 spike Task0 实测定案 A/B 不可行 → 计划内 TaskD 降级收尾（spec §2 结论 + ROADMAP 转远期，零代码）** |
-| `plans/2026-09-27-screenshot-generalization-phase1.md` | **screenshot 通用化实施计划（阶段一）**：库化重构（`SharpSight.Capture`/`SharpSight.UiAutomation`）+ 寻址扩展（display/hwnd/foreground/clientArea/element）+ `origin/scale/frameId` + 双轴 1568 + WebP + `includeCursor` + 文档/握手/回归同步；Task 0 为前置 spike（WGC 帧几何/Engine 依赖/测试 seam） | **待实施**（阶段二 annotate/OCR/diff/独立 NuGet 另立计划） |
+| `plans/2026-09-27-screenshot-generalization-phase1.md` | **screenshot 通用化实施计划（阶段一）**：库化重构（`SharpSight.Capture`/`SharpSight.UiAutomation`）+ 寻址扩展（display/hwnd/foreground/clientArea/element）+ `origin/scale/frameId` + 双轴 1568 + WebP + `includeCursor` + 文档/握手/回归同步；Task 0 为前置 spike（WGC 帧几何/Engine 依赖/测试 seam） | **已实施（阶段一）**（阶段二 annotate/OCR/diff/独立 NuGet 另立计划） |
 | `archive/plans/` | 已完成计划归档：P1 改名拆分 / P2 引擎 v1 / P3 MCP 工具面 / P4-1 DocumentService / P4-2 WebUI（实际工作在 master 分支，规划所写 feature/p4-monitor 系笔误） |
 | `research/01-debugger-tech-landscape.md` | 动态调试依赖库调研：四路线能力/许可/工作量对比 + 推荐组合 |
 | `research/04-webui-realtime-stack.md` | Web 实时渲染技术调研（含 2026-09-05 Superseded：React/SSE → Blazor Server + BootstrapBlazor） |
@@ -41,6 +41,6 @@
 | `specs/2026-09-05-p4-webui.md` | **P4 WebUI 细化 spec**（已冻结） |
 | `specs/2026-09-08-w1-set-value.md` 等 10 份 | **全部待办批次 spec**（已冻结）：W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3（导航与状态见 specs/README；W2/V2 已转 ROADMAP） |
 | `specs/2026-09-22-screenshot-tool-design.md` | **screenshot 截图工具 spec**（独立截图工具，WGC+GDI、image 块双轨；**已实现**——计划 `plans/2026-09-22-screenshot-tool.md`）；其 §8 冻结项已由下一条 Superseded（部分） |
-| `specs/2026-09-27-screenshot-generalization-design.md` | **screenshot 通用化设计 spec（agent 视觉基座）**：三目标（寻址通用/图像经济/语义桥）+ 库化重构（`SharpSight.Capture`/`SharpSight.UiAutomation`）；**草案待用户复核**（依据见 `research/screenshot-generalization/`） |
+| `specs/2026-09-27-screenshot-generalization-design.md` | **screenshot 通用化设计 spec（agent 视觉基座）**：三目标（寻址通用/图像经济/语义桥）+ 库化重构（`SharpSight.Capture`/`SharpSight.UiAutomation`）；**已确认并实施（阶段一）**（依据见 `research/screenshot-generalization/`；语义桥/annotate 阶段二另立计划） |
 
 > 规划文档配套 Git 历史与已完成计划见 `archive/plans/`；归档材料移出主目录以免导航误读为进行中。

@@ -41,7 +41,7 @@
 ## 2. 范围（做 / 不做）
 
 **做**：三目标全量（§4–§7）；库化重构（§3）；宿主薄暴露（§3.4）；铁律同步（§9）；测试（§10）。
-**分批**：阶段一为低风险高收益（WebP、双轴 1568、寻址扩展、库化）；阶段二为语义桥与成本优化（OCR/SoM/diff/by-ref）——见 §14。
+**分批**：阶段一为低风险高收益（双轴 1568、寻址扩展、库化）；阶段二为语义桥与成本优化（OCR/SoM/diff/by-ref）——见 §14。
 
 ## 3. 架构（方案 C）
 
@@ -59,7 +59,7 @@ src/
 ```
 
 - **依赖方向**：`SharpSight.Capture` 与 `SharpSight.UiAutomation` 是**零宿主依赖**能力库；`Engine`/`Session`/`Web` **不反向依赖**它们；宿主是唯一组合点。三者**均不得**引用 `DotNetDebuggerMcp`。
-- **`SharpSight.Capture` 依赖**：`System.Drawing.Common`（GDI/编码/裁剪/标注）、`SixLabors.ImageSharp 3.1.12`（WebP）、TFM 自带 WinRT 投影（`Windows.Media.Ocr`）。**无 FlaUI**。
+- **`SharpSight.Capture` 依赖**：`System.Drawing.Common`（GDI/PNG 编码/裁剪/标注）、TFM 自带 WinRT 投影（`Windows.Media.Ocr`）。**无 FlaUI**；**不引入任何第三方图像编码库**（输出固定 PNG，见 §6.1）。
 - **`SharpSight.UiAutomation` 依赖**：`FlaUI.UIA3`（+ `FlaUI.Core`）。**无 Capture/Engine**。
 - **组合关系**：元素级截图 = 宿主用 `SharpSight.UiAutomation` 取 `BoundingRectangle` + 所属顶层 hwnd → 交给 `SharpSight.Capture` 从**窗口帧**裁剪；两库互不引用，由宿主接线（避免循环依赖）。
 
@@ -82,7 +82,7 @@ CaptureResult CaptureWindow(CaptureRequest req);         // hwnd；WGC→PrintWi
 CaptureResult CaptureElement(CaptureRequest req);        // 宿主给「顶层窗口 hwnd + 元素物理矩形」→ 从窗口帧裁剪
 
 // 图像管线（唯一编码/缩放/裁剪归属）
-EncodedImage Process(Image source, ImageOptions opts);   // 双轴缩放(maxWidth,maxHeight)、format png|jpeg|webp、quality、grayscale
+EncodedImage Process(Image source, ImageOptions opts);   // 双轴缩放(maxWidth,maxHeight)、PNG 编码、grayscale
 byte[] Annotate(Image source, Mark[] marks, AnnotateOptions opts); // SoM：框+编号徽标（高对比底、字号自适应）
 
 // OCR
@@ -132,8 +132,6 @@ Rect GetBoundingRectangle(int index, int frameId);  // 带代际校验；失配 
 | `maxDimension` | `int = 1568` | 单值双轴上限（0=不缩放） |
 | `maxWidth` | `int = 0` | 双轴上限（非 0 时覆盖，与 `maxHeight` 取 min 语义） |
 | `maxHeight` | `int = 0` | 同上 |
-| `format` | `string = "png"` | `png` \| `jpeg` \| `webp` |
-| `quality` | `int = 80` | jpeg/webp 质量（clamp 0-100；png 忽略） |
 | `grayscale` | `bool = false` | 灰度（默认关） |
 | `diff` | `bool = false` | 无变化检测：与上一帧比对，未变化只回文本 |
 | `includeCursor` | `bool = false` | 叠加光标（**解冻**旧 spec §8） |
@@ -159,7 +157,7 @@ Rect GetBoundingRectangle(int index, int frameId);  // 带代际校验；失配 
 - `mode=screen`：虚拟屏（`SM_X/Y/CX/CYVIRTUALSCREEN`，原点可负），GDI BitBlt。
 - `mode=region`：`regionSpace=screen` 默认；越界=裁交集 + 头部注明；完全在屏外=中文错误。
 - `mode=element`：见 §7.1。
-- **不兼容组合显式报错**（对齐 `13`）：如 `format=png` + `quality` 非默认→忽略并头部注明；`clientArea` 与 `element` 同时给→报错；`region` 与 `window`/`display` 同时给→报错。
+- **不兼容组合显式报错**（对齐 `13`）：如 `clientArea` 与 `element` 同时给→报错；`region` 与 `window`/`display` 同时给→报错。**输出恒为 PNG**（无 `format`/`quality` 参数）。
 
 ### 4.3 返回契约与头部（沿用旧 spec 双轨，扩展头字段）
 
@@ -199,9 +197,8 @@ OCR:    zh-Hans-CN（可用: en-US, zh-Hans-CN）  MaxImageDimension=10000
 ## 6. 图像管线（经济）
 
 ### 6.1 格式与编码
-- `png`（默认，无损、文字清晰）/ `jpeg`（`quality`）/ **`webp`**（`SixLabors.ImageSharp 3.1.12`，`WebpEncoder`）。
-- **GDI+ 不支持 WebP**（`ImageFormat.Webp` 静默退化 PNG）→ WebP 走 ImageSharp；PNG/JPEG 仍可走 System.Drawing。
-- **版本纪律**：ImageSharp 锁 **3.1.12**（v4 构建期强制 `sixlabors.lic`）；**不引** `ImageSharp.Drawing`；**不引** SkiaSharp（win-x64 原生 13.4MB，与 PackAsTool hack 冲突）。
+- **输出固定 PNG**（无损、文字清晰），**唯一格式**——不提供 `format`/`quality` 参数，且**不引入任何第三方图像编码库**（PNG 由 `System.Drawing.Common` 编码）。
+- **理由（用户裁定 2026-09-28）**：第三方 WebP 编码库要么**免费路径不可升级**（`SixLabors.ImageSharp`：v3 无密钥但属旧线、v4+ 强制许可证密钥），要么带来体积/打包面（SkiaSharp 原生库 ~13MB）——均不满足「面向未来、可升级、依赖洁净」。体积收益的大头与格式无关，由**双轴降采样**（§6.2）与**超限落盘**（本节末条）承担。
 - 编码后 `≥2MB`（base64 前以 base64 后长度判定，沿用现状常量 `InlineImageBase64Bytes`）或 `filePath` 非空 → 落盘只回路径。
 
 ### 6.2 双轴降采样
@@ -211,7 +208,7 @@ OCR:    zh-Hans-CN（可用: en-US, zh-Hans-CN）  MaxImageDimension=10000
 - 在**源头**降采样（抓取后立即缩，再编码），并恒回传 `缩放`。
 
 ### 6.3 灰度
-- 默认关；显式 `grayscale=true` 才转灰（ImageSharp `Grayscale()`）。收益 20–40%（有损 WebP 已丢色度），色状态会丢失。
+- 默认关；显式 `grayscale=true` 才转灰（`System.Drawing` `ImageAttributes.SetColorMatrix` 灰度矩阵，0.299/0.587/0.114）。色状态会丢失。
 
 ### 6.4 无变化检测（`diff`）
 - 一期只做「**无变化 → 不附图、只回文本**」：对**编码前原图**做 64 位感知哈希/分块比对（TTL 内同一 `targetKey`）。
@@ -261,7 +258,7 @@ OCR:    zh-Hans-CN（可用: en-US, zh-Hans-CN）  MaxImageDimension=10000
 
 | 项 | 动作 |
 |---|---|
-| **新增** `src/SharpSight.Capture/` | 新库（§3.3）；TFM `net10.0-windows10.0.22621.0`；依赖 System.Drawing.Common + ImageSharp 3.1.12 |
+| **新增** `src/SharpSight.Capture/` | 新库（§3.3）；TFM `net10.0-windows10.0.22621.0`；依赖 System.Drawing.Common（**无第三方图像库**） |
 | **新增** `src/SharpSight.UiAutomation/` | 新库（§3.3）；依赖 FlaUI.UIA3 |
 | `src/DotNetDebugger.Engine/Capture/*` | **迁出**至 `SharpSight.Capture`；Engine 去掉 System.Drawing.Common（§11 待实测） |
 | `src/DotNetDebuggerMcp/Services/Ui/*` | **迁出**至 `SharpSight.UiAutomation`；宿主改为引用 |
@@ -289,16 +286,16 @@ OCR:    zh-Hans-CN（可用: en-US, zh-Hans-CN）  MaxImageDimension=10000
 
 ## 10. 测试计划
 
-- **`SharpSight.Capture` 单测**：显示器枚举；`CaptureDisplay` 各选择器；DWM 边框 vs `GetWindowRect` 偏差；双轴缩放守恒；WebP 产物合法（`RIFF....WEBP`）+ 体积对比；灰度；`IsUnchanged` TTL；`Annotate` 编号/截断/越界；OCR 探测与 null 降级（语言缺失 `Assert.Skip`）。
+- **`SharpSight.Capture` 单测**：显示器枚举；`CaptureDisplay` 各选择器；DWM 边框 vs `GetWindowRect` 偏差；双轴缩放守恒；PNG 产物合法；灰度；`IsUnchanged` TTL；`Annotate` 编号/截断/越界；OCR 探测与 null 降级（语言缺失 `Assert.Skip`）。
 - **`SharpSight.UiAutomation` 单测**：迁移既有 U1A 测试；`FindForCapture` 身份与 `ui_find` 一致；`FrameGeneration` 单调；旧帧拒绝。
 - **宿主工具单测**：参数校验全表中文文案；返回结构（头部 + image 块）；落盘/2MB seam（旧 spec §5.1 的 seam 缺失需补，见 §11）；`diff` 命中无图；`annotate`/`ocr` 头部；`mode=element` 端到端（UiSampleApp）。
 - **GUI 来源**：复用 `tests/TestData/UiSampleApp`（不改生成脚本）。
 - **CI**：无头/无 GPU → WGC/OCR 探测失败即 `Assert.Skip`；沿用 Engine `Parallelization(None)` 与宿主 `[Collection("AppServices")]` 纪律。
-- **手工验收**：副屏/前台/客户区/hwnd/元素各截一张；WebP 体积对比；OCR 语言包缺失表现；标注图编号与 `ui_action index` 闭环。
+- **手工验收**：副屏/前台/客户区/hwnd/元素各截一张；OCR 语言包缺失表现；标注图编号与 `ui_action index` 闭环。
 
 ## 11. 待实测 Spike（实现前置）
 
-1. **WebP**：ImageSharp 3.1.12 分支产物合法 + **发布产物无原生资产**（确认纯托管、PackAsTool 工具包干净）。
+1. **PNG 产物与工具包干净**：确认发布产物未引入任何第三方图像库的原生资产（PNG 走 `System.Drawing.Common`）。
 2. **OCR**：本机非打包 exe 下 `TryCreateFromUserProfileLanguages()` 是否可用；`zh-Hans-CN` 语言包在位/缺失降级提示。
 3. **WGC 窗口帧几何**：`CreateForWindow` 帧对应 `GetWindowRect` 还是 `EXTENDED_FRAME_BOUNDS`（决定元素裁剪偏移与整窗去阴影口径）。
 4. **元素裁剪正确性**：ComboBox 弹层/popup 跨顶层窗口场景下，用元素自身顶层 hwnd 取帧是否覆盖。
@@ -313,8 +310,7 @@ OCR:    zh-Hans-CN（可用: en-US, zh-Hans-CN）  MaxImageDimension=10000
 |---|---|
 | 库化重构波及 Engine/Session/Web/host，回归面大 | 先做「物理迁移 + 命名空间替换」保行为不变（阶段一），再叠功能；全量 build + 单测回归 |
 | `SharpSight.*` windows TFM 被非 Windows TFM 引用（NU1201） | 宿主本就 windows TFM；Web/Session 不引两库 |
-| ImageSharp v4 构建期密钥 | 锁 3.1.12；`Directory.Packages.props`/csproj 显式版本 |
-| WebP 在目标 agent 客户端渲染未知 | 默认 png；webp 显式 opt-in（§11.1 实测） |
+| 只有 PNG 一种格式（无 jpeg/webp） | 已定（用户裁定 2026-09-28）：体积靠双轴降采样 + 超限落盘；若将来确需其它格式，按「可免费升级 + 许可无门 + 无原生资产」三条标准重新选型 |
 | OCR 语言包缺失是常态 | 默认关 + null 降级 + 中文安装提示（§7.2） |
 | WGC 帧几何不明导致元素裁剪偏移 | §11.3 spike 先定；spike 前元素级走 `PrintWindow` 帧（其几何=窗口矩形） |
 | `diff` 缓存与「截图不入缓存」原则冲突 | 独立小 TTL（`ChangeTracker`），与反编译缓存/`IsErrorResult` 无关；文档说明 |
@@ -325,14 +321,15 @@ OCR:    zh-Hans-CN（可用: en-US, zh-Hans-CN）  MaxImageDimension=10000
 
 - mp4 录制 / `play` 输入 DSL；NCC 模板匹配；ML 像素检测器（OmniParser 式）。
 - 跨平台 provider（X11/Wayland/portal）；HTTP 多租户鉴权；遥测。
-- **默认** by-ref `resource_link`（二期显式开关）；**默认** webp / 灰度；`delay`。
+- **默认** by-ref `resource_link`（二期显式开关）；**默认** 灰度；`delay`。
+- **其它图片格式（jpeg/webp）一律不做**：`screenshot` 输出固定 PNG，不提供 `format`/`quality` 参数。
 - `detail=text`（D8）；物理输入注入（本项目动作走 UIA 语义）。
 - 截图结果的**像素级敏感信息脱敏**（本设计不涉及；仅在文档提示可见内容原样采集）。
 - 截图结果入反编译缓存 / 写 `AgentView` / Web 展示回放（Web 冻结）。
 
 ## 14. 分批实施
 
-- **阶段一（低风险高收益）**：库化迁移（Capture→`SharpSight.Capture`、Ui→`SharpSight.UiAutomation`，行为不变）；寻址扩展（display/foreground/hwnd/clientArea/element + `origin+scale+frameId`）；双轴降采样 + 默认 1568；WebP；`includeCursor`；头部/文档/握手/回归同步。
+- **阶段一（低风险高收益）**：库化迁移（Capture→`SharpSight.Capture`、Ui→`SharpSight.UiAutomation`，行为不变）；寻址扩展（display/foreground/hwnd/clientArea/element + `origin+scale+frameId`）；双轴降采样 + 默认 1568；`includeCursor`；头部/文档/握手/回归同步。
 - **阶段二（语义桥与成本）**：`annotate`（SoM）/`ocr`/`maxMarks`；`diff` 无变化检测；`regionSpace=window`；`SharpSight.*` 独立 NuGet 发布；by-ref 评估。
 
 ## 15. 来源（本设计依据）

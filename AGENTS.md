@@ -10,13 +10,15 @@
 |---|---|---|
 | `src/DotNetDebugger.Decompiler/` | 反编译/静态分析能力库 | `src/DotNetDebugger.Decompiler/AGENTS.md` |
 | `src/DotNetDebugger.Engine/` | 动态调试引擎（ICorDebug） | `src/DotNetDebugger.Engine/AGENTS.md` |
+| `src/SharpSight.Capture/` | 截图/图像能力库（WGC+GDI 捕获、缩放/编码/裁剪） | 根 `AGENTS.md`（暂无独立指令文件） |
+| `src/SharpSight.UiAutomation/` | UI 自动化能力库（FlaUI/UIA 元素模型与定位） | 根 `AGENTS.md`（暂无独立指令文件） |
 | `src/DotNetDebugger.Session/` | 会话/状态层（宿主与 Web 共享中枢） | `src/DotNetDebugger.Session/AGENTS.md` |
 | `src/DotNetDebugger.Web/` | Blazor Web 展示面（RCL，被宿主承载） | `src/DotNetDebugger.Web/AGENTS.md` |
 | `src/DotNetDebuggerMcp/` | **宿主 exe**（MCP+CLI+Web 承载） | `src/DotNetDebuggerMcp/AGENTS.md` |
 | `src/DotNetDebuggerMcp.Client/` | 端到端验证客户端 | `src/DotNetDebuggerMcp.Client/AGENTS.md` |
-| `tests/` | 5 个测试项目 + TestData | `tests/AGENTS.md` |
+| `tests/` | 6 个测试项目 + TestData | `tests/AGENTS.md` |
 
-**依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）与 `Engine`（只依赖 ClrDebug + DbgShim.win-x64 + System.Drawing.Common）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部四库。各库**均不得反向引用宿主**。
+**依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）、`Engine`（只依赖 ClrDebug + DbgShim.win-x64）、`SharpSight.Capture`（只依赖 System.Drawing.Common，**无第三方图像库**）与 `SharpSight.UiAutomation`（只依赖 FlaUI）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部六库。各库**均不得反向引用宿主**。
 
 **文档导航**：`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-2 已完成、P5 发布进行中、specs/research 导航）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `../../Externals/DebuggerExternals/`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
 
@@ -34,7 +36,10 @@
 - 工具方法返回 `Task<string>`，一切错误（参数校验/反编译/调试失败）返回中文提示文本，**不抛异常**。——**图片类工具例外**：`screenshot` 返回 `Task<CallToolResult>`（<2MB 附 image 块、≥2MB/指定 filePath 落盘返回路径），错误仍为纯文本 content、不设 IsError（spec `docs/planning/specs/2026-09-22-screenshot-tool-design.md` §3.3）。
 - **stdout 只承载 MCP 协议消息；日志必须走 stderr**——配置在 `DotNetDebuggerMcpCmd.OnExecuteAsync` MCP 启动分支（`ClearProviders` + `AddConsole(LogToStandardErrorThreshold = Trace)`），Web host 同款（`WebHostBootstrap.Build`），**严禁删除或改动**。历史教训：`Host.CreateApplicationBuilder` 默认 Console 日志写 stdout，并发请求下日志行与 JSON-RPC 响应字节交错会撕坏协议帧（agent 客户端 12 路并发 100% 挂死）。改启动逻辑/升级 Hosting 包后重验：裸 stdio 握手后 stdout 噪声行应为 0；回归护栏 `McpSessionConcurrencyTests`。另注意：日志走 stderr 后，凡自起子进程（Engine/Session/宿主测试、`-dbg`、`LaunchAndAttachAsync`）**必须持续排空子进程 stdout/stderr**，否则把子进程卡死在日志/输出写入上。
 - **更新版本号同步三处**：`src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` `<Version>`、`.mcp/server.json`（顶层 + `packages[0].version`）、`CHANGELOG.md`（发布前把 `[Unreleased]` 转 `## [<version>] - <date>`）。CI 从 CHANGELOG 提取版本段作 GitHub Release 正文，缺段发布失败。CHANGELOG 面向包使用者，只记使用者可见变更。
-- **改 MCP 工具（新增/删除/改名/加参/改默认值/改行为）必须把「根 `README.md` + 握手简介」一并改到位、与代码改动同 commit**：① 根 `README.md` 打包为 `PackageReadmeFile`（用户看到的是打包时快照）；② 握手 `ServerInstructions` 的 `AppText.HandshakeFeatureIntro`——客户端常只注入握手、工具目录会被截断，它是 agent 判断「何时该用本服务器」的唯一通道，**新增/删除整个能力族（如 UI 自动化 `ui_*`）或独立工作流（如 `debug_verify` 场景复验）时必须同步补/删对应触发条件**，不可只在工具目录层面加工具。历史教训：曾长期只改工具不改握手，导致 `ui_*` 与 `debug_verify` 在握手中无任何触发条件、agent 根本不知道它们存在。③ 同步扩回归断言 `DotNetDebuggerMcpCmdTests.HandshakeFeatureIntro_覆盖全部能力族触发条件`（逐族断言触发条件，漏一族即失败），否则握手漏更新无人察觉。
+- **改 MCP 工具（新增/删除/改名/加参/改默认值/改行为）必须同步「agent 真正看到的两处说明」——工具 `[Description]` 与服务器握手——与代码改动同 commit**：
+  - ① **工具 `[Description]`（硬要求）**：agent 在工具目录里读到的**唯一**说明。参数/默认值/行为一变就得跟着改——**改默认值、改行为最容易漏**，漏了 agent 会按旧说明调用（属静默失效）。
+  - ② **握手 `ServerInstructions` 的 `AppText.HandshakeFeatureIntro`（硬要求）**：客户端常只注入握手、工具目录会被截断，它是 agent 判断「何时该用本服务器」的**唯一通道**。**新增/删除整个能力族（如 UI 自动化 `ui_*`）或独立工作流（如 `debug_verify` 场景复验）时必须同步补/删对应触发条件**，不可只在工具目录层面加工具。历史教训：曾长期只改工具不改握手，导致 `ui_*` 与 `debug_verify` 在握手中无任何触发条件、agent 根本不知道它们存在。护栏：握手改动同步扩回归断言 `DotNetDebuggerMcpCmdTests.HandshakeFeatureIntro_覆盖全部能力族触发条件`（逐族断言触发条件，漏一族即失败）。
+  - ③ 根 `README.md`（**面向包使用者**，非 agent 通道）：打包为 `PackageReadmeFile`，用户看到的是打包时快照——改工具面时**也应**同步，别落下，但它不承担 agent 可发现性。
 - **跨层/多处重复使用的字面量必须定义成常量**，改文案只在常量类改一处：`Configuration/AppText.cs`（转发 Decompiler 库 `DecompilerText` 单一来源）、`Configuration/CacheSignatures.cs`（缓存签名前缀 + `\u001F` 分隔符；**改动必须同步 `CacheStatsTool.ToolNames`**）、`MetadataNaming.FormatToken`、`OutputFormatter.MemberLine`（`#MEMBER` 行）、`SectionBuilder.EmptyPlaceholder`（`（无）`）。新增工具/提示先查这些常量类。
 - **新增错误提示必须扩展 `InProcessDecompiler.IsErrorResult`**（七类前缀判定），否则管道会把错误提示误当正常结果写入缓存。
 - 工程惯例：修改逻辑后 build 通过 + 单元测试通过 + 本机跑 Client/CLI 确认输出（CI 的 build.yml 只做 build/test/发布，不跑端到端）。

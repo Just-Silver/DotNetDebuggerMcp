@@ -1,12 +1,29 @@
 using FlaUI.Core.AutomationElements;
 
+using System.Drawing;
 using System.Runtime.Versioning;
 
-namespace DotNetDebuggerMcp.Services.Ui;
+namespace SharpSight.UiAutomation;
 
 // ===== U1A UI 自动化模型（组件共享，集中定义） =====
 
-/// <summary>ui_find 命中控件清单行：Index 供 ui_action/ui_input/ui_get 复用；Patterns 为能力清单（逗号串，只列 IsSupported），Semantic 为同名成员语义候选（可为 null）。</summary>
+/// <summary>
+/// ui_find 命中控件清单行：Index 供 ui_action/ui_input/ui_get 复用；Patterns 为能力清单（逗号串，只列 IsSupported），
+/// Semantic 为同名成员语义候选（可为 null）。
+/// <para><paramref name="Rect"/> 是展示用字符串（旧输出保留）；<paramref name="RectPx"/> 是同一几何的
+/// <b>结构化物理像素矩形</b>（<see cref="UiElementLocator.FindForCapture"/> 填，供元素级截图裁剪）；
+/// <paramref name="TopLevelHwnd"/> 是该元素 <c>GetAncestor(GA_ROOT)</c> 的顶层窗口句柄（供 Capture 从窗口帧裁剪）。
+/// 二者仅 <c>FindForCapture</c> 填充，ui_find（<see cref="UiElementLocator.Find"/>）恒为默认值。</para>
+/// </summary>
+/// <param name="Index">清单内序号（0 基）。</param>
+/// <param name="Name">UIA Name。</param>
+/// <param name="Type">UIA ControlType 名。</param>
+/// <param name="AutoId">AutomationId。</param>
+/// <param name="Rect">展示用几何字符串（「x,y WxH」或「不可见/无几何」）。</param>
+/// <param name="Patterns">能力清单（逗号串）。</param>
+/// <param name="Semantic">同名成员语义候选（可为 null）。</param>
+/// <param name="RectPx">结构化物理像素矩形（<c>FindForCapture</c> 填；其余为 <see cref="Rectangle.Empty"/>）。</param>
+/// <param name="TopLevelHwnd">元素自身 <c>GetAncestor(GA_ROOT)</c> 顶层窗口句柄（<c>FindForCapture</c> 填；其余为 0）。</param>
 internal sealed record UiElementInfo(
     int Index,
     string Name,
@@ -14,10 +31,19 @@ internal sealed record UiElementInfo(
     string AutoId,
     string Rect,
     string Patterns,
-    string? Semantic);
+    string? Semantic,
+    Rectangle RectPx = default,
+    IntPtr TopLevelHwnd = default);
 
 /// <summary>ui_action/ui_input 结果：Message 注明实际动作与命中的 pattern（「已 {verb}（{pattern}）」）。</summary>
 internal sealed record UiActionResult(bool Ok, string Message);
+
+/// <summary>
+/// 元素采集中间结果（<c>ui_find</c> / <c>screenshot element</c> 共用）：<see cref="Elements"/> 为本次清单，
+/// <see cref="FrameId"/> 为本次采集产出的代际号（<see cref="FrameRegistry.Next"/>，spec §7.4）。工具层把
+/// <see cref="FrameId"/> 回显给 agent；消费侧（ui_action/ui_input/ui_get/screenshot element）带旧帧号 → 拒绝。
+/// </summary>
+internal sealed record UiFindResult(IReadOnlyList<UiElementInfo> Elements, int FrameId);
 
 /// <summary>
 /// ui_get 结果：Value=展示值、Raw=原始值兜底、ControlName=目标控件 Name（空则 AutomationId，供输出层

@@ -1,4 +1,4 @@
-using DotNetDebuggerMcp.Services.Ui;
+using SharpSight.UiAutomation;
 using System.Runtime.Versioning;
 using Xunit;
 
@@ -46,6 +46,14 @@ public sealed class UiElementLocatorPureTests
         Assert.NotEqual(UiElementLocator.OrdinalKey("", "保存", "Button"), UiElementLocator.OrdinalKey("", "保存", "MenuItem"));
         Assert.NotEqual(UiElementLocator.OrdinalKey("a", "x", "Button"), UiElementLocator.OrdinalKey("b", "x", "Button"));
         Assert.NotEqual(UiElementLocator.OrdinalKey("a", "x", "Button"), UiElementLocator.OrdinalKey("a", "y", "Button"));
+    }
+
+    [Fact]
+    public void SkipBecauseOffscreen_OnlyForConfirmedOffscreen()
+    {
+        // R13：ui_find 与 screenshot element 共用的离屏过滤谓词——true 才跳过；读取失败由调用方兜底 false（不筛）。
+        Assert.True(UiElementLocator.SkipBecauseOffscreen(isOffscreen: true));
+        Assert.False(UiElementLocator.SkipBecauseOffscreen(isOffscreen: false));
     }
 
     [Fact]
