@@ -60,6 +60,11 @@ internal sealed class UiElementLocator
     internal static string OrdinalKey(string autoId, string name, string controlType)
         => autoId + "\u001F" + name + "\u001F" + controlType;
 
+    /// <summary>顶层窗口句柄择优（纯函数，可单测）：元素自身根窗优先，否则回退所属顶层窗口——
+    /// 覆盖 XAML/UWP/WPF/Web 等无 HWND 控件（其 <c>NativeWindowHandle=0</c>）。</summary>
+    internal static IntPtr PreferTopLevel(IntPtr elementRoot, IntPtr windowHwnd)
+        => elementRoot != IntPtr.Zero ? elementRoot : windowHwnd;
+
     /// <summary>
     /// R13 共用离屏过滤谓词（spec §4.4/§7.1）：<c>ui_find</c> 与 <c>screenshot element</c> 走同一采集路径，此谓词
     /// 只有一处调用点，两路径行为必然一致；读取失败由调用方兜底为 false（未确认离屏不筛）。
@@ -99,6 +104,9 @@ internal sealed class UiElementLocator
         var semanticByName = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
         var ordinals = new Dictionary<string, int>(StringComparer.Ordinal);
         var truncated = false;
+
+        // 本次定位到的顶层窗口句柄：元素自身无 HWND 时作为截图裁剪源回退（XAML/UWP/Web 控件）。
+        var windowHwnd = SafeRead(() => window.Properties.NativeWindowHandle.ValueOrDefault, IntPtr.Zero);
 
         foreach (var el in all)
         {
@@ -153,8 +161,11 @@ internal sealed class UiElementLocator
             {
                 rectPx = rect;
                 var hwnd = SafeRead(() => el.Properties.NativeWindowHandle.ValueOrDefault, IntPtr.Zero);
-                if (hwnd != IntPtr.Zero)
-                    topLevel = SafeRead(() => GetAncestor(hwnd, GaRoot), hwnd);
+                // 元素自身带窗口句柄（Win32/WinForms 控件）→ 取其根窗；
+                // 否则（XAML/UWP/WPF/Electron/Web 等无 HWND 控件，NativeWindowHandle=0）→ 回退所属顶层窗口，
+                // 由 CaptureElement 把元素矩形与该窗口帧求交裁剪（修「hwnd=0 一律失败」，2026-09-28）。
+                var elementRoot = hwnd != IntPtr.Zero ? SafeRead(() => GetAncestor(hwnd, GaRoot), hwnd) : IntPtr.Zero;
+                topLevel = PreferTopLevel(elementRoot, windowHwnd);
             }
             infos.Add(new UiElementInfo(index, name, elType, autoId, rectText, caps.Describe(), semantic, rectPx, topLevel));
             entries.Add(new CachedEntry(pid, SafeRead(() => window.Name ?? "", ""), new TargetDescriptor(autoId, name, elType, ordinal)));

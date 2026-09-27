@@ -124,7 +124,7 @@ Rectangle GetBoundingRectangle(int index, int frameId);  // 带代际校验；�
 
 - `mode=auto` 推断优先级：`element` → `hwnd` → `windowTitle`/`processId` → `region` → `display` → 否则 `screen`。
 - `mode=foreground`：`GetForegroundWindow` + `GetWindowThreadProcessId`（锁屏/安全桌面返回 NULL → 中文原因）。
-- `mode=window`：整窗默认取 **`DWMWA_EXTENDED_FRAME_BOUNDS`**（去阴影、物理像素），失败回退 `GetWindowRect`；`clientArea=true` 走 `GetClientRect`+`ClientToScreen`。定位规则沿用旧 spec（hwnd 优先、pid 次之、标题兜底、空则活动会话 pid 兜底）。
+- `mode=window`：整窗默认取 **`DWMWA_EXTENDED_FRAME_BOUNDS`**（去阴影、物理像素），失败回退 `GetWindowRect`；`clientArea=true` 走 `GetClientRect`+`ClientToScreen`。定位规则沿用旧 spec（hwnd 优先、pid 次之、标题兜底、空则活动会话 pid 兜底）。**pid 命中多个可见根窗时按「非工具窗（`WS_EX_TOOLWINDOW`）→ 有标题 → 面积最大」择优**（2026-09-28 修：Z 序最前常是 1×1 缩略图/任务栏类助手窗，会截出 1×1 黑图却貌似成功）；**标题检索保持 Z 序最前**。
 - `mode=display`：`EnumDisplayMonitors` 枚举 → `primary`/`left`/`right` 解析；**1 基**对外编号，头部回显设备名 + 矩形，避免枚举序歧义。
 - `mode=screen`：虚拟屏（`SM_X/Y/CX/CYVIRTUALSCREEN`，原点可负），GDI BitBlt。
 - `mode=region`：图像素空间求交；越界=裁交集 + 头部注明（`已裁至屏幕交集`）；完全屏外=中文错误。
@@ -143,12 +143,15 @@ Rectangle GetBoundingRectangle(int index, int frameId);  // 带代际校验；�
 目标:   显示器 2 "\\.\DISPLAY2" (1920,0 1920x1080)   ← 或 窗口 "标题" (pid=…) / 前台窗口 / 屏幕 / 屏幕区域 / 元素 Button "保存"
 尺寸:   3440x1440                                   ← 图像=抓取区原生像素（不做缩放）
 原点:   (0,0)                                        ← 抓取矩形左上在虚拟屏物理像素的坐标
+选择:   命中 13 个可见窗口 → 已选 hwnd=27201368 2006x984 "test - 文件资源管理器"   ← 仅多命中时（事实行）
+备注:   目标窗口已最小化——截图为占位/残影画面，非真实界面                        ← 仅最小化/无标题/极小窗/参数越界时
 帧:     15                                           ← 仅 element 模式（代际护栏）
 来源:   WGC                                          ← WGC | PrintWindow | BitBlt（+「（光标未叠加）」备注）
 备注:   画面为纯黑（目标可能未渲染）                  ← 仅全黑时
 ---
 ```
-> `原点` 即 §5 的 `origin`；`帧` 即 `frameId`。全部为纯文本行，不含行号。
+> `原点` 即 §5 的 `origin`；`帧` 即 `frameId`。`选择:` 给出**实际选中的 hwnd/尺寸**（选错也能被 agent 一眼看出）；
+> `备注:` 为客观事实行（无标题/极小窗/最小化/参数越界）。全部为纯文本行，不含行号。
 
 ### 4.4 与 `ui_*` 的边界
 
@@ -179,7 +182,7 @@ Rectangle GetBoundingRectangle(int index, int frameId);  // 带代际校验；�
 ### 7.1 元素级截图与元素身份（D5/D9）
 - 元素来源：`SharpSight.UiAutomation.UiElementLocator.FindForCapture`（同 `ui_find` 一套身份：pid/窗口 → `FindAllDescendants` → 过滤 → 能力探测 → ordinal）。
 - 遮挡安全：**先拿元素所属顶层窗口的帧**（WGC/PrintWindow），再把元素矩形从虚拟屏物理像素换算为帧内坐标裁剪。
-- 元素可能属**另一顶层窗口**（ComboBox 弹层/popup/tooltip）→ 用元素自身 `GetAncestor(GA_ROOT)` 的 hwnd 取帧；裁剪与窗口帧求交，部分越界 → `ClippedToScreen=true`（头部注明「已裁至窗口帧」）。
+- 元素可能属**另一顶层窗口**（ComboBox 弹层/popup/tooltip）→ 用元素自身 `GetAncestor(GA_ROOT)` 的 hwnd 取帧；**元素无独立 HWND 时（XAML/UWP/WPF/Electron/Web 控件，`NativeWindowHandle=0`）回退元素所属顶层窗口帧**（2026-09-28 修：此前一律报 `hwnd=0` 失败，等于只有 Win32/WinForms 控件可截）；裁剪与窗口帧求交，部分越界 → `ClippedToScreen=true`（头部注明「已裁至窗口帧」）。
 - 离屏：`IsOffscreen=true` 过滤（与 `ui_find` 同一过滤，index 同源）。
 - `element` 为空时**显式报错**，绝不静默截取首个元素。
 
@@ -230,6 +233,7 @@ Rectangle GetBoundingRectangle(int index, int frameId);  // 带代际校验；�
 | `SharpSight.*` windows TFM 被非 Windows TFM 引用（NU1201） | 宿主本就 windows TFM；Web/Session 不引两库 |
 | 只有 PNG 一种格式 | 已定（用户裁定 2026-09-28）；不缩放，体积由「超限落盘」承担；若将来确需其它格式，按「可免费升级 + 许可无门 + 无原生资产」三条标准重新选型 |
 | WGC 帧几何不明导致元素裁剪偏移 | 已实测：WGC 首帧几何 == `DWMWA_EXTENDED_FRAME_BOUNDS`（与 `GetWindowRect` 差阴影/不可见边框），故 WGC 源 origin=扩展边框左上、GDI 回退源 origin=窗口矩形左上 |
+| pid 多窗导致截错窗口（1×1 助手窗）/ 无 HWND 元素截不到 | **已修（2026-09-28）**：pid 检索按「非工具窗→有标题→面积最大」择优 + 头部 `选择:` 事实行；element 无 HWND 时回退所属顶层窗口帧 |
 | **安全：截图可能含敏感信息 / 屏幕内容是不可信输入** | 本工具**不做**像素级脱敏；README/握手注明「截图会原样采集可见内容」；agent 侧应把屏幕内容视为**不可信数据**（防提示注入） |
 
 ## 13. 明确不做（YAGNI / 冻结）

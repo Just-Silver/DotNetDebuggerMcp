@@ -15,7 +15,9 @@ internal static class CaptureText
     public const string RegionMalformed =
         "region 格式应为 \"x,y,w,h\"（坐标为 mode=screen 返回图像素，原点左上）。";
 
-    /// <summary>display 选择器无效（越界或未知名称）。</summary>
+    /// <summary>region 格式正确但取值非法（宽或高 ≤ 0）——与「格式错」分开报，避免 agent 反复改格式。</summary>
+    public const string RegionSizeInvalid =
+        "region 的宽/高必须为正整数（当前 w 或 h ≤ 0；\"x,y,w,h\" 格式本身没错）。";
     public static string DisplayInvalid(string selector, int count)
         => $"display 无效：\"{selector}\"（共 {count} 台显示器；可用 1..{count} 或 primary/left/right）。";
 

@@ -42,6 +42,12 @@ public static class ScreenCapture
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int maxCount);
 
+    // 扩展样式（GWL_EXSTYLE=-20；WS_EX_TOOLWINDOW=0x80）：用于「可截主窗」评分时排除缩略图/任务栏类助手窗。
+    private const int GwlExStyle = -20;
+    private const long WsExToolWindow = 0x00000080L;
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
+
     /// <summary>幂等设置进程 DPI 感知（首次调用生效；失败=已由系统/调用方设置，容忍）。</summary>
     internal static void EnsureDpi()
     {
@@ -54,22 +60,29 @@ public static class ScreenCapture
     /// 枚举顶层可见窗口定位目标主窗（spec §3.1 定位规则，语义钉死「pid 优先、标题兜底」的择一）：
     /// <c>processId&gt;0</c> → 仅按 pid 匹配（titleSubstring 被忽略）；
     /// <c>processId=0</c> 且标题非空 → 仅按标题子串（忽略大小写，跨进程搜索）；
-    /// 双空 → null（宿主保证先做会话兜底、不传双空）。
-    /// EnumWindows 顺序即 Z 序（顶→底），首个命中即 Z 序最前主窗；MatchCount=全部命中数。
+    /// 双空 → null（宿主保证先做会话兜底、不传双空）。MatchCount=全部命中数。
+    /// <para><b>pid 检索的择优选</b>（2026-09-28，修「1×1 助手窗假成功」）：命中多个可见根窗时**不再取 Z 序最前**，
+    /// 而按「<b>非 WS_EX_TOOLWINDOW</b> → <b>有标题</b> → <b>面积最大</b>」分层评分，同分回退 Z 序最前——
+    /// 否则大量应用（资源管理器等）的 Z 序最前是 1×1 缩略图/任务栏类助手窗，会截出 1×1 黑图却貌似成功。</para>
+    /// <para><b>标题检索保持 Z 序最前</b>（命中者标题已匹配，语义不变）。</para>
     /// </summary>
     public static WindowHandleInfo? FindMainWindow(int processId, string titleSubstring)
     {
         EnsureDpi();
         if (processId <= 0 && string.IsNullOrWhiteSpace(titleSubstring)) return null;
 
-        WindowHandleInfo? first = null;
+        WindowHandleInfo? first = null;     // Z 序最前（标题检索口径 & pid 检索兜底）
+        WindowHandleInfo? best = null;      // pid 检索：分层评分最优
+        var bestScore = long.MinValue;
         var count = 0;
+        var byPid = processId > 0;
+
         EnumWindows((h, _) =>
         {
             if (!IsWindowVisible(h) || GetAncestor(h, GaRoot) != h) return true;
             // 注意：返回值是线程 id，进程 id 只能取 out 参数（spike 实录 bug：拿返回值比 pid 会漏窗口）
             GetWindowThreadProcessId(h, out var pid);
-            if (processId > 0)
+            if (byPid)
             {
                 if (pid != (uint)processId) return true;
             }
@@ -80,20 +93,22 @@ public static class ScreenCapture
                 if (sb.ToString().IndexOf(titleSubstring, StringComparison.OrdinalIgnoreCase) < 0) return true;
             }
             count++;
-            if (first is null)
+            var info = InfoOf(h, (int)pid, count);
+            first ??= info;
+            if (byPid)
             {
-                GetWindowRect(h, out var r);
-                var tsb = new StringBuilder(256);
-                GetWindowText(h, tsb, tsb.Capacity);
-                first = new WindowHandleInfo(h, tsb.ToString(),
-                    new System.Drawing.Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top),
-                    IsIconic(h), (int)pid, count);
+                // 分层评分：tier（非工具窗 2 / 有标题 1）权重量级远大于面积 → 先分层、层内再比面积。
+                var tier = (IsToolWindow(h) ? 0L : 2L) + (info.Title.Length > 0 ? 1L : 0L);
+                var area = (long)Math.Max(0, info.Rect.Width) * Math.Max(0, info.Rect.Height);
+                var score = tier * 1_000_000_000L + area;
+                if (score > bestScore) { bestScore = score; best = info; }
             }
             return true;   // 继续枚举以统计 MatchCount
         }, IntPtr.Zero);
 
-        if (first is null) return null;
-        return first with { MatchCount = count };   // 补全计数，免二次 Win32 调用
+        var chosen = byPid ? best : first;
+        if (chosen is null) return null;
+        return chosen with { MatchCount = count };   // 补全计数，免二次 Win32 调用
     }
 
     /// <summary>
@@ -125,13 +140,24 @@ public static class ScreenCapture
     /// <summary>取窗口基础信息（定位/头部/抓取共用）；hwnd 无效返回 null。</summary>
     internal static WindowHandleInfo? GetWindowInfo(IntPtr hwnd)
     {
-        if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var r)) return null;
-        var tsb = new StringBuilder(256);
-        GetWindowText(hwnd, tsb, tsb.Capacity);
+        if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out _)) return null;
         GetWindowThreadProcessId(hwnd, out var pid);
-        return new WindowHandleInfo(hwnd, tsb.ToString(),
+        return InfoOf(hwnd, (int)pid, matchCount: 1);
+    }
+
+    /// <summary>是否工具窗（<c>WS_EX_TOOLWINDOW</c>）：缩略图/任务栏/输入法等助手窗多属此类，不应作为截图主窗。</summary>
+    internal static bool IsToolWindow(IntPtr hwnd)
+        => (GetWindowLongPtr(hwnd, GwlExStyle).ToInt64() & WsExToolWindow) != 0;
+
+    /// <summary>按 hwnd 填 <see cref="WindowHandleInfo"/>（定位共用；调用方负责先校验 hwnd 有效）。</summary>
+    private static WindowHandleInfo InfoOf(IntPtr hwnd, int pid, int matchCount)
+    {
+        GetWindowRect(hwnd, out var r);
+        var sb = new StringBuilder(256);
+        GetWindowText(hwnd, sb, sb.Capacity);
+        return new WindowHandleInfo(hwnd, sb.ToString(),
             new System.Drawing.Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top),
-            IsIconic(hwnd), (int)pid, MatchCount: 1);
+            IsIconic(hwnd), pid, matchCount);
     }
 
     /// <summary>
@@ -382,7 +408,7 @@ public static class ScreenCapture
         if (elementRectPx.IsEmpty)
             throw new CaptureException("元素矩形为空：无法裁剪（目标元素不可见/无几何）。");
         var info = FindWindowByHwnd(topLevelHwnd)
-            ?? throw new CaptureException($"顶层窗口句柄无效或不可见（hwnd={topLevelHwnd}）：元素截图需传元素自身 GetAncestor(GA_ROOT) 的顶层窗口。");
+            ?? throw new CaptureException($"顶层窗口句柄无效或不可见（hwnd={topLevelHwnd}）：元素截图需要可用的顶层窗口句柄（元素自身或其所属窗口）。");
         var bounds = GetWindowBounds(topLevelHwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
 
         var (bmp, source, originX, originY) = CaptureWindowBits(topLevelHwnd, info, bounds, options.IncludeCursor);

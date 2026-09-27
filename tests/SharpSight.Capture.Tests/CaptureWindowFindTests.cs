@@ -37,4 +37,20 @@ public sealed class CaptureWindowFindTests
         Assert.Null(ScreenCapture.FindMainWindow(processId: 4185100, titleSubstring: ""));
         Assert.Null(ScreenCapture.FindMainWindow(0, "这个标题一定不存在-" + Guid.NewGuid()));
     }
+
+    [Fact]
+    public void FindMainWindow_ByPid_PrefersTitledBigWindow_OverToolWindow()
+    {
+        // 回归（2026-09-28，P0）：资源管理器等进程的 Z 序最前是 1×1 缩略图/任务栏类助手窗（无标题、WS_EX_TOOLWINDOW）；
+        // pid 检索必须择优（非工具窗 → 有标题 → 面积最大），不得再选中 1×1 或空标题窗。
+        var explorer = System.Diagnostics.Process.GetProcessesByName("explorer").FirstOrDefault();
+        if (explorer is null) Assert.Skip("本环境没有 explorer 进程（非交互桌面会话），spec §6.4 预案");
+
+        var w = ScreenCapture.FindMainWindow(explorer!.Id, "");
+        if (w is null) Assert.Skip("explorer 无可见根窗（锁屏/无桌面），spec §6.4 预案");
+
+        Assert.False(string.IsNullOrEmpty(w!.Title));                      // 曾经会选中无标题的 1×1 助手窗
+        Assert.True(w.Rect.Width >= 32 && w.Rect.Height >= 32, $"{w.Rect.Width}x{w.Rect.Height}");
+        Assert.True(w.MatchCount >= 1);
+    }
 }

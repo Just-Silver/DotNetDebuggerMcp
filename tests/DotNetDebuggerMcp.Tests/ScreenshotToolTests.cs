@@ -96,8 +96,11 @@ public sealed class ScreenshotToolTests
     public async Task RegionMalformed_AllThreeForms_ReturnSpecMessage()
     {
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();
-        const string msg = "region 格式应为 \"x,y,w,h\"（坐标为 mode=screen 返回图像素，原点左上）。";
-        foreach (var bad in new[] { "1,2,3", "a,b,c,d", "1,2,-3,4", "" })
+        const string malformed = "region 格式应为 \"x,y,w,h\"（坐标为 mode=screen 返回图像素，原点左上）。";
+        const string sizeInvalid = "region 的宽/高必须为正整数（当前 w 或 h ≤ 0；\"x,y,w,h\" 格式本身没错）。";
+
+        // 段数不够 / 非整数 / 空 → 格式错
+        foreach (var bad in new[] { "1,2,3", "a,b,c,d", "" })
         {
             var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
             {
@@ -105,7 +108,19 @@ public sealed class ScreenshotToolTests
                 ["region"] = bad,
             });
             Assert.True(r.IsError != true, r.Text());
-            Assert.Equal(msg, r.Text());
+            Assert.Equal(malformed, r.Text());
+        }
+
+        // 宽/高非正 → 取值错（P6：格式没问题，避免 agent 反复改格式）
+        foreach (var bad in new[] { "1,2,-3,4", "1,2,0,4", "0,0,0,0" })
+        {
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "region",
+                ["region"] = bad,
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Equal(sizeInvalid, r.Text());
         }
     }
 
@@ -148,14 +163,18 @@ public sealed class ScreenshotToolTests
     [Fact]
     public void TryParseRegion_FourInts_PositiveSizes()
     {
-        Assert.True(ScreenshotTool.TryParseRegion("10,20,30,40", out var rect));
+        Assert.True(ScreenshotTool.TryParseRegion("10,20,30,40", out var rect, out _));
         Assert.Equal(new Rectangle(10, 20, 30, 40), rect);
-        Assert.True(ScreenshotTool.TryParseRegion(" 1 , 2 , 3 , 4 ", out var trimmed));
+        Assert.True(ScreenshotTool.TryParseRegion(" 1 , 2 , 3 , 4 ", out var trimmed, out _));
         Assert.Equal(new Rectangle(1, 2, 3, 4), trimmed);
-        Assert.False(ScreenshotTool.TryParseRegion("1,2,3", out _));
-        Assert.False(ScreenshotTool.TryParseRegion("1,2,0,4", out _));
-        Assert.False(ScreenshotTool.TryParseRegion("1,2,3,-4", out _));
-        Assert.False(ScreenshotTool.TryParseRegion("a,b,c,d", out _));
+        Assert.False(ScreenshotTool.TryParseRegion("1,2,3", out _, out var malformed));     // 段数不够 → 格式错
+        Assert.False(malformed);
+        Assert.False(ScreenshotTool.TryParseRegion("a,b,c,d", out _, out var notNumber));   // 非整数 → 格式错
+        Assert.False(notNumber);
+        Assert.False(ScreenshotTool.TryParseRegion("1,2,0,4", out _, out var zeroW));       // 取值非法（w=0）
+        Assert.True(zeroW);
+        Assert.False(ScreenshotTool.TryParseRegion("1,2,3,-4", out _, out var negH));       // 取值非法（h<0）
+        Assert.True(negH);
     }
 
     private static DisplayInfo Display(int index, bool primary, int x, int y, int w, int h)
@@ -236,6 +255,35 @@ public sealed class ScreenshotToolTests
         });
         Assert.True(r.IsError != true, r.Text());
         Assert.Contains("需提供 element", r.Text());
+    }
+
+    [Fact]
+    public async Task Window_ByMultiWindowPid_SelectsRealWindow_NotTinyHelper()
+    {
+        // P0 回归（2026-09-28）：explorer 的 Z 序最前是 1×1 工具窗；必须在头部给出 `选择:` 行且选中窗口尺寸正常。
+        var explorer = System.Diagnostics.Process.GetProcessesByName("explorer").FirstOrDefault();
+        if (explorer is null) Assert.Skip("本环境没有 explorer 进程（非交互桌面会话），spec §6.4 预案");
+
+        var tmp = Path.Combine(Path.GetTempPath(), $"screenshot-pid-select-{Guid.NewGuid():N}.png");
+        try
+        {
+            await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "window",
+                ["processId"] = explorer!.Id,
+                ["filePath"] = tmp,      // 落盘避免大图内联
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("选择:", r.Text());
+            var m = System.Text.RegularExpressions.Regex.Match(r.Text(), @"尺寸:\s*(\d+)x(\d+)");
+            Assert.True(m.Success, r.Text());
+            Assert.True(int.Parse(m.Groups[1].Value) > 100 && int.Parse(m.Groups[2].Value) > 100, r.Text());
+        }
+        finally
+        {
+            if (File.Exists(tmp)) File.Delete(tmp);
+        }
     }
 
     // ===== 代际护栏（ui_* frameId，spec §7.4；无 GUI，校验先于进程解析）=====

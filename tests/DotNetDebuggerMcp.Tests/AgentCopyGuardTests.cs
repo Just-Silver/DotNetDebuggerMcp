@@ -51,6 +51,8 @@ public sealed class AgentCopyGuardTests
         { nameof(ScreenshotTool.Screenshot), "auto" },             // mode 默认 auto 按参数推断
         { nameof(ScreenshotTool.Screenshot), "原点" },             // 头部 origin 坐标元数据（图像恒原生 1:1）
         { nameof(ScreenshotTool.Screenshot), "不做任何缩放" },     // 「不缩放」= agent 必须知道的行为（尺寸交模型侧，防双重处理）
+        { nameof(ScreenshotTool.Screenshot), "仅 element 模式输出" },   // `帧` 字段只在 element 模式出现（P4 说明与输出对齐）
+        { nameof(ScreenshotTool.Screenshot), "window 整窗走 WGC" },     // 大图落盘预警：WGC 整窗 PNG 明显大于 screen
         // 视觉族发现工具（只为 screenshot 寻址服务；只读）
         { nameof(ScreenshotDisplaysTool.ScreenshotDisplays), "显示器" },              // 列显示器清单
         { nameof(ScreenshotWindowsTool.ScreenshotWindows), "可见顶层窗口" },          // 列窗口清单
@@ -61,6 +63,10 @@ public sealed class AgentCopyGuardTests
     public static TheoryData<string, string, string> ParamContractData => new()
     {
         { nameof(ScreenshotTool.Screenshot), "mode", "auto" },             // 模式推断默认值
+        { nameof(ScreenshotTool.Screenshot), "processId", "非工具窗→有标题→面积最大" },   // pid 多窗择优（P0：防 1×1 助手窗）
+        { nameof(ScreenshotTool.Screenshot), "element", "自动按其所属顶层窗口帧裁剪" },    // 无 HWND 控件回退（P1）
+        { nameof(ScreenshotTool.Screenshot), "frameId", "所有模式都校验" },               // 护栏作用域（P2 说明澄清）
+        { nameof(ScreenshotTool.Screenshot), "frameId", "普通 screen/region/window 截图不会" },  // 谁推进帧号（实测口径）
         { nameof(ScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
         { nameof(ScreenshotTool.Screenshot), "includeCursor", "光标" },
         { nameof(ScreenshotTool.Screenshot), "filePath", "临时目录" },          // 落盘基准=临时目录（防污染调用方项目）
