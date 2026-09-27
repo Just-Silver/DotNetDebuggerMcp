@@ -23,18 +23,16 @@ public static class DebugScreenshotTool
 {
     /// <summary>截取窗口/屏幕画面返回图片（window/screen/region 三模式；参数语义与默认值见各参数 <c>[Description]</c>）。</summary>
     [McpServerTool]
-    [Description("截取窗口/屏幕画面返回图片，供多态模型观察 UI 状态做自动化冒烟。独立工具，不要求调试会话。" +
+    [Description("截取窗口/屏幕画面返回图片（固定 PNG），供多态模型观察 UI 状态做自动化冒烟。独立工具，不要求调试会话。" +
         "mode=window（默认）按 processId 或 windowTitle 定位目标主窗口（窗口未出现会等 timeoutSeconds 秒，默认 5）；" +
         "mode=screen 截全屏；mode=region 按 region=\"x,y,w,h\"（mode=region 时必填）截局部，坐标以 mode=screen 返回的图像素为准" +
-        "（原点左上）——建议先 screen 看全景再裁局部。format 默认 png，jpeg+quality 可压体积；图片过大自动改为落盘返回绝对路径。" +
+        "（原点左上）——建议先 screen 看全景再裁局部。图片过大自动改为落盘返回绝对路径。" +
         "坐标/状态判断仍以 debug_state/debug_stack 为准，本工具只提供视觉观察。")]
     public static async Task<CallToolResult> Screenshot(
         [Description("截图模式：window（默认，截目标主窗口）/ screen（全屏）/ region（局部）。")] string mode = "window",
         [Description("window 定位：目标进程 pid（0=未提供）；非 0 时优先于 windowTitle。")] int processId = 0,
         [Description("window 定位：窗口标题子串（忽略大小写）；processId=0 时生效。")] string windowTitle = "",
         [Description("mode=region 时必填，\"x,y,w,h\"（mode=screen 返回图像素空间，原点左上）。")] string region = "",
-        [Description("输出格式：png（默认）/ jpeg。")] string format = "png",
-        [Description("jpeg 质量 0-100（默认 80，越界自动收紧）；png 忽略。")] int quality = 80,
         [Description("仅 window：等窗口出现秒数（默认 5，0-30；0=立即试一次）。")] int timeoutSeconds = 5,
         [Description("非空=强制落盘到该路径；空=仅图片超 2MB 时落盘到本地 screenshots 目录。")] string filePath = "",
         CancellationToken cancellationToken = default)
@@ -45,11 +43,6 @@ public static class DebugScreenshotTool
             mode = (mode ?? "").Trim().ToLowerInvariant();
             if (mode is not ("window" or "screen" or "region"))
                 return TextOnly($"mode 仅支持 window/screen/region（当前 \"{mode}\"）。");
-            format = (format ?? "").Trim().ToLowerInvariant();
-            if (format is not ("png" or "jpeg" or "jpg"))
-                return TextOnly($"format 仅支持 png/jpeg（当前 \"{format}\"）。");
-            if (format == "jpg") format = "jpeg";
-            quality = Math.Clamp(quality, 0, 100);
             timeoutSeconds = Math.Clamp(timeoutSeconds, 0, 30);
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -68,7 +61,6 @@ public static class DebugScreenshotTool
             // —— 抓取（等窗轮询在宿主，换算/缩放/编码唯一在 Engine，spec §4.4）——
             CaptureResult result;
             string targetLine;
-            var ext = format == "jpeg" ? "jpg" : "png";
             if (mode == "window")
             {
                 var located = await LocateWindowAsync(processId, windowTitle, timeoutSeconds, cancellationToken);
@@ -76,13 +68,11 @@ public static class DebugScreenshotTool
                 var info = located.Info!;
                 targetLine = $"目标:   窗口 \"{info.Title}\" (pid={info.Pid})";
                 if (info.MatchCount > 1) targetLine += $"（命中 {info.MatchCount} 个可见窗口，已截主窗口）";
-                result = ScreenCapture.CaptureWindow(info.Hwnd,
-                    AppConfig.ScreenshotMaxDimension, format, quality);
+                result = ScreenCapture.CaptureWindow(info.Hwnd, AppConfig.ScreenshotMaxDimension);
             }
             else
             {
-                result = ScreenCapture.CaptureScreen(clip,
-                    AppConfig.ScreenshotMaxDimension, format, quality);
+                result = ScreenCapture.CaptureScreen(clip, AppConfig.ScreenshotMaxDimension);
                 targetLine = mode == "screen"
                     ? "目标:   屏幕"
                     : $"目标:   屏幕区域 ({clip!.Value.X},{clip.Value.Y},{clip.Value.Width},{clip.Value.Height})";
@@ -117,7 +107,7 @@ public static class DebugScreenshotTool
             {
                 try
                 {
-                    var full = ResolveScreenshotPath(filePath, mode, ext, processId);
+                    var full = ResolveScreenshotPath(filePath, mode, processId);
                     File.WriteAllBytes(full, result.Image);
                     header.AppendLine($"已落盘: {full}");
                     attachImage = false;
@@ -132,7 +122,7 @@ public static class DebugScreenshotTool
             var content = new List<ContentBlock> { new TextContentBlock { Text = header.ToString() } };
             if (attachImage)
                 // FromBytes（非 Data setter）：SDK 语义 Data=base64 文本字节，FromBytes 存原始字节并懒编码
-                content.Add(ImageContentBlock.FromBytes(result.Image, $"image/{format}"));
+                content.Add(ImageContentBlock.FromBytes(result.Image, "image/png"));
             return new CallToolResult { Content = content };
         }
         catch (OperationCanceledException)
@@ -183,7 +173,7 @@ public static class DebugScreenshotTool
         return (null, $"{timeoutSeconds} 秒内未找到匹配的可见窗口（{selector}）。");
     }
 
-    internal static string ResolveScreenshotPath(string filePath, string mode, string ext, int processId)
+    internal static string ResolveScreenshotPath(string filePath, string mode, int processId)
     {
         if (!string.IsNullOrWhiteSpace(filePath))
         {
@@ -193,7 +183,7 @@ public static class DebugScreenshotTool
         }
         Directory.CreateDirectory(AppConfig.ScreenshotsDir);
         var pidSeg = mode == "window" ? $"-{processId}" : "";
-        var name = $"screenshot-{DateTime.Now:yyyyMMdd-HHmmssfff}-{mode}{pidSeg}.{ext}";
+        var name = $"screenshot-{DateTime.Now:yyyyMMdd-HHmmssfff}-{mode}{pidSeg}.png";
         return Path.Combine(AppConfig.ScreenshotsDir, name);
     }
 

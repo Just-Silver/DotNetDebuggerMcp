@@ -22,7 +22,7 @@ public sealed class CaptureScreenTests
     {
         if (_screenAvailable is null)
         {
-            try { _ = ScreenCapture.CaptureScreen(null, 2000, "png", 80); _screenAvailable = true; }
+            try { _ = ScreenCapture.CaptureScreen(null, 2000); _screenAvailable = true; }
             catch (CaptureException) { _screenAvailable = false; }
         }
         if (_screenAvailable == false)
@@ -37,7 +37,7 @@ public sealed class CaptureScreenTests
         SkipIfScreenUnavailable();
         var vw = GetSystemMetrics(78);   // SM_CXVIRTUALSCREEN
         var vh = GetSystemMetrics(79);   // SM_CYVIRTUALSCREEN
-        var r = ScreenCapture.CaptureScreen(null, 2000, "png", 80);
+        var r = ScreenCapture.CaptureScreen(null, 2000);
         var k = Math.Min(1.0, 2000.0 / Math.Max(vw, vh));
         Assert.Equal((int)Math.Round(vw * k), r.Width);
         Assert.Equal((int)Math.Round(vh * k), r.Height);
@@ -54,7 +54,7 @@ public sealed class CaptureScreenTests
     {
         SkipIfScreenUnavailable();
         // maxDimension 极大→k=1（任何分辨率下成立），图像空间=原生空间，断言直白
-        var r = ScreenCapture.CaptureScreen(new Rectangle(10, 10, 80, 60), 10000, "png", 80);
+        var r = ScreenCapture.CaptureScreen(new Rectangle(10, 10, 80, 60), 10000);
         Assert.Equal(80, r.Width);
         Assert.Equal(60, r.Height);
         Assert.Equal(80, r.NativeWidth);
@@ -66,8 +66,8 @@ public sealed class CaptureScreenTests
     {
         SkipIfScreenUnavailable();
         // 同参数下 k 恒等：先取 screen 图像空间宽度作越界构造基准
-        var imgW = ScreenCapture.CaptureScreen(null, 2000, "png", 80).Width;
-        var r = ScreenCapture.CaptureScreen(new Rectangle(imgW - 40, 0, 200, 100), 2000, "png", 80);
+        var imgW = ScreenCapture.CaptureScreen(null, 2000).Width;
+        var r = ScreenCapture.CaptureScreen(new Rectangle(imgW - 40, 0, 200, 100), 2000);
         Assert.True(r.ClippedToScreen);                   // 部分越界=裁交集+头部注明（spec §5.2）
         Assert.True(r.Width > 0);
         Assert.True(r.Width <= imgW);                     // 交集不越出图像空间
@@ -78,7 +78,7 @@ public sealed class CaptureScreenTests
     {
         // 屏外判定在 GetDC 之前（纯换算），锁屏下也恒可跑
         var ex = Assert.Throws<CaptureException>(() =>
-            ScreenCapture.CaptureScreen(new Rectangle(99999, 99999, 10, 10), 2000, "png", 80));
+            ScreenCapture.CaptureScreen(new Rectangle(99999, 99999, 10, 10), 2000));
         Assert.Contains("完全在屏幕范围", ex.Message);   // spec §5.2 约定文案（Engine 生成、宿主透传）
         Assert.Contains("之外", ex.Message);
     }
@@ -125,7 +125,7 @@ public sealed class CaptureScreenTests
         var nx = GetSystemMetrics(76);
         var ny = GetSystemMetrics(77);
         // 旧签名（宿主当前调用点）仍可用，且同样回填 origin（全屏=虚拟屏左上）
-        var r = ScreenCapture.CaptureScreen(null, 100000, "png", 80);
+        var r = ScreenCapture.CaptureScreen(null, 100000);
         Assert.Equal(nx, r.OriginX);
         Assert.Equal(ny, r.OriginY);
         Assert.Equal(1.0, r.Scale, 3);

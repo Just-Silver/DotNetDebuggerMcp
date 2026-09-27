@@ -28,7 +28,7 @@ internal static class ImagePipeline
     /// <param name="originX">抓取矩形左上角 X（虚拟屏物理像素，spec §5）；直接回填结果。</param>
     /// <param name="originY">抓取矩形左上角 Y；直接回填结果。</param>
     public static CaptureResult Process(Bitmap source, Size kBase, int maxWidth, int maxHeight,
-        string format, int quality, string? windowTitle, string sourceName, bool clippedToScreen = false,
+        string? windowTitle, string sourceName, bool clippedToScreen = false,
         int originX = 0, int originY = 0)
     {
         var k = ScaleFactor(kBase, maxWidth, maxHeight);
@@ -37,7 +37,7 @@ internal static class ImagePipeline
 
         using Bitmap scaled = k < 1.0 ? Resize(source, outW, outH) : CopyOf(source);
         var allBlack = IsAllBlack(scaled);
-        var bytes = Encode(scaled, format, quality);
+        var bytes = Encode(scaled);
         // Scale = 图像像素 / 原生物理像素（spec §5）；源图宽恒 >0，无需防零。
         return new CaptureResult(bytes, scaled.Width, scaled.Height,
             source.Width, source.Height, windowTitle, sourceName, allBlack, clippedToScreen,
@@ -89,25 +89,12 @@ internal static class ImagePipeline
         finally { bmp.UnlockBits(bd); }
     }
 
-    private static byte[] Encode(Bitmap bmp, string format, int quality)
+    /// <summary>输出**固定 PNG**（唯一格式；spec §6.1，用户裁定 2026-09-28）：无 format/quality，
+    /// 不引入任何第三方图像编码库，PNG 由 <c>System.Drawing</c> 编码。</summary>
+    private static byte[] Encode(Bitmap bmp)
     {
         using var ms = new MemoryStream();
-        switch (format.ToLowerInvariant())
-        {
-            case "png":
-                bmp.Save(ms, ImageFormat.Png);
-                break;
-            case "jpeg":
-            case "jpg":
-                var codec = ImageCodecInfo.GetImageEncoders()
-                    .First(c => c.FormatID == ImageFormat.Jpeg.Guid);
-                using (var ep = new EncoderParameter(Encoder.Quality, (long)Math.Clamp(quality, 0, 100)))
-                using (var eps = new EncoderParameters(1) { Param = { [0] = ep } })
-                    bmp.Save(ms, codec, eps);
-                break;
-            default:
-                throw new ArgumentException($"不支持的输出格式: {format}");
-        }
+        bmp.Save(ms, ImageFormat.Png);
         return ms.ToArray();
     }
 }

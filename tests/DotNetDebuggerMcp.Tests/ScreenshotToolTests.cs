@@ -17,7 +17,6 @@ namespace DotNetDebuggerMcp.Tests;
 public sealed class ScreenshotToolTests
 {
     private static readonly byte[] PngMagic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-    private static readonly byte[] JpegMagic = [0xFF, 0xD8];
 
     private static string UiSampleAppExe => Path.Combine(
         Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, "UiSampleApp", "UiSampleApp.exe");
@@ -89,18 +88,6 @@ public sealed class ScreenshotToolTests
     }
 
     [Fact]
-    public async Task InvalidFormat_ReturnsSpecMessage()
-    {
-        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
-        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
-        {
-            ["format"] = "gif",
-        });
-        Assert.True(r.IsError != true, r.Text());
-        Assert.Equal("format 仅支持 png/jpeg（当前 \"gif\"）。", r.Text());
-    }
-
-    [Fact]
     public async Task RegionMalformed_AllThreeForms_ReturnSpecMessage()
     {
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();
@@ -165,29 +152,6 @@ public sealed class ScreenshotToolTests
         });
         Assert.True(r.IsError != true, r.Text());
         Assert.Equal($"0 秒内未找到匹配的可见窗口（processId={deadPid}）。", r.Text());
-    }
-
-    [Fact]
-    public async Task JpegWindow_EncodesJpegImageBlock()
-    {
-        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
-        using var app = LaunchUiSampleApp();
-        try
-        {
-            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
-            {
-                ["processId"] = app.Id,
-                ["format"] = "jpeg",
-                ["quality"] = 60,
-                ["timeoutSeconds"] = 5,
-            });
-            Assert.True(r.IsError != true, r.Text());
-            var img = ImageOf(r);
-            Assert.NotNull(img);
-            Assert.Equal("image/jpeg", img!.MimeType);
-            Assert.True(img.DecodedData.Length > 2 && img.DecodedData.Span[..2].SequenceEqual(JpegMagic));
-        }
-        finally { KillUiSampleApp(app); }
     }
 
     // ===== screen/region 真实抓取（锁屏探测 Skip）=====
@@ -256,18 +220,18 @@ public sealed class ScreenshotToolTests
     [Fact]
     public void ResolveScreenshotPath_DefaultDirPattern_And_FilePathOverride()
     {
-        // 默认目录+文件名模式（spec §5.1：screenshot-{ts}-{mode}[-{pid}].{ext}，pid 仅 window）
-        var def = DebugScreenshotTool.ResolveScreenshotPath("", "window", "png", 12345);
+        // 默认目录+文件名模式（spec §5.1：screenshot-{ts}-{mode}[-{pid}].png，pid 仅 window）
+        var def = DebugScreenshotTool.ResolveScreenshotPath("", "window", 12345);
         Assert.StartsWith(DotNetDebuggerMcp.Configuration.AppConfig.ScreenshotsDir, def);
         Assert.Matches(@"screenshot-\d{8}-\d{9}-window-12345\.png$", def);
-        var scr = DebugScreenshotTool.ResolveScreenshotPath("", "screen", "jpg", 0);
-        Assert.Matches(@"-screen\.jpg$", scr);
+        var scr = DebugScreenshotTool.ResolveScreenshotPath("", "screen", 0);
+        Assert.Matches(@"-screen\.png$", scr);
         // filePath 分支：绝对化 + 创建父目录（目录创建副作用在此清理）
         var customDir = Path.Combine(Path.GetTempPath(), $"screenshot-dirtest-{Guid.NewGuid():N}");
         try
         {
             var custom = DebugScreenshotTool.ResolveScreenshotPath(
-                Path.Combine(customDir, "a.png"), "window", "png", 1);
+                Path.Combine(customDir, "a.png"), "window", 1);
             Assert.Equal(Path.Combine(customDir, "a.png"), custom);
             Assert.True(Directory.Exists(customDir));
         }

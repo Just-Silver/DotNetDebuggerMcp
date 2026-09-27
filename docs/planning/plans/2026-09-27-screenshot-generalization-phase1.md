@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把截图能力从 `Engine/Capture/`、UI 自动化从宿主 `Services/Ui/` 抽成两个零宿主依赖的库（`SharpSight.Capture` / `SharpSight.UiAutomation`，**行为不变**），并据此落地「寻址扩展 + 坐标模型 `origin/scale/frameId` + 双轴 1568 + WebP + `includeCursor`」，同步文档/握手/回归。
+**Goal:** 把截图能力从 `Engine/Capture/`、UI 自动化从宿主 `Services/Ui/` 抽成两个零宿主依赖的库（`SharpSight.Capture` / `SharpSight.UiAutomation`，**行为不变**），并据此落地「寻址扩展 + 坐标模型 `origin/scale/frameId` + 双轴 1568 + `includeCursor`」，同步文档/握手/回归。
 
 **Architecture:** 两库零宿主依赖（Capture 不引 FlaUI，UiAutomation 不引 Capture/Engine）；`Engine` 迁出 `Capture/` 后去掉 `System.Drawing.Common`；宿主是唯一组合点，只做 MCP 参数绑定/编排/头部/落盘。阶段二（OCR/SoM/diff/独立 NuGet）另立计划。
 
-**Tech Stack:** .NET 10（`net10.0-windows10.0.22621.0`）、`System.Drawing.Common 10.0.12`、`SixLabors.ImageSharp 3.1.12`、`FlaUI 5.0.0`、WinRT 投影、xunit.v3 + MTP。
+**Tech Stack:** .NET 10（`net10.0-windows10.0.22621.0`）、`System.Drawing.Common 10.0.12`、`FlaUI 5.0.0`、WinRT 投影、xunit.v3 + MTP。
 
-**Spec:** `docs/planning/specs/2026-09-27-screenshot-generalization-design.md`（本计划只实现其 §14「阶段一」范围：库化 + 寻址 + 1568 + WebP + `includeCursor` + 文档同步）
+**Spec:** `docs/planning/specs/2026-09-27-screenshot-generalization-design.md`（本计划只实现其 §14「阶段一」范围：库化 + 寻址 + 1568 + `includeCursor` + 文档同步）
 
 ## Global Constraints
 
@@ -449,7 +449,7 @@ git commit -m "feat(sharp-sight): 元素级截图与 frameId 代际护栏"
 - Test: `tests/SharpSight.Capture.Tests/ImagePipelineTests.cs`
 
 **Interfaces:**
-- Produces: `ImagePipeline.Process(source, int maxWidth, int maxHeight, string format, int quality, ...)`（**替代**原 `maxDimension` 单参）；`AppConfig.ScreenshotMaxDimension = 1568`。
+- Produces: `ImagePipeline.Process(source, int maxWidth, int maxHeight, ...)`（**替代**原 `maxDimension` 单参；`format`/`quality` 已在 PNG-only 清理中移除）；`AppConfig.ScreenshotMaxDimension = 1568`。
 - Consumes: Task 3。
 
 - [ ] **Step 1: 改失败测试**
@@ -491,62 +491,12 @@ git commit -m "feat(screenshot): 双轴降采样并将默认上限改为 1568"
 
 ---
 
-## Task 8: WebP（ImageSharp 3.1.12）
+## Task 8: ~~WebP（ImageSharp 3.1.12）~~ **已取消（用户裁定 2026-09-28）**
 
-**Files:**
-- Modify: `src/SharpSight.Capture/SharpSight.Capture.csproj`（加包）
-- Modify: `src/SharpSight.Capture/ImagePipeline.cs`
-- Test: `tests/SharpSight.Capture.Tests/ImagePipelineTests.cs`
-
-**Interfaces:**
-- Produces: `ImagePipeline.Encode` 支持 `"webp"`；产物 magic `RIFF....WEBP`。
-- Consumes: Task 7。
-
-- [ ] **Step 1: 加包**
-
-```xml
-<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
-```
-（**不要 v4.x**；**不要** `ImageSharp.Drawing`；**不要** SkiaSharp。）
-
-- [ ] **Step 2: 写失败测试**
-
-```csharp
-[Fact]
-public void Encode_Webp_HasRiffMagic()
-{
-    using var src = TestImages.Solid(64, 64);
-    var (img, bytes) = ImagePipeline.Process(src, 1568, 1568, "webp", 80, null, "test", false);
-    Assert.Equal("RIFF", Encoding.ASCII.GetString(bytes, 0, 4));
-    Assert.Equal("WEBP", Encoding.ASCII.GetString(bytes, 8, 4));
-}
-```
-
-- [ ] **Step 3: 跑测试确认失败**
-
-Run: `dotnet test --project tests/SharpSight.Capture.Tests/SharpSight.Capture.Tests.csproj -- --filter-method "*Encode_Webp*"`
-Expected: FAIL（未知格式抛 `ArgumentException`）。
-
-- [ ] **Step 4: 实现**
-
-`ImagePipeline.Encode` 增 `case "webp"`：`bitmap.LockBits`（`Format32bppArgb`，二进制兼容 `Bgra32`）→ `Image.LoadPixelData<Bgra32>(span, w, h, stride)` → `SaveAsWebp(stream, new WebpEncoder { Quality = clamp(quality) })`（quality 只夹上界，调用方 `Clamp(0,100)`）。宿主 `format` 白名单加 `"webp"`、扩展名 `.webp`、mime `image/webp`。
-
-- [ ] **Step 5: 跑测试确认通过**
-
-Run: `dotnet test --project tests/SharpSight.Capture.Tests/SharpSight.Capture.Tests.csproj`
-Expected: PASS。
-
-- [ ] **Step 6: 验证发布产物无原生资产（Task 0/§11）**
-
-Run: `dotnet pack -c Release src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj -o out/pkg && (展开 nupkg 检查 tools/ 下无 *.dll 原生资产列表外文件)`
-Expected: 无新增原生 dll（ImageSharp 纯托管）。
-
-- [ ] **Step 7: 提交**
-
-```bash
-git add -A
-git commit -m "feat(screenshot): 加 WebP 编码（ImageSharp 3.1.12，纯托管）"
-```
+**裁定**：`screenshot` **输出固定 PNG，唯一格式**——不提供 `format`/`quality`，也**不引入任何第三方图像编码库**。
+- 理由：第三方 WebP 编码库要么**免费路径不可升级**（ImageSharp v3 旧线 / v4+ 强制许可证密钥），要么带来体积与打包面（SkiaSharp 原生库 ~13MB）——均不满足「面向未来、可升级、依赖洁净」。体积收益的大头由**双轴降采样（Task 7）与超限落盘**承担。
+- 本任务**已在合并前直接落地为「PNG-only 清理」**（提交信息 `chore(screenshot): 输出固定 PNG...`）：移除 `CaptureOptions.Format/Quality`、`ImagePipeline` 的 jpeg/未知格式分支、宿主 `format`/`quality` 参数与 mime/扩展名映射，以及对应测试。
+- **不需要**再为 WebP 做任何工作；spec §4.1/§6.1/§13 已同步为 PNG-only。
 
 ---
 
@@ -657,7 +607,7 @@ git commit -m "feat(screenshot): 工具面扩展（display/hwnd/foreground/clien
 
 - [ ] **Step 2: 握手 + 回归断言**
 
-`AppText.HandshakeFeatureIntro` 的 screenshot 触发条件补：多显示器/前台窗口/客户区/hwnd/元素级/WebP/光标；`DotNetDebuggerMcpCmdTests.HandshakeFeatureIntro_覆盖全部能力族触发条件` 逐族补 `Assert.Contains`（漏一族即失败）。
+`AppText.HandshakeFeatureIntro` 的 screenshot 触发条件补：多显示器/前台窗口/客户区/hwnd/元素级/光标；`DotNetDebuggerMcpCmdTests.HandshakeFeatureIntro_覆盖全部能力族触发条件` 逐族补 `Assert.Contains`（漏一族即失败）。
 
 - [ ] **Step 3: AGENTS.md 依赖方向**
 
@@ -671,7 +621,7 @@ git commit -m "feat(screenshot): 工具面扩展（display/hwnd/foreground/clien
 ## [Unreleased]
 
 ### 新增
-- `screenshot` 工具通用化（阶段一）：多显示器/前台窗口/客户区/hwnd/元素级寻址，统一 `origin/scale/frameId` 坐标元数据，WebP 编码，`includeCursor`，双轴降采样（默认 1568）。
+- `screenshot` 工具通用化（阶段一）：多显示器/前台窗口/客户区/hwnd/元素级寻址，统一 `origin/scale/frameId` 坐标元数据，`includeCursor`，双轴降采样（默认 1568），输出固定 PNG。
 - 新增可复用库 `SharpSight.Capture` 与 `SharpSight.UiAutomation`。
 - `ui_find` 返回 `frameId`；`ui_action`/`ui_input`/`ui_get` 新增可选 `frameId` 旧帧护栏。
 ```
@@ -695,7 +645,7 @@ git commit -m "docs(screenshot): 同步 README/握手/回归断言/AGENTS/CHANGE
 
 ## 自审记录（写入后逐项核对）
 
-1. **Spec 覆盖（§14 阶段一）**：库化重构→Task 1/2；寻址扩展→Task 4/5/6；坐标模型→Task 3；双轴 1568→Task 7；WebP→Task 8；`includeCursor`→Task 9；工具面→Task 10；文档/握手/回归→Task 11；前置 spike→Task 0。**阶段二项（annotate/ocr/diff/regionSpace=window/独立 NuGet/by-ref）不在本计划**（另立 `2026-09-27-screenshot-generalization-phase2.md`）。
+1. **Spec 覆盖（§14 阶段一）**：库化重构→Task 1/2；寻址扩展→Task 4/5/6；坐标模型→Task 3；双轴 1568→Task 7；**WebP→Task 8 已取消（用户裁定 PNG-only，已并入 PNG-only 清理提交）**；`includeCursor`→Task 9；工具面→Task 10；文档/握手/回归→Task 11；前置 spike→Task 0。**阶段二项（annotate/ocr/diff/regionSpace=window/独立 NuGet/by-ref）不在本计划**（另立 `2026-09-27-screenshot-generalization-phase2.md`）。
 2. **占位符扫描**：无 TBD/“稍后实现”；所有代码步骤含可编译片段或明确命令。
 3. **类型一致性**：`CaptureResult` 字段（Task 3）在 Task 5/6/10 一致；`ImagePipeline.Process` 在 Task 7 改签名后 Task 8 沿用；`FrameRegistry.Validate` 在 Task 6 定义、Task 10 消费。
 

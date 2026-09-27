@@ -19,7 +19,7 @@ public sealed class CaptureWindowWgcTests
         var w = CaptureTestHelpers.WaitFound(app.Process.Id, TimeSpan.FromSeconds(5));
         Assert.NotNull(w);
 
-        var r = ScreenCapture.CaptureWindow(w!.Hwnd, 2000, "png", 80);
+        var r = ScreenCapture.CaptureWindow(w!.Hwnd, 2000);
 
         Assert.False(r.WasAllBlack);
         Assert.Equal("WGC", r.Source);          // 支持环境 WGC 必走通；发生回退=链路 bug

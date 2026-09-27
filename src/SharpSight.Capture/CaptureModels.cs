@@ -30,7 +30,7 @@ public sealed record WindowHandleInfo(
 public sealed record WindowBounds(Rectangle ExtendedFrame, Rectangle WindowRect, Rectangle ClientArea);
 
 /// <summary>截图结果（Engine 唯一产出形状；宿主只消费字段拼头部/双轨，不做任何坐标与图像处理）。</summary>
-/// <param name="Image">编码后字节（png/jpeg，按入参 format）。</param>
+/// <param name="Image">编码后字节（**固定 PNG**；spec §6.1）。</param>
 /// <param name="Width">输出（缩放后）宽。</param>
 /// <param name="Height">输出（缩放后）高。</param>
 /// <param name="NativeWidth">原生（缩放前）宽：window=窗口、screen=全屏、region=裁剪区。</param>
@@ -53,23 +53,20 @@ public sealed record CaptureResult(
 
 /// <summary>
 /// CaptureScreen 入参（T3 引入；spec §5 坐标模型 / §6.2 降采样）。旧
-/// <c>CaptureScreen(clip, maxDimension, format, quality)</c> 重载委托到此，行为不变（宿主切换见 Task 10）。
+/// <c>CaptureScreen(clip, maxDimension)</c> 重载委托到此，行为不变（宿主切换见 Task 10）。
+/// **输出固定 PNG**（spec §6.1，用户裁定 2026-09-28）：不提供 format/quality。
 /// </summary>
 /// <param name="Clip">裁剪矩形（mode=screen 返回图像素空间）；null=全屏。
 /// <b>适用模式：screen / display /（将来 element）</b>；<b>window 模式忽略本参数</b>——窗口几何由目标窗口自身
 /// 决定（WGC 源取 <c>DWMWA_EXTENDED_FRAME_BOUNDS</c>、GDI 回退源取 <c>GetWindowRect</c>），不套用裁剪。</param>
 /// <param name="MaxWidth">输出宽上限（原生物理像素，spec §6.2）；≤0 视为该轴不限制。两轴皆 ≤0 ⇒ 不缩放（k=1）。</param>
 /// <param name="MaxHeight">输出高上限（原生物理像素）；≤0 视为该轴不限制，语义同 <paramref name="MaxWidth"/>。</param>
-/// <param name="Format">输出编码 "png" | "jpeg"（默认 png）。</param>
-/// <param name="Quality">jpeg 质量 0-100（默认 80）。</param>
 /// <param name="ClientArea">window 模式是否抓客户区（<see cref="ScreenCapture.CaptureWindow(IntPtr, CaptureOptions)"/> 消费；
 /// screen/display/region 忽略）。默认 false=整窗。Task 5 引入。</param>
 public sealed record CaptureOptions(
     Rectangle? Clip = null,
     int MaxWidth = 0,
     int MaxHeight = 0,
-    string Format = "png",
-    int Quality = 80,
     bool ClientArea = false);
 
 /// <summary>截图失败（约定中文文案由 Engine 生成，宿主 catch 后原样返回——spec §5.2

@@ -148,7 +148,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 | 工具 | 用途 |
 | ---- | ---- |
-| `dotnetdebugger_screenshot` | 截取窗口/屏幕画面返回图片（供多态模型观察 UI 状态做自动化冒烟）。**独立工具，不要求调试会话**。`mode=window`（默认）按 `processId`（优先）或 `windowTitle` 子串定位主窗口（未出现会等 `timeoutSeconds`，默认 5s；两者皆空时若有活动调试会话自动取其目标 pid）；`mode=screen` 全屏；`mode=region` 按 `region="x,y,w,h"` 截局部——**坐标以 mode=screen 返回的图像素为准**（原点左上），建议先 screen 看全景再裁局部。抓取链 **WGC 优先**（被遮挡/后台窗口照截，无需置顶、无需抢前台）→ `PrintWindow` → `BitBlt` 兜底（只截得到屏幕上最上层内容，头部 `来源:` 行如实标注来源）。`format` 默认 `png`、`jpeg`+`quality` 可压体积；单边超 2000px 自动等比缩放；base64 后 ≥2MB 或指定 `filePath` 时改为**落盘返回绝对路径**（默认目录 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\`，不自动清理）。坐标/状态判断仍以 `debug_state`/`debug_stack` 为准，本工具只提供视觉观察 |
+| `dotnetdebugger_screenshot` | 截取窗口/屏幕画面返回图片（**固定 PNG**，供多态模型观察 UI 状态做自动化冒烟）。**独立工具，不要求调试会话**。`mode=window`（默认）按 `processId`（优先）或 `windowTitle` 子串定位主窗口（未出现会等 `timeoutSeconds`，默认 5s；两者皆空时若有活动调试会话自动取其目标 pid）；`mode=screen` 全屏；`mode=region` 按 `region="x,y,w,h"` 截局部——**坐标以 mode=screen 返回的图像素为准**（原点左上），建议先 screen 看全景再裁局部。抓取链 **WGC 优先**（被遮挡/后台窗口照截，无需置顶、无需抢前台）→ `PrintWindow` → `BitBlt` 兜底（只截得到屏幕上最上层内容，头部 `来源:` 行如实标注来源）。**输出恒为 PNG**（无格式/质量参数）；默认等比缩到长边 ≤1568px；base64 后 ≥2MB 或指定 `filePath` 时改为**落盘返回绝对路径**（默认目录 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\`，不自动清理）。坐标/状态判断仍以 `debug_state`/`debug_stack` 为准，本工具只提供视觉观察 |
 
 ### UI 自动化（`ui_find` / `ui_action` / `ui_input` / `ui_get` / `ui_wait`——全 UIA 语义，真实操作运行中的 .NET UI 应用）
 
