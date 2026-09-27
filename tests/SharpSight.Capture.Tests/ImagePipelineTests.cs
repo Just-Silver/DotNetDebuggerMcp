@@ -83,4 +83,31 @@ public sealed class ImagePipelineTests
         using var src = Make(10, 10, Color.Red);
         Assert.ThrowsAny<Exception>(() => ImagePipeline.Process(src, src.Size, 2000, "gif", 80, null, "WGC"));
     }
+
+    // ===== 坐标模型（T3；spec §5 screen = origin + image / scale）=====
+
+    [Fact]
+    public void Origin_PassedThrough_And_Scale_FilledFromOutputOverNative()
+    {
+        using var src = Make(400, 300, Color.SteelBlue);
+        var r = ImagePipeline.Process(src, src.Size, maxDimension: 200, "png", 80, null, "BitBlt",
+            clippedToScreen: false, originX: 120, originY: 45);
+        Assert.Equal(120, r.OriginX);
+        Assert.Equal(45, r.OriginY);
+        Assert.Equal(0.5, r.Scale, 3);          // 输出 200 / 原生 400
+        Assert.Equal(200, r.Width);
+    }
+
+    [Fact]
+    public void Origin_DefaultsZero_ScaleOne_NewMetadataDefaults()
+    {
+        using var src = Make(50, 50, Color.Red);
+        var r = ImagePipeline.Process(src, src.Size, 2000, "png", 80, null, "WGC");
+        Assert.Equal(0, r.OriginX);
+        Assert.Equal(0, r.OriginY);
+        Assert.Equal(1.0, r.Scale, 3);
+        Assert.Equal(0, r.FrameId);            // Task 10 宿主注入前恒 0
+        Assert.Equal(-1, r.DisplayIndex);      // 未定位到具体显示器
+        Assert.False(r.IsClientArea);
+    }
 }

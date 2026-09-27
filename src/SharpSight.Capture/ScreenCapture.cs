@@ -97,24 +97,30 @@ public static class ScreenCapture
             IsIconic(hwnd), (int)pid, MatchCount: 1);
     }
 
+    private const int DefaultMaxDimension = 2000;   // 两侧均未指定时的兜底（与宿主 AppConfig.ScreenshotMaxDimension 现状一致）
+
     /// <summary>
     /// screen/region：GDI BitBlt 虚拟屏（spec §4.3-3：screen/region 不开 WGC）。
-    /// clipInImageSpace=「mode=screen 返回图像素空间」坐标（宿主仅解析字符串格式，换算唯一在此）：
+    /// <see cref="CaptureOptions.Clip"/>=「mode=screen 返回图像素空间」坐标（宿主仅解析字符串格式，换算唯一在此）：
     /// 图像空间求交——空交集抛 spec §5.2 屏外约定错误（W/H 用图像空间尺寸，agent 可自查口径，
     /// 由 Engine 回传、宿主不触碰坐标换算）；非空交 → round 换算原生空间裁剪（BitBlt 只抓交集）；
     /// 交 ≠ 原始输入即 ClippedToScreen（部分越界=已裁交集，头部注明）。
+    /// 坐标模型（spec §5）：origin=抓取矩形左上（虚拟屏物理像素，即 nativeClip 左上）、
+    /// scale=Width/NativeWidth（由 ImagePipeline 回填）。
     /// </summary>
-    public static CaptureResult CaptureScreen(Rectangle? clipInImageSpace, int maxDimension, string format, int quality)
+    public static CaptureResult CaptureScreen(CaptureOptions options)
     {
         EnsureDpi();
         var native = GdiCapture.VirtualScreenRect();
+        // R8 临时映射（Task 7 撤除）：双轴 maxWidth/maxHeight 暂压成单轴 maxDimension。
+        var maxDimension = ResolveMaxDimension(options.MaxWidth, options.MaxHeight);
         var k = Math.Min(1.0, (double)maxDimension / Math.Max(native.Width, native.Height));
         var imgW = Math.Max(1, (int)Math.Round(native.Width * k));
         var imgH = Math.Max(1, (int)Math.Round(native.Height * k));
 
         Rectangle nativeClip;
         var clipped = false;
-        if (clipInImageSpace is { } c)
+        if (options.Clip is { } c)
         {
             (nativeClip, clipped) = ResolveRegionClip(c, native, k, imgW, imgH);
         }
@@ -124,8 +130,27 @@ public static class ScreenCapture
         }
 
         using var bmp = GdiCapture.CaptureScreenBits(nativeClip);
-        return ImagePipeline.Process(bmp, native.Size, maxDimension, format, quality,
-            windowTitle: null, sourceName: "BitBlt", clippedToScreen: clipped);
+        return ImagePipeline.Process(bmp, native.Size, maxDimension, options.Format, options.Quality,
+            windowTitle: null, sourceName: "BitBlt", clippedToScreen: clipped,
+            originX: nativeClip.X, originY: nativeClip.Y);
+    }
+
+    /// <summary>
+    /// 旧签名（宿主当前调用点，Task 10 切换）：委托到 <see cref="CaptureScreen(CaptureOptions)"/>，
+    /// maxDimension 同时作 maxWidth/maxHeight，缩放与裁剪行为与切换前逐位一致。
+    /// </summary>
+    public static CaptureResult CaptureScreen(Rectangle? clipInImageSpace, int maxDimension, string format, int quality)
+        => CaptureScreen(new CaptureOptions(clipInImageSpace, maxDimension, maxDimension, format, quality));
+
+    // R8 临时映射（Task 7 撤除）：真·双轴应为 k=min(1, maxW/W, maxH/H)；
+    // 暂取正值中最小者作单轴 maxDimension 交给现有 ImagePipeline——仅当 MaxWidth==MaxHeight 与双轴等价，
+    // 故 T3 测试恒用相等两轴；两侧均非正时兜底 DefaultMaxDimension（等价「不放大」的小图不变）。
+    private static int ResolveMaxDimension(int maxWidth, int maxHeight)
+    {
+        var m = int.MaxValue;
+        if (maxWidth > 0) m = Math.Min(m, maxWidth);
+        if (maxHeight > 0) m = Math.Min(m, maxHeight);
+        return m == int.MaxValue ? DefaultMaxDimension : m;
     }
 
     /// <summary>
@@ -186,6 +211,8 @@ public static class ScreenCapture
         if (bmp is null) throw new CaptureException(failMsg);
 
         using (bmp)
-            return ImagePipeline.Process(bmp, bmp.Size, maxDimension, format, quality, info.Title, source);
+            // origin 暂用 GetWindowRect 左上（虚拟屏物理像素）；WGC 帧几何与客户区精化见 Task 5。
+            return ImagePipeline.Process(bmp, bmp.Size, maxDimension, format, quality, info.Title, source,
+                originX: info.Rect.X, originY: info.Rect.Y);
     }
 }

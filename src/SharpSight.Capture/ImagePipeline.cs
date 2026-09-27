@@ -12,8 +12,11 @@ namespace SharpSight.Capture;
 /// </summary>
 internal static class ImagePipeline
 {
+    /// <param name="originX">抓取矩形左上角 X（虚拟屏物理像素，spec §5）；直接回填结果。</param>
+    /// <param name="originY">抓取矩形左上角 Y；直接回填结果。</param>
     public static CaptureResult Process(Bitmap source, Size kBase, int maxDimension,
-        string format, int quality, string? windowTitle, string sourceName, bool clippedToScreen = false)
+        string format, int quality, string? windowTitle, string sourceName, bool clippedToScreen = false,
+        int originX = 0, int originY = 0)
     {
         var k = Math.Min(1.0, (double)maxDimension / Math.Max(kBase.Width, kBase.Height));
         var outW = Math.Max(1, (int)Math.Round(source.Width * k));
@@ -22,8 +25,10 @@ internal static class ImagePipeline
         using Bitmap scaled = k < 1.0 ? Resize(source, outW, outH) : CopyOf(source);
         var allBlack = IsAllBlack(scaled);
         var bytes = Encode(scaled, format, quality);
+        // Scale = 图像像素 / 原生物理像素（spec §5）；源图宽恒 >0，无需防零。
         return new CaptureResult(bytes, scaled.Width, scaled.Height,
-            source.Width, source.Height, windowTitle, sourceName, allBlack, clippedToScreen);
+            source.Width, source.Height, windowTitle, sourceName, allBlack, clippedToScreen,
+            originX, originY, (double)scaled.Width / source.Width);
     }
 
     private static Bitmap CopyOf(Bitmap src)

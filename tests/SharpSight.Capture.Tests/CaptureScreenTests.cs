@@ -83,6 +83,54 @@ public sealed class CaptureScreenTests
         Assert.Contains("之外", ex.Message);
     }
 
+    // ===== ①b 坐标模型（T3；spec §5 screen = origin + image / scale）=====
+    // R8 临时映射（Task 7 撤除）：测试恒用 MaxWidth == MaxHeight，使单轴/双轴语义结果一致。
+
+    [Fact]
+    public void Region_NoScale_ReportsNativeOriginAndUnitScale()
+    {
+        SkipIfScreenUnavailable();
+        var nx = GetSystemMetrics(76);   // SM_XVIRTUALSCREEN（多屏可为负）
+        var ny = GetSystemMetrics(77);
+        // MaxWidth==MaxHeight 且极大 → k=1，图像空间与原生空间重合，断言直白
+        var r = ScreenCapture.CaptureScreen(new CaptureOptions
+        {
+            Clip = new Rectangle(100, 100, 400, 300), MaxWidth = 100000, MaxHeight = 100000 });
+        Assert.Equal(nx + 100, r.OriginX);   // origin=抓取矩形左上（虚拟屏物理像素）
+        Assert.Equal(ny + 100, r.OriginY);
+        Assert.Equal(1.0, r.Scale, 3);
+    }
+
+    [Fact]
+    public void FullScreen_EqualMaxWidthMaxHeight_ReportsScaleAndVirtualScreenOrigin()
+    {
+        SkipIfScreenUnavailable();
+        var nx = GetSystemMetrics(76);
+        var ny = GetSystemMetrics(77);
+        var vw = GetSystemMetrics(78);
+        var vh = GetSystemMetrics(79);
+        const int maxDim = 800;
+        var r = ScreenCapture.CaptureScreen(new CaptureOptions { MaxWidth = maxDim, MaxHeight = maxDim });
+        var k = Math.Min(1.0, (double)maxDim / Math.Max(vw, vh));
+        Assert.Equal(nx, r.OriginX);         // 全屏 origin=虚拟屏左上
+        Assert.Equal(ny, r.OriginY);
+        Assert.Equal(k, r.Scale, 3);
+        Assert.Equal((int)Math.Round(vw * k), r.Width);
+    }
+
+    [Fact]
+    public void LegacySignature_Delegates_AndFillsOriginToo()
+    {
+        SkipIfScreenUnavailable();
+        var nx = GetSystemMetrics(76);
+        var ny = GetSystemMetrics(77);
+        // 旧签名（宿主当前调用点）仍可用，且同样回填 origin（全屏=虚拟屏左上）
+        var r = ScreenCapture.CaptureScreen(null, 100000, "png", 80);
+        Assert.Equal(nx, r.OriginX);
+        Assert.Equal(ny, r.OriginY);
+        Assert.Equal(1.0, r.Scale, 3);
+    }
+
     // ===== ② 换算纯函数（不碰 GDI，任何环境恒跑；固定假屏幕：原点可为负的双屏纵排形态）=====
 
     private static readonly Rectangle FakeNative = new(0, -1080, 1920, 2160);

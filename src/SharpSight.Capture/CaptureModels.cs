@@ -26,9 +26,33 @@ public sealed record WindowHandleInfo(
 /// <param name="Source">抓取来源 "WGC" | "PrintWindow" | "BitBlt"（回退链结果即来源；screen/region 恒 BitBlt）。</param>
 /// <param name="WasAllBlack">输出图纯黑采样（头部「备注」行数据源；抓到纯黑不报错）。</param>
 /// <param name="ClippedToScreen">region 部分越界已裁至屏幕交集（头部「尺寸」行注记，spec §3.3）。</param>
+/// <param name="OriginX">抓取矩形左上角 X（虚拟屏物理像素；spec §5 origin）。</param>
+/// <param name="OriginY">抓取矩形左上角 Y（虚拟屏物理像素；spec §5 origin）。</param>
+/// <param name="Scale">图像像素 / 原生物理像素（spec §5 scale = Width/NativeWidth）。</param>
+/// <param name="FrameId">采集代际号（由 SharpSight.UiAutomation 维护、宿主注入；未接入时恒 0）。</param>
+/// <param name="DisplayIndex">归属显示器序号；screen 全屏/未定位到具体显示器时为 -1。</param>
+/// <param name="IsClientArea">抓取的是否为窗口客户区（Task 5 启用；当前恒 false）。</param>
 public sealed record CaptureResult(
     byte[] Image, int Width, int Height, int NativeWidth, int NativeHeight,
-    string? WindowTitle, string Source, bool WasAllBlack, bool ClippedToScreen = false);
+    string? WindowTitle, string Source, bool WasAllBlack, bool ClippedToScreen = false,
+    int OriginX = 0, int OriginY = 0, double Scale = 1.0, int FrameId = 0,
+    int DisplayIndex = -1, bool IsClientArea = false);
+
+/// <summary>
+/// CaptureScreen 入参（T3 引入；spec §5 坐标模型 / §6.2 降采样）。旧
+/// <c>CaptureScreen(clip, maxDimension, format, quality)</c> 重载委托到此，行为不变（宿主切换见 Task 10）。
+/// </summary>
+/// <param name="Clip">region 裁剪矩形（mode=screen 返回图像素空间）；null=全屏。</param>
+/// <param name="MaxWidth">输出长边上限（原生物理像素）；0=不限。R8 临时映射，见 ScreenCapture.ResolveMaxDimension。</param>
+/// <param name="MaxHeight">输出长边上限；0=不限。</param>
+/// <param name="Format">输出编码 "png" | "jpeg"（默认 png）。</param>
+/// <param name="Quality">jpeg 质量 0-100（默认 80）。</param>
+public sealed record CaptureOptions(
+    Rectangle? Clip = null,
+    int MaxWidth = 0,
+    int MaxHeight = 0,
+    string Format = "png",
+    int Quality = 80);
 
 /// <summary>截图失败（约定中文文案由 Engine 生成，宿主 catch 后原样返回——spec §5.2
 /// 「屏外判定由 Engine 执行并回传约定错误，宿主不触碰坐标换算」的落地通道）。</summary>
