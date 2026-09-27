@@ -91,4 +91,45 @@ public sealed class DisplayEnumeratorTests
         Assert.Contains("不存在", ex.Message);
         Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(-1));
     }
+
+    // ===== R21 回归：display 的 k 基数=显示器原生尺寸（非虚拟屏图像空间）=====
+
+    [Fact]
+    public void CaptureDisplay_WithHostScale_ReturnsThatDisplayBounds_NotVirtualScreen()
+    {
+        SkipIfScreenUnavailable();
+        var ds = ScreenCapture.EnumerateDisplays();
+        if (ds.Length == 0) Assert.Skip("未枚举到显示器");
+        // 多屏优先取第二块：R21 缺陷（display 矩形被当虚拟屏 Clip）正在副屏路径复现（交集为空/夹回整屏）。
+        var idx = ds.Length >= 2 ? 1 : 0;
+        var d = ds[idx];
+
+        // 镜像宿主 display 模式默认（maxDimension=1568），确认缩放以显示器尺寸为基数而非虚拟屏。
+        var r = ScreenCapture.CaptureDisplay(idx, new CaptureOptions(MaxWidth: 1568, MaxHeight: 1568));
+
+        Assert.Equal(d.Index, r.DisplayIndex);
+        Assert.Equal(d.Bounds.X, r.OriginX);                 // origin=该显示器左上
+        Assert.Equal(d.Bounds.Y, r.OriginY);
+        Assert.Equal(d.Bounds.Width, r.NativeWidth);         // 原生=该显示器矩形（非整虚拟屏）
+        Assert.Equal(d.Bounds.Height, r.NativeHeight);
+        var k = Math.Min(1.0, Math.Min(1568.0 / d.Bounds.Width, 1568.0 / d.Bounds.Height));
+        Assert.Equal(Math.Max(1, (int)Math.Round(d.Bounds.Width * k)), r.Width);
+        Assert.Equal(Math.Max(1, (int)Math.Round(d.Bounds.Height * k)), r.Height);
+    }
+
+    [Fact]
+    public void CaptureDisplay_SecondMonitor_DoesNotThrow_OriginIsThatMonitor()
+    {
+        SkipIfScreenUnavailable();
+        var ds = ScreenCapture.EnumerateDisplays();
+        if (ds.Length < 2)
+            Assert.Skip("单显示器环境：display=2 的 R21 回归（旧实现会抛「完全在屏幕范围之外」）需多屏才可复现");
+        var d = ds[1];
+        var r = ScreenCapture.CaptureDisplay(1);
+        Assert.Equal(1, r.DisplayIndex);
+        Assert.Equal(d.Bounds.X, r.OriginX);
+        Assert.Equal(d.Bounds.Y, r.OriginY);
+        Assert.Equal(d.Bounds.Width, r.Width);
+        Assert.Equal(d.Bounds.Height, r.Height);
+    }
 }

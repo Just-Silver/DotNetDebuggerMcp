@@ -185,11 +185,16 @@ public static class ScreenCapture
         => CaptureDisplay(index, new CaptureOptions());
 
     /// <summary>
-    /// 指定显示器逐屏捕获（带抓取选项，Task 10/R18）：语义同 <see cref="CaptureDisplay(int)"/>，另透传
-    /// <paramref name="options"/> 的 <see cref="CaptureOptions.MaxWidth"/>/<see cref="CaptureOptions.MaxHeight"/>/
-    /// <see cref="CaptureOptions.IncludeCursor"/>（避免 display 模式的光标/缩放请求被静默丢弃）。
-    /// <b>忽略 <see cref="CaptureOptions.Clip"/></b>——显示器几何由目标显示器自身 Bounds 决定（此处覆盖为
-    /// Bounds 偏移）；<see cref="CaptureOptions.ClientArea"/> 对 display 无意义、同样忽略。
+    /// 指定显示器逐屏捕获（带抓取选项，Task 10/R18；R21 修正 k 基数）：语义同 <see cref="CaptureDisplay(int)"/>，
+    /// 另透传 <paramref name="options"/> 的 <see cref="CaptureOptions.MaxWidth"/>/<see cref="CaptureOptions.MaxHeight"/>/
+    /// <see cref="CaptureOptions.IncludeCursor"/>。
+    /// <para><b>display 与 region 是不同入口（不可混用坐标口径）</b>：本方法<b>直接按该显示器矩形 <c>d.Bounds</c>
+    /// 抓取</b>，<c>k</c> 的基数是<b>显示器原生尺寸</b>（spec §6.2），结果 origin=显示器左上、DisplayIndex=库侧 0 基。
+    /// 而 <see cref="CaptureScreen(CaptureOptions)"/> 的 <see cref="CaptureOptions.Clip"/> 是「<b>虚拟屏</b>图像空间」
+    /// 坐标——若把显示器原生矩形当 Clip 传入，多显示器下会被按虚拟屏为 kBase 的换算夹回整屏或判为屏外（R21 前的缺陷），
+    /// 故本方法<b>不经</b> <see cref="CaptureScreen(CaptureOptions)"/>。</para>
+    /// <b>忽略 <see cref="CaptureOptions.Clip"/>/<see cref="CaptureOptions.ClientArea"/></b>（显示器几何由自身决定）。
+    /// 索引越界抛约定错误。
     /// </summary>
     public static CaptureResult CaptureDisplay(int index, CaptureOptions options)
     {
@@ -198,10 +203,12 @@ public static class ScreenCapture
         if ((uint)index >= (uint)displays.Length)
             throw new CaptureException($"显示器序号 {index} 不存在（共 {displays.Length} 台，库侧 0 基索引 0..{displays.Length - 1}）。");
         var d = displays[index];
-        // CaptureOptions.Clip 是 spec §5 的「图像空间」坐标（相对虚拟屏左上）；k=1 时与原生空间重合，故 Clip = Bounds 偏移（无缩放）。
-        var native = GdiCapture.VirtualScreenRect();
-        var clipInImageSpace = new Rectangle(d.Bounds.X - native.X, d.Bounds.Y - native.Y, d.Bounds.Width, d.Bounds.Height);
-        return CaptureScreen(options with { Clip = clipInImageSpace }) with { DisplayIndex = index };
+        // 直接抓该显示器屏幕矩形；kBase = 显示器原生尺寸（非虚拟屏），故 origin 即显示器左上、无虚拟屏偏移换算。
+        using var bmp = GdiCapture.CaptureScreenBits(d.Bounds);
+        var cursorNote = OverlayCursorNote(bmp, options.IncludeCursor, d.Bounds.X, d.Bounds.Y);
+        return ImagePipeline.Process(bmp, bmp.Size, options.MaxWidth, options.MaxHeight,
+            windowTitle: null, sourceName: "BitBlt" + cursorNote,
+            originX: d.Bounds.X, originY: d.Bounds.Y) with { DisplayIndex = d.Index };
     }
 
     /// <summary>

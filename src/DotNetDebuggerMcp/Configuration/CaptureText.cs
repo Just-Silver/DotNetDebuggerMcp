@@ -35,6 +35,10 @@ internal static class CaptureText
     public const string ElementNeedsProcess =
         "mode=element 需要 processId 定位目标进程（或先 debug_launch 建立会话自动取目标 pid）。";
 
+    /// <summary>mode=element 未提供 element 引用（R24：不静默截取首个元素）。</summary>
+    public const string ElementRequired =
+        "mode=element 需提供 element（可为元素序号——可先 ui_find 取编号，或控件名/AutomationId 子串）。";
+
     /// <summary>mode=element 时未命中任何元素。</summary>
     public static string ElementNotFound(string element)
         => $"未找到 element=\"{element}\" 对应的 UIA 元素。可先 ui_find 看可用控件与 index（同源）再截图。";

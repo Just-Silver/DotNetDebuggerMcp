@@ -39,8 +39,9 @@ public static class DebugScreenshotTool
         [Description("mode=region 时必填，\"x,y,w,h\"（坐标为 mode=screen 返回图像的像素空间，原点左上）；mode=screen 时可选用作局部裁剪。")] string region = "",
         [Description("mode=element 用：UIA 元素引用——元素序号（相对目标窗口全量元素清单，与无过滤 ui_find 的 index 同源）或控件名/AutomationId 子串。")] string element = "",
         [Description("可交互性护栏（可省略）：填写 ui_find 返回的帧号校验目标是否来自旧画面（0=不校验；非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
-        [Description("输出宽上限（像素；0=用默认长边上限 1568；两轴可分别指定，等比缩放不放大）。")] int maxWidth = 0,
-        [Description("输出高上限（像素；0=用默认长边上限 1568；语义同 maxWidth）。")] int maxHeight = 0,
+        [Description("输出长边上限（像素，默认 1568；0=不缩放、返回 1:1 原图）；maxWidth/maxHeight 分别指定时覆盖对应轴。")] int maxDimension = AppConfig.ScreenshotMaxDimension,
+        [Description("输出宽上限（像素；0=用 maxDimension；两轴可分别指定，等比缩放不放大）。")] int maxWidth = 0,
+        [Description("输出高上限（像素；0=用 maxDimension；语义同 maxWidth）。")] int maxHeight = 0,
         [Description("是否在截图中包含鼠标光标（默认 false；WGC 源内建开关，GDI 源手动叠加、失败时来源行注明「光标未叠加」）。")] bool includeCursor = false,
         [Description("window/foreground 等窗口出现的秒数（默认 5，范围 0-30；0=立即试一次）。")] int timeoutSeconds = 5,
         [Description("非空=强制落盘到该路径；空=仅图片超 2MB 时落盘到本地 screenshots 目录。")] string filePath = "",
@@ -78,9 +79,9 @@ public static class DebugScreenshotTool
                 }
             }
 
-            // 图像经济（spec §6.2）：显式 maxWidth/maxHeight 优先，未指定的轴回落默认长边上限。
-            var maxW = maxWidth > 0 ? maxWidth : AppConfig.ScreenshotMaxDimension;
-            var maxH = maxHeight > 0 ? maxHeight : AppConfig.ScreenshotMaxDimension;
+            // 图像经济（spec §6.2/§4.1）：maxWidth/maxHeight 分别覆盖对应轴，未指定轴回落 maxDimension；
+            // 两轴有效上限皆 0 ⇒ 不缩放（CaptureOptions ≤0 = 该轴不限制，k=1，1:1 原图）。
+            var (maxW, maxH) = ResolveMaxDimensions(maxDimension, maxWidth, maxHeight);
 
             CaptureResult result;
             string targetLine;
@@ -146,6 +147,8 @@ public static class DebugScreenshotTool
                 }
                 default: // element
                 {
+                    // R24：mode=element 必须给 element 引用，绝不静默截取首个元素。
+                    if (string.IsNullOrWhiteSpace(element)) return TextOnly(CaptureText.ElementRequired);
                     var procPid = processId > 0 ? processId : DebugSessionService.Manager.Active?.ProcessId ?? 0;
                     if (procPid <= 0) return TextOnly(CaptureText.ElementNeedsProcess);
                     var found = await LocateElementAsync(procPid, element, timeoutSeconds, cancellationToken);
@@ -247,14 +250,23 @@ public static class DebugScreenshotTool
             return CaptureText.Incompatible("windowTitle", "mode=window/foreground", mode);
         if (mode == "foreground" && !string.IsNullOrWhiteSpace(windowTitle) && windowTitle.Trim() != "@active")
             return CaptureText.Incompatible("windowTitle", "mode=window（foreground 仅接受 @active）", mode);
-        if (processId > 0 && mode is not ("window" or "foreground" or "element"))
-            return CaptureText.Incompatible("processId", "mode=window/foreground/element", mode);
+        if (processId > 0 && mode is not ("window" or "element"))
+            return CaptureText.Incompatible("processId", "mode=window/element", mode);
         return null;
     }
 
-    /// <summary>region 字符串解析（纯函数，可单测）：四段整数且 w/h 为正；坐标口径见 <c>[Description]</c>。</summary>
-    internal static bool TryParseRegion(string region, out Rectangle rect)
+    /// <summary>
+    /// 有效双轴输出上限（纯函数，可单测；spec §4.1/§6.2）：maxWidth/maxHeight&gt;0 分别覆盖对应轴，
+    /// 否则回落 maxDimension（负数视为 0）；两轴皆 0 ⇒ 不缩放（1:1 原图）。
+    /// </summary>
+    internal static (int Width, int Height) ResolveMaxDimensions(int maxDimension, int maxWidth, int maxHeight)
     {
+        var dim = Math.Max(0, maxDimension);
+        return (maxWidth > 0 ? maxWidth : dim, maxHeight > 0 ? maxHeight : dim);
+    }
+
+    /// <summary>region 字符串解析（纯函数，可单测）：四段整数且 w/h 为正；坐标口径见 <c>[Description]</c>。</summary>
+    internal static bool TryParseRegion(string region, out Rectangle rect)    {
         rect = default;
         var parts = (region ?? "").Split(',');
         if (parts.Length != 4 || !parts.All(p => int.TryParse(p.Trim(), out _))) return false;

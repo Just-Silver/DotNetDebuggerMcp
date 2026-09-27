@@ -212,6 +212,7 @@ public sealed class ScreenshotToolTests
             (new() { ["mode"] = "screen", ["processId"] = 123 }, "processId"),
             (new() { ["mode"] = "display", ["clientArea"] = true }, "clientArea"),
             (new() { ["mode"] = "screen", ["element"] = "x" }, "element"),
+            (new() { ["mode"] = "foreground", ["processId"] = 123 }, "processId"),
         };
         foreach (var (args, expect) in cases)
         {
@@ -220,6 +221,33 @@ public sealed class ScreenshotToolTests
             Assert.Contains("参数不兼容", r.Text());
             Assert.Contains(expect, r.Text());
         }
+    }
+
+    [Fact]
+    public async Task ElementMode_NoElement_ReturnsExplicitError()
+    {
+        // R24：mode=element 未给 element 必须显式报错，不得静默截取首个元素。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+        {
+            ["mode"] = "element",
+        });
+        Assert.True(r.IsError != true, r.Text());
+        Assert.Contains("需提供 element", r.Text());
+    }
+
+    [Theory]
+    [InlineData(1568, 0, 0, 1568, 1568)]      // 默认：双轴 1568
+    [InlineData(0, 0, 0, 0, 0)]               // maxDimension=0 且无覆盖 → 不缩放（1:1）
+    [InlineData(1568, 500, 0, 500, 1568)]     // maxWidth 覆盖一轴
+    [InlineData(1568, 0, 300, 1568, 300)]     // maxHeight 覆盖一轴
+    [InlineData(0, 500, 0, 500, 0)]           // 关闭缩放 + 单轴覆盖
+    [InlineData(-5, -1, 0, 0, 0)]             // 负值按 0（不缩放）
+    public void ResolveMaxDimensions_Matrix(int dim, int w, int h, int ew, int eh)
+    {
+        var (effW, effH) = DebugScreenshotTool.ResolveMaxDimensions(dim, w, h);
+        Assert.Equal(ew, effW);
+        Assert.Equal(eh, effH);
     }
 
     // ===== 代际护栏（ui_* frameId，spec §7.4；无 GUI，校验先于进程解析）=====
