@@ -2,7 +2,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 
-namespace DotNetDebugger.Engine.Capture;
+namespace SharpSight.Capture;
 
 /// <summary>
 /// 截图后处理唯一归属（spec §4.2：缩放/编码/裁剪/纯黑检测职责在 Engine，宿主不碰）：

@@ -6,6 +6,7 @@
     <Project Path="src/DotNetDebugger.Web/DotNetDebugger.Web.csproj" />
     <Project Path="src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj" />
     <Project Path="src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.Client.csproj" Id="f3860b2b-4192-4565-a126-d506da738ec3" />
+    <Project Path="src/SharpSight.Capture/SharpSight.Capture.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/DotNetDebugger.Decompiler.Tests/DotNetDebugger.Decompiler.Tests.csproj" />
@@ -13,5 +14,6 @@
     <Project Path="tests/DotNetDebugger.Session.Tests/DotNetDebugger.Session.Tests.csproj" />
     <Project Path="tests/DotNetDebugger.Web.Tests/DotNetDebugger.Web.Tests.csproj" />
     <Project Path="tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj" />
+    <Project Path="tests/SharpSight.Capture.Tests/SharpSight.Capture.Tests.csproj" />
   </Folder>
 </Solution>

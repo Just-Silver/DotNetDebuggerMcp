@@ -59,6 +59,7 @@
     <ProjectReference Include="..\DotNetDebugger.Engine\DotNetDebugger.Engine.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Session\DotNetDebugger.Session.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Web\DotNetDebugger.Web.csproj" />
+    <ProjectReference Include="..\SharpSight.Capture\SharpSight.Capture.csproj" />
   </ItemGroup>
 
   <!-- Web SDK 自带 AspNetCore.App 框架引用与 SWA Root 管线（合并 RCL 静态资产到 _content 路由） -->

@@ -1,7 +1,7 @@
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 using Xunit;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>
 /// 窗口定位单测（screenshot 计划 T2；spec §3.1 定位规则、§6.2 测试策略）：

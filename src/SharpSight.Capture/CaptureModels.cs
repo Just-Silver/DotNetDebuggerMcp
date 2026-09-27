@@ -1,6 +1,6 @@
 using System.Drawing;
 
-namespace DotNetDebugger.Engine.Capture;
+namespace SharpSight.Capture;
 
 // screenshot 计划 T2 —— 数据形状对 spec §4.2 的说明：spec 列举「hwnd/标题/rect/IsIconic」为必备字段；
 // 为落实 §3.3 头部「目标 (pid=N)」「命中 N 个可见窗口」与「已裁至屏幕交集」文案，补 3 个派生字段

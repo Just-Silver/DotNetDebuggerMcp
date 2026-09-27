@@ -1,9 +1,9 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 using Xunit;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>
 /// screen/region 抓取与换算单测（screenshot 计划 T4；spec §4.2 CaptureScreen、§3.1 k 换算、§5.2 屏外文案）。

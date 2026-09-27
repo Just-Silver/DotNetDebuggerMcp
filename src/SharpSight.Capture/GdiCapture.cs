@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Runtime.InteropServices;
 
-namespace DotNetDebugger.Engine.Capture;
+namespace SharpSight.Capture;
 
 /// <summary>
 /// GDI 抓取（spec §4.3 回退链第 2/3 道 + screen/region 唯一路径）：

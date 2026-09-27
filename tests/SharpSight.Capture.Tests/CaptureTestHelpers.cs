@@ -1,6 +1,6 @@
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>Capture 系测试共享辅助：等窗出现轮询（窗口创建异步，50ms 间隔）。T2/T4/T5 用例共用。</summary>
 internal static class CaptureTestHelpers

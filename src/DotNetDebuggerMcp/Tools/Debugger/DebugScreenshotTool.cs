@@ -1,4 +1,4 @@
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 using DotNetDebuggerMcp.Configuration;
 using DotNetDebuggerMcp.Services;
 using ModelContextProtocol.Protocol;

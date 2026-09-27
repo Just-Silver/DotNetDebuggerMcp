@@ -1,7 +1,7 @@
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 using Xunit;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>
 /// WGC 抓取单测（screenshot 计划 T5；spec §4.3 第 1 道、§6.2/§6.4：IsSupported 探测，不支持即 Skip 不红）。

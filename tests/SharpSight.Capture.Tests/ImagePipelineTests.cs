@@ -1,9 +1,9 @@
 using System.Drawing;
 using System.Drawing.Imaging;
-using DotNetDebugger.Engine.Capture;
+using SharpSight.Capture;
 using Xunit;
 
-namespace DotNetDebugger.Engine.Tests;
+namespace SharpSight.Capture.Tests;
 
 /// <summary>
 /// 图像管线上/下边界单测（screenshot 计划 T3；spec §4.2 缩放/编码/纯黑职责唯一归属 Engine）：

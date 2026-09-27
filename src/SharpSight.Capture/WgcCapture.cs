@@ -6,7 +6,7 @@ using Windows.Graphics.DirectX.Direct3D11;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
 
-namespace DotNetDebugger.Engine.Capture;
+namespace SharpSight.Capture;
 
 /// <summary>
 /// Windows Graphics Capture 单帧抓窗（spec §4.3 第 1 道；2026-09-22 spike 实测跑通版本）：
