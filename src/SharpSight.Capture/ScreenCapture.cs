@@ -289,6 +289,9 @@ public static class ScreenCapture
     public static CaptureResult CaptureWindow(IntPtr hwnd, CaptureOptions options)
     {
         EnsureDpi();
+        // options.Clip 在 window 模式被忽略（非静默丢参，见 CaptureOptions.Clip 文档）：窗口几何由目标窗口自身
+        // 决定——WGC 源取 DWMWA_EXTENDED_FRAME_BOUNDS、GDI 回退源取 GetWindowRect（Spike A 实测口径），
+        // 不支持再叠加外部裁剪；将来 element 模式复用 Clip 语义做元素级裁剪。
         const string failMsg = "窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。";
         var info = GetWindowInfo(hwnd) ?? throw new CaptureException(failMsg);
         var bounds = GetWindowBounds(hwnd) ?? throw new CaptureException(failMsg);

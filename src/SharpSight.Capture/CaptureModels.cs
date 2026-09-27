@@ -44,7 +44,7 @@ public sealed record WindowBounds(Rectangle ExtendedFrame, Rectangle WindowRect,
 /// <param name="Scale">图像像素 / 原生物理像素（spec §5 scale = Width/NativeWidth）。</param>
 /// <param name="FrameId">采集代际号（由 SharpSight.UiAutomation 维护、宿主注入；未接入时恒 0）。</param>
 /// <param name="DisplayIndex">归属显示器序号；screen 全屏/未定位到具体显示器时为 -1。</param>
-/// <param name="IsClientArea">抓取的是否为窗口客户区（Task 5 启用；当前恒 false）。</param>
+/// <param name="IsClientArea">抓取的是否为窗口客户区（仅 window 模式 ClientArea=true 时置 true，其余模式恒 false）。</param>
 public sealed record CaptureResult(
     byte[] Image, int Width, int Height, int NativeWidth, int NativeHeight,
     string? WindowTitle, string Source, bool WasAllBlack, bool ClippedToScreen = false,
@@ -55,7 +55,9 @@ public sealed record CaptureResult(
 /// CaptureScreen 入参（T3 引入；spec §5 坐标模型 / §6.2 降采样）。旧
 /// <c>CaptureScreen(clip, maxDimension, format, quality)</c> 重载委托到此，行为不变（宿主切换见 Task 10）。
 /// </summary>
-/// <param name="Clip">region 裁剪矩形（mode=screen 返回图像素空间）；null=全屏。</param>
+/// <param name="Clip">裁剪矩形（mode=screen 返回图像素空间）；null=全屏。
+/// <b>适用模式：screen / display /（将来 element）</b>；<b>window 模式忽略本参数</b>——窗口几何由目标窗口自身
+/// 决定（WGC 源取 <c>DWMWA_EXTENDED_FRAME_BOUNDS</c>、GDI 回退源取 <c>GetWindowRect</c>），不套用裁剪。</param>
 /// <param name="MaxWidth">输出长边上限（原生物理像素）；0/负=不限。两轴皆 0/负 ⇒ 不缩放（k=1，R10）。R8 临时映射，见 ScreenCapture.ResolveMaxDimension。</param>
 /// <param name="MaxHeight">输出长边上限；0/负=不限，语义同 <paramref name="MaxWidth"/>。</param>
 /// <param name="Format">输出编码 "png" | "jpeg"（默认 png）。</param>
