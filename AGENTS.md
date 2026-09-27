@@ -10,13 +10,15 @@
 |---|---|---|
 | `src/DotNetDebugger.Decompiler/` | 反编译/静态分析能力库 | `src/DotNetDebugger.Decompiler/AGENTS.md` |
 | `src/DotNetDebugger.Engine/` | 动态调试引擎（ICorDebug） | `src/DotNetDebugger.Engine/AGENTS.md` |
+| `src/SharpSight.Capture/` | 截图/图像能力库（WGC+GDI 捕获、缩放/编码/裁剪） | 根 `AGENTS.md`（暂无独立指令文件） |
+| `src/SharpSight.UiAutomation/` | UI 自动化能力库（FlaUI/UIA 元素模型与定位） | 根 `AGENTS.md`（暂无独立指令文件） |
 | `src/DotNetDebugger.Session/` | 会话/状态层（宿主与 Web 共享中枢） | `src/DotNetDebugger.Session/AGENTS.md` |
 | `src/DotNetDebugger.Web/` | Blazor Web 展示面（RCL，被宿主承载） | `src/DotNetDebugger.Web/AGENTS.md` |
 | `src/DotNetDebuggerMcp/` | **宿主 exe**（MCP+CLI+Web 承载） | `src/DotNetDebuggerMcp/AGENTS.md` |
 | `src/DotNetDebuggerMcp.Client/` | 端到端验证客户端 | `src/DotNetDebuggerMcp.Client/AGENTS.md` |
-| `tests/` | 5 个测试项目 + TestData | `tests/AGENTS.md` |
+| `tests/` | 6 个测试项目 + TestData | `tests/AGENTS.md` |
 
-**依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）与 `Engine`（只依赖 ClrDebug + DbgShim.win-x64 + System.Drawing.Common）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部四库。各库**均不得反向引用宿主**。
+**依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）、`Engine`（只依赖 ClrDebug + DbgShim.win-x64）、`SharpSight.Capture`（只依赖 System.Drawing.Common，**无第三方图像库**）与 `SharpSight.UiAutomation`（只依赖 FlaUI）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部六库。各库**均不得反向引用宿主**。
 
 **文档导航**：`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-2 已完成、P5 发布进行中、specs/research 导航）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `../../Externals/DebuggerExternals/`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
 

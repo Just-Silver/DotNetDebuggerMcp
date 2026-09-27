@@ -6,6 +6,22 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Added
+
+- **`screenshot` 工具通用化（阶段一）**：新增寻址模式 `display`（指定显示器，含 `primary`/`left`/`right` 邻屏）、`foreground`（当前前台窗口）、`element`（按 UIA 元素引用截单个控件）、`hwnd`（按窗口句柄）、`clientArea`（窗口客户区）；新增参数 `maxDimension`（默认 1568）、`maxWidth`/`maxHeight`（双轴上限）、`includeCursor`（叠加鼠标光标）；返回头部新增 `原点`/`缩放`/`帧` 坐标元数据（`screen_x=原点x+图像x/缩放`；`帧` 配合 `ui_find`/`ui_*` 的 `frameId` 做旧画面护栏）。`mode` 默认 `auto`（按其它参数推断），`windowTitle=@active` 指当前前台窗口
+- 新增可复用能力库 **`SharpSight.Capture`**（WGC+GDI 截图/图像管线）与 **`SharpSight.UiAutomation`**（FlaUI/UIA 元素模型与定位），拆自宿主/Engine，行为不变
+- `ui_find` 返回值头部含 `帧: frameId=N`；`ui_action`/`ui_input`/`ui_get` 新增可选 `frameId`（旧帧护栏：非当前帧拒绝并提示重新 `ui_find`/`screenshot`，0=不校验）
+
+### Changed
+
+- **`screenshot` 默认缩放上限由 2000 改为 1568**（长边）；`maxDimension=0`（且未做单轴覆盖）可关闭缩放、返回 1:1 原图
+
+### Removed
+
+- **`screenshot` 的 `format`/`quality` 参数已移除（破坏性）**：输出**固定 PNG**；传入这两个参数将被忽略
+
 ## [2.1.0] - 2026-09-27
 
 ### Added

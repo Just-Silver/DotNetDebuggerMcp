@@ -1,6 +1,6 @@
 # tests 测试套件导航
 
-仓库测试按被测项目拆分（`slnx` `/tests/` 下 5 个项目，xunit.v3 4.0.0 + Microsoft.NET.Test.Sdk，global.json 配置 MTP 运行器）。各测试项目细节见对应 `src/*/AGENTS.md` 的「验证」节；此处只记跨套件共享要点。
+仓库测试按被测项目拆分（`slnx` `/tests/` 下 6 个项目，xunit.v3 4.0.0 + Microsoft.NET.Test.Sdk，global.json 配置 MTP 运行器）。各测试项目细节见对应 `src/*/AGENTS.md` 的「验证」节；此处只记跨套件共享要点。
 
 ## 项目映射
 
@@ -8,6 +8,7 @@
 |---|---|---|
 | `DotNetDebugger.Decompiler.Tests` | Decompiler 库 | DocumentService 三套（语句级映射）+ 反编译后文件句柄释放回归（`AssemblyFileHandleTests`）+ 经库 internals；其余组件单测在宿主测试项目 |
 | `DotNetDebugger.Engine.Tests` | Engine | 真实 attach DebugTarget 子进程；**必须串行**（AssemblyInfo.cs ParallelMode.None） |
+| `SharpSight.Capture.Tests` | SharpSight.Capture 库 | 纯逻辑（ImagePipeline/DisplayEnumerator/区域换算/窗口定位）+ 真实抓屏/WGC（部分按环境 Skip）；起 UiSampleApp 子进程需排空 stdout/stderr |
 | `DotNetDebugger.Session.Tests` | Session | 真实 attach；**必须串行**；AgentActionLogTests 纯内存可快跑 |
 | `DotNetDebugger.Web.Tests` | Web 库 | TypeTreeData/DocumentStore/AgentViewContext 纯服务端（razor/JS 人工验收） |
 | `DotNetDebuggerMcp.Tests` | 宿主 | 最全：缓存/管道/校验/工具/更新检查 + debug 工具端到端 + MCP+Web 共存 + 会话级并发回归 |
