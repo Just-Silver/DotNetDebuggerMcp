@@ -43,8 +43,8 @@ public sealed record CaptureResult(
 /// <c>CaptureScreen(clip, maxDimension, format, quality)</c> 重载委托到此，行为不变（宿主切换见 Task 10）。
 /// </summary>
 /// <param name="Clip">region 裁剪矩形（mode=screen 返回图像素空间）；null=全屏。</param>
-/// <param name="MaxWidth">输出长边上限（原生物理像素）；0=不限。R8 临时映射，见 ScreenCapture.ResolveMaxDimension。</param>
-/// <param name="MaxHeight">输出长边上限；0=不限。</param>
+/// <param name="MaxWidth">输出长边上限（原生物理像素）；0/负=不限。两轴皆 0/负 ⇒ 不缩放（k=1，R10）。R8 临时映射，见 ScreenCapture.ResolveMaxDimension。</param>
+/// <param name="MaxHeight">输出长边上限；0/负=不限，语义同 <paramref name="MaxWidth"/>。</param>
 /// <param name="Format">输出编码 "png" | "jpeg"（默认 png）。</param>
 /// <param name="Quality">jpeg 质量 0-100（默认 80）。</param>
 public sealed record CaptureOptions(

@@ -97,7 +97,35 @@ public static class ScreenCapture
             IsIconic(hwnd), (int)pid, MatchCount: 1);
     }
 
-    private const int DefaultMaxDimension = 2000;   // 两侧均未指定时的兜底（与宿主 AppConfig.ScreenshotMaxDimension 现状一致）
+    /// <summary>
+    /// 枚举全部显示器（spec §4.2 mode=display / §3.3）：<see cref="DisplayInfo.Index"/> 为库侧 0 基、
+    /// 按 <c>EnumDisplayMonitors</c> 枚举序；含设备名、主屏标志、Bounds/WorkArea（虚拟屏物理像素）与有效 DPI/缩放。
+    /// 仅 Win32 查询、不读屏幕 DC，锁屏/无头环境亦可用。1 基对外编号与 primary/left/right 解析属宿主（Task 10）。
+    /// </summary>
+    public static DisplayInfo[] EnumerateDisplays()
+    {
+        EnsureDpi();   // 与其它公开入口一致：先设 PMv2，否则 GetMonitorInfoW 的矩形会被 DPI 虚拟化，破坏物理像素口径
+        return DisplayEnumerator.Enumerate();
+    }
+
+    /// <summary>
+    /// 指定显示器逐屏捕获（spec §4.2 mode=display）：<paramref name="index"/> 为库侧 0 基枚举序
+    /// （<see cref="DisplayInfo.Index"/>）；1 基对外编号与 primary/left/right 解析属宿主（Task 10），库侧不参与。
+    /// 复用 screen 的 GDI BitBlt（不开 WGC，spec §4.3-3），把该显示器 Bounds 作为裁剪区（无缩放，k=1）；
+    /// origin=显示器左上（虚拟屏物理像素），回填 <see cref="CaptureResult.DisplayIndex"/>。索引越界抛约定错误。
+    /// </summary>
+    public static CaptureResult CaptureDisplay(int index)
+    {
+        EnsureDpi();
+        var displays = EnumerateDisplays();
+        if ((uint)index >= (uint)displays.Length)
+            throw new CaptureException($"显示器序号 {index} 不存在（共 {displays.Length} 台，库侧 0 基索引 0..{displays.Length - 1}）。");
+        var d = displays[index];
+        // CaptureOptions.Clip 是 spec §5 的「图像空间」坐标（相对虚拟屏左上）；k=1 时与原生空间重合，故 Clip = Bounds 偏移（无缩放）。
+        var native = GdiCapture.VirtualScreenRect();
+        var clipInImageSpace = new Rectangle(d.Bounds.X - native.X, d.Bounds.Y - native.Y, d.Bounds.Width, d.Bounds.Height);
+        return CaptureScreen(new CaptureOptions(Clip: clipInImageSpace)) with { DisplayIndex = index };
+    }
 
     /// <summary>
     /// screen/region：GDI BitBlt 虚拟屏（spec §4.3-3：screen/region 不开 WGC）。
@@ -112,7 +140,8 @@ public static class ScreenCapture
     {
         EnsureDpi();
         var native = GdiCapture.VirtualScreenRect();
-        // R8 临时映射（Task 7 撤除）：双轴 maxWidth/maxHeight 暂压成单轴 maxDimension。
+        // R8 临时映射（Task 7 撤除）：双轴 maxWidth/maxHeight 暂压成单轴 maxDimension；
+        // 两轴皆 0/负 ⇒ 不缩放（R10，与 spec §4.1「0=不缩放」一致）。
         var maxDimension = ResolveMaxDimension(options.MaxWidth, options.MaxHeight);
         var k = Math.Min(1.0, (double)maxDimension / Math.Max(native.Width, native.Height));
         var imgW = Math.Max(1, (int)Math.Round(native.Width * k));
@@ -137,20 +166,21 @@ public static class ScreenCapture
 
     /// <summary>
     /// 旧签名（宿主当前调用点，Task 10 切换）：委托到 <see cref="CaptureScreen(CaptureOptions)"/>，
-    /// maxDimension 同时作 maxWidth/maxHeight，缩放与裁剪行为与切换前逐位一致。
+    /// maxDimension 同时作 maxWidth/maxHeight。宿主恒传正数（2000），故缩放/裁剪与切换前逐位一致；
+    /// 若传 0/负则按 R10 语义不缩放（k=1，spec §4.1「0=不缩放」）。
     /// </summary>
     public static CaptureResult CaptureScreen(Rectangle? clipInImageSpace, int maxDimension, string format, int quality)
         => CaptureScreen(new CaptureOptions(clipInImageSpace, maxDimension, maxDimension, format, quality));
 
     // R8 临时映射（Task 7 撤除）：真·双轴应为 k=min(1, maxW/W, maxH/H)；
     // 暂取正值中最小者作单轴 maxDimension 交给现有 ImagePipeline——仅当 MaxWidth==MaxHeight 与双轴等价，
-    // 故 T3 测试恒用相等两轴；两侧均非正时兜底 DefaultMaxDimension（等价「不放大」的小图不变）。
-    private static int ResolveMaxDimension(int maxWidth, int maxHeight)
+    // 故 T3 测试恒用相等两轴；两轴皆 0/负 ⇒ 不缩放（返回 int.MaxValue，k=1，与 spec §4.1「0=不缩放」一致）。
+    internal static int ResolveMaxDimension(int maxWidth, int maxHeight)
     {
         var m = int.MaxValue;
         if (maxWidth > 0) m = Math.Min(m, maxWidth);
         if (maxHeight > 0) m = Math.Min(m, maxHeight);
-        return m == int.MaxValue ? DefaultMaxDimension : m;
+        return m;
     }
 
     /// <summary>
