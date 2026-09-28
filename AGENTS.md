@@ -44,6 +44,27 @@
 - **新增错误提示必须扩展 `InProcessDecompiler.IsErrorResult`**（七类前缀判定），否则管道会把错误提示误当正常结果写入缓存。
 - 工程惯例：修改逻辑后 build 通过 + 单元测试通过 + 本机跑 Client/CLI 确认输出（CI 的 build.yml 只做 build/test/发布，不跑端到端）。
 
+## 代码可读性纪律（防"又臭又长"的函数）——历史教训
+
+**先例**：`ScreenshotTool.Screenshot`（~180 行：模式解析 / 兼容校验 / 6 路分派 / 头部 / 落盘全混在一起）与 `VerifyService.ExecuteStepsAsync`（~181 行：每个 step kind 全内联）。2026-09-28 以 **Extract Method + 每模式/每步骤小函数**（行为不变、逐项提交）拆短。**别再写出这种函数。**
+
+- **阈值（硬要求）**：单个方法（不含 XML 文档注释与空行）**≤ 60 行**为宜，**一旦超过 80 行必须拆**——或在方法首行注释写明"为何不可拆"的**具体**理由。本次改动把某方法推过 80 行时，**同一次改动里拆掉**。
+- **手法优先级**：① Extract Method（提取私有方法/纯函数）→ ② 提取辅助类型（如把散落的计数器/中间集合收进 `RunState` 这类小类）→ ③ 数据驱动（注册表/表）**仅当**「同一集合在 ≥3 处重复列举、且各分支同构」时才用。
+- **反模式——为消除 `switch` 而套策略模式 / 引 DI**：分支少、且各分支调用**不同 API** 时，`switch` 是最清晰、可 F12/grep 直达的表达；拆成"策略表"只会让"某值干了什么"不可直达（属负收益）。本仓库宿主**无 DI 容器**（工具类 static + `WithToolsFromAssembly`，能力库零宿主依赖、测试直接调 `internal static` 纯函数），**不要为风格引入 DI**。
+- **明确不拆**：底层协议/字节解码（IL opcode、`MetadataHandle.Kind`、token 高位、字符转义）与自研文法/DSL 解释器（表达式树、事件/步骤联合类型）——天然较长且为穷尽分派，保持 `switch`、内部按职责分块即可。
+- **自检**（启发式：`record struct`/单行构造函数会误报，需人工核对；命中即对照上表处置）：
+  ```powershell
+  $sig='^\s{4}(public|private|internal|protected)\s.*\('
+  Get-ChildItem -Recurse -Filter *.cs src | ForEach-Object {
+    $l=Get-Content $_.FullName; $i=@()
+    for($n=0;$n -lt $l.Count;$n++){ if($l[$n] -match $sig){ $i+=$n } }
+    for($j=0;$j -lt $i.Count;$j++){
+      $e=if($j+1 -lt $i.Count){$i[$j+1]}else{$l.Count}
+      if(($e-$i[$j]) -ge 80){ '{0}:{1} {2}行 {3}' -f $_.Name,($i[$j]+1),($e-$i[$j]),$l[$i[$j]].Trim() }
+    }
+  }
+  ```
+
 ## 输出约定（agent 消费的 API 形状）
 
 - 结果前置头部信息块（`程序集/目标` + 总量 + `当前输出` + `剩余` + `---`，纯文本不带行号）；命中缓存时 `目标` 行后追加 `缓存:   命中（重复查询成本低）`；写盘工具成功提示含「来源 <assembly>」。**不展示参数行**。
