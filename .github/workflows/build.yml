@@ -101,7 +101,10 @@ jobs:
           $marker = "## [$tag]"
           $idx = $changelog.IndexOf($marker)
           if ($idx -lt 0) { throw "CHANGELOG.md 缺少段落 $marker，请先为 $tag 记录变更说明" }
-          $notes = $changelog.Substring($idx + $marker.Length)
+          # 跳过整行标题（`## [<version>] - <date>`）再取正文：否则正文首行会残留悬空的 `- <date>`
+          $lineEnd = $changelog.IndexOf("`n", $idx)
+          if ($lineEnd -lt 0) { throw "CHANGELOG.md 段落 $marker 标题行异常（其后无换行）" }
+          $notes = $changelog.Substring($lineEnd + 1)
           $next = $notes.IndexOf("`n## ")
           if ($next -ge 0) { $notes = $notes.Substring(0, $next) }
           $notes = $notes.Trim()
