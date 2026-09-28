@@ -151,7 +151,8 @@ public static class ScreenshotTool
                         notes.Add($"选择:   命中 {info.MatchCount} 个可见窗口 → 已选 hwnd={info.Hwnd} {info.Rect.Width}x{info.Rect.Height} \"{info.Title}\"{rule}");
                     }
                     if (info.Title.Length == 0)
-                        notes.Add($"备注:   选中窗口无标题（hwnd={info.Hwnd}）——它不在 screenshot_windows 清单里；建议改用 hwnd 精确指定");
+                        notes.Add(NoTitleNote(info.Hwnd.ToInt64(),
+                            ScreenCapture.FindForegroundWindow()?.Hwnd == info.Hwnd));
                     if (!info.IsIconic && (info.Rect.Width < 32 || info.Rect.Height < 32))
                         notes.Add($"备注:   选中窗口尺寸极小（{info.Rect.Width}x{info.Rect.Height} hwnd={info.Hwnd}），可能不是目标主窗");
                     if (info.IsIconic)
@@ -273,6 +274,16 @@ public static class ScreenshotTool
     /// 与「标题子串忽略大小写」不一致，`@ACTIVE` 会被当普通标题检索而误判「窗口不存在」）。</summary>
     internal static bool IsActiveSpecial(string windowTitle)
         => string.Equals(windowTitle.Trim(), "@active", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 选中窗口无标题时的头部备注（纯函数可单测）：<c>screenshot_windows</c> 只列**有标题**的窗口，
+    /// 但**前台**窗口即使无标题也会保留并标 <c>(无标题)</c>。故备注须按该窗是否实际在清单里如实区分
+    /// （2026-09-28 修：此前一律断言「它不在 screenshot_windows 清单里」，与前台无标题窗实际被列出的行为矛盾）。
+    /// </summary>
+    internal static string NoTitleNote(long hwnd, bool listedInWindows)
+        => listedInWindows
+            ? $"备注:   选中窗口无标题（hwnd={hwnd}）——它在 screenshot_windows 清单里标为 (无标题)（该窗为前台窗口）；建议改用 hwnd 精确指定"
+            : $"备注:   选中窗口无标题（hwnd={hwnd}）——它不在 screenshot_windows 清单里（无标题且非前台）；建议改用 hwnd 精确指定";
 
     /// <summary>region 字符串解析（纯函数，可单测）：四段整数且 w/h 为正；坐标口径见 <c>[Description]</c>。
     /// <paramref name="sizeInvalid"/>=true 表示「格式对但取值非法（w/h≤0）」，供调用方分开报错。</summary>

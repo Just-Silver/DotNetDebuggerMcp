@@ -637,6 +637,27 @@ public sealed class ScreenshotToolTests
         }
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void NoTitleNote_ReflectsWhetherInWindowsList(bool listedInWindows)
+    {
+        // screenshot_windows 只列「有标题」的窗口，但**前台**窗口即使无标题也会以 (无标题) 列出——
+        // 备注须如实区分（2026-09-28 修：此前一律写「不在 screenshot_windows 清单里」，与前台无标题窗被列出矛盾）。
+        var note = ScreenshotTool.NoTitleNote(1576568, listedInWindows);
+        Assert.Contains("hwnd=1576568", note);
+        if (listedInWindows)
+        {
+            Assert.Contains("标为 (无标题)", note);
+            Assert.DoesNotContain("不在 screenshot_windows 清单里", note);
+        }
+        else
+        {
+            Assert.Contains("不在 screenshot_windows 清单里", note);
+            Assert.DoesNotContain("标为 (无标题)", note);
+        }
+    }
+
     [Fact]
     public void ResolveScreenshotPath_DefaultDirPattern_And_FilePathOverride()
     {

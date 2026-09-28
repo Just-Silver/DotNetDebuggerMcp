@@ -254,11 +254,31 @@ public sealed class DebugEngineCore : IAsyncDisposable
             return Task.CompletedTask;
         }, ct);
 
-    /// <summary>终止目标进程（强制结束，非正常退出）——调试/复验结束后收口（disconnect 只断开调试、进程继续运行）。</summary>
+    /// <summary>
+    /// 终止目标进程（强制结束，非正常退出）——调试/复验结束后收口（disconnect 只断开调试、进程继续运行）。
+    /// <para><b>运行态必须先停再终止</b>：<c>ICorDebugController::Terminate</c> 要求进程处于 synchronized（已停）态
+    /// （coreclr <c>CordbProcess::Terminate</c> 的 <c>ATT_REQUIRE_SYNCED_OR_NONINIT_MAY_FAIL</c>），进程 Running 时
+    /// 直接调用会因未同步失败（此前被 <c>catch {}</c> 静默吞掉、误报成功）。<c>Stop</c> 是唯一同步方法，故运行态
+    /// 先协作停再终止；终止失败不再吞——向上抛出，由宿主如实报「终止失败」。</para>
+    /// </summary>
     public Task TerminateAsync(int exitCode = 0, CancellationToken ct = default)
         => PostAsync(() =>
         {
-            try { _process?.Terminate(exitCode); } catch { /* 进程已退出/未就绪：忽略 */ }
+            var process = _process;
+            if (process is not null)
+            {
+                // 运行态：先 Stop 使其 synchronized（Stop 失败按「已停/已退出」容忍，让 Terminate 给出最终结论）。
+                try
+                {
+                    if (process.TryIsRunning(out var running) != HRESULT.S_OK || running)
+                        process.Stop(0);
+                }
+                catch (Exception ex)
+                {
+                    Log("warn", $"终止前 Stop 失败（按已停继续）: {ex.Message}");
+                }
+                process.Terminate(exitCode);
+            }
             _stoppedThreadId = -1;
             PublishState(DebugSessionState.Exited, $"terminated (exitCode={exitCode})");
             return Task.CompletedTask;

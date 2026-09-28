@@ -41,6 +41,36 @@ public sealed class BreakpointTests
     }
 
     [Fact]
+    public async Task Terminate_WhileRunning_KillsTargetProcess()
+    {
+        // 回归：进程处于运行态时 ICorDebugController::Terminate 因未同步失败，此前被静默吞后误报成功；
+        // 修后引擎先 Stop 再 Terminate，运行态也应真正杀掉目标。
+        var exe = TestPaths.DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        using var target = DebugTargetProcess.Start("sleep 30");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+        Assert.False(target.HasExited);
+
+        var events = new List<DebugEvent>();
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
+        var reader = ConsumeAsync(session.Events, events);
+
+        // 附加后目标停在初始同步点；Continue 使其进入运行态后再终止（缺陷触发条件）。
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        Assert.False(target.HasExited);
+
+        await session.TerminateAsync(exitCode: 7, ct: TestContext.Current.CancellationToken);
+
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline && !target.HasExited) await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.True(target.HasExited, "运行态 Terminate 后目标进程未退出");
+
+        await reader.WaitBounded(2000, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task SetBreakpoint_InvalidIlOffset_ThrowsChineseHint()
     {
         var exe = TestPaths.DebugTargetExe;
