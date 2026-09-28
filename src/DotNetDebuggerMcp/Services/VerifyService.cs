@@ -145,182 +145,230 @@ internal static class VerifyService
     private static async Task<string> ExecuteStepsAsync(VerifyScenario scenario, ActiveDebugSession active,
         string? managedModulePath, string header, string scenarioPath, CancellationToken ct)
     {
-        var bpOrder = new List<DebugBreakpoint>();          // 场景内 breakpoint 步骤出现序（assert 引用 0-based 序）
-        var exceptionHitCount = 0;
-        var assertCount = 0;
-        var assertsPassed = 0;
-        var stepsExecuted = 0;
-
+        var st = new RunState();
         foreach (var step in scenario.Steps)
         {
-            switch (step.Kind)
-            {
-                case VerifyStepKind.Breakpoint:
-                {
-                    var resolve = ResolveMemberTarget(managedModulePath!, step);
-                    if (resolve.ErrorMessage is not null)
-                        return FailAt(header, step, resolve.ErrorMessage, active);
-                    try
-                    {
-                        var bp = await active.Session.SetBreakpointAsync(resolve.ModuleName, resolve.Token, 0,
-                            step.Hit, DebugBreakpointMode.Stop, condition: null, ct);
-                        bpOrder.Add(bp);
-                        managerLog($"第{step.Index}步 breakpoint {step.TypeName}.{step.MemberName}",
-                            bp.IsBound ? $"id={bp.Id}" : $"id={bp.Id}（待绑定，模块加载后自动绑）");
-                        stepsExecuted++;
-                    }
-                    catch (Exception ex)
-                    {
-                        return FailAt(header, step, $"设置断点失败：{ex.Message}", active);
-                    }
-                    break;
-                }
-                case VerifyStepKind.Continue:
-                {
-                    if (step.WaitSeconds == 0)
-                    {
-                        // 放行不等停点（供后续 uiAction/uiAssert 在目标运行中驱动 UI）——不做新停点等待。
-                        var st0 = active.Buffer.CurrentState;
-                        if (st0 != DebugSessionState.Exited && st0 != DebugSessionState.Detached)
-                        {
-                            try { await active.Session.ContinueAsync(ct); }
-                            catch (Exception ex) { return FailAt(header, step, $"continue 失败：{ex.Message}", active); }
-                        }
-                        managerLog($"第{step.Index}步 continue（放行不等停点）", "目标继续运行（供后续 uiAction/uiAssert 驱动）");
-                        stepsExecuted++;
-                        break;
-                    }
-                    var state = active.Buffer.CurrentState;
-                    if (state != DebugSessionState.Exited && state != DebugSessionState.Detached)
-                    {
-                        StopContext? newStop = null;
-                        var processExited = false;
-                        try
-                        {
-                            // debug_continue 同语义：无论当前 Stopped/Attaching/None 都放行（launch 冻结在 Main 前的初始同步点也是停）
-                            await active.Session.ContinueAsync(ct);
-                            // 等「新停点」deadline 循环（DebugRunToTool 同款陈旧快照保护）：ContinueAsync 返回时事件缓冲
-                            // 未必已消费 Running 事件——单次 WaitForStopAsync 会立刻返回 continue 前的旧 Stopped 快照，
-                            // 多断点/二次 continue 下 assert 会对旧快照假 FAIL。捕获 preStop 引用，返回仍是同一引用则丢弃继续等；
-                            // 进程 Exited 时 WaitForStopAsync 返回的 LastStop 也可能是 preStop——退出按状态判定，不引旧停点。
-                            var preStop = active.Buffer.LastStop; // continue 前停点快照（引用比较）
-                            var deadline = DateTime.UtcNow.AddSeconds(step.WaitSeconds);
-                            while (true)
-                            {
-                                var remaining = deadline - DateTime.UtcNow;
-                                if (remaining <= TimeSpan.Zero) break; // 到期 = 超时（newStop 保持 null）
-                                var waitStop = await active.Buffer.WaitForStopAsync(remaining, ct);
-                                if (active.Buffer.CurrentState == DebugSessionState.Exited)
-                                {
-                                    processExited = true;
-                                    break;
-                                }
-                                if (waitStop is not null && !ReferenceEquals(waitStop, preStop))
-                                {
-                                    newStop = waitStop;
-                                    break;
-                                }
-                                // 陈旧快照：丢弃继续等真正的新停点（缓冲翻到 Running→下个停点）
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            return FailAt(header, step, $"continue 失败：{ex.Message}", active);
-                        }
-
-                        var after = active.Buffer.CurrentState;
-                        if (processExited || after == DebugSessionState.Exited)
-                        {
-                            managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", "进程已退出（目标自然结束，非停点）");
-                            stepsExecuted++;
-                            break;
-                        }
-                        if (newStop is null)
-                            return FailAt(header, step,
-                                $"等待 {step.WaitSeconds} 秒未停（当前状态 {StateText(after)}）——断点未命中或代码路径未走到。", active);
-                        if (newStop.Kind == DebugEventKind.ExceptionHit) exceptionHitCount++;
-                        managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", $"stop={DescribeStop(newStop)}");
-                        stepsExecuted++;
-                    }
-                    else
-                    {
-                        managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", "进程已退出，跳过");
-                        stepsExecuted++;
-                    }
-                    break;
-                }
-                case VerifyStepKind.Assert:
-                {
-                    assertCount++;
-                    var ctx = BuildAssertContext(active, bpOrder, exceptionHitCount);
-                    var (passed, reason) = VerifyAssertions.Evaluate(step, ctx);
-                    managerLog($"第{step.Index}步 assert {DescribeAssert(step)}", passed ? "PASS" : $"FAIL {reason}");
-                    if (!passed)
-                        return FailAt(header, step, reason, active);
-                    assertsPassed++;
-                    stepsExecuted++;
-                    break;
-                }
-                case VerifyStepKind.UiAction:
-                {
-                    if (!OperatingSystem.IsWindowsVersionAtLeast(7))
-                        return FailAt(header, step, "uiAction 需要 Windows 7+（UIA3 仅 Windows）。", active);
-                    try
-                    {
-                        var ar = await UiRetryAsync(MakeUiAction(step, ct), ct, IsIdempotentVerb(step.Verb));
-                        managerLog($"第{step.Index}步 uiAction {DescribeStep(step)}", ar.Message);
-                        stepsExecuted++;
-                    }
-                    catch (OperationCanceledException) { throw; }
-                    catch (UiException ex) { return FailAt(header, step, ex.Message, active); }
-                    catch (Exception ex) { return FailAt(header, step, $"UI 动作失败：{ex.Message}", active); }
-                    break;
-                }
-                case VerifyStepKind.UiAssert:
-                {
-                    assertCount++;
-                    if (!OperatingSystem.IsWindowsVersionAtLeast(7))
-                        return FailAt(header, step, "uiAssert 需要 Windows 7+（UIA3 仅 Windows）。", active);
-                    var passed = false;
-                    var reason = "";
-                    try
-                    {
-                        var st = await UiRetryAsync(MakeUiGet(step, ct), ct, retryOnTimeout: true);
-                        var actualRaw = st.Raw ?? st.Value;
-                        if (step.EqualsText.Length > 0)
-                            passed = string.Equals(actualRaw, step.EqualsText, StringComparison.Ordinal);
-                        else
-                            passed = st.Value.Contains(step.ContainsText, StringComparison.OrdinalIgnoreCase);
-
-                        if (!passed)
-                        {
-                            // DB1：失败理由中的实际值按控件 Name/AutoId 脱敏（防 UI 读值泄露凭据；期望值来自场景、原样展示）
-                            var expected = step.EqualsText.Length > 0 ? step.EqualsText : step.ContainsText;
-                            var (safeActual, _) = SensitiveValueRedactor.Redact(st.ControlName, actualRaw);
-                            reason = step.EqualsText.Length > 0
-                                ? $"UI 断言 what={step.What} 实际值 {Quote(safeActual)}，期望 equals {Quote(expected)}。"
-                                : $"UI 断言 what={step.What} 实际值 {Quote(safeActual)} 不含 contains {Quote(expected)}。";
-                        }
-                    }
-                    catch (OperationCanceledException) { throw; }
-                    catch (UiException ex) { reason = ex.Message; }
-                    catch (Exception ex) { reason = $"UI 断言失败：{ex.Message}"; }
-
-                    managerLog($"第{step.Index}步 uiAssert {DescribeStep(step)}", passed ? "PASS" : $"FAIL {reason}");
-                    if (!passed) return FailAt(header, step, reason, active);
-                    assertsPassed++;
-                    stepsExecuted++;
-                    break;
-                }
-                case VerifyStepKind.Ui:
-                    return FailAt(header, step, $"步骤类型依赖未就绪（{step.Requires}）：ui.* 触发需 U1 能力，本版本未实现该步骤。", active);
-                case VerifyStepKind.Set:
-                    return FailAt(header, step, $"步骤类型依赖未就绪（{step.Requires}）：现场改值需 W1 能力，本版本未实现该步骤。", active);
-            }
+            var fail = await RunStepAsync(step, st, active, managedModulePath, header, ct);
+            if (fail is not null) return fail;   // fail-fast
         }
 
-        var assertSummary = assertCount > 0 ? $"断言 {assertsPassed}/{assertCount} 通过" : "无断言";
-        return $"{header}：PASS —— 步骤 {stepsExecuted}/{scenario.Steps.Count} 完成，{assertSummary}。场景文件：{scenarioPath}";
+        var assertSummary = st.AssertCount > 0 ? $"断言 {st.AssertsPassed}/{st.AssertCount} 通过" : "无断言";
+        return $"{header}：PASS —— 步骤 {st.StepsExecuted}/{scenario.Steps.Count} 完成，{assertSummary}。场景文件：{scenarioPath}";
+    }
+
+    /// <summary>场景执行的可变状态（收拢断点序 + 各计数器，随步骤累加）。</summary>
+    private sealed class RunState
+    {
+        public List<DebugBreakpoint> BpOrder { get; } = new();   // 场景内 breakpoint 步骤出现序（assert 引用 0-based 序）
+        public int ExceptionHitCount { get; set; }
+        public int AssertCount { get; set; }
+        public int AssertsPassed { get; set; }
+        public int StepsExecuted { get; set; }
+    }
+
+    /// <summary>单步分派：返回 null=继续下一步，非 null=FAIL 文本（fail-fast）。</summary>
+    private static async Task<string?> RunStepAsync(VerifyStep step, RunState st, ActiveDebugSession active,
+        string? managedModulePath, string header, CancellationToken ct)
+    {
+        switch (step.Kind)
+        {
+            case VerifyStepKind.Breakpoint:
+                return await RunBreakpointStepAsync(step, st, active, managedModulePath, header, ct);
+            case VerifyStepKind.Continue:
+                return await RunContinueStepAsync(step, st, active, header, ct);
+            case VerifyStepKind.Assert:
+                return RunAssertStep(step, st, active, header);
+            case VerifyStepKind.UiAction:
+                return await RunUiActionStepAsync(step, st, active, header, ct);
+            case VerifyStepKind.UiAssert:
+                return await RunUiAssertStepAsync(step, st, active, header, ct);
+            case VerifyStepKind.Ui:
+                return FailAt(header, step, $"步骤类型依赖未就绪（{step.Requires}）：ui.* 触发需 U1 能力，本版本未实现该步骤。", active);
+            case VerifyStepKind.Set:
+                return FailAt(header, step, $"步骤类型依赖未就绪（{step.Requires}）：现场改值需 W1 能力，本版本未实现该步骤。", active);
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>breakpoint 步骤：解析成员目标并下断点（未绑定=待绑定，模块加载后自动绑）。</summary>
+    private static async Task<string?> RunBreakpointStepAsync(VerifyStep step, RunState st,
+        ActiveDebugSession active, string? managedModulePath, string header, CancellationToken ct)
+    {
+        var resolve = ResolveMemberTarget(managedModulePath!, step);
+        if (resolve.ErrorMessage is not null)
+            return FailAt(header, step, resolve.ErrorMessage, active);
+        try
+        {
+            var bp = await active.Session.SetBreakpointAsync(resolve.ModuleName, resolve.Token, 0,
+                step.Hit, DebugBreakpointMode.Stop, condition: null, ct);
+            st.BpOrder.Add(bp);
+            managerLog($"第{step.Index}步 breakpoint {step.TypeName}.{step.MemberName}",
+                bp.IsBound ? $"id={bp.Id}" : $"id={bp.Id}（待绑定，模块加载后自动绑）");
+            st.StepsExecuted++;
+        }
+        catch (Exception ex)
+        {
+            return FailAt(header, step, $"设置断点失败：{ex.Message}", active);
+        }
+        return null;
+    }
+
+    /// <summary>continue 步骤：WaitSeconds=0 放行不等停点；否则等待新停点（陈旧快照保护见 <see cref="WaitForNewStopAsync"/>）。</summary>
+    private static async Task<string?> RunContinueStepAsync(VerifyStep step, RunState st,
+        ActiveDebugSession active, string header, CancellationToken ct)
+    {
+        if (step.WaitSeconds == 0)
+        {
+            // 放行不等停点（供后续 uiAction/uiAssert 在目标运行中驱动 UI）——不做新停点等待。
+            var st0 = active.Buffer.CurrentState;
+            if (st0 != DebugSessionState.Exited && st0 != DebugSessionState.Detached)
+            {
+                try { await active.Session.ContinueAsync(ct); }
+                catch (Exception ex) { return FailAt(header, step, $"continue 失败：{ex.Message}", active); }
+            }
+            managerLog($"第{step.Index}步 continue（放行不等停点）", "目标继续运行（供后续 uiAction/uiAssert 驱动）");
+            st.StepsExecuted++;
+            return null;
+        }
+
+        var state = active.Buffer.CurrentState;
+        if (state == DebugSessionState.Exited || state == DebugSessionState.Detached)
+        {
+            managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", "进程已退出，跳过");
+            st.StepsExecuted++;
+            return null;
+        }
+
+        var wait = await WaitForNewStopAsync(step, active, ct);
+        if (wait.Error is not null)
+            return FailAt(header, step, wait.Error, active);
+
+        var after = active.Buffer.CurrentState;
+        if (wait.ProcessExited || after == DebugSessionState.Exited)
+        {
+            managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", "进程已退出（目标自然结束，非停点）");
+            st.StepsExecuted++;
+            return null;
+        }
+        if (wait.Stop is null)
+            return FailAt(header, step,
+                $"等待 {step.WaitSeconds} 秒未停（当前状态 {StateText(after)}）——断点未命中或代码路径未走到。", active);
+        if (wait.Stop.Kind == DebugEventKind.ExceptionHit) st.ExceptionHitCount++;
+        managerLog($"第{step.Index}步 continue（等停 {step.WaitSeconds}s）", $"stop={DescribeStop(wait.Stop)}");
+        st.StepsExecuted++;
+        return null;
+    }
+
+    /// <summary>continue 后等待「新停点」（DebugRunToTool 同款陈旧快照保护）：ContinueAsync 返回时事件缓冲未必已消费
+    /// Running 事件——单次 WaitForStopAsync 会立刻返回 continue 前的旧 Stopped 快照，多断点/二次 continue 下 assert 会对
+    /// 旧快照假 FAIL。捕获 preStop 引用，返回仍是同一引用则丢弃继续等；进程 Exited 时 LastStop 也可能是 preStop——
+    /// 退出按状态判定，不引旧停点。返回 continue 异常文本（<c>Error</c>）、新停点、是否退出。</summary>
+    private static async Task<(StopContext? Stop, bool ProcessExited, string? Error)> WaitForNewStopAsync(
+        VerifyStep step, ActiveDebugSession active, CancellationToken ct)
+    {
+        StopContext? newStop = null;
+        var processExited = false;
+        try
+        {
+            // debug_continue 同语义：无论当前 Stopped/Attaching/None 都放行（launch 冻结在 Main 前的初始同步点也是停）
+            await active.Session.ContinueAsync(ct);
+            var preStop = active.Buffer.LastStop; // continue 前停点快照（引用比较）
+            var deadline = DateTime.UtcNow.AddSeconds(step.WaitSeconds);
+            while (true)
+            {
+                var remaining = deadline - DateTime.UtcNow;
+                if (remaining <= TimeSpan.Zero) break; // 到期 = 超时（newStop 保持 null）
+                var waitStop = await active.Buffer.WaitForStopAsync(remaining, ct);
+                if (active.Buffer.CurrentState == DebugSessionState.Exited)
+                {
+                    processExited = true;
+                    break;
+                }
+                if (waitStop is not null && !ReferenceEquals(waitStop, preStop))
+                {
+                    newStop = waitStop;
+                    break;
+                }
+                // 陈旧快照：丢弃继续等真正的新停点（缓冲翻到 Running→下个停点）
+            }
+        }
+        catch (Exception ex)
+        {
+            return (null, false, $"continue 失败：{ex.Message}");
+        }
+        return (newStop, processExited, null);
+    }
+
+    /// <summary>assert 步骤：对停点现场求值（详见 <see cref="VerifyAssertions.Evaluate"/>）。</summary>
+    private static string? RunAssertStep(VerifyStep step, RunState st, ActiveDebugSession active, string header)
+    {
+        st.AssertCount++;
+        var ctx = BuildAssertContext(active, st.BpOrder, st.ExceptionHitCount);
+        var (passed, reason) = VerifyAssertions.Evaluate(step, ctx);
+        managerLog($"第{step.Index}步 assert {DescribeAssert(step)}", passed ? "PASS" : $"FAIL {reason}");
+        if (!passed)
+            return FailAt(header, step, reason, active);
+        st.AssertsPassed++;
+        st.StepsExecuted++;
+        return null;
+    }
+
+    /// <summary>uiAction 步骤：UIA 语义动作（幂等动词可重试；UIA 异常/失败转 FAIL）。</summary>
+    private static async Task<string?> RunUiActionStepAsync(VerifyStep step, RunState st,
+        ActiveDebugSession active, string header, CancellationToken ct)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(7))
+            return FailAt(header, step, "uiAction 需要 Windows 7+（UIA3 仅 Windows）。", active);
+        try
+        {
+            var ar = await UiRetryAsync(MakeUiAction(step, ct), ct, IsIdempotentVerb(step.Verb));
+            managerLog($"第{step.Index}步 uiAction {DescribeStep(step)}", ar.Message);
+            st.StepsExecuted++;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (UiException ex) { return FailAt(header, step, ex.Message, active); }
+        catch (Exception ex) { return FailAt(header, step, $"UI 动作失败：{ex.Message}", active); }
+        return null;
+    }
+
+    /// <summary>uiAssert 步骤：读 UIA 值并比对（失败理由中的实际值按控件 Name/AutoId 脱敏）。</summary>
+    private static async Task<string?> RunUiAssertStepAsync(VerifyStep step, RunState st,
+        ActiveDebugSession active, string header, CancellationToken ct)
+    {
+        st.AssertCount++;
+        if (!OperatingSystem.IsWindowsVersionAtLeast(7))
+            return FailAt(header, step, "uiAssert 需要 Windows 7+（UIA3 仅 Windows）。", active);
+        var passed = false;
+        var reason = "";
+        try
+        {
+            var ui = await UiRetryAsync(MakeUiGet(step, ct), ct, retryOnTimeout: true);
+            var actualRaw = ui.Raw ?? ui.Value;
+            if (step.EqualsText.Length > 0)
+                passed = string.Equals(actualRaw, step.EqualsText, StringComparison.Ordinal);
+            else
+                passed = ui.Value.Contains(step.ContainsText, StringComparison.OrdinalIgnoreCase);
+
+            if (!passed)
+            {
+                // DB1：失败理由中的实际值按控件 Name/AutoId 脱敏（防 UI 读值泄露凭据；期望值来自场景、原样展示）
+                var expected = step.EqualsText.Length > 0 ? step.EqualsText : step.ContainsText;
+                var (safeActual, _) = SensitiveValueRedactor.Redact(ui.ControlName, actualRaw);
+                reason = step.EqualsText.Length > 0
+                    ? $"UI 断言 what={step.What} 实际值 {Quote(safeActual)}，期望 equals {Quote(expected)}。"
+                    : $"UI 断言 what={step.What} 实际值 {Quote(safeActual)} 不含 contains {Quote(expected)}。";
+            }
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (UiException ex) { reason = ex.Message; }
+        catch (Exception ex) { reason = $"UI 断言失败：{ex.Message}"; }
+
+        managerLog($"第{step.Index}步 uiAssert {DescribeStep(step)}", passed ? "PASS" : $"FAIL {reason}");
+        if (!passed) return FailAt(header, step, reason, active);
+        st.AssertsPassed++;
+        st.StepsExecuted++;
+        return null;
     }
 
     private static string FailAt(string header, VerifyStep step, string reason, ActiveDebugSession active)
