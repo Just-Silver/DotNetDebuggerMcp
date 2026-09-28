@@ -88,9 +88,7 @@ public static class ScreenCapture
             }
             else
             {
-                var sb = new StringBuilder(256);
-                GetWindowText(h, sb, sb.Capacity);
-                if (sb.ToString().IndexOf(titleSubstring, StringComparison.OrdinalIgnoreCase) < 0) return true;
+                if (ReadWindowTitle(h).IndexOf(titleSubstring, StringComparison.OrdinalIgnoreCase) < 0) return true;
             }
             count++;
             var info = InfoOf(h, (int)pid, count);
@@ -127,9 +125,7 @@ public static class ScreenCapture
             if (!IsWindowVisible(h) || GetAncestor(h, GaRoot) != h) return true;
             GetWindowThreadProcessId(h, out var pid);
             GetWindowRect(h, out var r);
-            var tsb = new StringBuilder(256);
-            GetWindowText(h, tsb, tsb.Capacity);
-            list.Add(new WindowHandleInfo(h, tsb.ToString(),
+            list.Add(new WindowHandleInfo(h, ReadWindowTitle(h),
                 new Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top),
                 IsIconic(h), (int)pid, 1));
             return true;
@@ -153,11 +149,26 @@ public static class ScreenCapture
     private static WindowHandleInfo InfoOf(IntPtr hwnd, int pid, int matchCount)
     {
         GetWindowRect(hwnd, out var r);
-        var sb = new StringBuilder(256);
-        GetWindowText(hwnd, sb, sb.Capacity);
-        return new WindowHandleInfo(hwnd, sb.ToString(),
+        return new WindowHandleInfo(hwnd, ReadWindowTitle(hwnd),
             new System.Drawing.Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top),
             IsIconic(hwnd), pid, matchCount);
+    }
+
+    // 标题读取缓冲（GetWindowText 最多写 Capacity-1 字符）；超长者只取到上限并以 … 明示，不返回完整超长标题。
+    private const int TitleCapacity = 256;
+
+    /// <summary>
+    /// 读窗口标题（上限 <see cref="TitleCapacity"/>-1 字符）。读满缓冲（可能被截断）时末尾补 <c>…</c> 明示——
+    /// <para>2026-09-28 修（batch3 D6）：此前固定 <c>StringBuilder(256)</c> 且**不加标记**，超长标题被静默截到 255、
+    /// 看似"标题就这么长"，误导排查。此处仅加 <c>…</c>；**刻意不返回完整标题**：完整标题对 agent 定位（按标题子串/pid）
+    /// 无价值，却会让 <c>screenshot_windows</c>（最多 200 行）等输出灌爆上下文。截断只影响展示，标题匹配仍按月/pid 正常。</para>
+    /// </summary>
+    private static string ReadWindowTitle(IntPtr hwnd)
+    {
+        var sb = new StringBuilder(TitleCapacity);
+        var read = GetWindowText(hwnd, sb, sb.Capacity);
+        var title = sb.ToString();
+        return read >= sb.Capacity - 1 ? title + "…" : title;   // 饱和=可能被截断 → 明示
     }
 
     /// <summary>

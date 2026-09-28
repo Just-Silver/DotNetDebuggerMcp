@@ -8,7 +8,7 @@ namespace SharpSight.Capture;
 
 /// <summary>定位到的窗口信息（FindMainWindow 返回；Z 序最前的可见顶层主窗）。</summary>
 /// <param name="Hwnd">窗口句柄。</param>
-/// <param name="Title">窗口标题（GetWindowText）。</param>
+/// <param name="Title">窗口标题（GetWindowText；超长有界截断，若被截断则末尾带 `…` 明示，不静默截断）。</param>
 /// <param name="Rect">窗口矩形（物理像素——入口统一设 DPI Per-Monitor V2）。</param>
 /// <param name="IsIconic">是否最小化（CaptureWindow 据此跳过 BitBlt 回退，spec §4.2）。</param>
 /// <param name="Pid">窗口所属进程 id（头部「目标」行展示）。</param>

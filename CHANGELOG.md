@@ -42,6 +42,7 @@
 - **`screenshot` 的 `filePath` 不展开环境变量**（`%TEMP%\x.png` 会生成名为 `%TEMP%` 的字面目录）→ 现在展开 `%VAR%`
 - **`debug_terminate` 对运行中的目标进程报「已终止」却实际未杀**：`ICorDebugController::Terminate` 要求进程处于已停（synchronized）态，运行中直接调用会因未同步失败（此前被静默吞掉、误报成功）。现引擎在终止前先协作停（`Stop`）再终止；`debug_launch` 会话另用 OS 进程句柄兜底强杀；终止失败不再吞——如实返回「终止失败」。agent 仍是**一次** `debug_terminate` 调用，无需先停/先附加
 - **`screenshot` 选中「前台无标题窗口」时备注自相矛盾**：此前固定写「它不在 `screenshot_windows` 清单里」，但 `screenshot_windows` 对**前台**窗口即使无标题也会以 `(无标题)` 列出；现按该窗是否实际入清单如实区分
+- **超长窗口标题被静默截断且无任何提示**：`screenshot_windows` 与 `screenshot` 头部遇超长（>255 字符）标题时截到 255 却看不出被截断（看似"标题就这么长"，误判排查）→ 现截断处补 `…` 明示；仍**不返回完整超长标题**（对定位无价值、且会灌爆上下文）
 
 ## [2.1.0] - 2026-09-27
 
