@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-28
+
 ### Added
 
 - **`screenshot` 工具通用化（阶段一）**：新增寻址模式 `display`（指定显示器，含 `primary`/`left`/`right` 邻屏）、`foreground`（当前前台窗口）、`element`（按 UIA 元素引用截单个控件）、`hwnd`（按窗口句柄）、`clientArea`（窗口客户区）；新增参数 `includeCursor`（叠加鼠标光标）；返回头部新增 `原点`/`帧` 坐标元数据（`screen_x=原点x+图像x`，图像恒为原生 1:1；`帧` 配合 `ui_find`/`ui_*` 的 `frameId` 做旧画面护栏）。`mode` 默认 `auto`（按其它参数推断），`windowTitle=@active` 指当前前台窗口
