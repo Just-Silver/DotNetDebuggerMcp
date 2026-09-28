@@ -15,7 +15,11 @@ namespace SharpSight.Capture;
 public static class ScreenCapture
 {
     private static int _dpiSet;   // 0=未设 1=已设（幂等）
-    private const int ProcessPerMonitorDpiAwareV2 = 4;
+    // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 是**负**伪句柄 -4（见 win32 `DPI_AWARENESS_CONTEXT` 定义：
+    // UNAWARE=-1/SYSTEM_AWARE=-2/PER_MONITOR_AWARE=-3/PER_MONITOR_AWARE_V2=-4）。曾误写 +4 →
+    // SetProcessDpiAwarenessContext 恒失败（ERROR_INVALID_PARAMETER=87），进程停留 DPI-UNAWARE；
+    // 100% 缩放时无差别故未被发现，非 100% 时 GetMonitorInfo/截图全变「逻辑像素」（batch3 F3）。
+    internal const int ProcessPerMonitorDpiAwareV2 = -4;
     private const int DwmwaExtendedFrameBounds = 9;   // DwmGetWindowAttribute 属性号（DWM 可见帧，去阴影）
     private const uint GaRoot = 2;
 
@@ -48,12 +52,16 @@ public static class ScreenCapture
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
     private static extern IntPtr GetWindowLongPtr(IntPtr hwnd, int index);
 
-    /// <summary>幂等设置进程 DPI 感知（首次调用生效；失败=已由系统/调用方设置，容忍）。</summary>
+    /// <summary>
+    /// 幂等设置进程 DPI 感知为 Per-Monitor V2（首次调用生效）。**所有查显示器/截图入口都会先调**——
+    /// 否则矩形与图像会被系统按 DPI 虚拟化成逻辑像素（非 100% 缩放下尺寸/坐标全错）。
+    /// 失败容忍：ERROR_ACCESS_DENIED(5)=已被清单/先前调用设置（此时以既有设置为准）；
+    /// ERROR_INVALID_PARAMETER(87)=上下文值非法（说明常量写错，见 <see cref="ProcessPerMonitorDpiAwareV2"/>）。
+    /// </summary>
     internal static void EnsureDpi()
     {
         if (Interlocked.CompareExchange(ref _dpiSet, 1, 0) != 0) return;
         SetProcessDpiAwarenessContext(new IntPtr(ProcessPerMonitorDpiAwareV2));
-        // ERROR_ACCESS_DENIED(5)=已设置、ERROR_INVALID_PARAMETER(87)=系统过旧——均容忍继续
     }
 
     /// <summary>
