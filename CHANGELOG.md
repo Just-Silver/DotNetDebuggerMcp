@@ -33,6 +33,13 @@
 - **`screenshot` 的 `region` 宽或高 ≤ 0 误报为「格式错误」**：现明确提示「宽/高必须为正整数」（格式本身没错，避免调用方反复改格式）
 - **`screenshot` 落盘失败提示中英混杂**：改为「落盘失败（原因）；已改为内联返回图片，可改用可写路径或去掉 `filePath` 重试」
 - `screenshot` 的 `timeoutSeconds` 超出 0-30 时静默夹取 → 现在头部注明已按夹取后的值处理
+- **`screenshot` 的 `element` 序号与带过滤的 `ui_find` 序号不同源、会静默截到别的控件**：说明已明确「序号必须是**无过滤** `ui_find` 的 index」并推荐用控件名/AutomationId（消除原说明「建议先用 ui_find 取 index」的自相矛盾）
+- **失败的 `element` 查找会把全局帧号推进数十**（内部 50ms 轮询每次调用都产帧）→ 现在**仅成功定位后**产一帧，一次拼错控件名不再让刚取得的有效 `frameId` 失效
+- **最小化窗口抓取失败时误导性归因「无桌面会话（服务/无头环境）」** → 改为「目标窗口已最小化，无法抓取：请先还原（`ui_action` verb=windowstate windowstate=normal）或改用 mode=screen/region」
+- **最小化主窗被多余备注「尺寸极小，可能不是目标主窗」** → 已最小化时不再报（最小化尺寸必然小），仅保留「目标窗口已最小化」
+- **`screenshot_displays` 缺说明承诺的「缩放比」**（100% 时被省略）→ 现在总是输出
+- **`windowTitle="@active"` 特值大小写敏感** → 改为大小写不敏感（`@ACTIVE` 亦可）；该入口头部与 `mode=foreground` 统一为「前台窗口」
+- **`screenshot` 的 `filePath` 不展开环境变量**（`%TEMP%\x.png` 会生成名为 `%TEMP%` 的字面目录）→ 现在展开 `%VAR%`
 
 ## [2.1.0] - 2026-09-27
 

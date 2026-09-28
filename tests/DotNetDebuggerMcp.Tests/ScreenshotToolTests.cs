@@ -29,6 +29,10 @@ public sealed class ScreenshotToolTests
     private static ImageContentBlock? ImageOf(CallToolResult r)
         => r.Content.OfType<ImageContentBlock>().FirstOrDefault();
 
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    private const int SwMinimize = 6;   // SW_MINIMIZE
+
     // ===== 启动/清理（UiSampleApp 独立副本；UseShellExecute=true 不继承管道句柄=排空纪律，spike 实测）=====
 
     private static Process LaunchUiSampleApp()
@@ -276,9 +280,12 @@ public sealed class ScreenshotToolTests
             });
             Assert.True(r.IsError != true, r.Text());
             Assert.Contains("选择:", r.Text());
+            // P0 回归：选中的不是无标题 1×1 助手窗（主窗可能最小化 → 160x28，故只排除 1×1 并校验标题非空）
+            var title = System.Text.RegularExpressions.Regex.Match(r.Text(), "目标:   窗口 \"([^\"]*)\"");
+            Assert.True(title.Success && title.Groups[1].Value.Length > 0, r.Text());
             var m = System.Text.RegularExpressions.Regex.Match(r.Text(), @"尺寸:\s*(\d+)x(\d+)");
             Assert.True(m.Success, r.Text());
-            Assert.True(int.Parse(m.Groups[1].Value) > 100 && int.Parse(m.Groups[2].Value) > 100, r.Text());
+            Assert.True(int.Parse(m.Groups[1].Value) > 1 && int.Parse(m.Groups[2].Value) > 1, r.Text());
         }
         finally
         {
@@ -395,6 +402,142 @@ public sealed class ScreenshotToolTests
             Assert.True(img.DecodedData.Length > 8 && img.DecodedData.Span[..8].SequenceEqual(PngMagic));
         }
         finally { KillUiSampleApp(app); }
+    }
+
+    [Fact]
+    public async Task Element_NotFound_DoesNotAdvanceFrame()
+    {
+        // D3 回归（2026-09-28）：失败/未命中的 element 查找（内部 50ms 轮询重试）不得推进全局帧号——
+        // 否则一次拼错控件名就把刚取得的有效 frameId 判成旧画面（实测曾 +46）。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            var f1 = await WaitFrameAsync(mcp, app.Id);          // 预热：等窗口就绪并取一帧
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "element",
+                ["processId"] = app.Id,
+                ["element"] = "NoSuchControlXYZ",
+                ["timeoutSeconds"] = 1,
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("未找到 element", r.Text());
+
+            var f2 = await WaitFrameAsync(mcp, app.Id);
+            Assert.Equal(f1 + 1, f2);      // 失败查找不产帧：只多了这次 ui_find 的那一帧
+        }
+        finally { KillUiSampleApp(app); }
+    }
+
+    /// <summary>经 MCP ui_find 取当前帧号（重试至窗口就绪；仅测试用）。</summary>
+    private static async Task<int> WaitFrameAsync(McpClient mcp, int pid)
+    {
+        string last = "";
+        for (var i = 0; i < 40; i++)
+        {
+            last = (await DebugMcpToolsTests.CallAsync(mcp, "ui_find",
+                new Dictionary<string, object?> { ["process"] = pid.ToString(), ["limit"] = 50 })).Text();
+            var m = System.Text.RegularExpressions.Regex.Match(last, @"frameId=(\d+)");
+            if (m.Success) return int.Parse(m.Groups[1].Value);
+            await Task.Delay(250, TestContext.Current.CancellationToken);
+        }
+        Assert.Fail($"ui_find 未返回 frameId（窗口未就绪）：{last}");
+        return 0;
+    }
+
+    [Fact]
+    public void IsActiveSpecial_CaseInsensitive()
+    {
+        // D5：@active 特值大小写不敏感（与「标题子串忽略大小写」一致）。
+        Assert.True(ScreenshotTool.IsActiveSpecial("@active"));
+        Assert.True(ScreenshotTool.IsActiveSpecial("@ACTIVE"));
+        Assert.True(ScreenshotTool.IsActiveSpecial("  @Active  "));
+        Assert.False(ScreenshotTool.IsActiveSpecial("@active2"));
+        Assert.False(ScreenshotTool.IsActiveSpecial(""));
+    }
+
+    [Fact]
+    public void ValidateCompatibility_ForegroundAcceptsActiveAnyCase()
+    {
+        Assert.Null(ScreenshotTool.ValidateCompatibility("foreground", "", "", "@ACTIVE", "", "", false, 0));
+        Assert.NotNull(ScreenshotTool.ValidateCompatibility("foreground", "", "", "别的标题", "", "", false, 0));
+    }
+
+    [Fact]
+    public void ResolveScreenshotPath_ExpandsEnvironmentVariables()
+    {
+        // D7：%VAR% 展开，否则会生成名为 "%TEMP%" 的字面目录。
+        var p = ScreenshotTool.ResolveScreenshotPath("%TEMP%\\shot.png", "region", 0);
+        Assert.DoesNotContain("%TEMP%", p);
+        Assert.EndsWith("shot.png", p);
+    }
+
+    [Fact]
+    public async Task Displays_ListsScaleRatio()
+    {
+        // D4：说明承诺「缩放比」，100% 也必须输出。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot_displays", new Dictionary<string, object?>());
+        Assert.True(r.IsError != true, r.Text());
+        if (r.Text().Contains("显示器: 0 台")) Assert.Skip("无显示器（无桌面会话）");
+        Assert.Contains("缩放", r.Text());
+    }
+
+    [Fact]
+    public async Task Window_ActiveSpecial_NamedAsForeground()
+    {
+        // D5+D6：@ACTIVE（大小写不敏感）应被识别为前台窗口，且头部与 mode=foreground 统一为「前台窗口」。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+        {
+            ["mode"] = "window",
+            ["windowTitle"] = "@ACTIVE",
+            ["timeoutSeconds"] = 0,
+        });
+        Assert.True(r.IsError != true, r.Text());
+        if (r.Text().Contains("没有前台窗口")) Assert.Skip("无前台窗口（锁屏/无桌面会话）");
+        Assert.Contains("目标:   前台窗口 ", r.Text());
+    }
+
+    [Fact]
+    public async Task Window_Minimized_NotesMinimizedWithoutTinySizeClaim()
+    {
+        // D9：最小化主窗只给「已最小化」备注，不再多报「尺寸极小，可能不是目标主窗」；
+        // 若该窗口最小化后抓取直接失败，则验证 D2 的可执行文案（已最小化 → 先还原）。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            var hwnd = await WaitMainWindowAsync(app);
+            ShowWindow(hwnd, SwMinimize);            // 直接 Win32 最小化（不依赖 UIA WindowPattern）
+            await Task.Delay(500, TestContext.Current.CancellationToken);
+
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "window",
+                ["processId"] = app.Id,
+                ["timeoutSeconds"] = 2,
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("已最小化", r.Text());
+            if (!r.Text().Contains("无法抓取"))
+                Assert.DoesNotContain("尺寸极小", r.Text());
+        }
+        finally { KillUiSampleApp(app); }
+    }
+
+    /// <summary>等 UiSampleApp 主窗口句柄就绪（仅测试用）。</summary>
+    private static async Task<IntPtr> WaitMainWindowAsync(Process app)
+    {
+        for (var i = 0; i < 50; i++)
+        {
+            app.Refresh();
+            if (app.MainWindowHandle != IntPtr.Zero) return app.MainWindowHandle;
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+        Assert.Fail("UiSampleApp 主窗口句柄未就绪");
+        return IntPtr.Zero;
     }
 
     // ===== screen/region 真实抓取（锁屏探测 Skip）=====

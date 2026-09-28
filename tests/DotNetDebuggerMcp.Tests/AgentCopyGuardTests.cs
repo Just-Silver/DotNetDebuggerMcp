@@ -65,6 +65,9 @@ public sealed class AgentCopyGuardTests
         { nameof(ScreenshotTool.Screenshot), "mode", "auto" },             // 模式推断默认值
         { nameof(ScreenshotTool.Screenshot), "processId", "非工具窗→有标题→面积最大" },   // pid 多窗择优（P0：防 1×1 助手窗）
         { nameof(ScreenshotTool.Screenshot), "element", "自动按其所属顶层窗口帧裁剪" },    // 无 HWND 控件回退（P1）
+        { nameof(ScreenshotTool.Screenshot), "element", "无过滤" },                        // 序号口径：必须是「无过滤」ui_find 的 index（D1）
+        { nameof(ScreenshotTool.Screenshot), "windowTitle", "@active（大小写不敏感）" },   // @active 特值大小写不敏感（D5）
+        { nameof(ScreenshotTool.Screenshot), "filePath", "%VAR%" },                        // filePath 支持环境变量展开（D7）
         { nameof(ScreenshotTool.Screenshot), "frameId", "所有模式都校验" },               // 护栏作用域（P2 说明澄清）
         { nameof(ScreenshotTool.Screenshot), "frameId", "普通 screen/region/window 截图不会" },  // 谁推进帧号（实测口径）
         { nameof(ScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
@@ -77,7 +80,7 @@ public sealed class AgentCopyGuardTests
         { nameof(ScreenshotTool.Screenshot), "windowTitle", "screenshot_windows" },
         { nameof(ScreenshotTool.Screenshot), "processId", "screenshot_windows" },
         { nameof(ScreenshotTool.Screenshot), "region", "先截一张" },
-        { nameof(ScreenshotTool.Screenshot), "element", "建议先用 ui_find" },
+        { nameof(ScreenshotTool.Screenshot), "element", "无过滤" },
         { nameof(UiTools.UiAction), "frameId", "旧画面" },
         { nameof(UiTools.UiInput), "frameId", "旧画面" },
         { nameof(UiTools.UiGet), "frameId", "旧画面" },

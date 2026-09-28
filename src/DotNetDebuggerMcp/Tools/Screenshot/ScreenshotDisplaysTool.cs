@@ -33,7 +33,7 @@ public static class ScreenshotDisplaysTool
                 var b = d.Bounds;   // 库侧 0 基枚举序 → 对外 1 基编号（与 screenshot 的 display 一致）
                 sb.AppendLine();
                 sb.Append($"  {d.Index + 1}{(d.IsPrimary ? " [主屏]" : "      ")}  \"{d.DeviceName}\"  ({b.X},{b.Y}) {b.Width}x{b.Height}");
-                if (Math.Abs(d.Scale - 1.0) > 1e-9) sb.Append($"  缩放 {d.Scale * 100:0}%");
+                sb.Append($"  缩放 {d.Scale * 100:0}%");   // 总是输出（说明承诺「缩放比」；2026-09-28 修 D4：此前 100% 时省略）
             }
             sb.AppendLine();
             sb.Append($"display 取值：1..{displays.Length} 或 primary；left/right 取主屏左/右侧相邻显示器。");

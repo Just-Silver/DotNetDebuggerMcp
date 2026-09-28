@@ -50,7 +50,8 @@ public sealed class CaptureWindowFindTests
         if (w is null) Assert.Skip("explorer 无可见根窗（锁屏/无桌面），spec §6.4 预案");
 
         Assert.False(string.IsNullOrEmpty(w!.Title));                      // 曾经会选中无标题的 1×1 助手窗
-        Assert.True(w.Rect.Width >= 32 && w.Rect.Height >= 32, $"{w.Rect.Width}x{w.Rect.Height}");
+        // 主窗可能处于最小化（rect 160x28）——只断言「不是 1×1 助手窗」，不假设窗口已还原。
+        Assert.True(w.Rect.Width > 1 && w.Rect.Height > 1, $"{w.Rect.Width}x{w.Rect.Height}");
         Assert.True(w.MatchCount >= 1);
     }
 }

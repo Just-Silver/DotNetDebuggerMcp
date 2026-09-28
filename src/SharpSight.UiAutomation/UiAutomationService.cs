@@ -55,13 +55,15 @@ internal sealed class UiAutomationService
 
     /// <summary>
     /// 元素级截图定位（spec §7.1）：与 <see cref="UiElementLocator.Find"/> 同一套身份/过滤/ordinal 与同一
-    /// <c>_lastFind</c> 缓存；产出新帧（每次采集一帧，spec §7.4）。供 <c>screenshot mode=element</c> 取
-    /// 结构化几何（RectPx/TopLevelHwnd）后交给 <c>SharpSight.Capture.CaptureElement</c>。
+    /// <c>_lastFind</c> 缓存。供 <c>screenshot mode=element</c> 取结构化几何（RectPx/TopLevelHwnd）后交给
+    /// <c>SharpSight.Capture.CaptureElement</c>。
+    /// <para><b>不产帧</b>（2026-09-28 修）：调用方在**成功定位后**才 <see cref="FrameRegistry.Next"/> 产一帧——
+    /// 该路径含 50ms 轮询重试，若每次调用都产帧，一次「元素名写错」会推进数十帧，把刚取得的有效
+    /// <c>frameId</c> 立刻判成旧画面。</para>
     /// </summary>
-    public Task<UiFindResult> FindForCaptureAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct)
-        => RunGateAsync(() => new UiFindResult(
-            _locator.FindForCapture(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit),
-            Frames.Next()), timeoutSeconds, ct);
+    public Task<IReadOnlyList<UiElementInfo>> FindForCaptureAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct)
+        => RunGateAsync(() => _locator.FindForCapture(
+            GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit), timeoutSeconds, ct);
 
     /// <summary>对目标控件执行语义动作（verb；windowstate 忽略 index/name/type 定位顶层窗口）。</summary>
     public Task<UiActionResult> ActionAsync(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate, int timeoutSeconds, CancellationToken ct)

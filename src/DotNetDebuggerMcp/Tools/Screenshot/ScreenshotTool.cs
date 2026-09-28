@@ -33,15 +33,15 @@ public static class ScreenshotTool
         [Description("截图模式（默认 auto）：auto=按其它参数推断；screen=全屏（虚拟屏）；display=指定显示器；window=目标窗口（默认整窗，可 clientArea=true 取客户区）；foreground=当前前台窗口；region=按 region 截局部；element=按 UIA 元素引用截该元素（见 element）。")] string mode = "auto",
         [Description("mode=display 用：显示器编号（1 基，如 1/2）或 primary（主屏，默认）/left（主屏左侧相邻）/right（右侧相邻）。不知道有几台/哪台是主屏时先调 screenshot_displays 列清单。")] string display = "",
         [Description("window/element 定位：目标进程 pid（0=未提供；window 模式优先于 windowTitle，element 模式必需或经活动调试会话兜底）。不知道 pid 时先调 screenshot_windows 列可见窗口（不限 .NET，含 pid）。该进程有多个可见窗口时按「非工具窗→有标题→面积最大」择优（头部 `选择:` 行给出所选 hwnd）；要截别的窗口请改用 hwnd。")] int processId = 0,
-        [Description("window 定位：窗口标题子串（忽略大小写，processId=0 时生效）；特值 @active 表示当前前台窗口。可用 screenshot_windows 列出可用窗口标题；标题检索取 Z 序最前的命中窗口。")] string windowTitle = "",
+        [Description("window 定位：窗口标题子串（忽略大小写，processId=0 时生效）；特值 @active（大小写不敏感）=当前前台窗口。可用 screenshot_windows 列出可用窗口标题；标题检索取 Z 序最前的命中窗口。")] string windowTitle = "",
         [Description("window 定位：窗口句柄十进制字符串（如 1234567；避开 64 位 JSON 精度），需为可见顶层主窗，非空时优先于 processId/windowTitle。不知道句柄时先调 screenshot_windows 列可见窗口（hwnd 列为十进制）。")] string hwnd = "",
         [Description("仅 window：true=截客户区（不含标题栏/边框），默认 false=整窗（WGC 可见帧，去阴影）。")] bool clientArea = false,
         [Description("mode=region 时必填，\"x,y,w,h\"（坐标为 mode=screen 返回图像的像素空间，原点左上；图像为原生 1:1，故该坐标=虚拟屏物理像素−头部原点）；mode=screen 时可选用作局部裁剪。可先截一张 mode=screen，用其头部 尺寸/原点 换算目标坐标。")] string region = "",
-        [Description("mode=element 用：UIA 元素引用——元素序号（相对目标窗口全量元素清单，与无过滤 ui_find 的 index 同源）或控件名/AutomationId 子串。建议先用 ui_find（同 process）取 index/名与帧号，再传入 element。元素无独立窗口句柄（XAML/UWP/Web 等）时自动按其所属顶层窗口帧裁剪。")] string element = "",
+        [Description("mode=element 用：UIA 元素引用——控件名/AutomationId 子串（**推荐**，不受序号口径影响；名称子串精确匹配优先、其次首个命中），或元素序号（**必须是「无过滤」ui_find 的 index**：相对目标窗口全量元素清单；带 text/type/automationId 过滤的 ui_find 序号是过滤后相对序号，与这里不同源，会截到别的控件）。元素无独立窗口句柄（XAML/UWP/Web 等）时自动按其所属顶层窗口帧裁剪。")] string element = "",
         [Description("可交互性护栏（可省略）：填写 ui_find 返回的帧号校验目标是否来自旧画面（0=不校验；非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。**对本工具所有模式都校验**；每次 ui_find 与 element 截图会推进帧号，普通 screen/region/window 截图不会。")] int frameId = 0,
         [Description("是否在截图中包含鼠标光标（默认 false；WGC 源内建开关，GDI 源手动叠加、失败时来源行注明「光标未叠加」）。")] bool includeCursor = false,
         [Description("window/foreground 等窗口出现的秒数（默认 5，范围 0-30；0=立即试一次；越界会夹取并在头部注明）。")] int timeoutSeconds = 5,
-        [Description("非空=强制落盘到该路径（相对路径以临时目录 %TEMP%\\DotNetDebuggerMcp\\screenshots 为基准，绝对路径按原样，均不会写入当前工作目录）；空=仅图片超 2MB 时自动落盘到该临时目录。**落盘时不再附图片内容**：只回文本 +「已落盘: <绝对路径>」，需自行读取该文件。")] string filePath = "",
+        [Description("非空=强制落盘到该路径（支持 `%VAR%` 环境变量，会展开；相对路径以临时目录 %TEMP%\\DotNetDebuggerMcp\\screenshots 为基准，绝对路径按原样，均不会写入当前工作目录）；空=仅图片超 2MB 时自动落盘到该临时目录。**落盘时不再附图片内容**：只回文本 +「已落盘: <绝对路径>」，需自行读取该文件。")] string filePath = "",
         CancellationToken cancellationToken = default)
     {
         try
@@ -120,6 +120,7 @@ public static class ScreenshotTool
                 case "window":
                 {
                     WindowHandleInfo info;
+                    var isActiveSpecial = false;   // windowTitle=@active：与 mode=foreground 同语义，头部统一「前台窗口」
                     if (!string.IsNullOrWhiteSpace(hwnd))
                     {
                         if (!long.TryParse(hwnd.Trim(), out var hv) || hv == 0)
@@ -128,11 +129,12 @@ public static class ScreenshotTool
                         if (byHwnd is null) return TextOnly(CaptureText.HwndInvalid(hwnd));
                         info = byHwnd;
                     }
-                    else if (windowTitle.Trim() == "@active")
+                    else if (IsActiveSpecial(windowTitle))
                     {
                         var fg = ScreenCapture.FindForegroundWindow();
                         if (fg is null) return TextOnly(CaptureText.ForegroundUnavailable);
                         info = fg;
+                        isActiveSpecial = true;
                     }
                     else
                     {
@@ -140,7 +142,9 @@ public static class ScreenshotTool
                         if (located.Error is not null) return TextOnly(located.Error);
                         info = located.Info!;
                     }
-                    targetLine = $"目标:   窗口 \"{info.Title}\" (pid={info.Pid})";
+                    targetLine = isActiveSpecial
+                        ? $"目标:   前台窗口 \"{info.Title}\" (pid={info.Pid})"
+                        : $"目标:   窗口 \"{info.Title}\" (pid={info.Pid})";
                     if (info.MatchCount > 1)
                     {
                         var rule = processId > 0 ? "（pid 检索按「非工具窗→有标题→面积最大」择优；要截别的窗口请用 hwnd 指定）" : "";
@@ -148,7 +152,7 @@ public static class ScreenshotTool
                     }
                     if (info.Title.Length == 0)
                         notes.Add($"备注:   选中窗口无标题（hwnd={info.Hwnd}）——它不在 screenshot_windows 清单里；建议改用 hwnd 精确指定");
-                    if (info.Rect.Width < 32 || info.Rect.Height < 32)
+                    if (!info.IsIconic && (info.Rect.Width < 32 || info.Rect.Height < 32))
                         notes.Add($"备注:   选中窗口尺寸极小（{info.Rect.Width}x{info.Rect.Height} hwnd={info.Hwnd}），可能不是目标主窗");
                     if (info.IsIconic)
                         notes.Add("备注:   目标窗口已最小化——截图为占位/残影画面，非真实界面");
@@ -258,12 +262,17 @@ public static class ScreenshotTool
             return CaptureText.Incompatible("region", "mode=region/screen", mode);
         if (!string.IsNullOrWhiteSpace(windowTitle) && mode is not ("window" or "foreground"))
             return CaptureText.Incompatible("windowTitle", "mode=window/foreground", mode);
-        if (mode == "foreground" && !string.IsNullOrWhiteSpace(windowTitle) && windowTitle.Trim() != "@active")
+        if (mode == "foreground" && !string.IsNullOrWhiteSpace(windowTitle) && !IsActiveSpecial(windowTitle))
             return CaptureText.Incompatible("windowTitle", "mode=window（foreground 仅接受 @active）", mode);
         if (processId > 0 && mode is not ("window" or "element"))
             return CaptureText.Incompatible("processId", "mode=window/element", mode);
         return null;
     }
+
+    /// <summary>windowTitle 的 <c>@active</c> 特值判定（大小写不敏感；2026-09-28 修：此前须精确小写，
+    /// 与「标题子串忽略大小写」不一致，`@ACTIVE` 会被当普通标题检索而误判「窗口不存在」）。</summary>
+    internal static bool IsActiveSpecial(string windowTitle)
+        => string.Equals(windowTitle.Trim(), "@active", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>region 字符串解析（纯函数，可单测）：四段整数且 w/h 为正；坐标口径见 <c>[Description]</c>。
     /// <paramref name="sizeInvalid"/>=true 表示「格式对但取值非法（w/h≤0）」，供调用方分开报错。</summary>
@@ -339,7 +348,7 @@ public static class ScreenshotTool
 
     /// <summary>头部组装（spec §4.3，纯文本不带行号；字段按模式裁剪，原点/帧来自 <see cref="CaptureResult"/>）。
     /// 图像恒为原生 1:1（本工具不缩放），故无「缩放」行、尺寸只给一个值。</summary>
-    /// <param name="notes">附加客观事实行（选择结果/小窗/最小化/参数越界）：插在「来源」之后、「备注」之前。</param>
+    /// <para><paramref name="notes"/>：附加客观事实行（选择结果/小窗/最小化/参数越界），插在「来源」之后、「备注」之前。</para>
     internal static StringBuilder BuildHeader(string targetLine, string mode, CaptureResult result,
         IReadOnlyList<string>? notes = null)
     {
@@ -419,13 +428,13 @@ public static class ScreenshotTool
             ct.ThrowIfCancellationRequested();
             try
             {
-                var find = byIndex
-                    ? await UiAutomationService.Instance.FindForCaptureAsync(process, "", "", "", "", limit, timeoutSeconds, ct)
-                    : await UiAutomationService.Instance.FindForCaptureAsync(process, "", selector, "", "", limit, timeoutSeconds, ct);
+                var elements = await UiAutomationService.Instance.FindForCaptureAsync(
+                    process, "", byIndex ? "" : selector, "", "", limit, timeoutSeconds, ct);
                 var hit = byIndex
-                    ? find.Elements.FirstOrDefault(e => e.Index == wanted)
-                    : find.Elements.FirstOrDefault();
-                if (hit is not null) return (hit, find.FrameId, null);
+                    ? elements.FirstOrDefault(e => e.Index == wanted)
+                    : elements.FirstOrDefault();
+                // 仅命中后产帧：失败/未命中/轮询重试不推进全局帧号（2026-09-28 修 D3）。
+                if (hit is not null) return (hit, UiAutomationService.Instance.Frames.Next(), null);
                 lastError = CaptureText.ElementNotFound(element);
             }
             catch (UiException ex)
@@ -444,6 +453,8 @@ public static class ScreenshotTool
     {
         if (!string.IsNullOrWhiteSpace(filePath))
         {
+            // 展开 %VAR%（如 %TEMP%\x.png）：否则会生成名为 "%TEMP%" 的字面目录（2026-09-28 修 D7）。
+            filePath = Environment.ExpandEnvironmentVariables(filePath);
             // 相对路径以截图根目录（临时目录）为基准——绝不按进程工作目录解析
             // （否则会写进使用者项目目录造成污染）；绝对路径按原样。
             var full = Path.IsPathRooted(filePath)

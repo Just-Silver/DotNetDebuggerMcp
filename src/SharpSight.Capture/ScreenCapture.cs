@@ -333,13 +333,13 @@ public static class ScreenCapture
         // options.Clip 在 window 模式被忽略（非静默丢参，见 CaptureOptions.Clip 文档）：窗口几何由目标窗口自身
         // 决定——WGC 源取 DWMWA_EXTENDED_FRAME_BOUNDS、GDI 回退源取 GetWindowRect（Spike A 实测口径），
         // 不支持再叠加外部裁剪；元素级裁剪是独立入口 CaptureElement(hwnd, elementRectPx)（不走本方法）。
-        var info = GetWindowInfo(hwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
-        var bounds = GetWindowBounds(hwnd) ?? throw new CaptureException(WindowCaptureFailMsg);
+        var info = GetWindowInfo(hwnd) ?? throw WindowCaptureFailure(hwnd);
+        var bounds = GetWindowBounds(hwnd) ?? throw WindowCaptureFailure(hwnd);
 
         // 客户区：GDI BitBlt 客户区屏幕矩形（spec §4.2；无 WGC——客户区本就是屏幕可见区）。
         if (options.ClientArea)
         {
-            if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw new CaptureException(WindowCaptureFailMsg);
+            if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw WindowCaptureFailure(hwnd);
             using var cbmp = GdiCapture.CaptureScreenBits(bounds.ClientArea);
             var cursorNote = OverlayCursorNote(cbmp, options.IncludeCursor, bounds.ClientArea.X, bounds.ClientArea.Y);
             return ImagePipeline.Process(cbmp, info.Title, "BitBlt" + cursorNote,
@@ -352,6 +352,13 @@ public static class ScreenCapture
     }
 
     private const string WindowCaptureFailMsg = "窗口抓取失败（WGC/PrintWindow/BitBlt 均未成功）——可能处于无桌面会话（服务/无头环境）。";
+
+    /// <summary>窗口抓取失败异常：目标最小化时给可执行指引（先还原窗口），否则给通用文案。
+    /// 2026-09-28 修：此前一律归因「无桌面会话」，会让 agent 误判环境不可用而放弃能力。</summary>
+    private static CaptureException WindowCaptureFailure(IntPtr hwnd)
+        => new(IsIconic(hwnd)
+            ? "目标窗口已最小化，无法抓取：请先还原窗口（ui_action verb=windowstate windowstate=normal）或改用 mode=screen/region。"
+            : WindowCaptureFailMsg);
 
     /// <summary>
     /// 整窗原生位图回退链 + 帧原点（Spike A 口径）：WGC（首帧几何 == <c>DWMWA_EXTENDED_FRAME_BOUNDS</c>，
@@ -385,7 +392,7 @@ public static class ScreenCapture
             originX = bounds.WindowRect.X; originY = bounds.WindowRect.Y;
         }
 
-        if (bmp is null) throw new CaptureException(WindowCaptureFailMsg);
+        if (bmp is null) throw WindowCaptureFailure(hwnd);
 
         // GDI 源无内建光标开关：编码前手动叠加（失败仅在 Source 备注，不计错误）；WGC 已内建、不重复叠加
         if (source != "WGC") source += OverlayCursorNote(bmp, includeCursor, originX, originY);
