@@ -23,15 +23,15 @@
 
 > 来源：截图三件套（`screenshot`/`screenshot_windows`/`screenshot_displays`）黑盒探索测试，产物 `D:\下载\test\batch2\`（报告 9 条）。**已逐条本机实测复核**，处置如下。
 
-**本轮修复（真缺陷）**
-- [ ] D1 `element` 序号跨工具口径不一致：`ui_find` 带过滤时返回**过滤后**相对序号，`screenshot element` 用**无过滤全量**序号，同数字异义且截图报成功 → 修：`element` 说明删除「建议先用 ui_find 取 index」的矛盾措辞，明确序号口径并推荐用控件名/AutomationId。
-- [ ] D2 最小化窗口抓取失败提示误导（归因「无桌面会话」）→ 修：失败且 `IsIconic` 时给「已最小化，请先还原」文案。
-- [ ] D3 失败的 element 查找把全局帧号推进数十（内部 50ms 轮询每次都产帧）→ 修：`FindForCaptureAsync` 不产帧，成功定位后由 `screenshot element` 产帧一次。
-- [ ] D4 `screenshot_displays` 缺说明承诺的「缩放比」（100% 时不输出）→ 修：总是输出缩放比。
-- [ ] D5 `windowTitle="@active"` 特值大小写敏感 → 修：改大小写不敏感（含 `mode=foreground` 兼容校验）。
-- [ ] D6 前台窗口在 `foreground` 与 `windowTitle=@active` 下头部命名不一致 → 修：统一「前台窗口」。
-- [ ] D7 `filePath` 不展开环境变量（`%TEMP%\x.png` 生成字面目录）→ 修：落盘前 `ExpandEnvironmentVariables`。
-- [ ] D9 最小化主窗被多余备注「尺寸极小，可能不是目标主窗」→ 修：`IsIconic` 时不再报尺寸极小。
+**本轮修复（8 条真缺陷，已随 `8aa9f95` 修复并加回归测试）**
+- D1 `element` 序号跨工具口径不一致（说明自相矛盾）→ 说明已明确「序号必须是「无过滤」`ui_find` 的 index」并推荐控件名/AutomationId。
+- D2 最小化窗口抓取失败归因「无桌面会话」→ 改为「已最小化，请先还原/改用 screen·region」。
+- D3 失败的 element 查找推进全局帧号数十 → `FindForCaptureAsync` 不产帧，成功定位后产一帧。
+- D4 `screenshot_displays` 缺「缩放比」→ 恒输出。
+- D5 `@active` 特值大小写敏感 → 大小写不敏感。
+- D6 前台窗口命名不一致 → 统一「前台窗口」。
+- D7 `filePath` 不展开环境变量 → 展开 `%VAR%`。
+- D9 最小化主窗多报「尺寸极小」→ 已最小化时不报。
 
 **已评估关闭（防重复立项）**
 - D8 `filePath` 静默覆盖已存在文件 = **关闭**（显式指定路径即写入，属预期行为）。
