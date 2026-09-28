@@ -41,8 +41,28 @@
 **待决策（需设计，暂不实施）**
 - D1 的**序号口径统一**：是否让 `ui_find` 过滤时并列输出全量序号（如 `[g=3 f=1]`），或让 `screenshot element` 跟随最近 `ui_find` 的过滤上下文——涉及 `ui_*` 契约与 `_lastFind` 缓存语义，需单独评估（含 `UiFrameRegistryTests.Find_And_FindForCapture_ShareSameIndexSequence` 影响）。
 
+## 2026-09-28 截图未覆盖项补测（batch3）——处置
+
+> 来源：对 batch2 遗留未覆盖项的补测，产物 `D:\下载\test\batch3\`（报告 27 项：**PASS 24 / FAIL 0 / UNCOVERED 3**；测试者未读 `src/`）。
+
+**本轮修复（1 条新缺陷）**
+- **D6 超长窗口标题静默截断**（>255 字符被截到 255 且无任何提示，看似"标题就这么长"）→ 截断处补 `…` 明示；刻意仍**不返回完整超长标题**（对定位无价值、且会让 `screenshot_windows` 等灌爆上下文）。commit `166cdd5`，回归 `CaptureWindowTitleTests`（3 例）。
+
+**纠错（batch2）**
+- batch2 辅助脚本 `img-diff.ps1` 有 bug（`$A/$a` 大小写不敏感同一变量 + `[string]` 类型约束把 Bitmap 强转成字符串 → 比较循环不执行、**恒报 diff=0**）→ 已修；据此**作废 batch2 §5「非前台窗口 `includeCursor` 不叠加」结论**（修正脚本重测：非前台同样叠加，diff=144）。batch2 报告已加更正横幅。
+- batch2 §4 两条缺陷（`debug_terminate` 运行态报成功未杀、前台无标题窗备注矛盾）已分别随 `96b11dd` 修复。
+
+**已确认（原存疑）**
+- E9 极小窗「尺寸极小」阈值 = `min(宽,高) < 32`（31 触发 / 32 不触发）；图像尺寸 = `GetWindowRect`。
+- element 无独立 HWND 回退裁剪（WPF）/ 下拉弹层独立顶层窗 / 越界 / console 无窗 / 旧帧护栏 均符合预期；`filePath` 落盘失败→明确提示 + 内联返回图片；`screenshot_windows` >200 行截断 + 上限提示。
+
+**待有环境才能覆盖（需用户介入）**
+- **F3 非 100% / 混合 DPI（最高风险未覆盖）**：需把某屏缩放改为 125%/150%（必要时重启会话）后，验 `screenshot_displays` 缩放比、`screenshot display` 原点/尺寸仍为物理像素、窗口/region 坐标口径。
+- **F4 无桌面会话（锁屏/断开）分支**：需锁屏/断开会话触发。
+- C3 GDI「光标未叠加」失败备注分支：需特殊显卡/RDP 配置，一般可忽略。
+
 ## 实施后遗留观察项（低优先）
 
-- screenshot `display=left`/`right` 的**多显示器真机验证**待补（2026-09-28 记录）：邻屏解析逻辑已有构造数据单测（`ScreenshotToolTests.ResolveDisplayIndex_PrimaryLeftRightOneBasedAndErrors`），但真实 `EnumerateDisplays()` 在多屏下的坐标/主屏判定（负坐标、各屏 DPI 不一、主屏不在最左等）尚缺端到端验证；`SharpSight.Capture.Tests.DisplayEnumeratorTests.CaptureDisplay_SecondMonitor_*` 在单显示器机器上 Skip。**待有双屏机器时手工跑一次 `screenshot display=left` 与 `display=right` 确认。**
+- screenshot `display=left`/`right` 的**多显示器真机验证**：**已完成（2026-09-28，双屏实机，副屏在主屏左侧）**——`display=left` 正确命中副屏 `\\.\DISPLAY194 (-1920,0) 1920x1080`，`display=right` 正确报「主屏右侧没有相邻显示器」；`mode=screen` 原点 `(-1920,0)`、尺寸 `3840x1080` 与虚拟屏一致；跨屏 `region` 原点换算正确。详见 `D:\下载\test\batch3\报告.md` G1/G2/G3。
 
 - U1A：① locator 严格 Name 全等使「UIA Name 随内容变化」控件同 index 二次操作判 stale（既定契约）；② `ui_wait` 释放 gate 后 `window` 跨操作复用（降级轮询，无崩溃证据）。
