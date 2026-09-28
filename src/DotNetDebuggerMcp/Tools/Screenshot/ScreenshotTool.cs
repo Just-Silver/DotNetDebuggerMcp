@@ -35,7 +35,7 @@ public static class ScreenshotTool
         [Description("window/element 定位：目标进程 pid（0=未提供；window 模式优先于 windowTitle，element 模式必需或经活动调试会话兜底）。不知道 pid 时先调 screenshot_windows 列可见窗口（不限 .NET，含 pid）。该进程有多个可见窗口时按「非工具窗→有标题→面积最大」择优（头部 `选择:` 行给出所选 hwnd）；要截别的窗口请改用 hwnd。")] int processId = 0,
         [Description("window 定位：窗口标题子串（忽略大小写，processId=0 时生效）；特值 @active（大小写不敏感）=当前前台窗口。可用 screenshot_windows 列出可用窗口标题；标题检索取 Z 序最前的命中窗口。")] string windowTitle = "",
         [Description("window 定位：窗口句柄十进制字符串（如 1234567；避开 64 位 JSON 精度），需为可见顶层主窗，非空时优先于 processId/windowTitle。不知道句柄时先调 screenshot_windows 列可见窗口（hwnd 列为十进制）。")] string hwnd = "",
-        [Description("仅 window：true=截客户区（不含标题栏/边框），默认 false=整窗（WGC 可见帧，去阴影）。")] bool clientArea = false,
+        [Description("仅 window：true=截客户区（不含标题栏/边框），默认 false=整窗（WGC 可见帧，去阴影）。客户区经屏幕 BitBlt 采集、不具遮挡捕获能力——窗口被遮挡或移出屏幕时会截到遮挡物/失败，需遮挡安全请用默认整窗（WGC/PrintWindow）。")] bool clientArea = false,
         [Description("mode=region 时必填，\"x,y,w,h\"（坐标为 mode=screen 返回图像的像素空间，原点左上；图像为原生 1:1，故该坐标=虚拟屏物理像素−头部原点）；mode=screen 时可选用作局部裁剪。可先截一张 mode=screen，用其头部 尺寸/原点 换算目标坐标。")] string region = "",
         [Description("mode=element 用：UIA 元素引用——控件名/AutomationId 子串（**推荐**，不受序号口径影响；名称子串精确匹配优先、其次首个命中），或元素序号（**必须是「无过滤」ui_find 的 index**：相对目标窗口全量元素清单；带 text/type/automationId 过滤的 ui_find 序号是过滤后相对序号，与这里不同源，会截到别的控件）。元素无独立窗口句柄（XAML/UWP/Web 等）时自动按其所属顶层窗口帧裁剪。")] string element = "",
         [Description("可交互性护栏（可省略）：填写 ui_find 返回的帧号校验目标是否来自旧画面（0=不校验；非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。**对本工具所有模式都校验**；每次 ui_find 与 element 截图会推进帧号，普通 screen/region/window 截图不会。")] int frameId = 0,

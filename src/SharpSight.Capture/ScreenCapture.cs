@@ -344,7 +344,9 @@ public static class ScreenCapture
     /// WGC 首帧尺寸与 <c>DWMWA_EXTENDED_FRAME_BOUNDS</c> <b>逐像素相等</b>（UiSampleApp 实测 762x552，
     /// 而 GetWindowRect 为 776x559，含约 7px 的 DWM 阴影/不可见 resize 边框），且 PrintWindow 相关性证实
     /// WGC 帧原点 = 扩展边框左上。故 <b>WGC 源 origin=扩展边框左上</b>；PrintWindow/BitBlt 按 <c>GetWindowRect</c>
-    /// 作画/采样，origin=窗口矩形左上。因此本方法不做「裁掉扩展边框偏移」的裁剪（那是 WGC 帧==GetWindowRect 时才需要）。</para>
+    /// 作画/采样，origin=窗口矩形左上。因此本方法不做「裁掉扩展边框偏移」的裁剪（那是 WGC 帧==GetWindowRect 时才需要）。
+    /// <b>该边框差值不是恒定 7px</b>（随 DWM 阴影有无、系统 DPI、窗口样式/粗边框、Windows 版本变化）——
+    /// 故实现<b>绝不施加固定偏移</b>，而是每次按源分别取 <c>ExtendedFrame</c>/<c>WindowRect</c> 两个矩形（见 CaptureWindowBits）。</para>
     /// </summary>
     public static CaptureResult CaptureWindow(IntPtr hwnd, CaptureOptions options)
     {
@@ -355,7 +357,9 @@ public static class ScreenCapture
         var info = GetWindowInfo(hwnd) ?? throw WindowCaptureFailure(hwnd);
         var bounds = GetWindowBounds(hwnd) ?? throw WindowCaptureFailure(hwnd);
 
-        // 客户区：GDI BitBlt 客户区屏幕矩形（spec §4.2；无 WGC——客户区本就是屏幕可见区）。
+        // 客户区：GDI BitBlt 客户区屏幕矩形（spec §4.2；无 WGC）。**边界**：仅在窗口可见且未被遮挡时等价于
+        // 「客户区内容」——被遮挡/移出屏幕时会截到遮挡物或失败；即 clientArea 不具整窗链的遮挡捕获能力
+        // （调用方若需遮挡安全，用默认整窗走 WGC/PrintWindow）。
         if (options.ClientArea)
         {
             if (bounds.ClientArea.Width <= 0 || bounds.ClientArea.Height <= 0) throw WindowCaptureFailure(hwnd);
@@ -394,7 +398,10 @@ public static class ScreenCapture
         var source = "WGC";
         int originX = bounds.ExtendedFrame.X, originY = bounds.ExtendedFrame.Y;
 
-        // 第 2 道：PrintWindow → 采样纯黑则继续回退（spec §4.3-2）；以 GetWindowRect 原点自画
+        // 第 2 道：PrintWindow → 采样纯黑则继续回退（spec §4.3-2）；以 GetWindowRect 原点自画。
+        // **边界**：PrintWindow 依赖目标窗口处理 WM_PRINT/WM_PRINTCLIENT——Chromium 系/游戏/部分 UWP 可能不
+        // 支持或只画一部分；「纯黑判据」只能筛「全黑」，**筛不出「非纯黑但内容陈旧/不完整」**（该道能兜住多少
+        // 取决于目标应用生态，非本链可控）。
         if (bmp is null)
         {
             bmp = GdiCapture.TryPrintWindow(hwnd);

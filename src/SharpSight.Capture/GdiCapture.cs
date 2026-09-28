@@ -50,7 +50,9 @@ internal static class GdiCapture
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
 
-    /// <summary>第 2 道：PrintWindow(PW_RENDERFULLCONTENT) 让窗口自画。失败返回 null 由调用方回退。</summary>
+    /// <summary>第 2 道：PrintWindow(PW_RENDERFULLCONTENT) 让窗口自画。失败返回 null 由调用方回退。
+    /// <para><b>边界</b>：依赖目标窗口处理 WM_PRINT/WM_PRINTCLIENT；Chromium 系/游戏/部分 UWP 可能不支持或只画一部分——
+    /// 调用方的「纯黑判据」只能筛「全黑」，筛不出「非纯黑但内容陈旧/不完整」。</para></summary>
     public static Bitmap? TryPrintWindow(IntPtr hwnd)
     {
         if (!GetWindowRect(hwnd, out var r)) return null;

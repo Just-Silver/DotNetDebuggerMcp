@@ -112,7 +112,7 @@ record CaptureResult(byte[] Image, int Width, int Height,
                      bool WasAllBlack /* 纯黑采样，头部「备注」行数据源；回退与否已由 Source 表达，不单列 FellBack */)
 ```
 
-- **DPI**：截图入口首次调用 `SetProcessDpiAwarenessContext(PROCESS_PER_MONITOR_DPI_AWARE_V2)`（幂等，已设置容忍 ERROR_ACCESS_DENIED）——全链物理像素，与 region 坐标空间定义一致。运行时调用，不用 manifest。
+- **DPI**：截图入口首次调用 `SetProcessDpiAwarenessContext(PROCESS_PER_MONITOR_DPI_AWARE_V2)`（幂等，已设置容忍 ERROR_ACCESS_DENIED）——全链物理像素，与 region 坐标空间定义一致。注意该上下文常量是**负伪句柄 `-4`**（`DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`），写 `+4` 会静默失败使进程停留 UNAWARE（非 100% 缩放全错，2026-09-28 修）。**宿主 exe 另附应用清单** `app.manifest`（`dpiAware=true/PM` + `dpiAwareness=PerMonitorV2`，官方推荐清单优先）；库内 `EnsureDpi` 保留以覆盖 `dotnet exec`/其它消费者无清单的场景。
 - **缩放/编码/裁剪（职责唯一归属 Engine，宿主不碰）**：Engine 内用 System.Drawing 完成 2000px 等比缩放（上限常量由宿主 `AppConfig` 定义、经参数传入 Engine）、format/quality 编码、region 裁剪（含 §3.1 的 k 换算与 round 取整）、纯黑采样检测，直接产出编码后 `byte[]`；宿主只做参数校验、等窗口轮询、头部组装、落盘与 CallToolResult 组装。
 
 ### 4.3 抓取回退链（window 模式）
@@ -127,6 +127,11 @@ record CaptureResult(byte[] Image, int Width, int Height,
 2. **PrintWindow**（`PW_RENDERFULLCONTENT`）→ 采样纯黑则继续回退。
 3. **BitBlt** 屏幕上窗口矩形（被遮挡处截到遮挡物，`Source=BitBlt` 头部标注 best-effort）。
 4. 全失败 → 约定中文错误（见 5.2）。`mode=screen`/`region` **直接走 GDI BitBlt**，不开 WGC 会话。
+
+> **边界（调用方预期校准，2026-09-28 补）**：
+> - **第 2 道 `PrintWindow` 的可靠性有上限**：它依赖目标窗口处理 `WM_PRINT`/`WM_PRINTCLIENT`——Chromium 系、游戏、部分 UWP 可能不支持或只画一部分。现有「采样纯黑→继续回退」**只能筛「全黑」**，**筛不出「非纯黑但内容陈旧/不完整」**；该道能兜住多少取决于目标应用生态，非本链可控。
+> - **`clientArea=true` 不具遮挡捕获能力**：它走 GDI BitBlt 屏幕客户区矩形，仅在窗口可见且未被遮挡时等价于「客户区内容」；窗口被遮挡、移出屏幕时会截到遮挡物或失败。需遮挡安全请用默认整窗链（WGC/PrintWindow）。
+> - **WGC 扩展边框与 `GetWindowRect` 的差值不是恒定值**（随 DWM 阴影有无、系统 DPI、窗口样式/粗边框、Windows 版本变化）：实现**按源分别取 `ExtendedFrame`/`WindowRect` 两个矩形**，**绝不施加固定偏移**（源码中出现的「约 7px」仅为 Spike A 一次实测的观察值，非常量）。
 
 ### 4.4 线程模型
 

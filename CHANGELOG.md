@@ -19,6 +19,7 @@
 
 - **`ui_find` 不再列出离屏（`IsOffscreen=true`）控件**（与 `screenshot element` 共用同一过滤、两者 index 保持同源）：清单中既有控件的 `index` 可能因过滤位移，请以新的 `ui_find` 输出为准
 - **`screenshot` 落盘位置改为系统临时目录**：默认落盘目录由 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\` 改为 `%TEMP%\DotNetDebuggerMcp\screenshots\`；`filePath` 传**相对路径**时也以该临时目录为基准（此前按进程当前工作目录解析——会把图片写进调用方项目目录）
+- **`screenshot` 文档补充能力边界（行为不变）**：`clientArea=true` 说明明确「经屏幕 BitBlt、**不保证遮挡场景**」；整窗回退链说明明确 `PrintWindow` 依赖目标窗口响应 `WM_PRINT`（Chromium 系/游戏等可能画黑或不全）与 `BitBlt` 的遮挡敏感；并注明 WGC 扩展边框与 `GetWindowRect` 的差值**非恒定**、按源分别取矩形（不施加固定偏移）
 
 ### Removed
 
