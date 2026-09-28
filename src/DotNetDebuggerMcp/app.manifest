@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="DotNetDebuggerMcp.app" />
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!-- 进程默认 DPI 感知：声明在清单里（官方推荐做法，见 SetProcessDpiAwarenessContext 文档），
+           进程一启动即为 Per-Monitor DPI 感知，无需依赖运行时 API 调用时机。
+           否则在非 100% 缩放下会被系统按「逻辑像素」虚拟化（如 1920x1080 变成 1536x864）。
+           true/PM 兼容 Win8.1；dpiAwareness=PerMonitorV2 供 Win10 1703+ 覆盖为更完整的行为。
+           注：SharpSight.Capture 库内的 EnsureDpi 仍保留（本库其它消费者 / dotnet exec 场景无此清单）。 -->
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/PM</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>

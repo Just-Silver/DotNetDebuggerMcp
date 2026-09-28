@@ -58,7 +58,7 @@
 
 **F3 已覆盖并修复（2026-09-28，副屏改 125% 实测）**
 - **非 100% 缩放下按「逻辑像素」上报（真缺陷）**：DPI 感知上下文常量误写 `+4`，而官方定义 `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4` → `SetProcessDpiAwarenessContext` 恒失败（`ERROR_INVALID_PARAMETER` 87）、进程停留 DPI-UNAWARE → `screenshot_displays`/`screenshot` 把 1920x1080 报成 1536x864、缩放报 100%（违背「虚拟屏物理像素 / 原生 1:1」）。已修（commit `d443c3a`），回归 `DpiAwarenessTests`（常量合法性 + 非 100% 显示器矩形须等于 `EnumDisplaySettings` 真实模式）。修复后实测 `display=2` → 1920x1080 / 缩放 125%。
-- 注：官方文档**推荐用应用清单**（`dpiAwareness=PerMonitorV2`）设定进程默认 DPI 感知、而非 API 调用（"can lead to unexpected application behavior"）。本库是能力库、必须能自设，故先修 API 常量；是否再给宿主 exe 加清单加固留待决策（未做）。
+- 注：官方文档**推荐用应用清单**（`dpiAwareness=PerMonitorV2`）设定进程默认 DPI 感知、而非 API 调用（"can lead to unexpected application behavior"）。本库是能力库、必须能自设，故先修 API 常量；**并已给宿主 exe 加清单**（`src/DotNetDebuggerMcp/app.manifest` + csproj `ApplicationManifest`）做双保险——对「直接跑 exe」形态生效（opencode 即是）；`dotnet tool`/`dotnet exec` 形态由 `dotnet` 宿主决定，仍靠库内 `EnsureDpi`。
 
 **仍需环境（低优先）**
 - F4 无桌面会话（锁屏/断开）分支：需锁屏/断开会话触发。
@@ -66,6 +66,6 @@
 
 ## 实施后遗留观察项（低优先）
 
-- screenshot `display=left`/`right` 的**多显示器真机验证**：**已完成（2026-09-28，双屏实机，副屏在主屏左侧）**——`display=left` 正确命中副屏 `\\.\DISPLAY194 (-1920,0) 1920x1080`，`display=right` 正确报「主屏右侧没有相邻显示器」；`mode=screen` 原点 `(-1920,0)`、尺寸 `3840x1080` 与虚拟屏一致；跨屏 `region` 原点换算正确。详见 `D:\下载\test\batch3\报告.md` G1/G2/G3。
+- screenshot `display=left`/`right` 的**多显示器真机验证**：**已完成（2026-09-28，双屏实机）**——副屏位于主屏**左侧**时，`display=left` 正确命中副屏、`display=right` 正确报「主屏右侧没有相邻显示器」；`mode=screen` 原点/尺寸与虚拟屏一致；跨屏 `region` 原点换算正确。**注：显示器布局可变**（后实测副屏改到主屏**上方** `(0,-1080)`，此时 left/right 均报无相邻、`screen` 原点随虚拟屏变化——行为自洽）。详见 `D:\下载\test\batch3\报告.md` G1/G2/G3。
 
 - U1A：① locator 严格 Name 全等使「UIA Name 随内容变化」控件同 index 二次操作判 stale（既定契约）；② `ui_wait` 释放 gate 后 `window` 跨操作复用（降级轮询，无崩溃证据）。
