@@ -1,4 +1,5 @@
 using DotNetDebuggerMcp.Tools.Debugger;
+using DotNetDebuggerMcp.Tools.Screenshot;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 using System.Reflection;
@@ -46,21 +47,40 @@ public sealed class AgentCopyGuardTests
         { nameof(UiTools.UiGet), "what" },                               // ui_get 读取状态
         { nameof(UiTools.UiWait), "超时返回当前状态" },                 // ui_wait 超时不报错
         // 阶段一 screenshot 通用化补录（agent 唯一直接可见的契约面：固定 PNG / 模式推断 / 坐标元数据）
-        { nameof(DebugScreenshotTool.Screenshot), "固定 PNG" },         // 输出格式恒为 PNG（无 format/quality）
-        { nameof(DebugScreenshotTool.Screenshot), "auto" },             // mode 默认 auto 按参数推断
-        { nameof(DebugScreenshotTool.Screenshot), "原点" },             // 头部 origin/scale 坐标元数据
-        { nameof(DebugScreenshotTool.Screenshot), "缩放" },
+        { nameof(ScreenshotTool.Screenshot), "固定 PNG" },         // 输出格式恒为 PNG（无 format/quality）
+        { nameof(ScreenshotTool.Screenshot), "auto" },             // mode 默认 auto 按参数推断
+        { nameof(ScreenshotTool.Screenshot), "原点" },             // 头部 origin 坐标元数据（图像恒原生 1:1）
+        { nameof(ScreenshotTool.Screenshot), "不做任何缩放" },     // 「不缩放」= agent 必须知道的行为（尺寸交模型侧，防双重处理）
+        { nameof(ScreenshotTool.Screenshot), "仅 element 模式输出" },   // `帧` 字段只在 element 模式出现（P4 说明与输出对齐）
+        { nameof(ScreenshotTool.Screenshot), "window 整窗走 WGC" },     // 大图落盘预警：WGC 整窗 PNG 明显大于 screen
+        // 视觉族发现工具（只为 screenshot 寻址服务；只读）
+        { nameof(ScreenshotDisplaysTool.ScreenshotDisplays), "显示器" },              // 列显示器清单
+        { nameof(ScreenshotWindowsTool.ScreenshotWindows), "可见顶层窗口" },          // 列窗口清单
     };
 
     // 每项 = (工具方法名, 参数名, 该参数 Description 必含关键片段) —— 参数级契约。
     // 锁「agent 据以正确调用」的关键事实：默认值、取值域、护栏语义；改参数说明必须同步改此处。
     public static TheoryData<string, string, string> ParamContractData => new()
     {
-        { nameof(DebugScreenshotTool.Screenshot), "mode", "auto" },             // 模式推断默认值
-        { nameof(DebugScreenshotTool.Screenshot), "maxDimension", "1568" },     // 默认上限（铁律：改默认值须改 Description）
-        { nameof(DebugScreenshotTool.Screenshot), "maxDimension", "0=不缩放" }, // 「不缩放」逃生门必须对 agent 可见
-        { nameof(DebugScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
-        { nameof(DebugScreenshotTool.Screenshot), "includeCursor", "光标" },
+        { nameof(ScreenshotTool.Screenshot), "mode", "auto" },             // 模式推断默认值
+        { nameof(ScreenshotTool.Screenshot), "processId", "非工具窗→有标题→面积最大" },   // pid 多窗择优（P0：防 1×1 助手窗）
+        { nameof(ScreenshotTool.Screenshot), "element", "自动按其所属顶层窗口帧裁剪" },    // 无 HWND 控件回退（P1）
+        { nameof(ScreenshotTool.Screenshot), "element", "无过滤" },                        // 序号口径：必须是「无过滤」ui_find 的 index（D1）
+        { nameof(ScreenshotTool.Screenshot), "windowTitle", "@active（大小写不敏感）" },   // @active 特值大小写不敏感（D5）
+        { nameof(ScreenshotTool.Screenshot), "filePath", "%VAR%" },                        // filePath 支持环境变量展开（D7）
+        { nameof(ScreenshotTool.Screenshot), "frameId", "所有模式都校验" },               // 护栏作用域（P2 说明澄清）
+        { nameof(ScreenshotTool.Screenshot), "frameId", "普通 screen/region/window 截图不会" },  // 谁推进帧号（实测口径）
+        { nameof(ScreenshotTool.Screenshot), "frameId", "旧画面" },        // 代际护栏语义
+        { nameof(ScreenshotTool.Screenshot), "includeCursor", "光标" },
+        { nameof(ScreenshotTool.Screenshot), "filePath", "临时目录" },          // 落盘基准=临时目录（防污染调用方项目）
+        { nameof(ScreenshotTool.Screenshot), "filePath", "不再附图片" },        // 落盘后不内联返回图片（需自行读文件）——agent 必须知道
+        // 寻址参数的「取值来源」必须对 agent 可见（跨工具指路；漏改等于 agent 又回到靠猜）
+        { nameof(ScreenshotTool.Screenshot), "display", "screenshot_displays" },
+        { nameof(ScreenshotTool.Screenshot), "hwnd", "screenshot_windows" },
+        { nameof(ScreenshotTool.Screenshot), "windowTitle", "screenshot_windows" },
+        { nameof(ScreenshotTool.Screenshot), "processId", "screenshot_windows" },
+        { nameof(ScreenshotTool.Screenshot), "region", "先截一张" },
+        { nameof(ScreenshotTool.Screenshot), "element", "无过滤" },
         { nameof(UiTools.UiAction), "frameId", "旧画面" },
         { nameof(UiTools.UiInput), "frameId", "旧画面" },
         { nameof(UiTools.UiGet), "frameId", "旧画面" },

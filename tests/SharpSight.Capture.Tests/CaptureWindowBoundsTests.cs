@@ -8,7 +8,7 @@ namespace SharpSight.Capture.Tests;
 /// <summary>
 /// 窗口寻址扩展单测（screenshot 计划 T5；spec §3.3/§4.2/§5、spike-2026-09-27.md Spike A）：
 /// FindWindowByHwnd/FindForegroundWindow 定位、GetWindowBounds 几何（DWM 去阴影/客户区）、
-/// CaptureWindow(hwnd, clientArea) 客户区抓取与整窗 origin（WGC 帧 == 扩展边框）。
+/// CaptureWindow(hwnd, CaptureOptions) 客户区抓取与整窗 origin（WGC 帧 == 扩展边框）。
 /// 真实起 UiSampleApp；抓屏失败（锁屏/无头/遮挡）按环境 Skip，不红（spec §6.4）。
 /// </summary>
 public sealed class CaptureWindowBoundsTests
@@ -80,7 +80,7 @@ public sealed class CaptureWindowBoundsTests
         Assert.True(b.ClientArea.Width > 0 && b.ClientArea.Height > 0);
     }
 
-    // ===== CaptureWindow(hwnd, clientArea=true)：BitBlt 客户区屏幕矩形 =====
+    // ===== CaptureWindow(hwnd, new CaptureOptions(ClientArea: true))：BitBlt 客户区屏幕矩形 =====
 
     [Fact]
     public void CaptureWindow_ClientArea_SizeAndOriginMatchClientBounds()
@@ -94,7 +94,7 @@ public sealed class CaptureWindowBoundsTests
         Assert.NotNull(b);
 
         CaptureResult r;
-        try { r = ScreenCapture.CaptureWindow(h!.Hwnd, clientArea: true); }
+        try { r = ScreenCapture.CaptureWindow(h!.Hwnd, new CaptureOptions(ClientArea: true)); }
         catch (CaptureException ex)
         {
             Assert.Skip("客户区 BitBlt 不可用（锁屏/安全桌面/无头环境），spec §6.4 预案：" + ex.Message);
@@ -104,9 +104,7 @@ public sealed class CaptureWindowBoundsTests
         Assert.True(r.IsClientArea);
         Assert.Equal("BitBlt", r.Source);
         Assert.Equal("UiSample", r.WindowTitle);
-        Assert.Equal(b!.ClientArea.Width, r.NativeWidth);
-        Assert.Equal(b.ClientArea.Height, r.NativeHeight);
-        Assert.Equal(b.ClientArea.Width, r.Width);    // 默认 maxW/H=0 ⇒ 不缩放
+        Assert.Equal(b!.ClientArea.Width, r.Width);   // 不缩放：输出=客户区原生尺寸
         Assert.Equal(b.ClientArea.Height, r.Height);
         Assert.Equal(b.ClientArea.X, r.OriginX);      // origin=客户区屏幕左上（spec §5）
         Assert.Equal(b.ClientArea.Y, r.OriginY);
@@ -130,14 +128,14 @@ public sealed class CaptureWindowBoundsTests
         var b = ScreenCapture.GetWindowBounds(h!.Hwnd);
         Assert.NotNull(b);
 
-        var r = ScreenCapture.CaptureWindow(h!.Hwnd);
+        var r = ScreenCapture.CaptureWindow(h!.Hwnd, new CaptureOptions());
         if (r.Source != "WGC")
             Assert.Skip("WGC 本环境未走通（发生回退）——编排回退语义由 CaptureWindowWgcTests 承担");
 
         Assert.False(r.IsClientArea);
         Assert.Equal(b!.ExtendedFrame.X, r.OriginX);
         Assert.Equal(b.ExtendedFrame.Y, r.OriginY);
-        Assert.Equal(b.ExtendedFrame.Width, r.NativeWidth);
-        Assert.Equal(b.ExtendedFrame.Height, r.NativeHeight);
+        Assert.Equal(b.ExtendedFrame.Width, r.Width);
+        Assert.Equal(b.ExtendedFrame.Height, r.Height);
     }
 }

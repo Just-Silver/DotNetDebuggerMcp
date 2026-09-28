@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
-using DotNetDebuggerMcp.Tools.Debugger;
+using DotNetDebuggerMcp.Configuration;
+using DotNetDebuggerMcp.Tools.Screenshot;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using SharpSight.Capture;
@@ -14,7 +15,8 @@ namespace DotNetDebuggerMcp.Tests;
 /// 经 MCP 协议真实往返（DebugMcpToolsTests.ConnectAsync/CallAsync 同款基建）。
 /// screen/region 真实抓取在锁屏/安全桌面环境会被系统拒绝 BitBlt——按 spec §6.4 探测 Skip 不红
 /// （window 模式走 WGC/PrintWindow 不受影响，锁屏下仍恒跑）。
-/// [Collection("AppServices")]：MCP 连接与 AppServices 静态状态（含 `AppConfig.InlineImageBase64Bytes` 阈值常量），按 tests/AGENTS 纪律串行。
+/// [Collection("AppServices")]：MCP 连接与 AppServices 静态状态（含 `AppConfig` 的落盘阈值/目录 seam
+/// `ConfigureForTest`），按 tests/AGENTS 纪律串行。
 /// </summary>
 [Collection("AppServices")]
 public sealed class ScreenshotToolTests
@@ -26,6 +28,10 @@ public sealed class ScreenshotToolTests
 
     private static ImageContentBlock? ImageOf(CallToolResult r)
         => r.Content.OfType<ImageContentBlock>().FirstOrDefault();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    private const int SwMinimize = 6;   // SW_MINIMIZE
 
     // ===== 启动/清理（UiSampleApp 独立副本；UseShellExecute=true 不继承管道句柄=排空纪律，spike 实测）=====
 
@@ -94,8 +100,11 @@ public sealed class ScreenshotToolTests
     public async Task RegionMalformed_AllThreeForms_ReturnSpecMessage()
     {
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();
-        const string msg = "region 格式应为 \"x,y,w,h\"（坐标为 mode=screen 返回图像素，原点左上）。";
-        foreach (var bad in new[] { "1,2,3", "a,b,c,d", "1,2,-3,4", "" })
+        const string malformed = "region 格式应为 \"x,y,w,h\"（坐标为 mode=screen 返回图像素，原点左上）。";
+        const string sizeInvalid = "region 的宽/高必须为正整数（当前 w 或 h ≤ 0；\"x,y,w,h\" 格式本身没错）。";
+
+        // 段数不够 / 非整数 / 空 → 格式错
+        foreach (var bad in new[] { "1,2,3", "a,b,c,d", "" })
         {
             var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
             {
@@ -103,7 +112,19 @@ public sealed class ScreenshotToolTests
                 ["region"] = bad,
             });
             Assert.True(r.IsError != true, r.Text());
-            Assert.Equal(msg, r.Text());
+            Assert.Equal(malformed, r.Text());
+        }
+
+        // 宽/高非正 → 取值错（P6：格式没问题，避免 agent 反复改格式）
+        foreach (var bad in new[] { "1,2,-3,4", "1,2,0,4", "0,0,0,0" })
+        {
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "region",
+                ["region"] = bad,
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Equal(sizeInvalid, r.Text());
         }
     }
 
@@ -130,30 +151,34 @@ public sealed class ScreenshotToolTests
     [InlineData("auto", "", "", "notepad", "", "window")]
     [InlineData("auto", "2", "", "", "", "display")]
     public void ResolveMode_Matrix(string mode, string display, string hwnd, string title, string region, string expected)
-        => Assert.Equal(expected, DebugScreenshotTool.ResolveMode(mode, display, hwnd, title, region));
+        => Assert.Equal(expected, ScreenshotTool.ResolveMode(mode, display, hwnd, title, region));
 
     [Fact]
     public void ResolveMode_ElementAndProcessId_AndPriority()
     {
-        Assert.Equal("element", DebugScreenshotTool.ResolveMode("auto", "", "", "", "", "7"));
-        Assert.Equal("window", DebugScreenshotTool.ResolveMode("auto", "", "", "", "", processId: 42));
+        Assert.Equal("element", ScreenshotTool.ResolveMode("auto", "", "", "", "", "7"));
+        Assert.Equal("window", ScreenshotTool.ResolveMode("auto", "", "", "", "", processId: 42));
         // element 优先级最高（即使同时给了 display/hwnd）
-        Assert.Equal("element", DebugScreenshotTool.ResolveMode("auto", "primary", "123", "", "", "7"));
+        Assert.Equal("element", ScreenshotTool.ResolveMode("auto", "primary", "123", "", "", "7"));
         // 显式 mode 覆盖推断
-        Assert.Equal("screen", DebugScreenshotTool.ResolveMode("screen", "primary", "123", "", "", "7"));
+        Assert.Equal("screen", ScreenshotTool.ResolveMode("screen", "primary", "123", "", "", "7"));
     }
 
     [Fact]
     public void TryParseRegion_FourInts_PositiveSizes()
     {
-        Assert.True(DebugScreenshotTool.TryParseRegion("10,20,30,40", out var rect));
+        Assert.True(ScreenshotTool.TryParseRegion("10,20,30,40", out var rect, out _));
         Assert.Equal(new Rectangle(10, 20, 30, 40), rect);
-        Assert.True(DebugScreenshotTool.TryParseRegion(" 1 , 2 , 3 , 4 ", out var trimmed));
+        Assert.True(ScreenshotTool.TryParseRegion(" 1 , 2 , 3 , 4 ", out var trimmed, out _));
         Assert.Equal(new Rectangle(1, 2, 3, 4), trimmed);
-        Assert.False(DebugScreenshotTool.TryParseRegion("1,2,3", out _));
-        Assert.False(DebugScreenshotTool.TryParseRegion("1,2,0,4", out _));
-        Assert.False(DebugScreenshotTool.TryParseRegion("1,2,3,-4", out _));
-        Assert.False(DebugScreenshotTool.TryParseRegion("a,b,c,d", out _));
+        Assert.False(ScreenshotTool.TryParseRegion("1,2,3", out _, out var malformed));     // 段数不够 → 格式错
+        Assert.False(malformed);
+        Assert.False(ScreenshotTool.TryParseRegion("a,b,c,d", out _, out var notNumber));   // 非整数 → 格式错
+        Assert.False(notNumber);
+        Assert.False(ScreenshotTool.TryParseRegion("1,2,0,4", out _, out var zeroW));       // 取值非法（w=0）
+        Assert.True(zeroW);
+        Assert.False(ScreenshotTool.TryParseRegion("1,2,3,-4", out _, out var negH));       // 取值非法（h<0）
+        Assert.True(negH);
     }
 
     private static DisplayInfo Display(int index, bool primary, int x, int y, int w, int h)
@@ -170,24 +195,24 @@ public sealed class ScreenshotToolTests
             Display(2, false, -1280, 0, 1280, 1024),
         };
 
-        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "", out var i, out _));
+        Assert.True(ScreenshotTool.TryResolveDisplayIndex(displays, "", out var i, out _));
         Assert.Equal(0, i);                                        // 空 = 主屏
-        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "primary", out i, out _));
+        Assert.True(ScreenshotTool.TryResolveDisplayIndex(displays, "primary", out i, out _));
         Assert.Equal(0, i);
-        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "2", out i, out _));
+        Assert.True(ScreenshotTool.TryResolveDisplayIndex(displays, "2", out i, out _));
         Assert.Equal(1, i);                                        // 1 基对外编号 → 0 基库索引
-        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "3", out i, out _));
+        Assert.True(ScreenshotTool.TryResolveDisplayIndex(displays, "3", out i, out _));
         Assert.Equal(2, i);
-        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "right", out i, out _));
+        Assert.True(ScreenshotTool.TryResolveDisplayIndex(displays, "right", out i, out _));
         Assert.Equal(1, i);
-        Assert.True(DebugScreenshotTool.TryResolveDisplayIndex(displays, "left", out i, out _));
+        Assert.True(ScreenshotTool.TryResolveDisplayIndex(displays, "left", out i, out _));
         Assert.Equal(2, i);
 
-        Assert.False(DebugScreenshotTool.TryResolveDisplayIndex(displays, "0", out _, out var err0));
+        Assert.False(ScreenshotTool.TryResolveDisplayIndex(displays, "0", out _, out var err0));
         Assert.Contains("display 无效", err0);
-        Assert.False(DebugScreenshotTool.TryResolveDisplayIndex(displays, "9", out _, out var err9));
+        Assert.False(ScreenshotTool.TryResolveDisplayIndex(displays, "9", out _, out var err9));
         Assert.Contains("display 无效", err9);
-        Assert.False(DebugScreenshotTool.TryResolveDisplayIndex(displays, "abc", out _, out var errA));
+        Assert.False(ScreenshotTool.TryResolveDisplayIndex(displays, "abc", out _, out var errA));
         Assert.Contains("display 无效", errA);
     }
 
@@ -195,7 +220,7 @@ public sealed class ScreenshotToolTests
     public void ResolveDisplayIndex_LeftRightWithoutAdjacent_ReturnsError()
     {
         var single = new[] { Display(0, true, 0, 0, 800, 600) };
-        Assert.False(DebugScreenshotTool.TryResolveDisplayIndex(single, "left", out _, out var err));
+        Assert.False(ScreenshotTool.TryResolveDisplayIndex(single, "left", out _, out var err));
         Assert.Contains("没有相邻显示器", err);
     }
 
@@ -236,18 +261,36 @@ public sealed class ScreenshotToolTests
         Assert.Contains("需提供 element", r.Text());
     }
 
-    [Theory]
-    [InlineData(1568, 0, 0, 1568, 1568)]      // 默认：双轴 1568
-    [InlineData(0, 0, 0, 0, 0)]               // maxDimension=0 且无覆盖 → 不缩放（1:1）
-    [InlineData(1568, 500, 0, 500, 1568)]     // maxWidth 覆盖一轴
-    [InlineData(1568, 0, 300, 1568, 300)]     // maxHeight 覆盖一轴
-    [InlineData(0, 500, 0, 500, 0)]           // 关闭缩放 + 单轴覆盖
-    [InlineData(-5, -1, 0, 0, 0)]             // 负值按 0（不缩放）
-    public void ResolveMaxDimensions_Matrix(int dim, int w, int h, int ew, int eh)
+    [Fact]
+    public async Task Window_ByMultiWindowPid_SelectsRealWindow_NotTinyHelper()
     {
-        var (effW, effH) = DebugScreenshotTool.ResolveMaxDimensions(dim, w, h);
-        Assert.Equal(ew, effW);
-        Assert.Equal(eh, effH);
+        // P0 回归（2026-09-28）：explorer 的 Z 序最前是 1×1 工具窗；必须在头部给出 `选择:` 行且选中窗口尺寸正常。
+        var explorer = System.Diagnostics.Process.GetProcessesByName("explorer").FirstOrDefault();
+        if (explorer is null) Assert.Skip("本环境没有 explorer 进程（非交互桌面会话），spec §6.4 预案");
+
+        var tmp = Path.Combine(Path.GetTempPath(), $"screenshot-pid-select-{Guid.NewGuid():N}.png");
+        try
+        {
+            await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "window",
+                ["processId"] = explorer!.Id,
+                ["filePath"] = tmp,      // 落盘避免大图内联
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("选择:", r.Text());
+            // P0 回归：选中的不是无标题 1×1 助手窗（主窗可能最小化 → 160x28，故只排除 1×1 并校验标题非空）
+            var title = System.Text.RegularExpressions.Regex.Match(r.Text(), "目标:   窗口 \"([^\"]*)\"");
+            Assert.True(title.Success && title.Groups[1].Value.Length > 0, r.Text());
+            var m = System.Text.RegularExpressions.Regex.Match(r.Text(), @"尺寸:\s*(\d+)x(\d+)");
+            Assert.True(m.Success, r.Text());
+            Assert.True(int.Parse(m.Groups[1].Value) > 1 && int.Parse(m.Groups[2].Value) > 1, r.Text());
+        }
+        finally
+        {
+            if (File.Exists(tmp)) File.Delete(tmp);
+        }
     }
 
     // ===== 代际护栏（ui_* frameId，spec §7.4；无 GUI，校验先于进程解析）=====
@@ -332,6 +375,171 @@ public sealed class ScreenshotToolTests
         Assert.Equal($"0 秒内未找到匹配的可见窗口（processId={deadPid}）。", r.Text());
     }
 
+    // ===== element 模式端到端（spec §10：mode=element 对真实 UiSampleApp）=====
+
+    [Fact]
+    public async Task Element_ByName_ReturnsPngImageBlock_WithFrameId()
+    {
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "element",
+                ["processId"] = app.Id,
+                ["element"] = "countButton",      // UiSampleApp 契约 AutomationId（Program.cs；定位按 Name/AutoId 子串）
+                ["timeoutSeconds"] = 5,
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("目标:   元素 ", r.Text());
+            Assert.Contains("帧:", r.Text());               // element 回填 FrameId（与 ui_find/ui_* 旧帧护栏闭环）
+            Assert.EndsWith("---", r.Text().TrimEnd('\r', '\n'));
+
+            var img = ImageOf(r);
+            Assert.NotNull(img);
+            Assert.Equal("image/png", img!.MimeType);
+            Assert.True(img.DecodedData.Length > 8 && img.DecodedData.Span[..8].SequenceEqual(PngMagic));
+        }
+        finally { KillUiSampleApp(app); }
+    }
+
+    [Fact]
+    public async Task Element_NotFound_DoesNotAdvanceFrame()
+    {
+        // D3 回归（2026-09-28）：失败/未命中的 element 查找（内部 50ms 轮询重试）不得推进全局帧号——
+        // 否则一次拼错控件名就把刚取得的有效 frameId 判成旧画面（实测曾 +46）。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            var f1 = await WaitFrameAsync(mcp, app.Id);          // 预热：等窗口就绪并取一帧
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "element",
+                ["processId"] = app.Id,
+                ["element"] = "NoSuchControlXYZ",
+                ["timeoutSeconds"] = 1,
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("未找到 element", r.Text());
+
+            var f2 = await WaitFrameAsync(mcp, app.Id);
+            Assert.Equal(f1 + 1, f2);      // 失败查找不产帧：只多了这次 ui_find 的那一帧
+        }
+        finally { KillUiSampleApp(app); }
+    }
+
+    /// <summary>经 MCP ui_find 取当前帧号（重试至窗口就绪；仅测试用）。</summary>
+    private static async Task<int> WaitFrameAsync(McpClient mcp, int pid)
+    {
+        string last = "";
+        for (var i = 0; i < 40; i++)
+        {
+            last = (await DebugMcpToolsTests.CallAsync(mcp, "ui_find",
+                new Dictionary<string, object?> { ["process"] = pid.ToString(), ["limit"] = 50 })).Text();
+            var m = System.Text.RegularExpressions.Regex.Match(last, @"frameId=(\d+)");
+            if (m.Success) return int.Parse(m.Groups[1].Value);
+            await Task.Delay(250, TestContext.Current.CancellationToken);
+        }
+        Assert.Fail($"ui_find 未返回 frameId（窗口未就绪）：{last}");
+        return 0;
+    }
+
+    [Fact]
+    public void IsActiveSpecial_CaseInsensitive()
+    {
+        // D5：@active 特值大小写不敏感（与「标题子串忽略大小写」一致）。
+        Assert.True(ScreenshotTool.IsActiveSpecial("@active"));
+        Assert.True(ScreenshotTool.IsActiveSpecial("@ACTIVE"));
+        Assert.True(ScreenshotTool.IsActiveSpecial("  @Active  "));
+        Assert.False(ScreenshotTool.IsActiveSpecial("@active2"));
+        Assert.False(ScreenshotTool.IsActiveSpecial(""));
+    }
+
+    [Fact]
+    public void ValidateCompatibility_ForegroundAcceptsActiveAnyCase()
+    {
+        Assert.Null(ScreenshotTool.ValidateCompatibility("foreground", "", "", "@ACTIVE", "", "", false, 0));
+        Assert.NotNull(ScreenshotTool.ValidateCompatibility("foreground", "", "", "别的标题", "", "", false, 0));
+    }
+
+    [Fact]
+    public void ResolveScreenshotPath_ExpandsEnvironmentVariables()
+    {
+        // D7：%VAR% 展开，否则会生成名为 "%TEMP%" 的字面目录。
+        var p = ScreenshotTool.ResolveScreenshotPath("%TEMP%\\shot.png", "region", 0);
+        Assert.DoesNotContain("%TEMP%", p);
+        Assert.EndsWith("shot.png", p);
+    }
+
+    [Fact]
+    public async Task Displays_ListsScaleRatio()
+    {
+        // D4：说明承诺「缩放比」，100% 也必须输出。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot_displays", new Dictionary<string, object?>());
+        Assert.True(r.IsError != true, r.Text());
+        if (r.Text().Contains("显示器: 0 台")) Assert.Skip("无显示器（无桌面会话）");
+        Assert.Contains("缩放", r.Text());
+    }
+
+    [Fact]
+    public async Task Window_ActiveSpecial_NamedAsForeground()
+    {
+        // D5+D6：@ACTIVE（大小写不敏感）应被识别为前台窗口，且头部与 mode=foreground 统一为「前台窗口」。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+        {
+            ["mode"] = "window",
+            ["windowTitle"] = "@ACTIVE",
+            ["timeoutSeconds"] = 0,
+        });
+        Assert.True(r.IsError != true, r.Text());
+        if (r.Text().Contains("没有前台窗口")) Assert.Skip("无前台窗口（锁屏/无桌面会话）");
+        Assert.Contains("目标:   前台窗口 ", r.Text());
+    }
+
+    [Fact]
+    public async Task Window_Minimized_NotesMinimizedWithoutTinySizeClaim()
+    {
+        // D9：最小化主窗只给「已最小化」备注，不再多报「尺寸极小，可能不是目标主窗」；
+        // 若该窗口最小化后抓取直接失败，则验证 D2 的可执行文案（已最小化 → 先还原）。
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            var hwnd = await WaitMainWindowAsync(app);
+            ShowWindow(hwnd, SwMinimize);            // 直接 Win32 最小化（不依赖 UIA WindowPattern）
+            await Task.Delay(500, TestContext.Current.CancellationToken);
+
+            var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?>
+            {
+                ["mode"] = "window",
+                ["processId"] = app.Id,
+                ["timeoutSeconds"] = 2,
+            });
+            Assert.True(r.IsError != true, r.Text());
+            Assert.Contains("已最小化", r.Text());
+            if (!r.Text().Contains("无法抓取"))
+                Assert.DoesNotContain("尺寸极小", r.Text());
+        }
+        finally { KillUiSampleApp(app); }
+    }
+
+    /// <summary>等 UiSampleApp 主窗口句柄就绪（仅测试用）。</summary>
+    private static async Task<IntPtr> WaitMainWindowAsync(Process app)
+    {
+        for (var i = 0; i < 50; i++)
+        {
+            app.Refresh();
+            if (app.MainWindowHandle != IntPtr.Zero) return app.MainWindowHandle;
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+        Assert.Fail("UiSampleApp 主窗口句柄未就绪");
+        return IntPtr.Zero;
+    }
+
     // ===== screen/region 真实抓取（锁屏探测 Skip）=====
 
     [Fact]
@@ -396,19 +604,80 @@ public sealed class ScreenshotToolTests
     }
 
     [Fact]
+    public async Task AutoFallback_OverThreshold_WritesDefaultDir_NoImageBlock()
+    {
+        // 阈值降为 1 字节 → 任何截图都触发「超限自动落盘」分支（spec §10 落盘/2MB seam；spike C 结论）。
+        // 直调工具方法而非经 MCP：宿主测试的 MCP 传输是 StdioClientTransport（server 为子进程），
+        // 进程内注入的 AppConfig seam 影响不到子进程——只有 in-process 直调才能覆盖该分支。
+        var dir = Path.Combine(Path.GetTempPath(), $"screenshot-autofallback-{Guid.NewGuid():N}");
+        AppConfig.ConfigureForTest(inlineImageBase64Bytes: 1, screenshotsDirOverride: dir);
+        try
+        {
+            using var app = LaunchUiSampleApp();
+            try
+            {
+                var r = await ScreenshotTool.Screenshot(processId: app.Id, timeoutSeconds: 5,
+                    cancellationToken: TestContext.Current.CancellationToken);
+                Assert.True(r.IsError != true, r.Text());
+                Assert.Null(ImageOf(r));                                  // 自动落盘 → 仅文本，无 image 块（未指定 filePath）
+                Assert.Contains("已落盘: ", r.Text());
+
+                var line = r.Text().Split('\n').First(l => l.StartsWith("已落盘: "));
+                var file = line["已落盘: ".Length..].Trim('\r', '\n', ' ');
+                Assert.StartsWith(Path.GetFullPath(dir), file);
+                Assert.True(File.Exists(file), $"落盘文件不存在: {file}（返回文本: {r.Text()}）");
+                Assert.True(File.ReadAllBytes(file).AsSpan(0, 8).SequenceEqual(PngMagic));
+            }
+            finally { KillUiSampleApp(app); }
+        }
+        finally
+        {
+            AppConfig.ResetForTest();
+            try { Directory.Delete(dir, true); } catch { /* 忽略 */ }
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void NoTitleNote_ReflectsWhetherInWindowsList(bool listedInWindows)
+    {
+        // screenshot_windows 只列「有标题」的窗口，但**前台**窗口即使无标题也会以 (无标题) 列出——
+        // 备注须如实区分（2026-09-28 修：此前一律写「不在 screenshot_windows 清单里」，与前台无标题窗被列出矛盾）。
+        var note = ScreenshotTool.NoTitleNote(1576568, listedInWindows);
+        Assert.Contains("hwnd=1576568", note);
+        if (listedInWindows)
+        {
+            Assert.Contains("标为 (无标题)", note);
+            Assert.DoesNotContain("不在 screenshot_windows 清单里", note);
+        }
+        else
+        {
+            Assert.Contains("不在 screenshot_windows 清单里", note);
+            Assert.DoesNotContain("标为 (无标题)", note);
+        }
+    }
+
+    [Fact]
     public void ResolveScreenshotPath_DefaultDirPattern_And_FilePathOverride()
     {
         // 默认目录+文件名模式（spec §5.1：screenshot-{ts}-{mode}[-{pid}].png，pid 仅 window）
-        var def = DebugScreenshotTool.ResolveScreenshotPath("", "window", 12345);
+        var def = ScreenshotTool.ResolveScreenshotPath("", "window", 12345);
         Assert.StartsWith(DotNetDebuggerMcp.Configuration.AppConfig.ScreenshotsDir, def);
         Assert.Matches(@"screenshot-\d{8}-\d{9}-window-12345\.png$", def);
-        var scr = DebugScreenshotTool.ResolveScreenshotPath("", "screen", 0);
+        var scr = ScreenshotTool.ResolveScreenshotPath("", "screen", 0);
         Assert.Matches(@"-screen\.png$", scr);
+        // 相对 filePath：以截图根目录（临时目录）为基准，绝不落到进程工作目录（防污染调用方项目）
+        var rel = ScreenshotTool.ResolveScreenshotPath(Path.Combine("relsub", "b.png"), "window", 1);
+        Assert.Equal(Path.Combine(AppConfig.ScreenshotsDir, "relsub", "b.png"), rel);
+        Assert.NotEqual(Path.GetFullPath(Path.Combine("relsub", "b.png")), rel);   // 证明不是按 CWD 解析
+        try { Directory.Delete(Path.Combine(AppConfig.ScreenshotsDir, "relsub"), true); } catch { /* 忽略 */ }
+
         // filePath 分支：绝对化 + 创建父目录（目录创建副作用在此清理）
         var customDir = Path.Combine(Path.GetTempPath(), $"screenshot-dirtest-{Guid.NewGuid():N}");
         try
         {
-            var custom = DebugScreenshotTool.ResolveScreenshotPath(
+            var custom = ScreenshotTool.ResolveScreenshotPath(
                 Path.Combine(customDir, "a.png"), "window", 1);
             Assert.Equal(Path.Combine(customDir, "a.png"), custom);
             Assert.True(Directory.Exists(customDir));

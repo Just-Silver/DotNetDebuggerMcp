@@ -15,7 +15,9 @@ internal static class CaptureText
     public const string RegionMalformed =
         "region 格式应为 \"x,y,w,h\"（坐标为 mode=screen 返回图像素，原点左上）。";
 
-    /// <summary>display 选择器无效（越界或未知名称）。</summary>
+    /// <summary>region 格式正确但取值非法（宽或高 ≤ 0）——与「格式错」分开报，避免 agent 反复改格式。</summary>
+    public const string RegionSizeInvalid =
+        "region 的宽/高必须为正整数（当前 w 或 h ≤ 0；\"x,y,w,h\" 格式本身没错）。";
     public static string DisplayInvalid(string selector, int count)
         => $"display 无效：\"{selector}\"（共 {count} 台显示器；可用 1..{count} 或 primary/left/right）。";
 
@@ -61,4 +63,7 @@ internal static class CaptureText
 
     /// <summary>提交给取消令牌的取消提示（放弃等待、可重试，不走缓存）。</summary>
     public const string Canceled = "screenshot 已取消（可重试）。";
+
+    /// <summary>发现类只读工具（screenshot_displays / screenshot_windows）的取消提示（不绑定 screenshot 字样）。</summary>
+    public const string CanceledGeneric = "已取消（可重试）。";
 }

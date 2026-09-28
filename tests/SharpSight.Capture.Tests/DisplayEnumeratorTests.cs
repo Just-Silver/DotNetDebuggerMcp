@@ -22,7 +22,7 @@ public sealed class DisplayEnumeratorTests
     {
         if (_screenAvailable is null)
         {
-            try { _ = ScreenCapture.CaptureDisplay(0); _screenAvailable = true; }
+            try { _ = ScreenCapture.CaptureDisplay(0, new CaptureOptions()); _screenAvailable = true; }
             catch (CaptureException) { _screenAvailable = false; }
         }
         if (_screenAvailable == false)
@@ -68,13 +68,12 @@ public sealed class DisplayEnumeratorTests
     {
         SkipIfScreenUnavailable();
         var d0 = ScreenCapture.EnumerateDisplays()[0];
-        var r = ScreenCapture.CaptureDisplay(0);
+        var r = ScreenCapture.CaptureDisplay(0, new CaptureOptions());
         Assert.Equal(0, r.DisplayIndex);
         Assert.Equal(d0.Bounds.X, r.OriginX);
         Assert.Equal(d0.Bounds.Y, r.OriginY);
-        Assert.Equal(d0.Bounds.Width, r.Width);      // 无缩放（R10：两轴 0 ⇒ k=1）
+        Assert.Equal(d0.Bounds.Width, r.Width);      // 不缩放：输出=该显示器原生尺寸
         Assert.Equal(d0.Bounds.Height, r.Height);
-        Assert.Equal(1.0, r.Scale, 3);
         Assert.Equal("BitBlt", r.Source);
         Assert.Null(r.WindowTitle);
         Assert.False(r.ClippedToScreen);
@@ -87,15 +86,15 @@ public sealed class DisplayEnumeratorTests
     {
         // 越界判定在 BitBlt 之前（纯校验），锁屏下亦恒跑
         var n = ScreenCapture.EnumerateDisplays().Length;
-        var ex = Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(n));
+        var ex = Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(n, new CaptureOptions()));
         Assert.Contains("不存在", ex.Message);
-        Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(-1));
+        Assert.Throws<CaptureException>(() => ScreenCapture.CaptureDisplay(-1, new CaptureOptions()));
     }
 
-    // ===== R21 回归：display 的 k 基数=显示器原生尺寸（非虚拟屏图像空间）=====
+    // ===== R21 回归：display 抓取以「该显示器矩形」为基（非整虚拟屏）=====
 
     [Fact]
-    public void CaptureDisplay_WithHostScale_ReturnsThatDisplayBounds_NotVirtualScreen()
+    public void CaptureDisplay_ReturnsThatDisplayBounds_NotVirtualScreen()
     {
         SkipIfScreenUnavailable();
         var ds = ScreenCapture.EnumerateDisplays();
@@ -104,17 +103,13 @@ public sealed class DisplayEnumeratorTests
         var idx = ds.Length >= 2 ? 1 : 0;
         var d = ds[idx];
 
-        // 镜像宿主 display 模式默认（maxDimension=1568），确认缩放以显示器尺寸为基数而非虚拟屏。
-        var r = ScreenCapture.CaptureDisplay(idx, new CaptureOptions(MaxWidth: 1568, MaxHeight: 1568));
+        var r = ScreenCapture.CaptureDisplay(idx, new CaptureOptions());
 
         Assert.Equal(d.Index, r.DisplayIndex);
         Assert.Equal(d.Bounds.X, r.OriginX);                 // origin=该显示器左上
         Assert.Equal(d.Bounds.Y, r.OriginY);
-        Assert.Equal(d.Bounds.Width, r.NativeWidth);         // 原生=该显示器矩形（非整虚拟屏）
-        Assert.Equal(d.Bounds.Height, r.NativeHeight);
-        var k = Math.Min(1.0, Math.Min(1568.0 / d.Bounds.Width, 1568.0 / d.Bounds.Height));
-        Assert.Equal(Math.Max(1, (int)Math.Round(d.Bounds.Width * k)), r.Width);
-        Assert.Equal(Math.Max(1, (int)Math.Round(d.Bounds.Height * k)), r.Height);
+        Assert.Equal(d.Bounds.Width, r.Width);               // 尺寸=该显示器矩形（非整虚拟屏）
+        Assert.Equal(d.Bounds.Height, r.Height);
     }
 
     [Fact]
@@ -125,7 +120,7 @@ public sealed class DisplayEnumeratorTests
         if (ds.Length < 2)
             Assert.Skip("单显示器环境：display=2 的 R21 回归（旧实现会抛「完全在屏幕范围之外」）需多屏才可复现");
         var d = ds[1];
-        var r = ScreenCapture.CaptureDisplay(1);
+        var r = ScreenCapture.CaptureDisplay(1, new CaptureOptions());
         Assert.Equal(1, r.DisplayIndex);
         Assert.Equal(d.Bounds.X, r.OriginX);
         Assert.Equal(d.Bounds.Y, r.OriginY);

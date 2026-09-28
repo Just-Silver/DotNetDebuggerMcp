@@ -10,18 +10,40 @@
 
 ### Added
 
-- **`screenshot` 工具通用化（阶段一）**：新增寻址模式 `display`（指定显示器，含 `primary`/`left`/`right` 邻屏）、`foreground`（当前前台窗口）、`element`（按 UIA 元素引用截单个控件）、`hwnd`（按窗口句柄）、`clientArea`（窗口客户区）；新增参数 `maxDimension`（默认 1568）、`maxWidth`/`maxHeight`（双轴上限）、`includeCursor`（叠加鼠标光标）；返回头部新增 `原点`/`缩放`/`帧` 坐标元数据（`screen_x=原点x+图像x/缩放`；`帧` 配合 `ui_find`/`ui_*` 的 `frameId` 做旧画面护栏）。`mode` 默认 `auto`（按其它参数推断），`windowTitle=@active` 指当前前台窗口
+- **`screenshot` 工具通用化（阶段一）**：新增寻址模式 `display`（指定显示器，含 `primary`/`left`/`right` 邻屏）、`foreground`（当前前台窗口）、`element`（按 UIA 元素引用截单个控件）、`hwnd`（按窗口句柄）、`clientArea`（窗口客户区）；新增参数 `includeCursor`（叠加鼠标光标）；返回头部新增 `原点`/`帧` 坐标元数据（`screen_x=原点x+图像x`，图像恒为原生 1:1；`帧` 配合 `ui_find`/`ui_*` 的 `frameId` 做旧画面护栏）。`mode` 默认 `auto`（按其它参数推断），`windowTitle=@active` 指当前前台窗口
 - 新增可复用能力库 **`SharpSight.Capture`**（WGC+GDI 截图/图像管线）与 **`SharpSight.UiAutomation`**（FlaUI/UIA 元素模型与定位），拆自宿主/Engine，行为不变
 - `ui_find` 返回值头部含 `帧: frameId=N`；`ui_action`/`ui_input`/`ui_get` 新增可选 `frameId`（旧帧护栏：非当前帧拒绝并提示重新 `ui_find`/`screenshot`，0=不校验）
+- 新增两个**只读发现工具**，补齐 `screenshot` 寻址参数的取值来源（此前无处可查）：**`screenshot_displays`** 列显示器清单（1 基编号/主屏/物理边界/缩放 → 喂 `display`）；**`screenshot_windows`** 列可见顶层窗口（`hwnd`/`pid`/标题/前台，**不限 .NET 进程** → 喂 `hwnd`/`windowTitle`/`processId`；只列**有标题且尺寸 > 0**的窗口——系统 shell 助手/阴影层/零尺寸停车窗等不可寻址目标已过滤）
 
 ### Changed
 
-- **`screenshot` 默认缩放上限由 2000 改为 1568**（长边）；`maxDimension=0`（且未做单轴覆盖）可关闭缩放、返回 1:1 原图
 - **`ui_find` 不再列出离屏（`IsOffscreen=true`）控件**（与 `screenshot element` 共用同一过滤、两者 index 保持同源）：清单中既有控件的 `index` 可能因过滤位移，请以新的 `ui_find` 输出为准
+- **`screenshot` 落盘位置改为系统临时目录**：默认落盘目录由 `%LOCALAPPDATA%\DotNetDebuggerMcp\screenshots\` 改为 `%TEMP%\DotNetDebuggerMcp\screenshots\`；`filePath` 传**相对路径**时也以该临时目录为基准（此前按进程当前工作目录解析——会把图片写进调用方项目目录）
 
 ### Removed
 
 - **`screenshot` 的 `format`/`quality` 参数已移除（破坏性）**：输出**固定 PNG**；传入这两个参数将被忽略
+- **`screenshot` 的缩放能力已移除（破坏性）**：`maxDimension`/`maxWidth`/`maxHeight` 三个参数删除，图像**恒按抓取区域原生像素 1:1 输出**（尺寸处理交模型侧，避免"服务器缩一次、模型侧再处理一次"造成坐标口径混乱）；头部随之去掉 `缩放` 行，`原点` 是唯一坐标换算量（`screen_x=原点x+图像x`）
+
+### Fixed
+
+- **`screenshot` 用 `processId` 定位多窗口进程时会截到 1×1 黑图却回报成功**：现按「**非工具窗（`WS_EX_TOOLWINDOW`）→ 有标题 → 面积最大**」择优（此类进程 Z 序最前常是缩略图/任务栏类助手窗），并在头部新增 **`选择:`** 事实行给出所选 hwnd 与尺寸；选中窗口无标题或尺寸过小时另给 `备注:` 告警——便于调用方发现选错目标并改用 `hwnd`
+- **`screenshot mode=element` 对无独立窗口句柄的控件（XAML/UWP/WPF/Electron/Web）一律报 `hwnd=0` 失败**：现回退到**元素所属顶层窗口帧**裁剪（Win32/WinForms 控件仍取元素自身根窗）
+- **`screenshot` 截最小化窗口不再静默"成功"**：头部注明「目标窗口已最小化——截图为占位/残影画面，非真实界面」（此前会得到 160×28 的标题栏残影却无任何提示）
+- **`screenshot` 的 `region` 宽或高 ≤ 0 误报为「格式错误」**：现明确提示「宽/高必须为正整数」（格式本身没错，避免调用方反复改格式）
+- **`screenshot` 落盘失败提示中英混杂**：改为「落盘失败（原因）；已改为内联返回图片，可改用可写路径或去掉 `filePath` 重试」
+- `screenshot` 的 `timeoutSeconds` 超出 0-30 时静默夹取 → 现在头部注明已按夹取后的值处理
+- **`screenshot` 的 `element` 序号与带过滤的 `ui_find` 序号不同源、会静默截到别的控件**：说明已明确「序号必须是**无过滤** `ui_find` 的 index」并推荐用控件名/AutomationId（消除原说明「建议先用 ui_find 取 index」的自相矛盾）
+- **失败的 `element` 查找会把全局帧号推进数十**（内部 50ms 轮询每次调用都产帧）→ 现在**仅成功定位后**产一帧，一次拼错控件名不再让刚取得的有效 `frameId` 失效
+- **最小化窗口抓取失败时误导性归因「无桌面会话（服务/无头环境）」** → 改为「目标窗口已最小化，无法抓取：请先还原（`ui_action` verb=windowstate windowstate=normal）或改用 mode=screen/region」
+- **最小化主窗被多余备注「尺寸极小，可能不是目标主窗」** → 已最小化时不再报（最小化尺寸必然小），仅保留「目标窗口已最小化」
+- **`screenshot_displays` 缺说明承诺的「缩放比」**（100% 时被省略）→ 现在总是输出
+- **`windowTitle="@active"` 特值大小写敏感** → 改为大小写不敏感（`@ACTIVE` 亦可）；该入口头部与 `mode=foreground` 统一为「前台窗口」
+- **`screenshot` 的 `filePath` 不展开环境变量**（`%TEMP%\x.png` 会生成名为 `%TEMP%` 的字面目录）→ 现在展开 `%VAR%`
+- **`debug_terminate` 对运行中的目标进程报「已终止」却实际未杀**：`ICorDebugController::Terminate` 要求进程处于已停（synchronized）态，运行中直接调用会因未同步失败（此前被静默吞掉、误报成功）。现引擎在终止前先协作停（`Stop`）再终止；`debug_launch` 会话另用 OS 进程句柄兜底强杀；终止失败不再吞——如实返回「终止失败」。agent 仍是**一次** `debug_terminate` 调用，无需先停/先附加
+- **`screenshot` 选中「前台无标题窗口」时备注自相矛盾**：此前固定写「它不在 `screenshot_windows` 清单里」，但 `screenshot_windows` 对**前台**窗口即使无标题也会以 `(无标题)` 列出；现按该窗是否实际入清单如实区分
+- **超长窗口标题被静默截断且无任何提示**：`screenshot_windows` 与 `screenshot` 头部遇超长（>255 字符）标题时截到 255 却看不出被截断（看似"标题就这么长"，误判排查）→ 现截断处补 `…` 明示；仍**不返回完整超长标题**（对定位无价值、且会灌爆上下文）
+- **非 100% 缩放下显示器/截图尺寸与坐标按「逻辑像素」上报**：进程 DPI 感知的上下文常量传错（`DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` 官方定义为 `-4`，误写 `+4` → `SetProcessDpiAwarenessContext` 恒失败、进程停留 DPI-UNAWARE）。在 125%/150% 缩放下 `screenshot_displays`/`screenshot` 会把显示器与图像缩小上报（1920x1080 报成 1536x864、缩放报 100%），与「虚拟屏物理像素 / 原生 1:1」契约不符 → 现修正常量，坐标与尺寸恢复物理像素、缩放如实
 
 ## [2.1.0] - 2026-09-27
 

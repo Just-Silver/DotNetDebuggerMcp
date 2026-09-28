@@ -977,6 +977,48 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task DebugTerminate_WhileRunning_KillsTarget()
+    {
+        // 回归：进程 Running 时 debug_terminate 此前报「已终止」但目标存活（ICorDebug Terminate 未同步失败被吞）。
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} sleep 30", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        var pid = int.Parse(System.Text.RegularExpressions.Regex.Match(launch.Text(), @"目标 pid=(\d+)").Groups[1].Value);
+        Assert.True(pid > 0, launch.Text());
+
+        // Continue 使目标进入运行态（缺陷触发条件）
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var runDeadline = DateTime.UtcNow.AddSeconds(10);
+        var running = false;
+        while (DateTime.UtcNow < runDeadline)
+        {
+            var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+            if (st.Text().Contains("运行中")) { running = true; break; }
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+        Assert.True(running, "目标未进入运行态，无法覆盖运行态终止");
+        Assert.True(System.Diagnostics.Process.GetProcesses().Any(p => p.Id == pid), "运行中目标进程应仍存活");
+        // 关键：等待进程真正恢复运行（debug_state 的「运行中」在 Continue 后立即发布，此刻进程可能尚未脱离同步点，
+        // 过早 terminate 会在「已停」态成功而漏掉运行态缺陷——stdio 复现脚本同样在 Continue 后等待再终止）。
+        await Task.Delay(900, TestContext.Current.CancellationToken);
+
+        var term = await CallAsync(mcp, "debug_terminate", new Dictionary<string, object?> { ["exitCode"] = 7 });
+        Assert.True(term.IsError != true, term.Text());
+        Assert.Contains("已终止目标进程", term.Text());
+
+        // 目标进程确已结束
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        while (DateTime.UtcNow < deadline && System.Diagnostics.Process.GetProcesses().Any(p => p.Id == pid))
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.False(System.Diagnostics.Process.GetProcesses().Any(p => p.Id == pid), "运行态 debug_terminate 后目标进程仍在");
+    }
+
+    [Fact]
     public async Task SourceLineBreakpoint_NotFound_AggregatesWithoutBlamingOneModule()
     {
         var exe = DebugTargetExe;

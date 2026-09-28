@@ -49,6 +49,17 @@ public sealed class UiElementLocatorPureTests
     }
 
     [Fact]
+    public void PreferTopLevel_ElementRootWins_ElseWindowHwnd()
+    {
+        // 修「无 HWND 控件 element 截图一律 hwnd=0 失败」（2026-09-28）：元素自身根窗优先，否则回退所属顶层窗口。
+        var elementRoot = new IntPtr(0x1111);
+        var windowHwnd = new IntPtr(0x2222);
+        Assert.Equal(elementRoot, UiElementLocator.PreferTopLevel(elementRoot, windowHwnd));
+        Assert.Equal(windowHwnd, UiElementLocator.PreferTopLevel(IntPtr.Zero, windowHwnd));
+        Assert.Equal(IntPtr.Zero, UiElementLocator.PreferTopLevel(IntPtr.Zero, IntPtr.Zero));
+    }
+
+    [Fact]
     public void SkipBecauseOffscreen_OnlyForConfirmedOffscreen()
     {
         // R13：ui_find 与 screenshot element 共用的离屏过滤谓词——true 才跳过；读取失败由调用方兜底 false（不筛）。

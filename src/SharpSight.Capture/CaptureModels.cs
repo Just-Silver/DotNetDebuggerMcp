@@ -8,7 +8,7 @@ namespace SharpSight.Capture;
 
 /// <summary>定位到的窗口信息（FindMainWindow 返回；Z 序最前的可见顶层主窗）。</summary>
 /// <param name="Hwnd">窗口句柄。</param>
-/// <param name="Title">窗口标题（GetWindowText）。</param>
+/// <param name="Title">窗口标题（GetWindowText；超长有界截断，若被截断则末尾带 `…` 明示，不静默截断）。</param>
 /// <param name="Rect">窗口矩形（物理像素——入口统一设 DPI Per-Monitor V2）。</param>
 /// <param name="IsIconic">是否最小化（CaptureWindow 据此跳过 BitBlt 回退，spec §4.2）。</param>
 /// <param name="Pid">窗口所属进程 id（头部「目标」行展示）。</param>
@@ -30,47 +30,41 @@ public sealed record WindowHandleInfo(
 public sealed record WindowBounds(Rectangle ExtendedFrame, Rectangle WindowRect, Rectangle ClientArea);
 
 /// <summary>截图结果（Engine 唯一产出形状；宿主只消费字段拼头部/双轨，不做任何坐标与图像处理）。</summary>
-/// <param name="Image">编码后字节（**固定 PNG**；spec §6.1）。</param>
-/// <param name="Width">输出（缩放后）宽。</param>
-/// <param name="Height">输出（缩放后）高。</param>
-/// <param name="NativeWidth">原生（缩放前）宽：window=窗口、screen=全屏、region=裁剪区。</param>
-/// <param name="NativeHeight">原生（缩放前）高，口径同 <paramref name="NativeWidth"/>。</param>
+/// <param name="Image">编码后字节（**固定 PNG**）。</param>
+/// <param name="Width">图像宽（=抓取区域原生物理像素宽）。</param>
+/// <param name="Height">图像高（=抓取区域原生物理像素高）。</param>
 /// <param name="WindowTitle">window 模式标题；screen/region 为 null。</param>
 /// <param name="Source">抓取来源 "WGC" | "PrintWindow" | "BitBlt"（回退链结果即来源；screen/region 恒 BitBlt）。</param>
 /// <param name="WasAllBlack">输出图纯黑采样（头部「备注」行数据源；抓到纯黑不报错）。</param>
-/// <param name="ClippedToScreen">region 部分越界已裁至屏幕交集（头部「尺寸」行注记，spec §3.3）。</param>
-/// <param name="OriginX">抓取矩形左上角 X（虚拟屏物理像素；spec §5 origin）。</param>
-/// <param name="OriginY">抓取矩形左上角 Y（虚拟屏物理像素；spec §5 origin）。</param>
-/// <param name="Scale">图像像素 / 原生物理像素（spec §5 scale = Width/NativeWidth）。</param>
+/// <param name="ClippedToScreen">region 部分越界已裁至屏幕交集（头部「尺寸」行注记）。</param>
+/// <param name="OriginX">抓取矩形左上角 X（虚拟屏物理像素）。</param>
+/// <param name="OriginY">抓取矩形左上角 Y（虚拟屏物理像素）。</param>
 /// <param name="FrameId">采集代际号（由 SharpSight.UiAutomation 维护、宿主注入；未接入时恒 0）。</param>
 /// <param name="DisplayIndex">归属显示器序号；screen 全屏/未定位到具体显示器时为 -1。</param>
 /// <param name="IsClientArea">抓取的是否为窗口客户区（仅 window 模式 ClientArea=true 时置 true，其余模式恒 false）。</param>
+/// <remarks>**本库不做任何缩放**（用户裁定 2026-09-28）：图像按抓取区域原生像素 1:1 出图，
+/// 尺寸处理交模型侧，避免"我们自己缩一次、模型侧再处理一次"造成坐标口径混乱。</remarks>
 public sealed record CaptureResult(
-    byte[] Image, int Width, int Height, int NativeWidth, int NativeHeight,
+    byte[] Image, int Width, int Height,
     string? WindowTitle, string Source, bool WasAllBlack, bool ClippedToScreen = false,
-    int OriginX = 0, int OriginY = 0, double Scale = 1.0, int FrameId = 0,
+    int OriginX = 0, int OriginY = 0, int FrameId = 0,
     int DisplayIndex = -1, bool IsClientArea = false);
 
 /// <summary>
-/// CaptureScreen 入参（T3 引入；spec §5 坐标模型 / §6.2 降采样）。旧
-/// <c>CaptureScreen(clip, maxDimension)</c> 重载委托到此（宿主已切到本重载，旧签名保留供单测）。
-/// **输出固定 PNG**（spec §6.1，用户裁定 2026-09-28）：不提供 format/quality。
+/// 抓取入参（T3 引入；spec §5 坐标模型）。
+/// **输出固定 PNG**（spec §6.1，用户裁定 2026-09-28）：不提供 format/quality，也不提供任何缩放参数。
 /// </summary>
 /// <param name="Clip">裁剪矩形（mode=screen 返回图像素空间）；null=全屏。
 /// <b>适用模式：screen / region</b>（element 走独立入口 <see cref="ScreenCapture.CaptureElement(IntPtr, Rectangle, CaptureOptions)"/>、不消费本参数）；
 /// <b>display 与 window 模式忽略本参数</b>——display 走自身入口
 /// （按显示器尺寸抓取）、window 几何由目标窗口自身决定（WGC 源取 <c>DWMWA_EXTENDED_FRAME_BOUNDS</c>、GDI 回退源取 <c>GetWindowRect</c>），均不套用裁剪。</param>
-/// <param name="MaxWidth">输出宽上限（原生物理像素，spec §6.2）；≤0 视为该轴不限制。两轴皆 ≤0 ⇒ 不缩放（k=1）。</param>
-/// <param name="MaxHeight">输出高上限（原生物理像素）；≤0 视为该轴不限制，语义同 <paramref name="MaxWidth"/>。</param>
 /// <param name="ClientArea">window 模式是否抓客户区（<see cref="ScreenCapture.CaptureWindow(IntPtr, CaptureOptions)"/> 消费；
 /// screen/display/region 忽略）。默认 false=整窗。Task 5 引入。</param>
 /// <param name="IncludeCursor">是否在截图中包含鼠标光标（默认 false）。WGC 路径经 <c>IsCursorCaptureEnabled</c> 开关
 /// （需 <c>ApiInformation</c> 探测、兼容老系统）；GDI 路径（screen/region、window 客户区、PrintWindow/BitBlt 回退）
-/// 在缩放/编码前手动叠加光标，叠加失败不报错、仅在 <see cref="CaptureResult.Source"/> 备注「光标未叠加」。Task 9 引入。</param>
+/// 在编码前手动叠加光标，叠加失败不报错、仅在 <see cref="CaptureResult.Source"/> 备注「光标未叠加」。Task 9 引入。</param>
 public sealed record CaptureOptions(
     Rectangle? Clip = null,
-    int MaxWidth = 0,
-    int MaxHeight = 0,
     bool ClientArea = false,
     bool IncludeCursor = false);
 

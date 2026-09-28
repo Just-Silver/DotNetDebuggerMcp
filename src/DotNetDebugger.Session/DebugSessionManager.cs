@@ -51,6 +51,32 @@ public sealed class ActiveDebugSession : IAsyncDisposable
         await Session.DisposeAsync();
         _process?.Dispose();
     }
+
+    /// <summary>是否 launch 启动的会话（持有 OS 进程句柄 → 可绕过 ICorDebug 直接终止）。</summary>
+    internal bool HasLaunchedProcess => _process is not null;
+
+    /// <summary>launch 会话：目标 OS 进程当前是否仍存活；无句柄的 attach 会话恒 false（不可判定）。</summary>
+    internal bool IsLaunchedProcessAlive()
+    {
+        try { return _process is { } p && !p.HasExited; }
+        catch { return false; }
+    }
+
+    /// <summary>
+    /// launch 会话：用 OS 句柄直接强杀目标进程（Win32 <c>TerminateProcess</c>，与进程运行/停止无关）——
+    /// 作为 ICorDebug 终止的兜底（ICorDebug 的 Terminate 要求进程已停，见 Engine TerminateAsync）。
+    /// 返回是否发起了强杀。
+    /// </summary>
+    internal bool TryKillLaunchedProcess()
+    {
+        try
+        {
+            if (_process is not { } p || p.HasExited) return false;
+            p.Kill();
+            return true;
+        }
+        catch { return false; }
+    }
 }
 
 /// <summary>
@@ -196,15 +222,30 @@ public sealed class DebugSessionManager : IAsyncDisposable
     /// <summary>
     /// 终止活动会话的目标进程（强制结束，非正常退出）并关闭会话。返回是否存在被终止的活动会话。
     /// 与 <see cref="CloseAsync"/> 的区别：Close 只断开调试（目标继续运行），本方法结束目标进程——调试/复验收口用。
+    /// <para>引擎终止失败时：launch 会话用 OS 句柄兜底强杀；仍存活（或 attach 会话不可判定）则**抛出**，
+    /// 由宿主如实报「终止失败」——不再静默吞后误报「已终止」。</para>
     /// </summary>
     public async Task<bool> TerminateAsync(int exitCode = 0, CancellationToken ct = default)
     {
         ActiveDebugSession? toClose;
         lock (_gate) { toClose = _active; _active = null; }
         if (toClose is null) return false;
-        try { await toClose.Session.TerminateAsync(exitCode, ct); } catch { /* 已退出/竞态：忽略，仍释放会话 */ }
+
+        Exception? error = null;
+        try { await toClose.Session.TerminateAsync(exitCode, ct); }
+        catch (Exception ex) { error = ex; }
+
+        // 引擎终止未成功时，launch 会话用 OS 句柄直接强杀（ICorDebug 的「必须先停」约束对 Win32 TerminateProcess 不适用）。
+        if (error is not null && toClose.HasLaunchedProcess)
+            toClose.TryKillLaunchedProcess();
+
+        // 是否仍有存活目标：launch 会话可判定；attach 会话无 OS 句柄 → 不可判定，按失败上报。
+        var failed = error is not null && (!toClose.HasLaunchedProcess || toClose.IsLaunchedProcessAlive());
+
         await toClose.DisposeAsync();
         ActiveSessionChanged?.Invoke(null);
+
+        if (failed) throw error!;
         return true;
     }
 

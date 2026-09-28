@@ -19,11 +19,10 @@ public sealed class CaptureWindowWgcTests
         var w = CaptureTestHelpers.WaitFound(app.Process.Id, TimeSpan.FromSeconds(5));
         Assert.NotNull(w);
 
-        var r = ScreenCapture.CaptureWindow(w!.Hwnd, 2000);
+        var r = ScreenCapture.CaptureWindow(w!.Hwnd, new CaptureOptions());
 
         Assert.False(r.WasAllBlack);
         Assert.Equal("WGC", r.Source);          // 支持环境 WGC 必走通；发生回退=链路 bug
-        Assert.Equal(r.NativeWidth, r.Width);   // UiSampleApp ~762px < 2000，不缩放
         // WGC 帧=窗口真实可见表面（实测 UiSampleApp 762x552），GetWindowRect 含 FixedSingle 边框/阴影带
         //（实测 776x559，差 14x7）——spec §6.2「尺寸与 rect 一致」按边框带放宽为有界区间 [rect-20, rect]：
         // WGC 不应大于 rect（截大=错源），且高度差不会到客户区误截程度（552 vs 客户区 520 会挂）。
