@@ -82,130 +82,21 @@ public static class ScreenshotTool
             if (timeoutOutOfRange)
                 notes.Add($"备注:   timeoutSeconds 超出范围（0-30），已按 {timeoutSeconds} 处理");
 
-            CaptureResult result;
-            string targetLine;
-            switch (resolved)
+            // 目标解析：按模式分派到各自的解析/采集（成功得 Result+TargetLine(+Notes)，失败得 Error）。
+            var capture = resolved switch
             {
-                case "screen":
-                case "region":
-                {
-                    result = ScreenCapture.CaptureScreen(new CaptureOptions(
-                        Clip: clip, IncludeCursor: includeCursor));
-                    var c = clip;
-                    targetLine = c is { } rect
-                        ? $"目标:   屏幕区域 ({rect.X},{rect.Y},{rect.Width},{rect.Height})"
-                        : "目标:   屏幕";
-                    break;
-                }
-                case "display":
-                {
-                    var displays = ScreenCapture.EnumerateDisplays();
-                    if (!TryResolveDisplayIndex(displays, display, out var di, out var derr))
-                        return TextOnly(derr);
-                    var d = displays[di];
-                    result = ScreenCapture.CaptureDisplay(di, new CaptureOptions(
-                        IncludeCursor: includeCursor));
-                    targetLine = $"目标:   显示器 {di + 1} \"{d.DeviceName}\" ({d.Bounds.X},{d.Bounds.Y} {d.Bounds.Width}x{d.Bounds.Height})";
-                    break;
-                }
-                case "foreground":
-                {
-                    var fg = ScreenCapture.FindForegroundWindow();
-                    if (fg is null) return TextOnly(CaptureText.ForegroundUnavailable);
-                    targetLine = $"目标:   前台窗口 \"{fg.Title}\" (pid={fg.Pid})";
-                    // clientArea 仅 mode=window 适用（ValidateCompatibility 已拒绝 foreground+clientArea），此处不透传。
-                    result = CaptureWindow(fg, clientArea: false, includeCursor);
-                    break;
-                }
-                case "window":
-                {
-                    WindowHandleInfo info;
-                    var isActiveSpecial = false;   // windowTitle=@active：与 mode=foreground 同语义，头部统一「前台窗口」
-                    if (!string.IsNullOrWhiteSpace(hwnd))
-                    {
-                        if (!long.TryParse(hwnd.Trim(), out var hv) || hv == 0)
-                            return TextOnly(CaptureText.HwndInvalid(hwnd));
-                        var byHwnd = ScreenCapture.FindWindowByHwnd(new IntPtr(hv));
-                        if (byHwnd is null) return TextOnly(CaptureText.HwndInvalid(hwnd));
-                        info = byHwnd;
-                    }
-                    else if (IsActiveSpecial(windowTitle))
-                    {
-                        var fg = ScreenCapture.FindForegroundWindow();
-                        if (fg is null) return TextOnly(CaptureText.ForegroundUnavailable);
-                        info = fg;
-                        isActiveSpecial = true;
-                    }
-                    else
-                    {
-                        var located = await LocateWindowAsync(processId, windowTitle, timeoutSeconds, cancellationToken);
-                        if (located.Error is not null) return TextOnly(located.Error);
-                        info = located.Info!;
-                    }
-                    targetLine = isActiveSpecial
-                        ? $"目标:   前台窗口 \"{info.Title}\" (pid={info.Pid})"
-                        : $"目标:   窗口 \"{info.Title}\" (pid={info.Pid})";
-                    if (info.MatchCount > 1)
-                    {
-                        var rule = processId > 0 ? "（pid 检索按「非工具窗→有标题→面积最大」择优；要截别的窗口请用 hwnd 指定）" : "";
-                        notes.Add($"选择:   命中 {info.MatchCount} 个可见窗口 → 已选 hwnd={info.Hwnd} {info.Rect.Width}x{info.Rect.Height} \"{info.Title}\"{rule}");
-                    }
-                    if (info.Title.Length == 0)
-                        notes.Add(NoTitleNote(info.Hwnd.ToInt64(),
-                            ScreenCapture.FindForegroundWindow()?.Hwnd == info.Hwnd));
-                    if (!info.IsIconic && (info.Rect.Width < 32 || info.Rect.Height < 32))
-                        notes.Add($"备注:   选中窗口尺寸极小（{info.Rect.Width}x{info.Rect.Height} hwnd={info.Hwnd}），可能不是目标主窗");
-                    if (info.IsIconic)
-                        notes.Add("备注:   目标窗口已最小化——截图为占位/残影画面，非真实界面");
-                    result = CaptureWindow(info, clientArea, includeCursor);
-                    break;
-                }
-                default: // element
-                {
-                    // R24：mode=element 必须给 element 引用，绝不静默截取首个元素。
-                    if (string.IsNullOrWhiteSpace(element)) return TextOnly(CaptureText.ElementRequired);
-                    var procPid = processId > 0 ? processId : DebugSessionService.Manager.Active?.ProcessId ?? 0;
-                    if (procPid <= 0) return TextOnly(CaptureText.ElementNeedsProcess);
-                    var found = await LocateElementAsync(procPid, element, timeoutSeconds, cancellationToken);
-                    if (found.Error is not null) return TextOnly(found.Error);
-                    var el = found.Info!;
-                    var label = string.IsNullOrEmpty(el.Name) ? el.AutoId : el.Name;
-                    targetLine = $"目标:   元素 {el.Type} \"{label}\"";
-                    result = ScreenCapture.CaptureElement(el.TopLevelHwnd, el.RectPx,
-                        new CaptureOptions(IncludeCursor: includeCursor))
-                        with { FrameId = found.FrameId };
-                    break;
-                }
-            }
+                "screen" or "region" => CaptureScreenOrRegion(clip, includeCursor),
+                "display" => ResolveDisplayTarget(display, includeCursor),
+                "foreground" => ResolveForegroundTarget(includeCursor),
+                "window" => await ResolveWindowTargetAsync(
+                    processId, windowTitle, hwnd, clientArea, includeCursor, timeoutSeconds, cancellationToken),
+                _ => await ResolveElementTargetAsync(
+                    processId, element, includeCursor, timeoutSeconds, cancellationToken),
+            };
+            if (capture.Error is not null) return TextOnly(capture.Error);
+            notes.AddRange(capture.Notes);
 
-            // —— 头部（spec §4.3）——
-            var header = BuildHeader(targetLine, resolved, result, notes);
-
-            // —— 双轨：内联 image 块 vs 落盘（spec §6.1；落盘失败仍附块，两害相权保 agent 能看到画面）——
-            var b64Len = ((long)result.Image.Length + 2) / 3 * 4;
-            var wantFile = !string.IsNullOrWhiteSpace(filePath) || b64Len >= AppConfig.InlineImageBase64Bytes;
-            var attachImage = true;
-            if (wantFile)
-            {
-                try
-                {
-                    var full = ResolveScreenshotPath(filePath, resolved, processId);
-                    File.WriteAllBytes(full, result.Image);
-                    header.AppendLine($"已落盘: {full}");
-                    attachImage = false;
-                }
-                catch (Exception ex)
-                {
-                    header.AppendLine($"落盘失败（{ex.Message}）；已改为内联返回图片，可改用可写路径或去掉 filePath 重试。");   // 仍附块
-                }
-            }
-            header.AppendLine("---");
-
-            var content = new List<ContentBlock> { new TextContentBlock { Text = header.ToString() } };
-            if (attachImage)
-                // FromBytes（非 Data setter）：SDK 语义 Data=base64 文本字节，FromBytes 存原始字节并懒编码
-                content.Add(ImageContentBlock.FromBytes(result.Image, "image/png"));
-            return new CallToolResult { Content = content };
+            return EmitResult(capture.Result!, capture.TargetLine, resolved, notes, filePath, processId);
         }
         catch (OperationCanceledException)
         {
@@ -223,6 +114,153 @@ public static class ScreenshotTool
         {
             return TextOnly($"截图失败：{ex.Message}");   // 防御兜底，不抛（铁律）
         }
+    }
+
+    /// <summary>单模式的目标解析结果：成功=<see cref="Result"/>(+<see cref="TargetLine"/>,+<see cref="Notes"/>)；
+    /// 失败=<see cref="Error"/>（主流程转 <c>TextOnly</c>）。<see cref="Notes"/> 仅 window 模式可能非空。</summary>
+    private sealed record TargetCapture(
+        CaptureResult? Result, string TargetLine, string? Error, IReadOnlyList<string> Notes);
+
+    /// <summary>mode=screen/region：恒 BitBlt 屏幕（可选 clip 局部裁剪）。</summary>
+    private static TargetCapture CaptureScreenOrRegion(Rectangle? clip, bool includeCursor)
+    {
+        var result = ScreenCapture.CaptureScreen(new CaptureOptions(
+            Clip: clip, IncludeCursor: includeCursor));
+        var targetLine = clip is { } rect
+            ? $"目标:   屏幕区域 ({rect.X},{rect.Y},{rect.Width},{rect.Height})"
+            : "目标:   屏幕";
+        return new TargetCapture(result, targetLine, null, Array.Empty<string>());
+    }
+
+    /// <summary>mode=display：解析显示器选择器（1 基/primary/left/right）后采集。</summary>
+    private static TargetCapture ResolveDisplayTarget(string display, bool includeCursor)
+    {
+        var displays = ScreenCapture.EnumerateDisplays();
+        if (!TryResolveDisplayIndex(displays, display, out var di, out var derr))
+            return new TargetCapture(null, "", derr, Array.Empty<string>());
+        var d = displays[di];
+        var result = ScreenCapture.CaptureDisplay(di, new CaptureOptions(
+            IncludeCursor: includeCursor));
+        var targetLine = $"目标:   显示器 {di + 1} \"{d.DeviceName}\" ({d.Bounds.X},{d.Bounds.Y} {d.Bounds.Width}x{d.Bounds.Height})";
+        return new TargetCapture(result, targetLine, null, Array.Empty<string>());
+    }
+
+    /// <summary>mode=foreground：采集当前前台窗口（clientArea 不适用，ValidateCompatibility 已拒绝该组合）。</summary>
+    private static TargetCapture ResolveForegroundTarget(bool includeCursor)
+    {
+        var fg = ScreenCapture.FindForegroundWindow();
+        if (fg is null) return new TargetCapture(null, "", CaptureText.ForegroundUnavailable, Array.Empty<string>());
+        var targetLine = $"目标:   前台窗口 \"{fg.Title}\" (pid={fg.Pid})";
+        // clientArea 仅 mode=window 适用（ValidateCompatibility 已拒绝 foreground+clientArea），此处不透传。
+        var result = CaptureWindow(fg, clientArea: false, includeCursor);
+        return new TargetCapture(result, targetLine, null, Array.Empty<string>());
+    }
+
+    /// <summary>mode=window：hwnd 优先 → @active 特值 → 等待定位（spec §4.2 择一语义），并产出选择/无标题/小窗/最小化事实行。</summary>
+    private static async Task<TargetCapture> ResolveWindowTargetAsync(
+        int processId, string windowTitle, string hwnd, bool clientArea, bool includeCursor,
+        int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        WindowHandleInfo info;
+        var isActiveSpecial = false;   // windowTitle=@active：与 mode=foreground 同语义，头部统一「前台窗口」
+        if (!string.IsNullOrWhiteSpace(hwnd))
+        {
+            if (!long.TryParse(hwnd.Trim(), out var hv) || hv == 0)
+                return new TargetCapture(null, "", CaptureText.HwndInvalid(hwnd), Array.Empty<string>());
+            var byHwnd = ScreenCapture.FindWindowByHwnd(new IntPtr(hv));
+            if (byHwnd is null)
+                return new TargetCapture(null, "", CaptureText.HwndInvalid(hwnd), Array.Empty<string>());
+            info = byHwnd;
+        }
+        else if (IsActiveSpecial(windowTitle))
+        {
+            var fg = ScreenCapture.FindForegroundWindow();
+            if (fg is null)
+                return new TargetCapture(null, "", CaptureText.ForegroundUnavailable, Array.Empty<string>());
+            info = fg;
+            isActiveSpecial = true;
+        }
+        else
+        {
+            var located = await LocateWindowAsync(processId, windowTitle, timeoutSeconds, cancellationToken);
+            if (located.Error is not null)
+                return new TargetCapture(null, "", located.Error, Array.Empty<string>());
+            info = located.Info!;
+        }
+
+        var targetLine = isActiveSpecial
+            ? $"目标:   前台窗口 \"{info.Title}\" (pid={info.Pid})"
+            : $"目标:   窗口 \"{info.Title}\" (pid={info.Pid})";
+        var notes = new List<string>();
+        if (info.MatchCount > 1)
+        {
+            var rule = processId > 0 ? "（pid 检索按「非工具窗→有标题→面积最大」择优；要截别的窗口请用 hwnd 指定）" : "";
+            notes.Add($"选择:   命中 {info.MatchCount} 个可见窗口 → 已选 hwnd={info.Hwnd} {info.Rect.Width}x{info.Rect.Height} \"{info.Title}\"{rule}");
+        }
+        if (info.Title.Length == 0)
+            notes.Add(NoTitleNote(info.Hwnd.ToInt64(),
+                ScreenCapture.FindForegroundWindow()?.Hwnd == info.Hwnd));
+        if (!info.IsIconic && (info.Rect.Width < 32 || info.Rect.Height < 32))
+            notes.Add($"备注:   选中窗口尺寸极小（{info.Rect.Width}x{info.Rect.Height} hwnd={info.Hwnd}），可能不是目标主窗");
+        if (info.IsIconic)
+            notes.Add("备注:   目标窗口已最小化——截图为占位/残影画面，非真实界面");
+
+        var result = CaptureWindow(info, clientArea, includeCursor);
+        return new TargetCapture(result, targetLine, null, notes);
+    }
+
+    /// <summary>mode=element：UIA 元素引用 → 所属顶层窗口帧裁剪（R24：必须给 element，绝不静默截首个元素）。</summary>
+    private static async Task<TargetCapture> ResolveElementTargetAsync(
+        int processId, string element, bool includeCursor, int timeoutSeconds, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(element))
+            return new TargetCapture(null, "", CaptureText.ElementRequired, Array.Empty<string>());
+        var procPid = processId > 0 ? processId : DebugSessionService.Manager.Active?.ProcessId ?? 0;
+        if (procPid <= 0)
+            return new TargetCapture(null, "", CaptureText.ElementNeedsProcess, Array.Empty<string>());
+        var found = await LocateElementAsync(procPid, element, timeoutSeconds, cancellationToken);
+        if (found.Error is not null)
+            return new TargetCapture(null, "", found.Error, Array.Empty<string>());
+        var el = found.Info!;
+        var label = string.IsNullOrEmpty(el.Name) ? el.AutoId : el.Name;
+        var targetLine = $"目标:   元素 {el.Type} \"{label}\"";
+        var result = ScreenCapture.CaptureElement(el.TopLevelHwnd, el.RectPx,
+            new CaptureOptions(IncludeCursor: includeCursor))
+            with { FrameId = found.FrameId };
+        return new TargetCapture(result, targetLine, null, Array.Empty<string>());
+    }
+
+    /// <summary>头部组装 + 双轨输出（spec §4.3/§6.1）：指定 filePath 或 base64 ≥ 阈值时落盘只回路径，否则内联 image 块；
+    /// 落盘失败仍附块（两害相权保 agent 能看到画面）。</summary>
+    private static CallToolResult EmitResult(CaptureResult result, string targetLine, string mode,
+        IReadOnlyList<string> notes, string filePath, int processId)
+    {
+        var header = BuildHeader(targetLine, mode, result, notes);
+
+        var b64Len = ((long)result.Image.Length + 2) / 3 * 4;
+        var wantFile = !string.IsNullOrWhiteSpace(filePath) || b64Len >= AppConfig.InlineImageBase64Bytes;
+        var attachImage = true;
+        if (wantFile)
+        {
+            try
+            {
+                var full = ResolveScreenshotPath(filePath, mode, processId);
+                File.WriteAllBytes(full, result.Image);
+                header.AppendLine($"已落盘: {full}");
+                attachImage = false;
+            }
+            catch (Exception ex)
+            {
+                header.AppendLine($"落盘失败（{ex.Message}）；已改为内联返回图片，可改用可写路径或去掉 filePath 重试。");   // 仍附块
+            }
+        }
+        header.AppendLine("---");
+
+        var content = new List<ContentBlock> { new TextContentBlock { Text = header.ToString() } };
+        if (attachImage)
+            // FromBytes（非 Data setter）：SDK 语义 Data=base64 文本字节，FromBytes 存原始字节并懒编码
+            content.Add(ImageContentBlock.FromBytes(result.Image, "image/png"));
+        return new CallToolResult { Content = content };
     }
 
     /// <summary>
