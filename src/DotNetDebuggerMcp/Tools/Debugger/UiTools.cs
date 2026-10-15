@@ -22,7 +22,7 @@ public static class UiTools
 
     /// <summary>按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单与各控件支持的 pattern）。</summary>
     [McpServerTool]
-    [Description("按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单供选择，含 index/Name/Type/AutoId/patterns 能力清单/Rect 与同名成员语义候选；语义候选可用 decompile_member <类型> <成员> 看实现）。全部走 UIA 语义，不移动光标、不注入输入、不抢前台。进程需已运行且是 .NET UI 应用（WPF/WinForms/…）；窗口树里没有的虚拟化项查不到。大 UI 树/长列表（如 999 行 DataGrid）用 scope（限定子树）+ depth（限定层数）缩小范围以免超时；带 scope/depth 的 index 仅限本次结果，截图请用无过滤 ui_find 的 index。")]
+    [Description("按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单供选择，含 index/Name/Type/AutoId/patterns 能力清单/Rect 与同名成员语义候选；语义候选可用 decompile_member <类型> <成员> 看实现）。全部走 UIA 语义，不移动光标、不注入输入、不抢前台。进程需已运行且是 .NET UI 应用（WPF/WinForms/…）；窗口树里没有的虚拟化项查不到。大 UI 树/长列表（如 999 行 DataGrid）用 scope（限定子树）+ depth（限定层数）缩小范围以免超时；带 scope/depth 的 index 仅限本次结果，截图请用无过滤 ui_find 的 index。**注意**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。")]
     public static async Task<string> UiFind(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示），如 UiSampleApp、1234。")] string process = "",
         [Description("窗口标题精确匹配；空 = 该进程首个顶层窗口。")] string title = "",
@@ -74,6 +74,7 @@ public static class UiTools
         }
         catch (UiException ex) { return Fail("ui_find", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_find", argsText, $"UI 查找失败：{ex.Message}"); }
+        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
     }
 
     /// <summary>对 UI 控件执行语义动作（真实操作，有产线副作用）。</summary>
@@ -114,6 +115,7 @@ public static class UiTools
         catch (StaleFrameException ex) { return Fail("ui_action", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_action", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_action", argsText, $"UI 操作失败：{ex.Message}"); }
+        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
     }
 
     /// <summary>对 UI 控件写入值（Value/RangeValue/LegacyIAccessible；真实操作，有产线副作用）。</summary>
@@ -147,6 +149,7 @@ public static class UiTools
         catch (StaleFrameException ex) { return Fail("ui_input", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_input", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_input", argsText, $"UI 写值失败：{ex.Message}"); }
+        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
     }
 
     /// <summary>读取 UI 控件状态（只读，无副作用；展示值经 DB1 敏感脱敏）。</summary>
@@ -183,6 +186,7 @@ public static class UiTools
         catch (StaleFrameException ex) { return Fail("ui_get", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_get", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_get", argsText, $"UI 读值失败：{ex.Message}"); }
+        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
     }
 
     /// <summary>等待 UI 状态变化/控件出现（事件化 + 轮询兜底，只读；超时返回当前状态不报错）。</summary>
@@ -213,6 +217,7 @@ public static class UiTools
         }
         catch (UiException ex) { return Fail("ui_wait", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_wait", argsText, $"UI 等待失败：{ex.Message}"); }
+        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
     }
 
     // ===== 轨迹与文案 =====

@@ -42,6 +42,36 @@ public sealed class UiSemanticResolverTests
         Assert.Equal(UiActionKind.LegacySelect, UiPatternDispatcher.Choose("select", caps, "", 0, "").Kind);
     }
 
+    /// <summary>P6：释放 UIA 客户端后 HasAutomation 转 false；再次取用经工厂重建（注入 seam 计数）。</summary>
+    [Fact]
+    public void ReleaseAutomation_ClearsClient_AndRebuildsViaFactory()
+    {
+        var built = 0;
+        var original = UiAutomationService.AutomationFactoryForTest;
+        UiAutomationService.AutomationFactoryForTest = () => { built++; return new FlaUI.UIA3.UIA3Automation(); };
+        try
+        {
+            var svc = UiAutomationService.Instance;
+            svc.ReleaseAutomation();               // 前置干净
+            Assert.False(svc.HasAutomation);
+
+            svc.EnsureAutomationForTest();         // 取用 → 走工厂重建
+            Assert.True(svc.HasAutomation);
+            Assert.Equal(1, built);
+
+            svc.ReleaseAutomation();               // P6：调用结束释放
+            Assert.False(svc.HasAutomation);
+
+            svc.EnsureAutomationForTest();         // 再次取用 → 再次重建
+            Assert.Equal(2, built);
+        }
+        finally
+        {
+            UiAutomationService.Instance.ReleaseAutomation();
+            UiAutomationService.AutomationFactoryForTest = original;
+        }
+    }
+
     [Fact]
     public void Lookup_WorkBagOnDebugTargetDll_ReturnsProgramWorkBagCandidate()
     {

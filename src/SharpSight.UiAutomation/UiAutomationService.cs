@@ -34,6 +34,18 @@ internal sealed class UiAutomationService
     /// </summary>
     public FrameRegistry Frames { get; } = new();
 
+    /// <summary>
+    /// 测试注入的 UIA 客户端工厂（seam）：默认为 null（走真实 <c>new UIA3Automation()</c>）。
+    /// 测试注入可计数/可观察的工厂后断言「调用结束已释放、再次调用走工厂重建」。
+    /// </summary>
+    internal static Func<UIA3Automation>? AutomationFactoryForTest;
+
+    /// <summary>当前是否持有 UIA 客户端（供测试/诊断观察——释放后应转 false）。</summary>
+    internal bool HasAutomation => _automation is not null;
+
+    /// <summary>测试专用：按需取用 UIA 客户端（触发工厂重建），供验证 P6「释放后可重建」。</summary>
+    internal void EnsureAutomationForTest() => GetAutomation();
+
     private UiAutomationService()
     {
     }
@@ -382,7 +394,20 @@ internal sealed class UiAutomationService
         return await task;
     }
 
-    private UIA3Automation GetAutomation() => _automation ??= new UIA3Automation();
+    private UIA3Automation GetAutomation() => _automation ??= AutomationFactoryForTest?.Invoke() ?? new UIA3Automation();
+
+    /// <summary>
+    /// 释放所持 UIA 客户端（P6）：<c>ui_*</c> 整次工具调用结束即调用——避免 UIA 客户端常驻导致目标持续维护/广播
+    /// 自动化树（改变其性能特征）。释放后下次调用按需重建。
+    /// <para>接线在**工具层**（UiTools 各调用的 finally），不可按「每次 RunGateAsync 后」释放——<c>WaitAsync</c>
+    /// 的订阅跨多次取放 gate。</para>
+    /// </summary>
+    internal void ReleaseAutomation()
+    {
+        var aut = _automation;
+        _automation = null;
+        try { aut?.Dispose(); } catch { /* 释放失败不影响后续重建 */ }
+    }
 
     private static T SafeRead<T>(Func<T> f, T fallback)
     {
