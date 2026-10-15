@@ -74,6 +74,8 @@ public static class DebugControlTool
             result = "进程已退出。";
         else if (stop is not null)
             result = $"已停下。最近停点: {DebugSessionTool.StopText(stop)}。用 debug_stack/debug_variables 观察；debug_continue 继续运行。";
+        else if (DebugInspectTool.IsFrozenReadableState(state))
+            result = $"进程处于初始冻结态（{DebugSessionTool.StateText(state)}）——非运行中，可直接读栈（debug_stack 缺省列全部线程）；debug_continue 后运行至断点停下。";
         else
             result = $"等待 {seconds} 秒未停（当前状态: {DebugSessionTool.StateText(state)}）。可再次 debug_wait 继续等待，或 debug_state 查询。";
 

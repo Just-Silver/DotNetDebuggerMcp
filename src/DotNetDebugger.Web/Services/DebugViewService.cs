@@ -139,27 +139,35 @@ public sealed class DebugViewService
         catch (Exception ex) { return $"单步失败：{ex.Message}"; }
     }
 
-    /// <summary>停点线程的调用栈（进程停时；未停返回空）。</summary>
+    /// <summary>停点线程的调用栈（停点态或 attach/launch 初始冻结态均可读；运行中返回空）。</summary>
     public async Task<IReadOnlyList<DebugStackFrame>> GetStackAsync(CancellationToken ct = default)
     {
         var active = Active;
-        if (active is null || active.Buffer.CurrentState != DebugSessionState.Stopped) return [];
+        if (active is null || !IsReadableState(active.Buffer.CurrentState)) return [];
         var tid = active.Buffer.StoppedThreadId;
         if (tid <= 0) return [];
         try { return await active.Session.GetStackFramesAsync(tid, ct); }
         catch { return []; }
     }
 
-    /// <summary>停点线程的局部变量/参数（进程停时）。</summary>
+    /// <summary>停点线程的局部变量/参数（停点态或初始冻结态；运行中返回空）。</summary>
     public async Task<IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>> GetVariablesAsync(CancellationToken ct = default)
     {
         var active = Active;
-        if (active is null || active.Buffer.CurrentState != DebugSessionState.Stopped) return new Dictionary<string, IReadOnlyList<DebugVariable>>();
+        if (active is null || !IsReadableState(active.Buffer.CurrentState)) return new Dictionary<string, IReadOnlyList<DebugVariable>>();
         var tid = active.Buffer.StoppedThreadId;
         if (tid <= 0) return new Dictionary<string, IReadOnlyList<DebugVariable>>();
         try { return await active.Session.GetVariablesAsync(tid, ct); }
         catch { return new Dictionary<string, IReadOnlyList<DebugVariable>>(); }
     }
+
+    /// <summary>
+    /// 可读栈态：停点（Stopped）或 attach/launch 后的初始冻结态（None/Attaching/Launching，引擎已停住全局）。
+    /// 与宿主 <c>DebugInspectTool.TryRequireReadable</c> 同口径（Web 不反引宿主，故本地实现）；**不含单步**。
+    /// </summary>
+    private static bool IsReadableState(DebugSessionState state)
+        => state is DebugSessionState.Stopped or DebugSessionState.None
+            or DebugSessionState.Attaching or DebugSessionState.Launching;
 
     /// <summary>托管线程列表（任意状态可读）。</summary>
     public async Task<IReadOnlyList<DebugThreadInfo>> GetThreadsAsync(CancellationToken ct = default)

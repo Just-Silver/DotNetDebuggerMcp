@@ -444,6 +444,41 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task DebugStack_LaunchFrozen_ReadableWithoutContinue()
+    {
+        var exe = DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await ConnectAsync();
+
+        // launch 后进程冻结在 Main 前（Attaching/初始停）——无停点事件、无最近停点线程
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 30", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        Assert.Contains("已启动", launch.Text());
+
+        // 不 continue：直接读栈应可用（冻结态 = 全部线程可读），不再回「无停点线程可读」
+        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.True(stack.IsError != true, stack.Text());
+        Assert.DoesNotContain("无停点线程可读", stack.Text());
+        Assert.DoesNotContain("进程未停在断点", stack.Text());
+        Assert.Contains("调用栈", stack.Text());
+
+        // debug_state 标注冻结态可读
+        var state = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        Assert.True(state.IsError != true, state.Text());
+        Assert.Contains("冻结", state.Text());
+
+        // all=true 显式请求全部线程
+        var all = await CallAsync(mcp, "debug_stack",
+            new Dictionary<string, object?> { ["all"] = true });
+        Assert.True(all.IsError != true, all.Text());
+        Assert.Contains("调用栈", all.Text());
+
+        await CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+    }
+
+    [Fact]
     public async Task DebugState_ConcurrentQueries_AllReturn()
     {
         var exe = DebugTargetExe;

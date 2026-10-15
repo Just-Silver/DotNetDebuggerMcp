@@ -202,6 +202,9 @@ public static class DebugSessionTool
         // attach 即成功提示：attach 到长活目标且进程在跑——不看起来像卡住（对照 DebugMCP waitForDebugSessionReady 五态）
         if (active.IsAttach && buffer.CurrentState == DotNetDebugger.Engine.Models.DebugSessionState.Running)
             lines.Add("attach 会话：已附加成功，进程继续独立运行（无停点不会自行停下）；设断点后 debug_continue/debug_wait 等待命中。");
+        // 初始冻结态（attach/launch 后、尚未 continue）：进程已停住全局、栈可直接读——不必先 debug_continue
+        if (DebugInspectTool.IsFrozenReadableState(buffer.CurrentState))
+            lines.Add("进程处于初始冻结态（非运行中）——可直接读栈（debug_stack 缺省列全部线程）；debug_continue 后运行至断点停下。");
         DebugSessionService.Manager.Actions.Log("debug_state", "", string.Join("; ", lines));
         return string.Join(Environment.NewLine, lines);
     }

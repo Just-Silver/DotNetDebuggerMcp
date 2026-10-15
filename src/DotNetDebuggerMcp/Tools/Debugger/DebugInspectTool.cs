@@ -4,6 +4,7 @@ using ModelContextProtocol.Server;
 
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 
 namespace DotNetDebuggerMcp.Tools.Debugger;
 
@@ -21,42 +22,64 @@ public static class DebugInspectTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>调用栈文本或错误提示。</returns>
     [McpServerTool]
-    [Description("读取调用栈（进程需停在断点/异常/单步）。每帧输出 类型.方法 [token]（解析失败降级为 模块!token+ILoffset）。缺省读最近停点线程；threadId 指定时读该线程。停在编译器生成的 async 状态机帧时可能读不到栈（返回空栈提示）——此时改用 debug_breakpoint_set typeName+line 断还原源码的 await 行。")]
+    [Description("读取调用栈（进程需停在断点/异常/单步，或处于 attach/launch 后的初始冻结态）。每帧输出 类型.方法 [token]（解析失败降级为 模块!token+ILoffset）。缺省读最近停点线程；threadId 指定时读该线程；all=true 或进程处于初始冻结态（无停点线程）时列出全部托管线程的栈（死锁/卡死排查）。停在编译器生成的 async 状态机帧时可能读不到栈（返回空栈提示）——此时改用 debug_breakpoint_set typeName+line 断还原源码的 await 行。")]
     public static async Task<string> DebugStack(
-        [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
+        [Description("线程 id；缺省 0 = 用最近停点线程（初始冻结态下无此线程则列全部线程）。")] int threadId = 0,
+        [Description("列出全部托管线程的调用栈（默认 false=只读单线程；初始冻结态自动启用）。死锁/卡死排查用。")] bool all = false,
         CancellationToken cancellationToken = default)
     {
-        if (!TryRequireStopped(out var active, out var error)) return error;
+        if (!TryRequireReadable(out var active, out var error)) return error;
 
         var tid = threadId > 0 ? threadId : active.Buffer.StoppedThreadId;
-        if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";
-
+        // 冻结态（Attaching/Launching/None）或显式 all 时：无单一停点线程，列全部线程
+        var listAll = all || tid <= 0;
         try
         {
+            if (listAll) return await RenderAllThreadsAsync(active, cancellationToken);
+
             var frames = await active.Session.GetStackFramesAsync(tid, cancellationToken);
             if (frames.Count == 0) return "调用栈为空（可能停在非托管/无 IL 帧处；async 状态机帧亦常见）。";
-            var lines = frames.Select(f =>
-            {
-                var loc = f.Location;
-                // 仅当类型名与方法名都解析出才组合真名（单侧成功会拼出 "Ns.Foo." / ".Bar" 残形）
-                var name = f.TypeName is not null && f.MethodName is not null
-                    ? $"{f.TypeName}.{f.MethodName}"
-                    : null;
-                // C④：类型名是编译器生成的 async 状态机（Ns.Outer+<Foo>d__N）时，在帧名上标注
-                // 原 async 方法 Foo 并归一化方法名（状态机自身的 MoveNext 是编译器生成步骤，非业务方法）。
-                if (name is not null && StateMachineFrameHelper.TryParseStateMachine(f.TypeName!) is { } sm)
-                    name = $"{f.TypeName} (状态机 {sm.MethodName}).{f.MethodName}";
-                var tokenSuffix = $"  [{loc.MethodTokenText}]"; // token 保留，供 debug_breakpoint_set 下断点
-                var pos = $"{loc.ModuleName}!{loc.MethodTokenText}+0x{loc.IlOffset:x}";
-                return $"  {f.FrameIndex}: {name ?? pos}{tokenSuffix}";
-            }).ToList();
             DebugSessionService.Manager.Actions.Log("debug_stack", $"thread={tid}", $"{frames.Count} 帧");
-            return $"调用栈（thread={tid}，{frames.Count} 帧）:{Environment.NewLine}{string.Join(Environment.NewLine, lines)}";
+            return $"调用栈（thread={tid}，{frames.Count} 帧）:{Environment.NewLine}{string.Join(Environment.NewLine, frames.Select(RenderFrame))}";
         }
         catch (Exception ex)
         {
             return $"读调用栈失败：{ex.Message}";
         }
+    }
+
+    /// <summary>列全部托管线程的调用栈（冻结态缺省 / all=true；各线程读不到帧给占位、不整体失败）。</summary>
+    private static async Task<string> RenderAllThreadsAsync(DotNetDebugger.Session.ActiveDebugSession active, CancellationToken ct)
+    {
+        var threads = await active.Session.GetThreadsAsync(ct);
+        if (threads.Count == 0) return "未读到托管线程（进程可能未就绪或已退出）。";
+        var sb = new StringBuilder($"调用栈（全部线程，共 {threads.Count} 个）:");
+        var total = 0;
+        foreach (var t in threads)
+        {
+            IReadOnlyList<DotNetDebugger.Engine.Models.DebugStackFrame> frames;
+            try { frames = await active.Session.GetStackFramesAsync(t.ThreadId, ct); }
+            catch { frames = []; }
+            sb.AppendLine().Append($"  thread {t.ThreadId}（{frames.Count} 帧）");
+            if (frames.Count == 0) sb.Append("    （该线程无 IL 帧/不可读）");
+            else foreach (var f in frames) sb.AppendLine().Append("  " + RenderFrame(f));
+            total += frames.Count;
+        }
+        DebugSessionService.Manager.Actions.Log("debug_stack", "all", $"{threads.Count} 线程 / {total} 帧");
+        return sb.ToString();
+    }
+
+    private static string RenderFrame(DotNetDebugger.Engine.Models.DebugStackFrame f)
+    {
+        var loc = f.Location;
+        // 仅当类型名与方法名都解析出才组合真名（单侧成功会拼出 "Ns.Foo." / ".Bar" 残形）
+        var name = f.TypeName is not null && f.MethodName is not null ? $"{f.TypeName}.{f.MethodName}" : null;
+        // C④：类型名是编译器生成的 async 状态机（Ns.Outer+<Foo>d__N）时，在帧名上标注原 async 方法并归一化方法名。
+        if (name is not null && StateMachineFrameHelper.TryParseStateMachine(f.TypeName!) is { } sm)
+            name = $"{f.TypeName} (状态机 {sm.MethodName}).{f.MethodName}";
+        var tokenSuffix = $"  [{loc.MethodTokenText}]"; // token 保留，供 debug_breakpoint_set 下断点
+        var pos = $"{loc.ModuleName}!{loc.MethodTokenText}+0x{loc.IlOffset:x}";
+        return $"  {f.FrameIndex}: {name ?? pos}{tokenSuffix}";
     }
 
     /// <summary>
@@ -99,7 +122,7 @@ public static class DebugInspectTool
         [Description("按名白名单（逗号分隔，空=全量）。精确忽略大小写匹配 局部/参数名（无符号名用 slotN）与 $exception；最多 50 项；未知名会在返回中列出可用名。")] string names = "",
         CancellationToken cancellationToken = default)
     {
-        if (!TryRequireStopped(out var active, out var error)) return error;
+        if (!TryRequireReadable(out var active, out var error)) return error;
 
         var tid = threadId > 0 ? threadId : active.Buffer.StoppedThreadId;
         if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";
@@ -236,7 +259,7 @@ public static class DebugInspectTool
     /// <summary>
     /// 前置校验：存在活动调试会话且进程处于 Stopped（断点/异常/单步停点）。
     /// 返回 false 时 <paramref name="active"/> 为 null、<paramref name="error"/> 带中文提示（调用方直接返回该提示）。
-    /// debug_evaluate 等停点读取类工具共用。
+    /// debug_set 等等停点读取类工具共用（**含写内存**——冻结态不放行）。
     /// </summary>
     internal static bool TryRequireStopped(
         [NotNullWhen(true)] out DotNetDebugger.Session.ActiveDebugSession? active,
@@ -256,4 +279,35 @@ public static class DebugInspectTool
         error = null;
         return true;
     }
+
+    /// <summary>
+    /// 只读类工具的前置校验：会话存在且进程**可读栈**——停点态（Stopped）或 attach/launch 后的**初始冻结态**
+    /// （Attaching/Launching/None）。冻结态下引擎已停住全局（CallbackHandler 的 _initialHold），栈可读，只是没有
+    /// 单一「停点线程」。**不含写入**：debug_set 仍用 <see cref="TryRequireStopped"/>（冻结态写目标内存风险高）。
+    /// </summary>
+    internal static bool TryRequireReadable(
+        [NotNullWhen(true)] out DotNetDebugger.Session.ActiveDebugSession? active,
+        [NotNullWhen(false)] out string? error)
+    {
+        active = DebugSessionService.Manager.Active;
+        if (active is null)
+        {
+            error = "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。";
+            return false;
+        }
+        if (active.Buffer.CurrentState == DebugSessionState.Stopped || IsFrozenReadableState(active.Buffer.CurrentState))
+        {
+            error = null;
+            return true;
+        }
+        error = "进程未停在断点/异常（当前非 Stopped 状态）。先 debug_continue 运行至断点停下，再读栈/变量。";
+        return false;
+    }
+
+    /// <summary>
+    /// 是否「初始冻结可读」态：attach/launch 后引擎停住全局、进程冻结，栈可读但无停点线程。
+    /// <c>None</c> 亦纳入——会话刚建立、事件缓冲尚未追上时进程同样是冻结的（否则 attach 后立刻读栈会竞态失败）。
+    /// </summary>
+    internal static bool IsFrozenReadableState(DebugSessionState state)
+        => state is DebugSessionState.None or DebugSessionState.Attaching or DebugSessionState.Launching;
 }
