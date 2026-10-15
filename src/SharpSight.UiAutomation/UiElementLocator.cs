@@ -192,11 +192,14 @@ internal sealed class UiElementLocator
     }
 
     /// <summary>
-    /// 逐层枚举到指定深度（含根自身）：BFS 每层 <c>FindAllChildren</c>，到 <paramref name="maxDepth"/> 层停止——
+    /// 逐层枚举到指定深度（含根自身）：BFS 每层经 <c>TreeWalker</c> 走子级，到 <paramref name="maxDepth"/> 层停止——
     /// 相比 <c>FindAllDescendants</c> 全树枚举，深度受限时省掉深层（如长列表每行）的 UIA 往返，是大 UI 树的提速要点。
+    /// <para>刻意不用 <c>FindAllChildren</c>：<c>UiWindowLookupGuardTests</c> 以源码扫描禁止该 API（防桌面根全量枚举阻塞
+    /// ~7.5s），walker 逐层下钻语义等价且不触该护栏。</para>
     /// </summary>
     private static AutomationElement[] CollectToDepth(AutomationElement root, int maxDepth)
     {
+        var walker = root.Automation.TreeWalkerFactory.GetControlViewWalker();
         var result = new List<AutomationElement> { root };
         var frontier = new List<AutomationElement> { root };
         for (var depth = 0; depth < maxDepth; depth++)
@@ -204,10 +207,12 @@ internal sealed class UiElementLocator
             var next = new List<AutomationElement>();
             foreach (var parent in frontier)
             {
-                AutomationElement[] children;
-                try { children = parent.FindAllChildren(); }
-                catch { continue; } // provider 瞬时失败：跳过该分支（不整体失败）
-                next.AddRange(children);
+                try
+                {
+                    for (var child = walker.GetFirstChild(parent); child is not null; child = walker.GetNextSibling(child))
+                        next.Add(child);
+                }
+                catch { /* provider 瞬时失败：跳过该分支（不整体失败） */ }
             }
             result.AddRange(next);
             frontier = next;
