@@ -15,6 +15,33 @@ public sealed class UiSemanticResolverTests
     private static string DebugTargetDll => Path.Combine(
         Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, "DebugTarget.dll");
 
+    /// <summary>P3：clickPoint=true 仅允许 invoke/select；其它 verb 明确报错（不静默忽略）。</summary>
+    [Fact]
+    public void Choose_ClickPoint_仅invoke与select_其它verb报错()
+    {
+        var caps = new UiPatternCapabilities(
+            Invoke: false, Toggle: false, SelectionItem: false, ExpandCollapse: true,
+            Value: false, RangeValue: false, Scroll: false, ScrollItem: false, Window: false, Legacy: true);
+
+        // expand + clickPoint=true → 报错（真实点击只支持「点一下」语义）
+        var ex = Assert.Throws<UiException>(() => UiPatternDispatcher.Choose("expand", caps, "", 0, "", clickPoint: true));
+        Assert.Contains("clickPoint", ex.Message);
+
+        // invoke/select + clickPoint=true → 走真实点击
+        Assert.Equal(UiActionKind.ClickPoint, UiPatternDispatcher.Choose("invoke", caps, "", 0, "", clickPoint: true).Kind);
+        Assert.Equal(UiActionKind.ClickPoint, UiPatternDispatcher.Choose("select", caps, "", 0, "", clickPoint: true).Kind);
+    }
+
+    /// <summary>P3：clickPoint=false 时行为不变（仍按能力分派；legacy 只暴露时走 legacy 兜底）。</summary>
+    [Fact]
+    public void Choose_ClickPointFalse_按能力分派不变()
+    {
+        var caps = new UiPatternCapabilities(
+            Invoke: false, Toggle: false, SelectionItem: false, ExpandCollapse: false,
+            Value: false, RangeValue: false, Scroll: false, ScrollItem: false, Window: false, Legacy: true);
+        Assert.Equal(UiActionKind.LegacySelect, UiPatternDispatcher.Choose("select", caps, "", 0, "").Kind);
+    }
+
     [Fact]
     public void Lookup_WorkBagOnDebugTargetDll_ReturnsProgramWorkBagCandidate()
     {

@@ -87,6 +87,7 @@ public static class UiTools
         [Description("滚动方向（verb=scroll 时必填）：up / down。")] string direction = "",
         [Description("滚动行数（verb=scroll 用，默认 0=3，范围 1-100）。")] int lines = 0,
         [Description("窗口状态（verb=windowstate 时必填）：normal / maximized / minimized。")] string windowstate = "",
+        [Description("**真实点击**（默认 false；仅 verb=invoke/select）。true 时按控件 ClickablePoint 移动真实光标并注入左键点击——**会移动光标、注入输入、可能抢前台**；仅在目标无 Invoke/SelectionItem（如部分 WPF-UI 导航项只暴露 legacy）且语义动作被证实无效时开启。其它 verb 配 clickPoint=true 会报错。")] bool clickPoint = false,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
@@ -101,7 +102,7 @@ public static class UiTools
             if (verb.Trim().Equals("rightclick", StringComparison.OrdinalIgnoreCase)
                 || verb.Trim().Equals("doubleclick", StringComparison.OrdinalIgnoreCase))
                 return Fail("ui_action", argsText, "UIA 无该语义入口，物理输入已移除；请改用等价菜单/命令的 ui_action verb=invoke。");
-            var result = await UiAutomationService.Instance.ActionAsync(process.Trim(), verb.Trim(), index, name.Trim(), type.Trim(), direction.Trim(), lines, windowstate.Trim(), timeoutSeconds, cancellationToken);
+            var result = await UiAutomationService.Instance.ActionAsync(process.Trim(), verb.Trim(), index, name.Trim(), type.Trim(), direction.Trim(), lines, windowstate.Trim(), timeoutSeconds, cancellationToken, clickPoint);
             return Done("ui_action", argsText, result.Message);
         }
         catch (OperationCanceledException)

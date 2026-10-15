@@ -16,7 +16,13 @@ namespace DotNetDebuggerMcp.Tests;
 /// </summary>
 public sealed class NoPhysicalInputGuardTests
 {
-    /// <summary>物理输入 API/token 黑名单（源码与 IL 共用语义）。</summary>
+    /// <summary>
+    /// 物理输入 API/token 黑名单（源码与 IL 共用语义）。
+    /// <para><b>P3 例外</b>：<c>ui_action clickPoint=true</c> 的真实点击走 <c>AutomationElement.Click</c>（内部即
+    /// <c>FlaUI.Core.Input.Mouse</c>）——故 <c>Click</c> 不再入此黑名单（那会让合法调用恒违规）；改由
+    /// <see cref="RealClickCallSite_IsUniqueAndGuarded"/> 断言「真实点击调用点唯一且只在
+    /// <c>PerformClickPoint</c> 内」。<c>FlaUI.Core.Input</c> 命名空间黑名单保留：本库不得**直接**引 Mouse。</para>
+    /// </summary>
     internal static readonly string[] ForbiddenTokens =
     [
         "FlaUI.Core.Input",
@@ -27,6 +33,9 @@ public sealed class NoPhysicalInputGuardTests
         "ActivateWindow",
         "PerformPhysicalMouse",
     ];
+
+    /// <summary>真实点击入口 token（P3）：只允许出现在 <c>UiPatternDispatcher.PerformClickPoint</c> 内。</summary>
+    private static readonly string[] RealClickTokens = ["Click(", "DoubleClick(", "RightClick(", "RightDoubleClick("];
 
     [Fact]
     public void HostSource_ContainsNoPhysicalInputTokens()
@@ -93,6 +102,47 @@ public sealed class NoPhysicalInputGuardTests
         var parts = file.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         return parts.Contains("bin", StringComparer.OrdinalIgnoreCase)
             || parts.Contains("obj", StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// P3 护栏：真实点击调用点（<c>.Click(</c>/<c>.DoubleClick(</c>/<c>.RightClick(</c>/<c>.RightDoubleClick(</c>）必须**只**
+    /// 出现在 <c>UiPatternDispatcher.PerformClickPoint</c> 方法体内——否则任何人可绕过 <c>clickPoint</c> 开关直接真实点击
+    /// （源码 token 扫描抓不到 <c>Click(false)</c>，IL 层又因合法调用共存而无法用黑名单，故按调用点唯一性守）。
+    /// </summary>
+    [Fact]
+    public void RealClickCallSite_IsUniqueAndGuarded()
+    {
+        var file = Path.Combine(TestDataPaths.RepositoryRoot, "src", "SharpSight.UiAutomation", "UiPatternDispatcher.cs");
+        Assert.True(File.Exists(file), $"未找到 {file}");
+        var lines = File.ReadAllLines(file);
+
+        var inPerformClickPoint = false;
+        var violations = new List<string>();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (line.Contains("void PerformClickPoint(", StringComparison.Ordinal)) { inPerformClickPoint = true; continue; }
+            // 方法体结束（顶格右括号）离开锚定区；PerformClickPoint 之后的方法都在顶格声明
+            if (inPerformClickPoint && line.StartsWith("    ///", StringComparison.Ordinal)) { inPerformClickPoint = false; }
+
+            // 排除声明行（internal static void PerformClickPoint）与注释
+            var trimmed = line.TrimStart();
+            if (trimmed.StartsWith("///", StringComparison.Ordinal) || trimmed.StartsWith("//", StringComparison.Ordinal)) continue;
+
+            foreach (var token in RealClickTokens)
+            {
+                if (!line.Contains(token, StringComparison.Ordinal)) continue;
+                if (!inPerformClickPoint)
+                    violations.Add($"{i + 1}: [{token}] {line.Trim()}");
+            }
+        }
+
+        Assert.True(violations.Count == 0,
+            "真实点击调用点（.Click(/.DoubleClick(/.RightClick(/.RightDoubleClick(）只允许出现在 UiPatternDispatcher.PerformClickPoint 内"
+            + "（真实点击须经 ui_action clickPoint=true 显式开关）；发现越界调用点：\n" + string.Join("\n", violations));
+
+        // PerformClickPoint 必须真实存在（防改名后本护栏静默失效）
+        Assert.Contains(lines, l => l.Contains("void PerformClickPoint(", StringComparison.Ordinal));
     }
 
     /// <summary>扫描 TypeRef（禁止 FlaUI.Core.Input 命名空间）+ MemberRef/PInvoke import（禁止物理输入 API 名）。</summary>

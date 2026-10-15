@@ -124,6 +124,8 @@ internal enum UiActionKind
     LegacyDefaultAction,
     LegacySelect,
     Focus,
+    /// <summary>真实点击（显式 opt-in：ui_action clickPoint=true）——全库唯一物理输入入口。</summary>
+    ClickPoint,
 }
 
 /// <summary>ui_action 的纯决策结果（Choose 产出，Execute 消费）；PatternName 为展示用 pattern 名。</summary>

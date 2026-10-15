@@ -18,6 +18,10 @@ internal static class UiPatternDispatcher
     internal static readonly string[] Verbs =
         ["invoke", "toggle", "select", "expand", "collapse", "focus", "scroll", "scrollintoview", "windowstate"];
 
+    /// <summary>legacy 兜底命中时的「可能不生效」提示（P3）：仅暴露 legacy 的控件（如 WPF-UI 导航项）语义动作可能无实际效果。</summary>
+    internal const string LegacyMayNotWorkHint =
+        "（该控件仅暴露 legacy，语义动作**可能不生效**；无效时可试 clickPoint=true 走真实点击）";
+
     /// <summary>
     /// pattern 调用被 provider 拒绝时的补充引导（spec §9）：后台/不可见控件常导致语义动作失败，
     /// 提示 agent 用 ui_get what=offscreen 确认，并可用 windowstate=normal 还原最小化窗口（绝不静默提前台）。
@@ -25,8 +29,20 @@ internal static class UiPatternDispatcher
     internal const string OffscreenHint =
         "；若为目标后台/不可见导致 provider 拒绝，可用 ui_get what=offscreen 确认，必要时先 ui_action verb=windowstate windowstate=normal 还原最小化窗口。";
 
-    /// <summary>纯决策：按 verb 与能力快照选 pattern，全部不支持时抛 <see cref="UiException"/>（中文）。</summary>
-    public static ChosenAction Choose(string verb, UiPatternCapabilities caps, string direction, int lines, string windowstate)
+    /// <summary>纯决策：按 verb 与能力快照选 pattern，全部不支持时抛 <see cref="UiException"/>（中文）。
+    /// <paramref name="clickPoint"/> = true 时走真实点击（仅 invoke/select；其余 verb 报错）——真实点击会移动光标/注入输入。</summary>
+    public static ChosenAction Choose(string verb, UiPatternCapabilities caps, string direction, int lines, string windowstate, bool clickPoint = false)
+    {
+        if (clickPoint)
+        {
+            if (verb is not ("invoke" or "select"))
+                throw new UiException($"clickPoint=true 仅支持 verb=invoke/select（真实点击是「点一下」语义）；当前 verb={verb}。");
+            return new ChosenAction(verb, UiActionKind.ClickPoint, "ClickablePoint(真实点击)", direction, lines, windowstate);
+        }
+        return ChooseByCapability(verb, caps, direction, lines, windowstate);
+    }
+
+    private static ChosenAction ChooseByCapability(string verb, UiPatternCapabilities caps, string direction, int lines, string windowstate)
     {
         switch (verb)
         {
@@ -173,6 +189,9 @@ internal static class UiPatternDispatcher
                 Invoke(() => pattern.Select(0), "LegacySelect");
                 return;
             }
+            case UiActionKind.ClickPoint:
+                PerformClickPoint(element);
+                return;
             case UiActionKind.Focus:
                 // 非窗口控件；Focus() 对带 HWND 控件可能激活顶层窗口（spec §9 已述，非物理输入）。
                 Invoke(element.Focus, "Focus");
@@ -217,6 +236,23 @@ internal static class UiPatternDispatcher
             }
             default:
                 throw new UiException($"未实现的写值分派：{choice.Kind}。");
+        }
+    }
+
+    /// <summary>
+    /// 真实点击（P3，显式 opt-in）：按 <c>ClickablePoint</c> 移动真实光标并注入左键点击。
+    /// **这是全库唯一允许的真实点击调用点**——<c>NoPhysicalInputGuardTests</c> 断言 <c>.Click(</c>/<c>.DoubleClick(</c> 等
+    /// 仅出现在本方法体内，且只有 <c>ui_action clickPoint=true</c> 会走到这里（默认路径零物理输入）。
+    /// </summary>
+    internal static void PerformClickPoint(AutomationElement element)
+    {
+        try
+        {
+            element.Click(moveMouse: false);
+        }
+        catch (Exception ex)
+        {
+            throw new UiException($"真实点击失败：{ex.Message}（控件可能被遮挡/不可见；可先 ui_action verb=windowstate windowstate=normal 还原窗口）。");
         }
     }
 

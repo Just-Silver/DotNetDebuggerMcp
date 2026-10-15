@@ -65,9 +65,10 @@ internal sealed class UiAutomationService
         => RunGateAsync(() => _locator.FindForCapture(
             GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit), timeoutSeconds, ct);
 
-    /// <summary>对目标控件执行语义动作（verb；windowstate 忽略 index/name/type 定位顶层窗口）。</summary>
-    public Task<UiActionResult> ActionAsync(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate, int timeoutSeconds, CancellationToken ct)
-        => RunGateAsync(() => ActionCore(process, verb, index, name, type, direction, lines, windowstate), timeoutSeconds, ct);
+    /// <summary>对目标控件执行语义动作（verb；windowstate 忽略 index/name/type 定位顶层窗口）。
+    /// <paramref name="clickPoint"/>=true 时走真实点击（仅 invoke/select；会移动光标/注入输入）。</summary>
+    public Task<UiActionResult> ActionAsync(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate, int timeoutSeconds, CancellationToken ct, bool clickPoint = false)
+        => RunGateAsync(() => ActionCore(process, verb, index, name, type, direction, lines, windowstate, clickPoint), timeoutSeconds, ct);
 
     /// <summary>对目标控件写入值（Value → RangeValue → LegacyIAccessible）。</summary>
     public Task<UiActionResult> InputAsync(string process, string value, int index, string name, string type, int timeoutSeconds, CancellationToken ct)
@@ -149,7 +150,7 @@ internal sealed class UiAutomationService
 
     // ===== 核心（gate 内串行 + 5s 兜底） =====
 
-    private UiActionResult ActionCore(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate)
+    private UiActionResult ActionCore(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate, bool clickPoint = false)
     {
         var verbNorm = verb.Trim().ToLowerInvariant();
         if (verbNorm is "rightclick" or "doubleclick")
@@ -158,6 +159,8 @@ internal sealed class UiAutomationService
             throw new UiException($"verb 不能为空（可选 {string.Join("/", UiPatternDispatcher.Verbs)}）。");
         if (verbNorm != "windowstate" && !UiPatternDispatcher.Verbs.Contains(verbNorm))
             throw new UiException($"verb 无效：{verb}（可选 {string.Join("/", UiPatternDispatcher.Verbs)}；无右键/双击——物理输入已移除）。");
+        if (clickPoint && verbNorm is not ("invoke" or "select"))
+            throw new UiException($"clickPoint=true 仅支持 verb=invoke/select（真实点击是「点一下」语义）；当前 verb={verbNorm}。");
 
         // 参数先于 UIA 目标解析校验（fail-fast：纯参数错误不触碰跨进程 UIA，避免环境慢时误报超时）。
         if (verbNorm == "scroll")
@@ -190,10 +193,14 @@ internal sealed class UiAutomationService
         }
 
         var caps = UiPatternCapabilities.Probe(element);
-        var chosen = UiPatternDispatcher.Choose(verbNorm, caps, direction, lines, windowstate);
+        var chosen = UiPatternDispatcher.Choose(verbNorm, caps, direction, lines, windowstate, clickPoint);
         UiPatternDispatcher.Execute(element, chosen);
         var verbDisplay = chosen.Kind == UiActionKind.Window ? $"windowstate={chosen.WindowState}" : verbNorm;
-        return new UiActionResult(true, $"已 {verbDisplay}（{chosen.PatternName}）");
+        // P3：legacy 兜底命中时标注「可能不生效」——原为静默假成功（报「已 select」但页面未切换）
+        var legacyHint = chosen.Kind is UiActionKind.LegacySelect or UiActionKind.LegacyDefaultAction
+            ? UiPatternDispatcher.LegacyMayNotWorkHint
+            : "";
+        return new UiActionResult(true, $"已 {verbDisplay}（{chosen.PatternName}）{legacyHint}");
     }
 
     private UiActionResult InputCore(string process, string value, int index, string name, string type)
