@@ -72,6 +72,34 @@ public sealed class UiSemanticResolverTests
         }
     }
 
+    /// <summary>P6 并发：两个并发 ui 调用期间不得释放客户端（引用计数）；全部结束才释放。</summary>
+    [Fact]
+    public async Task EndUiCall_ConcurrentCalls_DoNotReleaseUntilAllDone()
+    {
+        var original = UiAutomationService.AutomationFactoryForTest;
+        UiAutomationService.AutomationFactoryForTest = () => new FlaUI.UIA3.UIA3Automation();
+        try
+        {
+            var svc = UiAutomationService.Instance;
+            svc.ReleaseAutomation();
+            svc.BeginUiCall();
+            svc.EnsureAutomationForTest();
+            Assert.True(svc.HasAutomation);
+
+            svc.BeginUiCall();                                  // 第二个并发调用
+            await svc.EndUiCallAsync(TestContext.Current.CancellationToken);
+            Assert.True(svc.HasAutomation);                     // 仍有并发调用 → 不释放
+
+            await svc.EndUiCallAsync(TestContext.Current.CancellationToken);
+            Assert.False(svc.HasAutomation);                    // 全部结束 → 释放
+        }
+        finally
+        {
+            UiAutomationService.Instance.ReleaseAutomation();
+            UiAutomationService.AutomationFactoryForTest = original;
+        }
+    }
+
     [Fact]
     public void Lookup_WorkBagOnDebugTargetDll_ReturnsProgramWorkBagCandidate()
     {

@@ -26,6 +26,8 @@ internal sealed class UiAutomationService
     private readonly UiElementLocator _locator = new();
     private readonly UiEventWaiter _waiter = new();
     private UIA3Automation? _automation;
+    /// <summary>并发 ui 调用深度（P6 引用计数）：&gt;0 时不释放客户端。</summary>
+    private int _uiCallDepth;
 
     /// <summary>
     /// 元素采集代际号登记（spec §7.4）：<c>ui_find</c> 与 <c>screenshot element</c> 每次采集调用
@@ -399,14 +401,33 @@ internal sealed class UiAutomationService
     /// <summary>
     /// 释放所持 UIA 客户端（P6）：<c>ui_*</c> 整次工具调用结束即调用——避免 UIA 客户端常驻导致目标持续维护/广播
     /// 自动化树（改变其性能特征）。释放后下次调用按需重建。
-    /// <para>接线在**工具层**（UiTools 各调用的 finally），不可按「每次 RunGateAsync 后」释放——<c>WaitAsync</c>
-    /// 的订阅跨多次取放 gate。</para>
     /// </summary>
     internal void ReleaseAutomation()
     {
         var aut = _automation;
         _automation = null;
         try { aut?.Dispose(); } catch { /* 释放失败不影响后续重建 */ }
+    }
+
+    /// <summary>
+    /// 标记一次 ui 调用开始（P6 引用计数）：并发调用（MCP 支持并发）期间**不得**释放客户端，
+    /// 否则 <c>ui_wait</c> 的等待循环（跨多次取放 gate）或另一并发调用手里的客户端会被中途 Dispose。
+    /// </summary>
+    internal void BeginUiCall() => Interlocked.Increment(ref _uiCallDepth);
+
+    /// <summary>标记一次 ui 调用结束；计数归零时在 **gate 内**释放客户端（与非调用期的 COM 操作互斥）。</summary>
+    internal async Task EndUiCallAsync(CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (Interlocked.Decrement(ref _uiCallDepth) <= 0)
+            {
+                _uiCallDepth = 0;
+                ReleaseAutomation();
+            }
+        }
+        finally { _gate.Release(); }
     }
 
     private static T SafeRead<T>(Func<T> f, T fallback)

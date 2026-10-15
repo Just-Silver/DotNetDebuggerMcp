@@ -472,28 +472,36 @@ public static class ScreenshotTool
 
         var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
         string? lastError = null;
-        do
+        UiAutomationService.Instance.BeginUiCall();  // P6：整次 element 定位全程持客户端，结束释放
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            try
+            do
             {
-                var elements = await UiAutomationService.Instance.FindForCaptureAsync(
-                    process, "", byIndex ? "" : selector, "", "", limit, timeoutSeconds, ct);
-                var hit = byIndex
-                    ? elements.FirstOrDefault(e => e.Index == wanted)
-                    : elements.FirstOrDefault();
-                // 仅命中后产帧：失败/未命中/轮询重试不推进全局帧号（2026-09-28 修 D3）。
-                if (hit is not null) return (hit, UiAutomationService.Instance.Frames.Next(), null);
-                lastError = CaptureText.ElementNotFound(element);
-            }
-            catch (UiException ex)
-            {
-                lastError = ex.Message;
-            }
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    var elements = await UiAutomationService.Instance.FindForCaptureAsync(
+                        process, "", byIndex ? "" : selector, "", "", limit, timeoutSeconds, ct);
+                    var hit = byIndex
+                        ? elements.FirstOrDefault(e => e.Index == wanted)
+                        : elements.FirstOrDefault();
+                    // 仅命中后产帧：失败/未命中/轮询重试不推进全局帧号（2026-09-28 修 D3）。
+                    if (hit is not null) return (hit, UiAutomationService.Instance.Frames.Next(), null);
+                    lastError = CaptureText.ElementNotFound(element);
+                }
+                catch (UiException ex)
+                {
+                    lastError = ex.Message;
+                }
 
-            if (DateTime.UtcNow >= deadline) break;
-            await Task.Delay(50, ct);
-        } while (true);
+                if (DateTime.UtcNow >= deadline) break;
+                await Task.Delay(50, ct);
+            } while (true);
+        }
+        finally
+        {
+            await UiAutomationService.Instance.EndUiCallAsync(CancellationToken.None);
+        }
 
         return (null, 0, lastError);
     }

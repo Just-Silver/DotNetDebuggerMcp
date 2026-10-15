@@ -35,7 +35,7 @@ public sealed class NoPhysicalInputGuardTests
     ];
 
     /// <summary>真实点击入口 token（P3）：只允许出现在 <c>UiPatternDispatcher.PerformClickPoint</c> 内。</summary>
-    private static readonly string[] RealClickTokens = ["Click(", "DoubleClick(", "RightClick(", "RightDoubleClick("];
+    private static readonly string[] RealClickTokens = [".Click(", ".DoubleClick(", ".RightClick(", ".RightDoubleClick("];
 
     [Fact]
     public void HostSource_ContainsNoPhysicalInputTokens()
@@ -106,43 +106,65 @@ public sealed class NoPhysicalInputGuardTests
 
     /// <summary>
     /// P3 护栏：真实点击调用点（<c>.Click(</c>/<c>.DoubleClick(</c>/<c>.RightClick(</c>/<c>.RightDoubleClick(</c>）必须**只**
-    /// 出现在 <c>UiPatternDispatcher.PerformClickPoint</c> 方法体内——否则任何人可绕过 <c>clickPoint</c> 开关直接真实点击
-    /// （源码 token 扫描抓不到 <c>Click(false)</c>，IL 层又因合法调用共存而无法用黑名单，故按调用点唯一性守）。
+    /// 出现在 <c>UiPatternDispatcher.PerformClickPoint</c> 方法体内——否则任何人可绕过 <c>clickPoint</c> 开关直接真实点击。
+    /// <para>扫**全部 <c>src/</c> 源码**（不只 UiPatternDispatcher.cs）：否则在别处新增一行 <c>element.Click(...)</c> 不会被发现
+    /// （IL 层也兜不住——<c>AutomationElement::Click</c> 不在禁用命名空间内）。</para>
     /// </summary>
     [Fact]
     public void RealClickCallSite_IsUniqueAndGuarded()
     {
-        var file = Path.Combine(TestDataPaths.RepositoryRoot, "src", "SharpSight.UiAutomation", "UiPatternDispatcher.cs");
-        Assert.True(File.Exists(file), $"未找到 {file}");
-        var lines = File.ReadAllLines(file);
+        var root = Path.Combine(TestDataPaths.RepositoryRoot, "src");
+        Assert.True(Directory.Exists(root), $"源码目录不存在：{root}");
 
-        var inPerformClickPoint = false;
+        var locatorFile = Path.Combine(root, "SharpSight.UiAutomation", "UiPatternDispatcher.cs");
+        Assert.True(File.Exists(locatorFile), $"未找到 {locatorFile}");
+        Assert.Contains(File.ReadAllLines(locatorFile), l => l.Contains("void PerformClickPoint(", StringComparison.Ordinal));
+
+        // 允许调用点：仅 UiPatternDispatcher.cs 的 PerformClickPoint 方法体内
+        var allowed = AllowedClickPointLines(File.ReadAllLines(locatorFile));
+
         var violations = new List<string>();
-        for (var i = 0; i < lines.Length; i++)
+        foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories).Where(f => !IsBuildOutput(f)))
         {
-            var line = lines[i];
-            if (line.Contains("void PerformClickPoint(", StringComparison.Ordinal)) { inPerformClickPoint = true; continue; }
-            // 方法体结束（顶格右括号）离开锚定区；PerformClickPoint 之后的方法都在顶格声明
-            if (inPerformClickPoint && line.StartsWith("    ///", StringComparison.Ordinal)) { inPerformClickPoint = false; }
-
-            // 排除声明行（internal static void PerformClickPoint）与注释
-            var trimmed = line.TrimStart();
-            if (trimmed.StartsWith("///", StringComparison.Ordinal) || trimmed.StartsWith("//", StringComparison.Ordinal)) continue;
-
-            foreach (var token in RealClickTokens)
+            var lines = File.ReadAllLines(file);
+            var rel = Path.GetRelativePath(TestDataPaths.RepositoryRoot, file);
+            for (var i = 0; i < lines.Length; i++)
             {
-                if (!line.Contains(token, StringComparison.Ordinal)) continue;
-                if (!inPerformClickPoint)
-                    violations.Add($"{i + 1}: [{token}] {line.Trim()}");
+                var trimmed = lines[i].TrimStart();
+                if (trimmed.StartsWith("///", StringComparison.Ordinal) || trimmed.StartsWith("//", StringComparison.Ordinal)) continue;
+                foreach (var token in RealClickTokens)
+                {
+                    if (!lines[i].Contains(token, StringComparison.Ordinal)) continue;
+                    if (rel.EndsWith("UiPatternDispatcher.cs", StringComparison.Ordinal) && allowed.Contains(i + 1)) continue;
+                    violations.Add($"{rel}:{i + 1}: [{token}] {lines[i].Trim()}");
+                }
             }
         }
 
         Assert.True(violations.Count == 0,
             "真实点击调用点（.Click(/.DoubleClick(/.RightClick(/.RightDoubleClick(）只允许出现在 UiPatternDispatcher.PerformClickPoint 内"
-            + "（真实点击须经 ui_action clickPoint=true 显式开关）；发现越界调用点：\n" + string.Join("\n", violations));
+            + "（须经 ui_action clickPoint=true 显式开关）；发现越界调用点：\n" + string.Join("\n", violations));
+    }
 
-        // PerformClickPoint 必须真实存在（防改名后本护栏静默失效）
-        Assert.Contains(lines, l => l.Contains("void PerformClickPoint(", StringComparison.Ordinal));
+    /// <summary>按方法体花括号配对，取出 PerformClickPoint 方法体覆盖的行号（1 基）。</summary>
+    private static HashSet<int> AllowedClickPointLines(string[] lines)
+    {
+        var allowed = new HashSet<int>();
+        var depth = 0;
+        var started = false;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (!started)
+            {
+                if (!lines[i].Contains("void PerformClickPoint(", StringComparison.Ordinal)) continue;
+                started = true;
+            }
+            allowed.Add(i + 1);
+            depth += lines[i].Count(c => c == '{');
+            depth -= lines[i].Count(c => c == '}');
+            if (depth <= 0 && lines[i].Contains('}')) break;   // 方法体闭合
+        }
+        return allowed;
     }
 
     /// <summary>扫描 TypeRef（禁止 FlaUI.Core.Input 命名空间）+ MemberRef/PInvoke import（禁止物理输入 API 名）。</summary>

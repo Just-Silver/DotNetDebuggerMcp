@@ -36,6 +36,7 @@ public static class UiTools
         CancellationToken cancellationToken = default)
     {
         var argsText = $"process={process} title={title} text={text} type={type} autoId={automationId} limit={limit} scope={scope} depth={depth} timeout={timeoutSeconds}";
+        UiAutomationService.Instance.BeginUiCall();
         try
         {
             if (string.IsNullOrWhiteSpace(process))
@@ -74,7 +75,7 @@ public static class UiTools
         }
         catch (UiException ex) { return Fail("ui_find", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_find", argsText, $"UI 查找失败：{ex.Message}"); }
-        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
+        finally { await UiAutomationService.Instance.EndUiCallAsync(CancellationToken.None); } // P6：引用计数归零时释放 UIA 客户端
     }
 
     /// <summary>对 UI 控件执行语义动作（真实操作，有产线副作用）。</summary>
@@ -95,6 +96,7 @@ public static class UiTools
         CancellationToken cancellationToken = default)
     {
         var argsText = $"process={process} verb={verb} index={index} name={name} type={type} frameId={frameId} direction={direction} lines={lines} windowstate={windowstate} timeout={timeoutSeconds}";
+        UiAutomationService.Instance.BeginUiCall();
         try
         {
             UiAutomationService.Instance.Frames.Validate(frameId);
@@ -115,7 +117,7 @@ public static class UiTools
         catch (StaleFrameException ex) { return Fail("ui_action", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_action", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_action", argsText, $"UI 操作失败：{ex.Message}"); }
-        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
+        finally { await UiAutomationService.Instance.EndUiCallAsync(CancellationToken.None); } // P6：引用计数归零时释放 UIA 客户端
     }
 
     /// <summary>对 UI 控件写入值（Value/RangeValue/LegacyIAccessible；真实操作，有产线副作用）。</summary>
@@ -132,6 +134,7 @@ public static class UiTools
         CancellationToken cancellationToken = default)
     {
         var argsText = $"process={process} value={value} index={index} name={name} type={type} frameId={frameId} timeout={timeoutSeconds}";
+        UiAutomationService.Instance.BeginUiCall();
         try
         {
             UiAutomationService.Instance.Frames.Validate(frameId);
@@ -149,7 +152,7 @@ public static class UiTools
         catch (StaleFrameException ex) { return Fail("ui_input", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_input", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_input", argsText, $"UI 写值失败：{ex.Message}"); }
-        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
+        finally { await UiAutomationService.Instance.EndUiCallAsync(CancellationToken.None); } // P6：引用计数归零时释放 UIA 客户端
     }
 
     /// <summary>读取 UI 控件状态（只读，无副作用；展示值经 DB1 敏感脱敏）。</summary>
@@ -166,6 +169,7 @@ public static class UiTools
         CancellationToken cancellationToken = default)
     {
         var argsText = $"process={process} what={what} index={index} name={name} type={type} frameId={frameId} timeout={timeoutSeconds}";
+        UiAutomationService.Instance.BeginUiCall();
         try
         {
             UiAutomationService.Instance.Frames.Validate(frameId);
@@ -186,7 +190,7 @@ public static class UiTools
         catch (StaleFrameException ex) { return Fail("ui_get", argsText, ex.Message); }
         catch (UiException ex) { return Fail("ui_get", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_get", argsText, $"UI 读值失败：{ex.Message}"); }
-        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
+        finally { await UiAutomationService.Instance.EndUiCallAsync(CancellationToken.None); } // P6：引用计数归零时释放 UIA 客户端
     }
 
     /// <summary>等待 UI 状态变化/控件出现（事件化 + 轮询兜底，只读；超时返回当前状态不报错）。</summary>
@@ -202,6 +206,7 @@ public static class UiTools
         CancellationToken cancellationToken = default)
     {
         var argsText = $"process={process} text={text} type={type} from={textChangedFrom} to={textChangedTo} timeout={timeoutSeconds}";
+        UiAutomationService.Instance.BeginUiCall();
         try
         {
             if (string.IsNullOrWhiteSpace(process))
@@ -217,7 +222,7 @@ public static class UiTools
         }
         catch (UiException ex) { return Fail("ui_wait", argsText, ex.Message); }
         catch (Exception ex) { return Fail("ui_wait", argsText, $"UI 等待失败：{ex.Message}"); }
-        finally { UiAutomationService.Instance.ReleaseAutomation(); } // P6：调用结束释放 UIA 客户端
+        finally { await UiAutomationService.Instance.EndUiCallAsync(CancellationToken.None); } // P6：引用计数归零时释放 UIA 客户端
     }
 
     // ===== 轨迹与文案 =====

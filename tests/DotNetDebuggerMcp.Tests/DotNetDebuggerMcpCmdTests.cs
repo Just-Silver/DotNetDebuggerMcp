@@ -132,6 +132,32 @@ public class DotNetDebuggerMcpCmdTests
     }
 
     [Fact]
+    public void 握手_未启用族的工具名不出现_各组合()
+    {
+        // spec §8.1/§8.6：disabled 族的工具名/触发词完全不出现（不只是单族 Decompile 情形）
+        var uiOnly = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Ui, null);
+        Assert.DoesNotContain("debug_attach", uiOnly);
+        Assert.DoesNotContain("debug_", uiOnly);
+        Assert.DoesNotContain("截图", uiOnly);
+        Assert.DoesNotContain("screenshot", uiOnly);
+
+        var screenshotOnly = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Screenshot, null);
+        Assert.DoesNotContain("ui_find", screenshotOnly);
+        Assert.DoesNotContain("ui_action", screenshotOnly);
+        Assert.DoesNotContain("debug_", screenshotOnly);
+
+        var debugOnly = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Debug, null);
+        Assert.DoesNotContain("ui_find", debugOnly);
+        Assert.DoesNotContain("screenshot", debugOnly);
+
+        // 启用时对应触发词出现
+        var all = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.All, null);
+        Assert.Contains("debug_attach", all);
+        Assert.Contains("ui_find", all);
+        Assert.Contains("截图", all);
+    }
+
+    [Fact]
     public void 握手_全关_不注入能力简介()
     {
         var none = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.None, null);

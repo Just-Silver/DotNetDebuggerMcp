@@ -32,11 +32,15 @@ internal static class HandshakeText
         "- **当需要验证某个运行期假设（强制走某分支 / 置空 / 换引用）时**，停点后用 debug_set 改写现场变量或字段再继续；取表达式值用 debug_evaluate、下钻对象结构用 debug_object、复盘整段经过用 debug_timeline。\n" +
         "- **当改完 bug 需要自证修复、或回归一段运行期场景时**，用 debug_verify 按场景 JSON（可选重编译 + 断点/求值/输出断言序列）一键跑到 PASS/FAIL。含 uiAction/uiAssert 步骤时需服务端已启用 ui 能力族。\n" +
         "- **当需要向用户或自己实时展示调试现场（网页监视器：断点/单步/变量/动作时间线）时**，调用 web_open 打开（幂等；仅为可选展示，不影响 agent 独立完成调试）。\n";
-    private const string UseUi =
-        "- **当需要操作桌面 GUI 到某状态（点按钮 / 勾选 / 切下拉 / 填输入框 / 滚动）时**，使用 UI 自动化工具 ui_find（列控件与能力）→ ui_action/ui_input（语义动作/写值）→ ui_wait（等状态变化）→ ui_get（读值）；全 UIA 语义，不移动光标、不注入输入、不抢前台，且不要求活动调试会话（可先摆好 UI 状态再 debug_attach）。单次 UIA 调用默认 5s 护栏，目标响应慢时用 timeoutSeconds 调大（超时≠环境 UIA 不可用）。目标无 Invoke/SelectionItem（如部分 WPF-UI 导航项）时可显式 ui_action clickPoint=true 走真实点击——会移动光标/注入点击/可能抢前台，性能类排查勿用。\n" +
-        "- **注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。\n";
+    private const string UseUiLead =
+        "- **当需要操作桌面 GUI 到某状态（点按钮 / 勾选 / 切下拉 / 填输入框 / 滚动）时**，使用 UI 自动化工具 ui_find（列控件与能力）→ ui_action/ui_input（语义动作/写值）→ ui_wait（等状态变化）→ ui_get（读值）；全 UIA 语义，不移动光标、不注入输入、不抢前台";
+    // 跨族引用（debug_attach / debug_* / 截图 / ui_find）只在对应族也启用时出现——否则会指向未注册的工具（spec §8.1/§8.6）。
+    private const string UseUiTailNoDebug = "。单次 UIA 调用默认 5s 护栏，目标响应慢时用 timeoutSeconds 调大（超时≠环境 UIA 不可用）。目标无 Invoke/SelectionItem（如部分 WPF-UI 导航项）时可显式 ui_action clickPoint=true 走真实点击——会移动光标/注入点击/可能抢前台，性能类排查勿用。\n";
+    private const string UseUiObserveNoDebug = "- **注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请勿依赖 ui_*。\n";
+    private const string UseUiObserveWithScreenshot = "- **注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。\n";
     private const string UseScreenshot =
-        "- **当需要观察 GUI 窗口/屏幕画面（看控件状态、布局冒烟）时**，调用 screenshot 截图：可按全屏/指定显示器（副屏）/窗口（pid、标题、前台、句柄）/窗口客户区/屏幕区域/UIA 单个元素寻址，返回图片；头部给出 原点/帧 坐标元数据（图像为原生 1:1，本服务器不做缩放），可选叠加光标（includeCursor），图片过大会改为落盘返回路径。寻址参数不确定时先列清单：显示器用 `screenshot_displays`、可见窗口用 `screenshot_windows`（hwnd/标题/pid，不限 .NET 进程）；按控件截图先 `ui_find` 取 index/名与帧号。`ui_find` 输出的 `帧: frameId=N` 可回传给 `ui_action`/`ui_input`/`ui_get` 与 screenshot，用于拦截引用旧画面的操作。\n";
+        "- **当需要观察 GUI 窗口/屏幕画面（看控件状态、布局冒烟）时**，调用 screenshot 截图：可按全屏/指定显示器（副屏）/窗口（pid、标题、前台、句柄）/窗口客户区/屏幕区域/UIA 单个元素寻址，返回图片；头部给出 原点/帧 坐标元数据（图像为原生 1:1，本服务器不做缩放），可选叠加光标（includeCursor），图片过大会改为落盘返回路径。寻址参数不确定时先列清单：显示器用 `screenshot_displays`、可见窗口用 `screenshot_windows`（hwnd/标题/pid，不限 .NET 进程）。\n";
+    private const string UseScreenshotElementUi = "- 按控件截图先 `ui_find` 取 index/名与帧号；`ui_find` 输出的 `帧: frameId=N` 可回传给 `ui_action`/`ui_input`/`ui_get` 与 screenshot，用于拦截引用旧画面的操作。\n";
 
     private const string ToolListPrefix = "具体工具清单见 MCP 工具目录（";
     private const string ToolListDecompile = "`decompile` 等语义前缀，静态工具另有 `signature`/`list_types`/`call_*`/`hierarchy`/`dependencies`/`interface_usage`/`field_access`/`search_string`";
@@ -65,8 +69,8 @@ internal static class HandshakeText
             sb.Append(UseHeader);
             if (enabled.HasFlag(FeatureFamily.Decompile)) sb.Append(UseDecompile);
             if (enabled.HasFlag(FeatureFamily.Debug)) sb.Append(UseDebug);
-            if (enabled.HasFlag(FeatureFamily.Ui)) sb.Append(UseUi);
-            if (enabled.HasFlag(FeatureFamily.Screenshot)) sb.Append(UseScreenshot);
+            if (enabled.HasFlag(FeatureFamily.Ui)) sb.Append(BuildUseUi(enabled));
+            if (enabled.HasFlag(FeatureFamily.Screenshot)) sb.Append(BuildUseScreenshot(enabled));
             sb.Append('\n').Append(BuildToolList(enabled));
             sb.Append(ConventionHeader).Append(BuildConvention(enabled));
         }
@@ -95,6 +99,20 @@ internal static class HandshakeText
             ? $"{ConventionStatic}{ConventionDebugFrozen}{ConventionDebug}"
             : ConventionStatic;
 
+
+    /// <summary>ui 段：仅当 debug / screenshot 也启用时才引用它们（否则会指向未注册的工具）。</summary>
+    private static string BuildUseUi(FeatureFamily enabled)
+    {
+        var sb = new StringBuilder(UseUiLead);
+        if (enabled.HasFlag(FeatureFamily.Debug)) sb.Append("，且不要求活动调试会话（可先摆好 UI 状态再 debug_attach）");
+        sb.Append(UseUiTailNoDebug);
+        sb.Append(enabled.HasFlag(FeatureFamily.Screenshot) ? UseUiObserveWithScreenshot : UseUiObserveNoDebug);
+        return sb.ToString();
+    }
+
+    /// <summary>screenshot 段：仅在 ui 也启用时才提「按控件截图用 ui_find 取 index/frameId」。</summary>
+    private static string BuildUseScreenshot(FeatureFamily enabled)
+        => enabled.HasFlag(FeatureFamily.Ui) ? UseScreenshot + UseScreenshotElementUi : UseScreenshot;
 
     /// <summary>按固定顺序列出启用族的中文能力短语（顿号分隔）。</summary>
     private static string JoinFamilies(FeatureFamily enabled)

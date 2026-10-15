@@ -13,8 +13,18 @@ public sealed class ToolFeatureRegistryTests
     {
         var all = ToolFeatureRegistry.AllToolTypes();
         Assert.NotEmpty(all);
+        // 未登记 → FamilyOf 返回 None（旧实现的 Decompile 兜底会让此断言空过）
         foreach (var t in all)
-            Assert.True(Enum.IsDefined(ToolFeatureRegistry.FamilyOf(t)), $"{t.Name} 未登记能力族");
+            Assert.True(ToolFeatureRegistry.FamilyOf(t) != FeatureFamily.None,
+                $"{t.FullName} 未登记能力族（新增工具必须显式归属，否则可能被误发布或漏门控）");
+    }
+
+    [Fact]
+    public void 未启用族_不注册工具()
+    {
+        // 覆盖率之外：FamilyOf=None 的类型不得出现在任何启用集合里（防未登记项默认暴露）
+        foreach (var t in ToolFeatureRegistry.AllToolTypes().Where(x => ToolFeatureRegistry.FamilyOf(x) == FeatureFamily.None))
+            Assert.DoesNotContain(t, ToolFeatureRegistry.EnabledToolTypes(FeatureFamily.All));
     }
 
     [Fact]
