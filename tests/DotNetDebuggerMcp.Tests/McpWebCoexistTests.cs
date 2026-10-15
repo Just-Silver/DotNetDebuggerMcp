@@ -47,7 +47,7 @@ public sealed class McpWebCoexistTests
         {
             Name = "DotNetDebuggerMcp mcp+web test client",
             Command = "dotnet",
-            Arguments = [serverDll, .. extraArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries)],
+            Arguments = [serverDll, "--features=decompile,debug,ui,screenshot", .. extraArgs.Split(' ', StringSplitOptions.RemoveEmptyEntries)],
         });
         return await McpClient.CreateAsync(transport).WaitAsync(TimeSpan.FromSeconds(30));
     }

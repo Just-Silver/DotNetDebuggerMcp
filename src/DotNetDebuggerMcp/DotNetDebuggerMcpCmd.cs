@@ -393,7 +393,9 @@ public class DotNetDebuggerMcpCmd
             if (!string.IsNullOrEmpty(serverInstructions)) o.ServerInstructions = serverInstructions;
         })
         // 按启用能力族注册工具：未启用的族根本不进工具目录（agent 看不到、也调不到）。CLI 路径不经此处。
-        .WithStdioServerTransport().WithTools(ToolFeatureRegistry.EnabledToolTypes(features));
+        // 必须显式转 IEnumerable<Type>：否则泛型重载 WithTools<TToolType>(TToolType) 以恒等转换胜出，
+        // 把类型列表当成「工具实例集合」→ 静默注册 0 个工具、tools/list 无 handler（2026-10-15 实证）。
+        .WithStdioServerTransport().WithTools((IEnumerable<Type>)ToolFeatureRegistry.EnabledToolTypes(features));
         // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新 NuGet 磁盘缓存供下一次会话使用，不 await 以免阻塞启动
         _ = AppServices.Updater.RefreshIfStaleAsync();
         var mcpTask = builder.Build().RunAsync();

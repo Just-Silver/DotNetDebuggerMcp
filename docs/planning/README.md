@@ -42,5 +42,7 @@
 | `specs/2026-09-27-screenshot-generalization-design.md` | **screenshot 设计 spec（agent 视觉基座：寻址与坐标模型）**：寻址通用（多显示器/前台/客户区/hwnd/UIA 元素）+ `origin+frameId` 坐标模型 + 库化重构（`SharpSight.Capture`/`SharpSight.UiAutomation`）+ 两个只读发现工具；**已实施**。原「图像经济（缩放/1568）」与「语义桥（OCR/SoM）」两条主线**已按用户裁定（2026-09-28）整条撤销**，配套调研与实施计划已从仓库移除 |
 | `2026-09-28-screenshot-blackbox-batch2.md` | **截图能力黑盒测试（batch2）上下文背景**：本轮 8 项修复与逐项复验方法、已关闭项、待决策（element 序号口径统一）、未覆盖面——供换机重测时自包含参考 |
 | `2026-10-11-agent-usage-feedback.md` | **agent 实际使用反馈（问题 + 建议）**：一次真实 WPF「卡死」排查中踩到的问题（attach 后读不到栈 / 无 break-all、重复 attach 的无解释 COM 错误、`ui_action` 驱不动 WPF-UI 导航项、`index` 语义脆弱且文案误导、大 UI 树 `ui_find` 超时、`ui_*` 对目标的观测扰动等）与逐条建议，含复现原文 |
+| `specs/2026-10-15-agent-usage-feedback-fixes.md` | **反馈修复 + 能力开关 spec**：P1–P7 定案（冻结态可读栈 / 重复 attach 拒绝与生命周期修复 / `clickPoint` opt-in / index 文案 / `scope`·`depth` / UIA 客户端释放 / 断开 resume）+ §8 能力族开关（四族门控、未开启不注册不注入） |
+| `plans/2026-10-15-agent-usage-feedback-fixes.md` | **上条的实施计划**（12 任务，逐任务 RED→GREEN；已执行） |
 
 > 规划文档配套 Git 历史与已完成计划见 `archive/plans/`；归档材料移出主目录以免导航误读为进行中。

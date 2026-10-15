@@ -169,7 +169,7 @@ public sealed class McpSessionConcurrencyTests
         {
             Name = "DotNetDebuggerMcp concurrency test client",
             Command = "dotnet",
-            Arguments = [serverDll],
+            Arguments = [serverDll, "--features=decompile,debug,ui,screenshot"],
         });
         return await McpClient.CreateAsync(transport).WaitAsync(TimeSpan.FromSeconds(30));
     }

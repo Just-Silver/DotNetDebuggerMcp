@@ -3,6 +3,7 @@
 > 近期待办，完成一项删一项；远期想法见 `docs/ROADMAP.md`；开发指南见同目录 `AGENTS.md`。
 
 > **当前无未完成近期待办。**
+> **2026-10-15 能力开关（已完成）**：新增 `--features` / `DOTNETDEBUGGERMCP_FEATURES`（`FeatureFlags`/`ToolFeatureRegistry`/`HandshakeText`）——四族门控，默认仅 `decompile`；未启用族不注册工具、握手不注入。另完成 2026-10-11 agent 反馈 P1–P7 修复（详见 `docs/planning/specs/2026-10-15-agent-usage-feedback-fixes.md`）。
 > **2026-09-10 清理归档**：已完成历史已删除（细节见 git log 与 `docs/planning/specs/`）。已交付：W1 现场改写、V3 统一时间线、DB1 敏感脱敏、DB2 按名白名单、D1 对象深读、D2 子进程跟随、V4 语料断言、U1+U1A 全 UIA 化 UI 自动化、V1 一键复验；**2026-09-10 CoreMes 实证修复**：实例方法参数名对齐 `this`、同址重复断点、`debug_run_to` 陈旧停点、`debug_evaluate` `$exception`、`search_string` 生成类型、ilOffset 中文提示、源行断点聚合提示、新增 `debug_terminate`/`debug_modules`、`debug_*` 描述订正、D2 无 CLR 不虚报、D1 文案。W3 数据断点、W2 SetIP、V2 崩溃 dump、`frameIndex` 帧选择 **已转 `docs/ROADMAP.md`**。
 
 ## 本轮 CoreMes 动态调试实证（2026-09-10，47 工具全量实测）——全部处置

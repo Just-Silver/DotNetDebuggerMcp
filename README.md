@@ -76,6 +76,25 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 重启 opencode 后工具以 `dotnetdebugger_*` 前缀暴露（v2 中工具名为 `<服务器名>_<工具名>`）。`assembly` / `outputDir` 的相对路径以 opencode 会话的工作目录解析。
 
+## 能力开关
+
+默认**只启用反编译/静态分析**能力。调试 / UI 自动化 / 截图三族需显式开启——用命令行参数 `--features=<逗号分隔>`（或环境变量 `DOTNETDEBUGGERMCP_FEATURES`，命令行优先），取值 `decompile` / `debug` / `ui` / `screenshot`：
+
+```jsonc
+"command": ["DotNetDebuggerMcp", "--features=decompile,debug,ui,screenshot"]
+```
+
+- **未启用的族**：其工具**不进 MCP 工具目录**（`tools/list` 里看不到），握手简介里也**完全不提**。
+- **只作用于 MCP 面**：CLI 执行路径（`-a` 反编译、`-l` 列类型、`-dbg` 一次性调试、`-c` 检查更新）**不受开关影响**。
+- 缺省不传 = 仅 `decompile`；显式传空（`--features=`）= 零能力；未知取值给出中文错误并以非零码退出。
+
+| 开关 | 覆盖能力 |
+| ---- | -------- |
+| `decompile` | 反编译 + 元数据/静态分析工具（默认开启） |
+| `debug` | `debug_*` 动态调试全族 + `debug_verify` + `web_open` |
+| `ui` | `ui_find` / `ui_action` / `ui_input` / `ui_get` / `ui_wait` |
+| `screenshot` | `screenshot` / `screenshot_displays` / `screenshot_windows` |
+
 ## 核心约定
 
 - **输出带头部信息块**：`程序集 / 目标 / 总行数 / 当前输出 / 剩余` + `---` 分隔线，命中缓存时追加 `缓存: 命中`。

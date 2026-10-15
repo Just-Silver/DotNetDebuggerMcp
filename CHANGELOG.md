@@ -8,6 +8,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **能力族开关 `--features` / `DOTNETDEBUGGERMCP_FEATURES`**：可选 `decompile`/`debug`/`ui`/`screenshot`（逗号分隔）。**默认只启用 `decompile`**——调试 / UI 自动化 / 截图三族需显式开启；未启用的族其工具**不进 MCP 工具目录**、握手简介也**不提及**。只作用于 MCP 面，CLI 执行路径（`-a`/`-l`/`-dbg`/`-c`）不受影响。
+
+### Changed
+
+- **默认工具面收窄（破坏性）**：不传 `--features` 时服务器**只暴露反编译/静态分析工具**；要使用 `debug_*`、`ui_*`、`screenshot*`、`web_open`，需在 MCP 客户端配置里给启动参数加 `--features=decompile,debug,ui,screenshot`（或设环境变量 `DOTNETDEBUGGERMCP_FEATURES`）。升级后若发现调试/UI/截图工具「消失」，即为此因。
+
 ## [2.2.0] - 2026-09-28
 
 ### Added

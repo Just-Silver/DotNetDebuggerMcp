@@ -22,6 +22,7 @@
 | `2026-09-08-w3-data-breakpoint.md` | **W3 数据断点 spec**（宿主 TODO P4）：字段/局部值变化即停；ClrDebug A/B 两路径 + spike 三问 | **已评估 → 降级收尾**（2026-09-10 spike 实测定案：A `CreateBreakpoint()` 恒 E_NOTIMPL、B 无创建端 → 均不可行，按计划 TaskD 转 ROADMAP 零 Engine 代码；spec §2 结论 + 根 README 指引 + ROADMAP 条目 + 宿主 TODO W3=已评估转 ROADMAP；实施计划 `plans/2026-09-09-w3-data-breakpoint.md`） |
 | `2026-09-22-screenshot-tool-design.md` | **screenshot 截图工具 spec**（独立工具）：mode=window/screen/region 单工具多模式、WGC 优先+GDI 回退、CallToolResult image 块双轨、PackAsTool hack（spike 实证）、UiSampleApp 测试、Web 冻结不接入 | **已实现**（计划 `plans/2026-09-22-screenshot-tool.md` 执行完成 2026-09-22；三轮审查通过，第三轮 Approved）；**§8 冻结项（多显示器/includeCursor/元素级/origin 坐标系）已由下一条 Superseded（部分）** |
 | `2026-09-27-screenshot-generalization-design.md` | **screenshot 设计 spec（agent 视觉基座：寻址与坐标模型）**：寻址通用（多显示器/前台/客户区/hwnd/UIA 元素）+ `origin+frameId` 坐标模型 + **库化重构**（`SharpSight.Capture` + `SharpSight.UiAutomation`；Engine 迁出 `Capture/` 去 System.Drawing.Common）+ 两个只读发现工具（`screenshot_displays`/`screenshot_windows`）；解冻旧 spec §8 | **已实施**（寻址/库化/坐标模型已落地；**图像经济（缩放/1568）与语义桥（OCR/SoM）两条主线已按用户裁定 2026-09-28 整条撤销**） |
+| `2026-10-15-agent-usage-feedback-fixes.md` | **反馈修复 + 能力开关 spec**：P1–P7（冻结态可读栈 / 重复 attach 拒绝+生命周期修复 / `clickPoint` opt-in / index 文案 / `scope`·`depth` / UIA 客户端释放 / 断开 resume）+ §8 能力族开关（四族门控）；计划 `plans/2026-10-15-agent-usage-feedback-fixes.md` | **已实施**（2026-10-15） |
 
 ## 阶段对应关系（decisions D7）
 

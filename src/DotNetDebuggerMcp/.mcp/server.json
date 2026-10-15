@@ -12,7 +12,14 @@
         "type": "stdio"
       },
       "packageArguments": [],
-      "environmentVariables": []
+      "environmentVariables": [
+        {
+          "name": "DOTNETDEBUGGERMCP_FEATURES",
+          "description": "启用的能力族（逗号分隔：decompile/debug/ui/screenshot）；默认只启用 decompile（反编译/静态分析）。仅作用于 MCP 面（工具注册与握手注入），CLI 参数不受影响。等价于命令行参数 --features。",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
     }
   ],
   "repository": {
