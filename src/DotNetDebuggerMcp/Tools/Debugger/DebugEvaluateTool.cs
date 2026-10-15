@@ -31,7 +31,7 @@ public static class DebugEvaluateTool
     {
         if (string.IsNullOrWhiteSpace(expression))
             return "缺少 expression（必填）。支持：成员访问 a.b、数组/字符串索引 a[i]、一元 !、单次比较（== != < <= > >=）与字面量。";
-        if (!DebugInspectTool.TryRequireReadable(out var active, out var error)) return error;
+        if (!DebugInspectTool.TryRequireStopped(out var active, out var error)) return error;
 
         var tid = threadId > 0 ? threadId : active.Buffer.StoppedThreadId;
         if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";

@@ -36,7 +36,7 @@ public static class DebugObjectTool
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(path)) return "缺少 path（必填）。对象路径如 order.Customer、$exception。";
-        if (!DebugInspectTool.TryRequireReadable(out var active, out var error)) return error;
+        if (!DebugInspectTool.TryRequireStopped(out var active, out var error)) return error;
 
         var tid = threadId > 0 ? threadId : active.Buffer.StoppedThreadId;
         if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";

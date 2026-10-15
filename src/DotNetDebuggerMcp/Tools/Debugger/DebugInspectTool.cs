@@ -123,7 +123,7 @@ public static class DebugInspectTool
         [Description("按名白名单（逗号分隔，空=全量）。精确忽略大小写匹配 局部/参数名（无符号名用 slotN）与 $exception；最多 50 项；未知名会在返回中列出可用名。")] string names = "",
         CancellationToken cancellationToken = default)
     {
-        if (!TryRequireReadable(out var active, out var error)) return error;
+        if (!DebugInspectTool.TryRequireStopped(out var active, out var error)) return error;
 
         var tid = threadId > 0 ? threadId : active.Buffer.StoppedThreadId;
         if (tid <= 0) return "无停点线程可读（先 debug_continue 运行至断点停下）。";
@@ -282,9 +282,10 @@ public static class DebugInspectTool
     }
 
     /// <summary>
-    /// 只读类工具的前置校验：会话存在且进程**可读栈**——停点态（Stopped）或 attach/launch 后的**初始冻结态**
-    /// （Attaching/Launching/None）。冻结态下引擎已停住全局（CallbackHandler 的 _initialHold），栈可读，只是没有
-    /// 单一「停点线程」。**不含写入**：debug_set 仍用 <see cref="TryRequireStopped"/>（冻结态写目标内存风险高）。
+    /// **仅 <c>debug_stack</c> 用**的前置校验：会话存在且进程**可读栈**——停点态（Stopped）或 attach/launch 后的**初始冻结态**
+    /// （None/Attaching/Launching，引擎已停住全局）。冻结态下**没有停点线程**，故 <c>debug_stack</c> 必须列全部线程；
+    /// 需要「某线程栈顶帧」的工具（variables/evaluate/object/读值）**不得**用它——冻结态给不出栈顶帧，放行只会产出
+    /// 半截提示（回归 <c>DebugObject_DrillTree_...AndNotStopped</c>）。
     /// </summary>
     internal static bool TryRequireReadable(
         [NotNullWhen(true)] out DotNetDebugger.Session.ActiveDebugSession? active,
