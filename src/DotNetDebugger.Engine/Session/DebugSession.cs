@@ -30,7 +30,16 @@ public sealed class DebugSession : IAsyncDisposable
     private static async Task<DebugSession> CreateAsync(Func<DebugEngineCore, Task> start, IBreakpointConditionEvaluator? conditionEvaluator, ISourceLineBreakpointResolver? sourceLineResolver, CancellationToken ct)
     {
         var core = new DebugEngineCore(conditionEvaluator, sourceLineResolver);
-        await start(core).ConfigureAwait(false);
+        try
+        {
+            await start(core).ConfigureAwait(false);
+        }
+        catch
+        {
+            // 启动失败必须释放 core：否则泄漏 MTA 线程与已 Initialize 的 ICorDebug，目标被残留附加、后续 attach 恒失败。
+            await core.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
         return new DebugSession(core);
     }
 

@@ -211,6 +211,43 @@ public sealed class DebugSessionManagerTests
     }
 
     [Fact]
+    public async Task Attach_已有会话_中文拒绝且不触引擎()
+    {
+        Assert.True(File.Exists(TestTarget.DebugTargetExe));
+
+        await using var manager = new DebugSessionManager();
+        var first = await manager.LaunchAndAttachAsync($"{TestTarget.DebugTargetExe} 1 8", ct: TestContext.Current.CancellationToken);
+        Assert.NotNull(manager.Active);
+
+        // 再次 attach（无论目标是否同一）→ 前置拒绝，不触引擎、不换掉现有会话
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => manager.AttachAsync(first.ProcessId, TestContext.Current.CancellationToken));
+        Assert.Contains("已有活动调试会话", ex.Message);
+        Assert.Contains("debug_disconnect", ex.Message);
+        Assert.Same(first, manager.Active); // 原会话保留
+
+        await manager.CloseAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task Attach_失败_不泄漏引擎可再次attach()
+    {
+        // 先对不存在的 pid attach（必失败）——CreateAsync 失败路径须释放 core，否则残留
+        await using var manager = new DebugSessionManager();
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => manager.AttachAsync(999_999_99, TestContext.Current.CancellationToken));
+        Assert.Null(manager.Active);
+
+        // 失败后仍能正常 attach 真实目标（无残留附加/可重试）
+        using var target = TestTarget.StartDebugTarget("1 6");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+        var active = await manager.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        Assert.NotNull(manager.Active);
+        Assert.Equal(target.Id, active.ProcessId);
+        await manager.CloseAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task LaunchAndAttach_ExitCodeCapturedOnExited()
     {
         Assert.True(File.Exists(TestTarget.DebugTargetExe));

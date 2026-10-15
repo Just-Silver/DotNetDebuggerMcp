@@ -34,6 +34,8 @@ public sealed class DebugEngineCore : IAsyncDisposable
     private Exception? _startupError;
     private volatile bool _started;
     private volatile bool _disposed;
+    /// <summary>目标进程已退出（ExitProcess 回调置位）：detach 对已退出进程失败属预期，不报错。</summary>
+    private volatile bool _processExited;
 
     // 调试对象（仅在 MTA 线程创建/使用；_process 跨回调线程写/命令泵线程读，volatile）
     private CorDebug? _corDebug;
@@ -106,6 +108,9 @@ public sealed class DebugEngineCore : IAsyncDisposable
 
     /// <summary>内部：CreateProcess 回调时记录进程对象（供 Continue/读线程用）。</summary>
     internal void SetProcess(CorDebugProcess process) => _process = process;
+
+    /// <summary>内部：ExitProcess 回调时标记目标已退出（detach 失败按预期处理）。</summary>
+    internal void MarkProcessExited() => _processExited = true;
 
     private void DoBootstrap(Func<DbgShim, BootstrapResult> bootstrap, DebugSessionState state, CancellationToken ct)
     {
@@ -244,15 +249,51 @@ public sealed class DebugEngineCore : IAsyncDisposable
         }
     }
 
-    /// <summary>断开调试（detach）。</summary>
+    /// <summary>断开调试（detach）。detach 失败**如实上报**（含警告日志 + 抛出），不再静默吞掉——
+    /// 静默会让「已断开」成为谎报、目标仍被残留附加、后续 attach 恒失败。</summary>
     public Task DisconnectAsync(CancellationToken ct = default)
         => PostAsync(() =>
         {
-            try { _process?.Detach(); } catch { /* 已退出则忽略 */ }
+            try
+            {
+                EnsureSynchronizedForDetach();
+                ClearBreakpointsForDetach();
+                _process?.Detach();
+            }
+            catch (Exception) when (_processExited)
+            {
+                // 目标已退出：detach 失败属预期，不报错（区别于「仍被附加」的真失败）
+            }
+            catch (Exception ex)
+            {
+                Log("warn", $"Detach 失败（目标可能已被其它调试器占用）：{ex.Message}");
+                throw new InvalidOperationException(
+                    $"断开调试失败：{ex.Message}（目标进程可能仍被附加；若为外部调试器残留，需重启目标恢复）。", ex);
+            }
             _stoppedThreadId = -1;
             PublishState(DebugSessionState.Detached, "detached");
             return Task.CompletedTask;
         }, ct);
+
+    /// <summary>
+    /// detach 前把进程停到同步态：<c>ICorDebugController.Detach</c> 要求进程已停，运行中直接 detach 会
+    /// <c>CORDBG_E_PROCESS_NOT_SYNCHRONIZED</c>（实测）。Detach 官方语义即「进程继续正常运行」，故 Stop 后 detach
+    /// 目标会自行恢复（顺带满足「断开后目标不被挂起」）。Stop 失败不阻断 detach 尝试（由 detach 暴露真错误）。
+    /// </summary>
+    private void EnsureSynchronizedForDetach()
+    {
+        if (_process is null) return;
+        if (_process.TryIsRunning(out var running) != HRESULT.S_OK || !running) return;
+        var hr = _process.TryStop(0);
+        if (hr != HRESULT.S_OK) Log("warn", $"Detach 前 Stop 未成功（{hr}），仍尝试 detach。");
+    }
+
+    /// <summary>detach 前清除全部断点：<c>Detach</c> 在有未决断点时返回 <c>CORDBG_E_DETACH_FAILED_OUTSTANDING_BREAKPOINTS</c>（实测）。</summary>
+    private void ClearBreakpointsForDetach()
+    {
+        if (_breakpoints.Breakpoints.Count == 0) return;
+        try { _breakpoints.Clear(); } catch (Exception ex) { Log("warn", $"Detach 前清断点失败：{ex.Message}"); }
+    }
 
     /// <summary>
     /// 终止目标进程（强制结束，非正常退出）——调试/复验结束后收口（disconnect 只断开调试、进程继续运行）。

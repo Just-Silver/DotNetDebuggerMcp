@@ -50,6 +50,7 @@ public sealed class CallbackHandler
                     _core.Log("info", $"CreateProcess pid={cp.Process?.Id}");
                     break;
                 case ExitProcessCorDebugManagedCallbackEventArgs:
+                    _core.MarkProcessExited();
                     _core.PublishState(DebugSessionState.Exited, "process exited");
                     _initialHold = false;
                     return; // 进程已退出：不 Continue

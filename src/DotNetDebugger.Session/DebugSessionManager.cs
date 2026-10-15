@@ -107,9 +107,13 @@ public sealed class DebugSessionManager : IAsyncDisposable
         return Activate(session, $"launch {commandLine}");
     }
 
-    /// <summary>附加到已运行进程。</summary>
+    /// <summary>附加到已运行进程。已有活动会话时**拒绝**（v1 单活动会话；请先 debug_disconnect/debug_terminate），
+    /// 避免把已建立会话的目标悄悄换掉、或对已被调试的进程重复附加产生裸 COM 错误。</summary>
     public async Task<ActiveDebugSession> AttachAsync(int processId, CancellationToken ct = default)
     {
+        if (Active is { } existing)
+            throw new InvalidOperationException(
+                $"已有活动调试会话（pid={existing.ProcessId}）。同一时刻仅支持一个调试会话，请先 debug_disconnect 或 debug_terminate 后再附加。");
         var session = await DebugSession.AttachAsync(processId, ExpressionConditionEvaluator.Instance, ct: ct,
             sourceLineResolver: SourceLineBreakpointResolver.Instance).ConfigureAwait(false);
         return Activate(session, $"attach pid={processId}", processId: processId, isAttach: true);
@@ -206,17 +210,34 @@ public sealed class DebugSessionManager : IAsyncDisposable
         return active;
     }
 
-    /// <summary>关闭活动会话（断开调试，进程继续独立运行）。</summary>
+    /// <summary>关闭活动会话（断开调试，进程继续独立运行）。断开成功后才置空活动会话——
+    /// 断开失败时如实抛出并保留会话书签，避免「报已断开/无会话但引擎仍挂着」的不一致。</summary>
     public async Task CloseAsync(CancellationToken ct = default)
     {
         ActiveDebugSession? toClose;
-        lock (_gate) { toClose = _active; _active = null; }
+        lock (_gate) toClose = _active;
         if (toClose is not null)
         {
-            try { await toClose.Session.DisconnectAsync(ct); } catch { }
+            await toClose.Session.DisconnectAsync(ct);   // 失败抛中文（不静默）；此时 _active 保留
+            lock (_gate) { if (ReferenceEquals(_active, toClose)) _active = null; }
             await toClose.DisposeAsync();
         }
         ActiveSessionChanged?.Invoke(null);
+    }
+
+    /// <summary>
+    /// 强制释放调试会话（**不杀目标进程**）：只 <see cref="ActiveDebugSession.DisposeAsync"/>（其内部即 Detach +
+    /// ICorDebug 终结），用于会话/引擎状态不一致（书签与引擎不匹配、disconnect 失败残留）时的收口。
+    /// 与 <see cref="TerminateAsync"/> 的区别：后者结束目标进程，本方法不。
+    /// </summary>
+    public async Task<bool> ForceResetAsync(CancellationToken ct = default)
+    {
+        ActiveDebugSession? toClose;
+        lock (_gate) { toClose = _active; _active = null; }
+        if (toClose is null) return false;
+        await toClose.DisposeAsync();   // Dispose 内部吞异常：强制路径以「尽力释放 + 丢引用」为准
+        ActiveSessionChanged?.Invoke(null);
+        return true;
     }
 
     /// <summary>
@@ -287,7 +308,11 @@ public sealed class DebugSessionManager : IAsyncDisposable
         return active;
     }
 
-    public async ValueTask DisposeAsync() => await CloseAsync();
+    /// <summary>释放管理器：尽力断开当前会话，不抛（Dispose 语义）。</summary>
+    public async ValueTask DisposeAsync()
+    {
+        try { await CloseAsync(); } catch { /* Dispose 不抛：断开失败已在 CloseAsync 内如实上报过调用方 */ }
+    }
 
     /// <summary>把 KEY=VALUE 多行/分号组合的附加环境变量写入 psi（空行/无 = 的项忽略）。</summary>
     private static void ApplyEnvironment(System.Diagnostics.ProcessStartInfo psi, string environment)
