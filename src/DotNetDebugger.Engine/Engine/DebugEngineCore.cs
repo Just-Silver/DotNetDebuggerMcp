@@ -249,50 +249,46 @@ public sealed class DebugEngineCore : IAsyncDisposable
         }
     }
 
-    /// <summary>断开调试（detach）。detach 失败**如实上报**（含警告日志 + 抛出），不再静默吞掉——
-    /// 静默会让「已断开」成为谎报、目标仍被残留附加、后续 attach 恒失败。</summary>
-    public Task DisconnectAsync(CancellationToken ct = default)
-        => PostAsync(() =>
-        {
-            try
-            {
-                EnsureSynchronizedForDetach();
-                ClearBreakpointsForDetach();
-                _process?.Detach();
-            }
-            catch (Exception) when (_processExited)
-            {
-                // 目标已退出：detach 失败属预期，不报错（区别于「仍被附加」的真失败）
-            }
-            catch (Exception ex)
-            {
-                Log("warn", $"Detach 失败（目标可能已被其它调试器占用）：{ex.Message}");
-                throw new InvalidOperationException(
-                    $"断开调试失败：{ex.Message}（目标进程可能仍被附加；若为外部调试器残留，需重启目标恢复）。", ex);
-            }
-            _stoppedThreadId = -1;
-            PublishState(DebugSessionState.Detached, "detached");
-            return Task.CompletedTask;
-        }, ct);
-
     /// <summary>
-    /// detach 前把进程停到同步态：<c>ICorDebugController.Detach</c> 要求进程已停，运行中直接 detach 会
-    /// <c>CORDBG_E_PROCESS_NOT_SYNCHRONIZED</c>（实测）。Detach 官方语义即「进程继续正常运行」，故 Stop 后 detach
-    /// 目标会自行恢复（顺带满足「断开后目标不被挂起」）。Stop 失败不阻断 detach 尝试（由 detach 暴露真错误）。
+    /// 断开调试（detach）。detach 失败**如实上报**（含警告日志 + 抛出），不再静默吞掉——
+    /// 静默会让「已断开」成为谎报、目标仍被残留附加、后续 attach 恒失败。
+    /// <para><b>序：恢复运行 → 清断点 → detach</b>（实测约束，2026-10-15）：停点态 detach 会触发运行时 fail-fast
+    /// 打死目标（0xC0000409）；停点态或有未决断点时 detach 报 <c>CORDBG_E_DETACH_FAILED_OUTSTANDING_BREAKPOINTS</c> /
+    /// <c>CORDBG_E_PROCESS_NOT_SYNCHRONIZED</c>。只有「运行态且无断点」detach 才成功且目标继续正常运行（与 detach 语义一致）。</para>
     /// </summary>
-    private void EnsureSynchronizedForDetach()
+    public async Task DisconnectAsync(CancellationToken ct = default)
     {
-        if (_process is null) return;
-        if (_process.TryIsRunning(out var running) != HRESULT.S_OK || !running) return;
-        var hr = _process.TryStop(0);
-        if (hr != HRESULT.S_OK) Log("warn", $"Detach 前 Stop 未成功（{hr}），仍尝试 detach。");
+        // 分多条泵命令（每条一次泵迭代）：Continue 需泵处理完排队事件才真正进入运行态；
+        // 停点态 detach 会打死目标（0xC0000409）、有断点/未停都会失败（实证）。
+        // 有效序：Continue → 清断点 → Stop → Detach（Stop 满足 detach 的 synchronized 要求）。
+        try
+        {
+            await ContinueAsync(ct).ConfigureAwait(false);
+            await PostAsync(() => { _breakpoints.Clear(); return Task.CompletedTask; }, ct).ConfigureAwait(false);
+            await PostAsync(() => { SafeStop(); return Task.CompletedTask; }, ct).ConfigureAwait(false);
+            await PostAsync(() => { _process?.Detach(); return Task.CompletedTask; }, ct).ConfigureAwait(false);
+        }
+        catch (Exception) when (_processExited)
+        {
+            // 目标已退出：detach 失败属预期，不报错（区别于「仍被附加」的真失败）
+        }
+        catch (Exception ex)
+        {
+            Log("warn", $"Detach 失败（目标可能已被其它调试器占用）：{ex.Message}");
+            throw new InvalidOperationException(
+                $"断开调试失败：{ex.Message}（目标进程可能仍被附加；若为外部调试器残留，需重启目标恢复）。", ex);
+        }
+        _stoppedThreadId = -1;
+        PublishState(DebugSessionState.Detached, "detached");
     }
 
-    /// <summary>detach 前清除全部断点：<c>Detach</c> 在有未决断点时返回 <c>CORDBG_E_DETACH_FAILED_OUTSTANDING_BREAKPOINTS</c>（实测）。</summary>
-    private void ClearBreakpointsForDetach()
+    /// <summary>detach 前把进程停到 synchronized 态（<c>Detach</c> 要求）：已在停态则不动；Stop 失败仅记日志。</summary>
+    private void SafeStop()
     {
-        if (_breakpoints.Breakpoints.Count == 0) return;
-        try { _breakpoints.Clear(); } catch (Exception ex) { Log("warn", $"Detach 前清断点失败：{ex.Message}"); }
+        if (_process is null) return;
+        if (_process.TryIsRunning(out var running) == HRESULT.S_OK && !running) return;
+        var hr = _process.TryStop(0);
+        if (hr != HRESULT.S_OK) Log("warn", $"Detach 前 Stop 未成功（{hr}）。");
     }
 
     /// <summary>
@@ -490,9 +486,11 @@ public sealed class DebugEngineCore : IAsyncDisposable
             var idx = 0;
             while (true)
             {
+                // S_FALSE = 当前位置无框架、但栈走仍有效（叶帧常见）——必须继续 TryNext，
+                // 当终止会得到 0 帧（冻结态 attach 后读栈全空，2026-10-15 审查实证）。
                 var hr = walk.TryGetFrame(out var frame);
-                if (hr != HRESULT.S_OK) break;
-                if (frame is CorDebugILFrame ilf)
+                if (hr != HRESULT.S_OK && hr != HRESULT.S_FALSE) break;
+                if (hr == HRESULT.S_OK && frame is CorDebugILFrame ilf)
                 {
                     try
                     {

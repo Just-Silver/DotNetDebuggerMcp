@@ -463,6 +463,10 @@ public sealed class DebugMcpToolsTests
         Assert.DoesNotContain("无停点线程可读", stack.Text());
         Assert.DoesNotContain("进程未停在断点", stack.Text());
         Assert.Contains("调用栈", stack.Text());
+        // 必须真的**读到帧**——否则「冻结态可读栈」是空承诺（C1：叶帧 S_FALSE 被当终止会得到 0 帧）。
+        // 注意：不能要求每个线程都有帧（冻结态部分运行时内部线程本就无托管帧），也不能假定顶部帧一定是
+        // 目标程序集（Main 前的冻结点在运行时引导栈上）；只断言「至少一个线程帧数 > 0」。
+        Assert.Matches(@"thread \d+（[1-9]\d* 帧）", stack.Text());
 
         // debug_state 标注冻结态可读
         var state = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());

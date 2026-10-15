@@ -99,8 +99,8 @@ public sealed class BreakpointTests
         var exe = TestPaths.DebugTargetExe;
         Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
 
-        // 6 迭代 + delay 4s：命中首个 Work 后仍有多次未跑，detach 后应继续输出后续 work 行
-        using var target = DebugTargetProcess.Start("6 4");
+        // 200 迭代 + delay 4s：确保 detach 后目标仍在运行（不会在检测窗口内自然跑完，混淆「被杀」与「跑完」）
+        using var target = DebugTargetProcess.Start("200 4");
         await Task.Delay(800, TestContext.Current.CancellationToken);
 
         var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
@@ -125,16 +125,19 @@ public sealed class BreakpointTests
         await session.DisconnectAsync(TestContext.Current.CancellationToken);
 
         // 可观测判据（DebugTarget 是控制台程序、无窗口 → Responding/SendMessageTimeout 不适用）：stdout 心跳
+        // 关键：必须断言**目标未退出且继续输出**——「已退出」不算通过（C2 实证：从停点 disconnect 会打死目标
+        // 并落进 HasExited 分支假绿）。
         var deadline = DateTime.UtcNow.AddSeconds(10);
         string after = beforeExit;
         while (DateTime.UtcNow < deadline)
         {
             lock (target.Output) after = target.Output.ToString();
-            if (after.Length > beforeExit.Length || target.HasExited) break; // 有新输出（继续跑）或已跑完退出
+            if (after.Length > beforeExit.Length) break; // 有新输出 = 真的继续跑了
+            if (target.HasExited) break;                 // 退出：稍后断言失败（不得当 PASS）
             await Task.Delay(200, TestContext.Current.CancellationToken);
         }
-        Assert.True(after.Length > beforeExit.Length || target.HasExited,
-            $"detach 后目标未恢复运行（stdout 无新输出且未退出）。输出：{after}");
+        Assert.False(target.HasExited, $"detach 后目标进程退出（exitCode={(target.HasExited ? target.Process.ExitCode : (int?)null):X}）——不应被杀。输出：{after}");
+        Assert.True(after.Length > beforeExit.Length, $"detach 后目标未恢复运行（stdout 无新输出）。输出：{after}");
 
         await readerTask.WaitBounded(2000, TestContext.Current.CancellationToken);
     }
