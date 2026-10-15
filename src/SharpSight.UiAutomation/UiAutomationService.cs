@@ -47,10 +47,11 @@ internal sealed class UiAutomationService
     /// <summary>最近一次 ui_find 是否因 limit 截断（供工具层如实报告总量）。</summary>
     public bool LastFindTruncated => _locator.LastFindTruncated;
 
-    /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存 + 产出新帧）。</summary>
-    public Task<UiFindResult> FindAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct)
+    /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存 + 产出新帧）。
+    /// <paramref name="scopeIndex"/>≥0 限定子树、<paramref name="maxDepth"/>＞0 限定层数（大 UI 树提速）。</summary>
+    public Task<UiFindResult> FindAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct, int scopeIndex = -1, int maxDepth = 0)
         => RunGateAsync(() => new UiFindResult(
-            _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit),
+            _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, scopeIndex, maxDepth),
             Frames.Next()), timeoutSeconds, ct);
 
     /// <summary>

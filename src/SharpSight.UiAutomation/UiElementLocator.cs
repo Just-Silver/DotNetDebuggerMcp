@@ -71,9 +71,11 @@ internal sealed class UiElementLocator
     /// </summary>
     internal static bool SkipBecauseOffscreen(bool isOffscreen) => isOffscreen;
 
-    /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。</summary>
-    public IReadOnlyList<UiElementInfo> Find(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit)
-        => FindCore(automation, process, title, text, type, automationId, limit, forCapture: false);
+    /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存）。
+    /// <paramref name="scopeIndex"/>：≥0 时以其（上次 ui_find 的）index 元素为根，仅枚举其子树；
+    /// <paramref name="maxDepth"/>：&gt;0 时限制相对根的最大层数（大 UI 树/长列表用，避免全树枚举超时）。</summary>
+    public IReadOnlyList<UiElementInfo> Find(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit, int scopeIndex = -1, int maxDepth = 0)
+        => FindCore(automation, process, title, text, type, automationId, limit, forCapture: false, scopeIndex: scopeIndex, maxDepth: maxDepth);
 
     /// <summary>
     /// 元素级截图定位（spec §7.1）：与 <see cref="Find"/> <b>完全同一套</b>进程/窗口身份、过滤与 ordinal 计数，
@@ -81,11 +83,12 @@ internal sealed class UiElementLocator
     /// <see cref="UiElementInfo.RectPx"/>（物理像素）与 <see cref="UiElementInfo.TopLevelHwnd"/>
     /// （元素自身 <c>GetAncestor(GA_ROOT)</c>），供宿主交给 <c>SharpSight.Capture</c> 从窗口帧裁剪。
     /// 元素属另一顶层窗口（ComboBox 弹层/popup/tooltip）时即由其 <c>TopLevelHwnd</c> 体现。
+    /// <para><b>不带 scope/depth</b>：截图序号契约是「无过滤 ui_find 的 index」（根 AGENTS.md），故此处恒全树口径。</para>
     /// </summary>
     public IReadOnlyList<UiElementInfo> FindForCapture(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit)
         => FindCore(automation, process, title, text, type, automationId, limit, forCapture: true);
 
-    private IReadOnlyList<UiElementInfo> FindCore(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit, bool forCapture)
+    private IReadOnlyList<UiElementInfo> FindCore(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit, bool forCapture, int scopeIndex = -1, int maxDepth = 0)
     {
         var (pid, _) = ResolveProcess(process);
         var typeFilter = ResolveControlType(type); // 先校验类型（fail-fast，不触碰 UIA）
@@ -94,8 +97,16 @@ internal sealed class UiElementLocator
 
         var cap = Math.Clamp(limit <= 0 ? 50 : limit, 1, 500);
 
+        // 枚举根：scope 指定时以其子树为根（复用 index 条件缓存重解析），否则窗口全树。
+        AutomationElement root = window;
+        if (scopeIndex >= 0)
+        {
+            var entry = GetCachedEntry(pid, scopeIndex);
+            (root, _, _) = ResolveByDescriptor(automation, pid, entry);
+        }
+
         AutomationElement[] all;
-        try { all = window.FindAllDescendants(); }
+        try { all = maxDepth > 0 ? CollectToDepth(root, maxDepth) : root.FindAllDescendants(); }
         catch (Exception ex) { throw new UiException($"读取窗口控件树失败：{ex.Message}"); }
 
         var entries = new List<CachedEntry>(Math.Min(cap, 64));
@@ -178,6 +189,31 @@ internal sealed class UiElementLocator
         _lastFindTruncated = truncated;
 
         return infos;
+    }
+
+    /// <summary>
+    /// 逐层枚举到指定深度（含根自身）：BFS 每层 <c>FindAllChildren</c>，到 <paramref name="maxDepth"/> 层停止——
+    /// 相比 <c>FindAllDescendants</c> 全树枚举，深度受限时省掉深层（如长列表每行）的 UIA 往返，是大 UI 树的提速要点。
+    /// </summary>
+    private static AutomationElement[] CollectToDepth(AutomationElement root, int maxDepth)
+    {
+        var result = new List<AutomationElement> { root };
+        var frontier = new List<AutomationElement> { root };
+        for (var depth = 0; depth < maxDepth; depth++)
+        {
+            var next = new List<AutomationElement>();
+            foreach (var parent in frontier)
+            {
+                AutomationElement[] children;
+                try { children = parent.FindAllChildren(); }
+                catch { continue; } // provider 瞬时失败：跳过该分支（不整体失败）
+                next.AddRange(children);
+            }
+            result.AddRange(next);
+            frontier = next;
+            if (frontier.Count == 0) break;
+        }
+        return result.ToArray();
     }
 
     /// <summary>解析动作目标（index 优先按缓存条件重解析；否则 name/type 即时唯一定位）。含 1-2 次失效重试。</summary>

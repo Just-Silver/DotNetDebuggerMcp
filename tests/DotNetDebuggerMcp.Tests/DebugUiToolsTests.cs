@@ -45,6 +45,56 @@ public sealed class DebugUiToolsTests
     }
 
     [Fact]
+    public async Task UiFind_ScopeAndDepth_NarrowTheSubtree()
+    {
+        Assert.True(File.Exists(UiSampleAppExe), "UiSampleApp.exe 不存在，请先运行 generate-testdata.ps1");
+
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            // 全树清单（无过滤）：记录总量与某个已知深层控件是否可见
+            var full = await WaitUiFindAsync(mcp, new Dictionary<string, object?>(), "UI 控件清单");
+
+            // depth=1：只含窗口直接子级——控件数应明显少于全树
+            var depth1 = await UiFindAsync(mcp, new Dictionary<string, object?> { ["depth"] = 1 });
+            Assert.Contains("UI 控件清单", depth1);
+            var fullCount = ParseCount(full);
+            var depth1Count = ParseCount(depth1);
+            Assert.True(depth1Count > 0, "depth=1 应至少含窗口直接子级");
+            Assert.True(fullCount > 0, "无过滤 ui_find 应返回控件数");
+            Assert.True(depth1Count < fullCount, $"depth=1({depth1Count}) 应少于全树({fullCount})");
+
+            // scope：先找到某容器 index，再以它为根限定子树
+            var panel = await UiFindAsync(mcp, new Dictionary<string, object?> { ["type"] = "Pane" });
+            if (TryParseFirstIndex(panel, out var paneIndex))
+            {
+                var scoped = await UiFindAsync(mcp, new Dictionary<string, object?> { ["scope"] = paneIndex });
+                Assert.Contains("UI 控件清单", scoped);
+                Assert.True(ParseCount(scoped) <= fullCount, "scope 子树不应多于全树");
+            }
+        }
+        finally
+        {
+            KillUiSampleApp(app);
+        }
+    }
+
+    /// <summary>从 ui_find 头部「共 N 个控件」取数量。</summary>
+    private static int ParseCount(string text)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text, @"共 (\d+) 个控件");
+        return m.Success ? int.Parse(m.Groups[1].Value) : -1;
+    }
+
+    private static bool TryParseFirstIndex(string text, out int index)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(text, @"\[(\d+)\]");
+        index = m.Success ? int.Parse(m.Groups[1].Value) : -1;
+        return m.Success;
+    }
+
+    [Fact]
     public async Task UiFind_AcceptsTimeoutSecondsParameter()
     {
         Assert.True(File.Exists(UiSampleAppExe), "UiSampleApp.exe 不存在，请先运行 generate-testdata.ps1");

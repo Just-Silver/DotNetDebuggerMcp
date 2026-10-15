@@ -22,7 +22,7 @@ public static class UiTools
 
     /// <summary>按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单与各控件支持的 pattern）。</summary>
     [McpServerTool]
-    [Description("按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单供选择，含 index/Name/Type/AutoId/patterns 能力清单/Rect 与同名成员语义候选；语义候选可用 decompile_member <类型> <成员> 看实现）。全部走 UIA 语义，不移动光标、不注入输入、不抢前台。进程需已运行且是 .NET UI 应用（WPF/WinForms/…）；窗口树里没有的虚拟化项查不到。")]
+    [Description("按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单供选择，含 index/Name/Type/AutoId/patterns 能力清单/Rect 与同名成员语义候选；语义候选可用 decompile_member <类型> <成员> 看实现）。全部走 UIA 语义，不移动光标、不注入输入、不抢前台。进程需已运行且是 .NET UI 应用（WPF/WinForms/…）；窗口树里没有的虚拟化项查不到。大 UI 树/长列表（如 999 行 DataGrid）用 scope（限定子树）+ depth（限定层数）缩小范围以免超时；带 scope/depth 的 index 仅限本次结果，截图请用无过滤 ui_find 的 index。")]
     public static async Task<string> UiFind(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示），如 UiSampleApp、1234。")] string process = "",
         [Description("窗口标题精确匹配；空 = 该进程首个顶层窗口。")] string title = "",
@@ -30,15 +30,17 @@ public static class UiTools
         [Description("控件类型（UIA 类型名，如 Button/Text/Edit/List/ListItem/CheckBox/Window；TextBlock 等框架别名自动归一）。")] string type = "",
         [Description("AutomationId 精确匹配（可为空——WPF 常不设）。")] string automationId = "",
         [Description("返回条数上限，默认 50，范围 1-500。")] int limit = 50,
+        [Description("限定子树根：以上一次 ui_find 的该 index 元素为根，只枚举其子控件（默认 -1=不限）。大表/长列表（如 999 行 DataGrid）建议先 scope 到容器再查，否则单次枚举可能超时。")] int scope = -1,
+        [Description("最大层数（相对窗口/scope 根；默认 0=不限）。大 UI 树用 depth 限层可显著提速（如 depth=3 只看前几层容器）。")] int depth = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)
     {
-        var argsText = $"process={process} title={title} text={text} type={type} autoId={automationId} limit={limit} timeout={timeoutSeconds}";
+        var argsText = $"process={process} title={title} text={text} type={type} autoId={automationId} limit={limit} scope={scope} depth={depth} timeout={timeoutSeconds}";
         try
         {
             if (string.IsNullOrWhiteSpace(process))
                 return Fail("ui_find", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
-            var find = await UiAutomationService.Instance.FindAsync(process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, timeoutSeconds, cancellationToken);
+            var find = await UiAutomationService.Instance.FindAsync(process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, timeoutSeconds, cancellationToken, scope, depth);
             var elements = find.Elements;
 
             var pid = UiAutomationService.Instance.LastFindPid;
