@@ -28,7 +28,7 @@ public static class DebugSessionTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>中文结果提示（会话 id、实际工作目录与初始冻结说明）或错误提示。</returns>
     [McpServerTool]
-    [Description("启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。进程冻结在 Main 前的初始同步点——任意 .NET 程序无需启动配合即可从第一行业务代码前调试：设断点（未加载模块自动登记待绑定）后 debug_continue。返回会话 id、实际生效工作目录，进程已冻结在 Main 前（实时状态经 debug_state 查询）；命中断点后用 debug_state/debug_stack/debug_variables 查询。")]
+    [Description("启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。进程冻结在 Main 前的初始同步点——**冻结期间即可直接读栈**（debug_stack 缺省列全部线程），任意 .NET 程序无需启动配合即可从第一行业务代码前调试：设断点（未加载模块自动登记待绑定）后 debug_continue。返回会话 id、实际生效工作目录，进程已冻结在 Main 前（实时状态经 debug_state 查询）；命中断点后用 debug_state/debug_stack/debug_variables 查询。")]
     public static async Task<string> DebugLaunch(
         [Description("目标可执行文件路径（可含参数，如 DebugTarget.exe 3 8），相对当前工作目录（必填）。")] string commandLine = "",
         [Description("等待目标 CLR 启动的秒数上限，默认 30。")] int timeoutSeconds = 30,
@@ -62,7 +62,7 @@ public static class DebugSessionTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("附加到已运行的 .NET 进程进行调试。返回目标 pid 与初始状态；附加后进程冻结在附加时刻的执行点（非 Main 前——launch 才是冻结在 Main 前）。可设断点（未加载模块自动待绑定）后 debug_continue 运行至停点。")]
+    [Description("附加到已运行的 .NET 进程进行调试。返回目标 pid 与初始状态；附加后进程**冻结**在附加时刻的执行点（非 Main 前——launch 才是冻结在 Main 前），**冻结期间即可直接读栈**（debug_stack 缺省列全部线程）；可设断点（未加载模块自动待绑定）后 debug_continue 运行至停点。若已有活动会话会拒绝（请先 debug_disconnect）。")]
     public static async Task<string> DebugAttach(
         [Description("目标进程 id（必填）。")] int processId = 0,
         CancellationToken cancellationToken = default)
