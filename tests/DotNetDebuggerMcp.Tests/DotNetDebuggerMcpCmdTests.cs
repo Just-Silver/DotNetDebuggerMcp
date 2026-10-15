@@ -97,26 +97,51 @@ public class DotNetDebuggerMcpCmdTests
     public void BuildServerInstructions_含更新报告_简介后接更新报告()
     {
         const string report = "DotNetDebuggerMcp 已是最新版本";
-        var text = DotNetDebuggerMcpCmd.BuildServerInstructions(report);
+        var text = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.All, report);
 
         Assert.StartsWith("## 服务器简介", text);
         Assert.Contains("## 何时使用", text);
         Assert.Contains("## 使用约定", text);
-        Assert.Contains(AppText.HandshakeFeatureIntro, text);
         Assert.EndsWith(report, text);
     }
 
     [Fact]
     public void BuildServerInstructions_报告为空_仅功能简介()
     {
-        Assert.Equal(AppText.HandshakeFeatureIntro, DotNetDebuggerMcpCmd.BuildServerInstructions(null));
-        Assert.Equal(AppText.HandshakeFeatureIntro, DotNetDebuggerMcpCmd.BuildServerInstructions(""));
+        var text = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.All, null);
+        Assert.EndsWith("获取。", text); // 简介以使用约定末句收尾，无更新报告段
+        Assert.Equal(text, DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.All, ""));
     }
 
     [Fact]
-    public void HandshakeFeatureIntro_覆盖全部能力族触发条件()
+    public void 握手_启用族出现_未启用族不出现()
     {
-        var text = AppText.HandshakeFeatureIntro;
+        var all = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.All, null);
+        Assert.Contains("动态调试", all);
+        Assert.Contains("ui_find", all);
+        Assert.Contains("screenshot", all);
+        Assert.Contains("debug_verify", all);
+
+        var minimal = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Decompile, null);
+        Assert.Contains("反编译", minimal);
+        Assert.DoesNotContain("debug_", minimal);
+        Assert.DoesNotContain("ui_find", minimal);
+        Assert.DoesNotContain("ui_action", minimal);
+        Assert.DoesNotContain("screenshot", minimal);
+        Assert.DoesNotContain("web_open", minimal);
+    }
+
+    [Fact]
+    public void 握手_全关_不注入能力简介()
+    {
+        var none = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.None, null);
+        Assert.DoesNotContain("## 何时使用", none);
+    }
+
+    [Fact]
+    public void 握手_启用族触发条件齐备()
+    {
+        var text = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.All, null);
         // 触发条件导向：逐族断言「何时使用」，新增能力族漏进握手时本测试失败；仍不逐条列工具
         Assert.Contains("反编译", text);       // 静态分析族
         Assert.Contains("动态调试", text);     // 调试核心
