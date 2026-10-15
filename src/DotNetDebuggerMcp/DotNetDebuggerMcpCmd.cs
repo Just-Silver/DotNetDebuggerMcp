@@ -213,6 +213,13 @@ public class DotNetDebuggerMcpCmd
     public int WebPort { get; } = 0;
 
     /// <summary>
+    /// 启用的能力族（逗号分隔：decompile/debug/ui/screenshot）。缺省不传 = 只启用 decompile（反编译/静态分析）；
+    /// 显式传空串 = 零能力。只作用于 MCP 面（工具注册 + 握手注入），CLI 执行路径不受影响。
+    /// </summary>
+    [Option("--features <list>", "启用的能力族（逗号分隔：decompile/debug/ui/screenshot）；缺省=仅 decompile，显式空=零能力。仅作用于 MCP 面，CLI 参数不受影响。也可用环境变量 " + FeatureFlags.EnvVar + "。", CommandOptionType.SingleValue)]
+    public string Features { get; } = null!;
+
+    /// <summary>
     /// 版本号文本（由 -v/--version 触发输出），与 NuGet 包版本保持一致。
     /// </summary>
     public string Version => AppConfig.NuGetPackageId + " " + (AppConfig.CurrentVersion?.ToString(3) ?? "unknown");
@@ -349,6 +356,13 @@ public class DotNetDebuggerMcpCmd
             return 0;
         }
 
+        var (features, featuresError) = FeatureFlags.Resolve(Features, Environment.GetEnvironmentVariable(FeatureFlags.EnvVar));
+        if (featuresError is not null)
+        {
+            Console.Error.WriteLine(featuresError);
+            return 1;
+        }
+
         Task? webTask = null;
         if (Web)
         {
@@ -384,7 +398,8 @@ public class DotNetDebuggerMcpCmd
         {
             if (!string.IsNullOrEmpty(serverInstructions)) o.ServerInstructions = serverInstructions;
         })
-        .WithStdioServerTransport().WithToolsFromAssembly();
+        // 按启用能力族注册工具：未启用的族根本不进工具目录（agent 看不到、也调不到）。CLI 路径不经此处。
+        .WithStdioServerTransport().WithTools(ToolFeatureRegistry.EnabledToolTypes(features));
         // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新 NuGet 磁盘缓存供下一次会话使用，不 await 以免阻塞启动
         _ = AppServices.Updater.RefreshIfStaleAsync();
         var mcpTask = builder.Build().RunAsync();
