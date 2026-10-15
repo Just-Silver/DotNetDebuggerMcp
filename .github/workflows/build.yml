@@ -128,7 +128,9 @@ jobs:
         shell: pwsh
         run: |
           $nupkg = Get-ChildItem artifacts/*.nupkg | Select-Object -First 1
-          dotnet nuget push $nupkg.FullName --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json
+          # --skip-duplicate：重跑/重发时服务端已收录同版本不再以 409 失败（发布可幂等重试）。
+          # --timeout 600：nuget.org 慢或降级恢复期单次上传可能超默认 300s（曾实测 43773ms 后读响应中断）。
+          dotnet nuget push $nupkg.FullName --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate --timeout 600
 
       # NuGet 发布成功后创建 GitHub Release：正文复用 CHANGELOG 当前版本段，资产携带 nupkg，正式版（不标记 prerelease）
       - name: Create GitHub Release
