@@ -226,8 +226,10 @@ public sealed class DebugSessionManager : IAsyncDisposable
     }
 
     /// <summary>
-    /// 强制释放调试会话（**不杀目标进程**）：只 <see cref="ActiveDebugSession.DisposeAsync"/>（其内部即 Detach +
-    /// ICorDebug 终结），用于会话/引擎状态不一致（书签与引擎不匹配、disconnect 失败残留）时的收口。
+    /// 强制释放调试会话（**不杀目标进程**）：先经**泵内、带 resume 的断开路径**（与 <see cref="CloseAsync"/> 同一序：
+    /// 恢复运行 → 清断点 → detach）真正 detach，再释放引擎。用于会话/引擎状态不一致（书签与引擎不匹配、
+    /// disconnect 失败残留）时的收口——**不**直接走 <c>DisposeAsync</c> 的 off-pump detach（那不会真正 detach，
+    /// 目标仍被附加、后续 attach 恒失败）。
     /// 与 <see cref="TerminateAsync"/> 的区别：后者结束目标进程，本方法不。
     /// </summary>
     public async Task<bool> ForceResetAsync(CancellationToken ct = default)
@@ -235,7 +237,8 @@ public sealed class DebugSessionManager : IAsyncDisposable
         ActiveDebugSession? toClose;
         lock (_gate) { toClose = _active; _active = null; }
         if (toClose is null) return false;
-        await toClose.DisposeAsync();   // Dispose 内部吞异常：强制路径以「尽力释放 + 丢引用」为准
+        try { await toClose.Session.DisconnectAsync(ct); } catch { /* 强制路径：断开失败仍继续释放（已如实记日志） */ }
+        await toClose.DisposeAsync();
         ActiveSessionChanged?.Invoke(null);
         return true;
     }

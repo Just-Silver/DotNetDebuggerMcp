@@ -139,22 +139,32 @@ public sealed class DebugViewService
         catch (Exception ex) { return $"单步失败：{ex.Message}"; }
     }
 
-    /// <summary>停点线程的调用栈（停点态或 attach/launch 初始冻结态均可读；运行中返回空）。</summary>
+    /// <summary>停点线程的调用栈（停点态读数线程；attach/launch 初始冻结态无停点线程 → 合并全部线程的栈）。</summary>
     public async Task<IReadOnlyList<DebugStackFrame>> GetStackAsync(CancellationToken ct = default)
     {
         var active = Active;
         if (active is null || !IsReadableState(active.Buffer.CurrentState)) return [];
-        var tid = active.Buffer.StoppedThreadId;
-        if (tid <= 0) return [];
-        try { return await active.Session.GetStackFramesAsync(tid, ct); }
+        try
+        {
+            var tid = active.Buffer.StoppedThreadId;
+            if (tid > 0) return await active.Session.GetStackFramesAsync(tid, ct);
+            // 冻结态（无停点线程）：与 MCP debug_stack 同口径，合并全部托管线程的栈
+            var all = new List<DebugStackFrame>();
+            foreach (var t in await active.Session.GetThreadsAsync(ct))
+            {
+                try { all.AddRange(await active.Session.GetStackFramesAsync(t.ThreadId, ct)); }
+                catch { /* 单线程读失败跳过 */ }
+            }
+            return all;
+        }
         catch { return []; }
     }
 
-    /// <summary>停点线程的局部变量/参数（停点态或初始冻结态；运行中返回空）。</summary>
+    /// <summary>停点线程的局部变量/参数（需停点线程；冻结态无栈顶帧可用故返回空）。</summary>
     public async Task<IReadOnlyDictionary<string, IReadOnlyList<DebugVariable>>> GetVariablesAsync(CancellationToken ct = default)
     {
         var active = Active;
-        if (active is null || !IsReadableState(active.Buffer.CurrentState)) return new Dictionary<string, IReadOnlyList<DebugVariable>>();
+        if (active is null || active.Buffer.CurrentState != DebugSessionState.Stopped) return new Dictionary<string, IReadOnlyList<DebugVariable>>();
         var tid = active.Buffer.StoppedThreadId;
         if (tid <= 0) return new Dictionary<string, IReadOnlyList<DebugVariable>>();
         try { return await active.Session.GetVariablesAsync(tid, ct); }

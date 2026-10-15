@@ -216,7 +216,7 @@ public class DotNetDebuggerMcpCmd
     /// 启用的能力族（逗号分隔：decompile/debug/ui/screenshot）。缺省不传 = 只启用 decompile（反编译/静态分析）；
     /// 显式传空串 = 零能力。只作用于 MCP 面（工具注册 + 握手注入），CLI 执行路径不受影响。
     /// </summary>
-    [Option("--features <list>", "启用的能力族（逗号分隔：decompile/debug/ui/screenshot）；缺省=仅 decompile，显式空=零能力。仅作用于 MCP 面，CLI 参数不受影响。也可用环境变量 " + FeatureFlags.EnvVar + "。", CommandOptionType.SingleValue)]
+    [Option("--features <list>", "启用的能力族（逗号分隔：decompile/debug/ui/screenshot）；缺省=仅 decompile。至少需启用一个族。仅作用于 MCP 面，CLI 参数不受影响。也可用环境变量 " + FeatureFlags.EnvVar + "。", CommandOptionType.SingleValue)]
     public string Features { get; } = null!;
 
     /// <summary>

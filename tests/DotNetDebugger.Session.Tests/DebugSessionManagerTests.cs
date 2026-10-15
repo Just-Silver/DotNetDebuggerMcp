@@ -211,6 +211,27 @@ public sealed class DebugSessionManagerTests
     }
 
     [Fact]
+    public async Task ForceReset_后可再次attach()
+    {
+        using var target = TestTarget.StartDebugTarget("1 6");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+
+        await using var manager = new DebugSessionManager();
+        var first = await manager.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        Assert.NotNull(manager.Active);
+
+        var reset = await manager.ForceResetAsync(TestContext.Current.CancellationToken);
+        Assert.True(reset);
+        Assert.Null(manager.Active);
+
+        // reset 后目标未被残留附加 → 可再次 attach
+        var again = await manager.AttachAsync(target.Id, TestContext.Current.CancellationToken);
+        Assert.NotNull(manager.Active);
+        Assert.Equal(target.Id, again.ProcessId);
+        await manager.CloseAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task Attach_已有会话_中文拒绝且不触引擎()
     {
         Assert.True(File.Exists(TestTarget.DebugTargetExe));

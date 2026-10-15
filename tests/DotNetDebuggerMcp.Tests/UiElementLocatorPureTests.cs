@@ -71,12 +71,12 @@ public sealed class UiElementLocatorPureTests
     public void DescribeIndexMiss_区分pid不符与缓存被覆盖()
     {
         // P4：pid 不一致 → 说明「不属于该进程」
-        var pidMismatch = UiElementLocator.DescribeIndexMiss(pid: 100, currentPid: 200, cacheCount: 5, index: 0);
+        var pidMismatch = UiElementLocator.DescribeIndexMiss(pid: 100, currentPid: 200, index: 0);
         Assert.Contains("不属于", pidMismatch);
         Assert.Contains("ui_find", pidMismatch);
 
         // pid 一致但缓存被覆盖/为空 → 不得说「不属于该进程」（旧文案在此处自相矛盾：pid 一致却打印 pid=X 不匹配）
-        var overwritten = UiElementLocator.DescribeIndexMiss(pid: 100, currentPid: 100, cacheCount: 0, index: 3);
+        var overwritten = UiElementLocator.DescribeIndexMiss(pid: 100, currentPid: 100, index: 3);
         Assert.Contains("覆盖", overwritten);
         Assert.Contains("重新 ui_find", overwritten);
         Assert.DoesNotContain("不属于", overwritten);

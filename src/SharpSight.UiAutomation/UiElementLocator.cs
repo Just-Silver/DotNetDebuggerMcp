@@ -395,7 +395,7 @@ internal sealed class UiElementLocator
             var current = _lastFindPid;
             _lastFind.Clear();
             _lastFindPid = -1;
-            throw new UiException(DescribeIndexMiss(pid, current, _lastFind.Count, index));
+            throw new UiException(DescribeIndexMiss(pid, current, index));
         }
         if (index < 0 || index >= _lastFind.Count)
             throw new UiException($"index={index} 超出最近 ui_find 结果范围（0..{_lastFind.Count - 1}）。请重新 ui_find。");
@@ -407,7 +407,7 @@ internal sealed class UiElementLocator
     /// 旧实现把两者合并成一句，导致 pid 明明一致也报「不是进程 pid=X 的 ui_find 结果（当前缓存 pid=X）」自相矛盾。
     /// 纯函数，可单测。
     /// </summary>
-    internal static string DescribeIndexMiss(int pid, int currentPid, int cacheCount, int index)
+    internal static string DescribeIndexMiss(int pid, int currentPid, int index)
         => currentPid != pid
             ? $"index={index} 不属于进程 pid={pid} 的 ui_find 结果（当前缓存属于 pid={currentPid}）。请先对该进程执行 ui_find。"
             : $"index={index} 无法解析：ui_find 结果缓存已被后续查询覆盖或为空（index 只在**紧邻上一次 ui_find** 内有效）。请重新 ui_find 后立即用其 index。";

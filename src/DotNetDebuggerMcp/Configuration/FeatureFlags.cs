@@ -68,11 +68,18 @@ internal static class FeatureFlags
 
     /// <summary>
     /// 同 <see cref="Parse"/> 但不抛异常：未知取值时返回 <c>(None, 中文错误)</c>，供启动路径 <c>Console.Error</c> + 非零退出。
+    /// <para><b>零能力也报错</b>：一个不注册任何工具的 MCP 服务器会让客户端 <c>tools/list</c> 拿协议错误、
+    /// 完全不可用（实测），故「一个族都不启用」视为无效配置而非合法状态。</para>
     /// </summary>
     internal static (FeatureFamily Family, string? Error) Resolve(string? cliValue, string? envValue)
     {
-        if (cliValue is not null) return TryParse(cliValue);
-        if (!string.IsNullOrWhiteSpace(envValue)) return TryParse(envValue);
-        return (FeatureFamily.Decompile, null);
+        var (family, error) = cliValue is not null ? TryParse(cliValue)
+            : !string.IsNullOrWhiteSpace(envValue) ? TryParse(envValue)
+            : (FeatureFamily.Decompile, null);
+        if (error is not null) return (FeatureFamily.None, error);
+        if (family == FeatureFamily.None)
+            return (FeatureFamily.None,
+                $"至少需启用一个能力族（{string.Join("/", FeatureNames)}）——一个族都不启用的服务器无任何工具可暴露。");
+        return (family, null);
     }
 }

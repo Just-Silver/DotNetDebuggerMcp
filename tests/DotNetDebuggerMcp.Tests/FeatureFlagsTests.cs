@@ -17,8 +17,8 @@ public sealed class FeatureFlagsTests
     }
 
     [Fact]
-    public void Parse_显式空串_零能力()
-        => Assert.Equal(FeatureFamily.None, FeatureFlags.Parse("", null));
+    public void Parse_显式空串_报错_因零能力服务器不可用()
+        => Assert.Throws<InvalidOperationException>(() => FeatureFlags.Parse("", null));
 
     [Fact]
     public void Parse_环境变量_生效()
@@ -28,7 +28,8 @@ public sealed class FeatureFlagsTests
     public void Parse_CLI优先于环境变量()
     {
         Assert.Equal(FeatureFamily.Screenshot, FeatureFlags.Parse("screenshot", "debug"));
-        Assert.Equal(FeatureFamily.None, FeatureFlags.Parse("", "debug")); // CLI 显式空压过 env
+        // CLI 显式空压过 env（但零能力本身报错——见上一条）
+        Assert.Throws<InvalidOperationException>(() => FeatureFlags.Parse("", "debug"));
     }
 
     [Theory]

@@ -100,12 +100,11 @@ public static class DebugSessionTool
         return $"附加调试失败：{raw}";
     }
 
-    /// <summary>判定 HRESULT/COM 文本是否属「进程已被附加/参数无效」类（0x80070057 / ERROR_INVALID_PARAMETER / CORDBG_E_*）。</summary>
+    /// <summary>判定 HRESULT/COM 文本是否属「进程已被附加/参数无效」类（收敛到具体错误码，避免把无关 COM 失败误导成「需重启目标」）。</summary>
     private static bool LooksLikeAlreadyAttached(string message)
         => message.Contains("ERROR_INVALID_PARAMETER", StringComparison.OrdinalIgnoreCase)
         || message.Contains("0x80070057", StringComparison.OrdinalIgnoreCase)
-        || message.Contains("HRESULT", StringComparison.OrdinalIgnoreCase)
-        || message.Contains("COM component", StringComparison.OrdinalIgnoreCase);
+        || message.Contains("CORDBG_E", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// 断开当前调试会话（目标进程继续独立运行）。无活动会话返回提示。
@@ -137,7 +136,7 @@ public static class DebugSessionTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
     [McpServerTool]
-    [Description("强制释放当前调试会话（**不杀目标进程**，目标继续独立运行）。用于 debug_disconnect 失败、或会话书签与引擎状态不一致（报无会话但仍附加）时收口。与 debug_terminate 不同：本工具不结束目标进程。")]
+    [Description("强制释放当前调试会话（**不杀目标进程**，目标继续独立运行）。用于 debug_disconnect 失败、或会话书签与引擎状态不一致（报无会话但仍附加）时收口。与 debug_terminate 不同：本工具不结束目标进程。注意：若目标被外部调试器残留附加，本工具无法解除（需重启目标）。")]
     public static async Task<string> DebugReset(CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
@@ -145,7 +144,7 @@ public static class DebugSessionTool
         var pid = active.ProcessId;
         await DebugSessionService.Manager.ForceResetAsync(cancellationToken);
         DebugSessionService.Manager.Actions.Log("debug_reset", $"pid={pid}", "ok");
-        return $"已强制释放调试会话（pid={pid}，目标进程继续独立运行）。可重新 debug_attach。";
+        return $"已强制释放调试会话（pid={pid}，目标进程继续独立运行）。";
     }
 
     /// <summary>

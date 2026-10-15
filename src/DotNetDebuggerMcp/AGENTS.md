@@ -24,7 +24,7 @@
 - `Pipeline/ToolPipeline.cs` — 共享执行管道：缓存命中 → 进程内反编译回源（同 key 并发单飞）→ lines 分页；`IsErrorResult` 为 true 抛异常不入缓存。
 - `Caching/DecompileCache.cs` — 64MB LRU + 30 分钟滑动过期 + 5 分钟清理；反编译与元数据共用。
 - `Formatting/OutputFormatter.cs` + `SectionBuilder.cs` — 头部信息块、`#MEMBER` 行、`（无）` 占位、行号分页。
-- `Configuration/` — `AppConfig`（宿主专属常量）、`AppText`（转发 Decompiler 库 `DecompilerText` + `HandshakeFeatureIntro`）、`CacheSignatures`（缓存键前缀 + `\u001F` 分隔符，**改动必须同步 `CacheStatsTool.ToolNames`**）、`ToolParameterText`（MCP 参数级 `[Description]` 模板常量，Description 要求编译期常量故全 const）。**调试工具文案目前各工具内联、未集中**——新增共享调试提示时考虑收拢。
+- `Configuration/` — `AppConfig`（宿主专属常量）、`AppText`（转发 Decompiler 库 `DecompilerText`）、`FeatureFlags`（能力族开关解析：`--features`/`DOTNETDEBUGGERMCP_FEATURES`）、`ToolFeatureRegistry`（工具类型→能力族显式注册表）、`HandshakeText`（按能力族拼装握手简介）、`CacheSignatures`（缓存键前缀 + `\u001F` 分隔符，**改动必须同步 `CacheStatsTool.ToolNames`**）、`ToolParameterText`（MCP 参数级 `[Description]` 模板常量，Description 要求编译期常量故全 const）。**调试工具文案目前各工具内联、未集中**——新增共享调试提示时考虑收拢。
 - `Validation/ArgumentValidators.cs` — 共享校验（assembly/必填/memberName/token/list/outputDir/timeoutSeconds）。**debug 工具校验目前内联**（`TryParseToken`/`RequireStopped` 等），未走共享校验器。
 - `UpdateCheck/` — NuGet 更新检查（`%LOCALAPPDATA%\DotNetDebuggerMcp\update-check.json` 磁盘缓存，成功 TTL 24h/失败 1h）。
 
@@ -32,14 +32,14 @@
 
 - 业务参数：`-a` 反编译系 / `-l -nc -ns` list_types / `-s -hc -d -cg -iu -gi -cc -ai` 元数据系 / `-ss` search_string / `-fa -fn` field_access / `-mn -tt` decompile_member / `-tk` token 定位 / `-o [-p]` 写盘 / `-ln` 分页 / `--timeout`(默认 30) / `-c` 更新检查 / **`-dbg <exe>` + `-dbg-bp <token>` + `-dbg-offset`** 一次性调试 / **`--web` + `--web-port`** Web 模式 / `-v` `-h`。分发逻辑在 `DispatchCliAsync`（与 MCP 工具同一执行逻辑）。
 - `--web` 分支（L350-360）：`WebHostBootstrap.Configure(Manager, AgentView)` → `Build(port)` → 并联 `Task.WhenAll(mcpTask, webTask)`（任一侧结束等另一侧自然完成）。
-- MCP 启动分支：`builder.Logging.ClearProviders()` + `AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace)`——**严禁删除或改动**（stdout 只承载 MCP 协议帧；并发下 Console 日志与响应交错会撕坏帧，回归护栏 `McpSessionConcurrencyTests`）。握手期组装 `HandshakeFeatureIntro` + 「更新状态」段（`EnvironmentChecker.BuildHandshakeText`）注入 `ServerInstructions`；后台 fire-and-forget `RefreshIfStaleAsync`。
+- MCP 启动分支：`builder.Logging.ClearProviders()` + `AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace)`——**严禁删除或改动**（stdout 只承载 MCP 协议帧；并发下 Console 日志与响应交错会撕坏帧，回归护栏 `McpSessionConcurrencyTests`）。启动期按 `FeatureFlags` 决定注册哪些能力族的工具（`ToolFeatureRegistry.EnabledToolTypes`，**未启用族不进工具目录**），并组装按族拼装的握手简介（`HandshakeText.Build`）+ 「更新状态」段（`EnvironmentChecker.BuildHandshakeText`）注入 `ServerInstructions`；未知/零能力族取值 → stderr 中文 + 非零退出。后台 fire-and-forget `RefreshIfStaleAsync`。
 
 ## 铁律速查（完整版见根 AGENTS.md）
 
 - **所有 MCP 工具参数必须带默认值**（`string x = ""`，不声明可空）——SDK 按是否有默认值判断必填，缺默认值缺参会返回 Tool Error 而非中文提示。`[Description]` 用中文、面向 agent、**注明默认值**、不写实现细节措辞。
 - **每个工具方法带 `CancellationToken cancellationToken = default`**（SDK 识别并注入、不暴露为参数、不写 Description）。反编译类放 timeoutSeconds 后、元数据类放末尾。
 - 工具返回 `Task<string>`，一切错误返回中文提示文本，不抛异常。——**图片类工具例外**：`screenshot` 返回 `Task<CallToolResult>`（<2MB 附 image 块、≥2MB/指定 filePath 落盘返回路径），错误仍为纯文本 content、不设 IsError（spec §3.3，见 `docs/planning/specs/2026-09-22-screenshot-tool-design.md`）。
-- 更新版本号同步三处：csproj `<Version>` + `.mcp/server.json`（顶层与 packages[0] 两处）+ CHANGELOG `[Unreleased]`。改工具面必须同步 **工具 `[Description]`（agent 在工具目录看到的唯一说明：参数/默认值/行为一变就改）** 与 **握手简介 `AppText.HandshakeFeatureIntro`（新增/删除能力族或独立工作流必须补/删对应触发条件；配合扩 `HandshakeFeatureIntro_覆盖全部能力族触发条件` 回归断言）**——二者是 agent 的「可见」与「触发」通道，漏改等于新能力不可被发现；根 `README.md`（打包为 PackageReadmeFile）面向包使用者，也一并更新。
+- 更新版本号同步三处：csproj `<Version>` + `.mcp/server.json`（顶层与 packages[0] 两处）+ CHANGELOG `[Unreleased]`。改工具面必须同步 **工具 `[Description]`（agent 在工具目录看到的唯一说明：参数/默认值/行为一变就改）** 与 **握手简介（`HandshakeText` 按能力族拼装；新增/删除能力族或独立工作流必须补/删对应触发条件；配合扩 `握手_启用族触发条件齐备` 回归断言）**——二者是 agent 的「可见」与「触发」通道，漏改等于新能力不可被发现；根 `README.md`（打包为 PackageReadmeFile）面向包使用者，也一并更新。
 
 ## 验证
 
