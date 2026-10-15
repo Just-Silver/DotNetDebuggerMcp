@@ -299,7 +299,7 @@ internal sealed class UiElementLocator
                 for (var i = 0; i < hits.Count && i < 5; i++)
                     sb.Append($"[{i}] {SafeRead(() => hits[i].El.ControlType.ToString(), "?")} Name={hits[i].Hit} ");
                 if (hits.Count > 5) sb.Append("…");
-                sb.Append("请先 ui_find 定位后按 index 操作。");
+                sb.Append("请用 name+type 组合唯一定位（如 name=保存 type=Button），或先 ui_find 后按 index 操作。");
                 return new FindResult(null, true, sb.ToString());
             }
             return new FindResult(hits[0].El, false, hits[0].Hit);
@@ -354,12 +354,22 @@ internal sealed class UiElementLocator
             var current = _lastFindPid;
             _lastFind.Clear();
             _lastFindPid = -1;
-            throw new UiException($"index={index} 引用的不是进程 pid={pid} 的 ui_find 结果（当前缓存 pid={current}）。请先对该进程执行 ui_find。");
+            throw new UiException(DescribeIndexMiss(pid, current, _lastFind.Count, index));
         }
         if (index < 0 || index >= _lastFind.Count)
             throw new UiException($"index={index} 超出最近 ui_find 结果范围（0..{_lastFind.Count - 1}）。请重新 ui_find。");
         return _lastFind[index];
     }
+
+    /// <summary>
+    /// index 无法解析的说明（P4）：区分「pid 不符」与「缓存被后续 ui_find 覆盖/为空」两种情形——
+    /// 旧实现把两者合并成一句，导致 pid 明明一致也报「不是进程 pid=X 的 ui_find 结果（当前缓存 pid=X）」自相矛盾。
+    /// 纯函数，可单测。
+    /// </summary>
+    internal static string DescribeIndexMiss(int pid, int currentPid, int cacheCount, int index)
+        => currentPid != pid
+            ? $"index={index} 不属于进程 pid={pid} 的 ui_find 结果（当前缓存属于 pid={currentPid}）。请先对该进程执行 ui_find。"
+            : $"index={index} 无法解析：ui_find 结果缓存已被后续查询覆盖或为空（index 只在**紧邻上一次 ui_find** 内有效）。请重新 ui_find 后立即用其 index。";
 
     private static string DisplayLabel(TargetDescriptor descriptor)
     {

@@ -76,7 +76,7 @@ public static class UiTools
 
     /// <summary>对 UI 控件执行语义动作（真实操作，有产线副作用）。</summary>
     [McpServerTool]
-    [Description("对 UI 控件执行语义动作（真实操作，有产线副作用——会影响目标应用状态与数据）。全 UIA 语义 pattern：不移动光标、不注入输入、不抢前台（仅窗口最小化时经 WindowPattern 还原）。verb 必填，可选 invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate——按控件能力分派而非固定「点一下」：复选框用 toggle、列表/树/页签项用 select、下拉/树节点用 expand。**无右键/双击**：UIA 无该类入口、物理输入已移除，传 rightclick/doubleclick 会返回明确中文拒绝并引导改用等价菜单/命令的 verb=invoke。定位用 index（上次 ui_find 序号，优先）或 name/type（歧义返回候选清单）；verb=windowstate 忽略 index/name/type，按 process 定位顶层窗口。执行动作会写入 AgentActionLog 供复盘。")]
+    [Description("对 UI 控件执行语义动作（真实操作，有产线副作用——会影响目标应用状态与数据）。全 UIA 语义 pattern：不移动光标、不注入输入、不抢前台（仅窗口最小化时经 WindowPattern 还原）。verb 必填，可选 invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate——按控件能力分派而非固定「点一下」：复选框用 toggle、列表/树/页签项用 select、下拉/树节点用 expand。**无右键/双击**：UIA 无该类入口、物理输入已移除，传 rightclick/doubleclick 会返回明确中文拒绝并引导改用等价菜单/命令的 verb=invoke。定位用 index（上次 ui_find 序号，优先——但 index 只在紧邻上一次 ui_find 内有效，中间任何 ui_find 都会冲掉）或 name/type（name+type 组合可唯一化、最稳；歧义返回候选清单）；verb=windowstate 忽略 index/name/type，按 process 定位顶层窗口。执行动作会写入 AgentActionLog 供复盘。")]
     public static async Task<string> UiAction(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("语义动词（必填）：invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate。")] string verb = "",
