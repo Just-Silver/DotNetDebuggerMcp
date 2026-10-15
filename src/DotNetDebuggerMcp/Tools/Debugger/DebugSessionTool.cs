@@ -128,7 +128,7 @@ public static class DebugSessionTool
             return $"断开调试会话失败：{ex.Message}";
         }
         DebugSessionService.Manager.Actions.Log("debug_disconnect", "", "ok");
-        return "已断开调试会话（目标进程继续独立运行）。";
+        return "已断开调试会话（目标进程继续独立运行）。若目标随后不响应，可能是外部因素（外部调试器残留附加 / NtSuspendProcess / 系统挂起）——可重启目标恢复。";
     }
 
     /// <summary>

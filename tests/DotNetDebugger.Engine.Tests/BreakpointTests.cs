@@ -94,6 +94,52 @@ public sealed class BreakpointTests
     }
 
     [Fact]
+    public async Task Disconnect_FromStoppedState_TargetKeepsRunning()
+    {
+        var exe = TestPaths.DebugTargetExe;
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        // 6 迭代 + delay 4s：命中首个 Work 后仍有多次未跑，detach 后应继续输出后续 work 行
+        using var target = DebugTargetProcess.Start("6 4");
+        await Task.Delay(800, TestContext.Current.CancellationToken);
+
+        var workToken = ReadMethodToken(Path.ChangeExtension(exe, ".dll"), "Work");
+        Assert.True(workToken > 0);
+
+        var events = new List<DebugEvent>();
+        await using var session = await DebugSession.AttachAsync(target.Id, null, TestContext.Current.CancellationToken);
+        var readerTask = ConsumeAsync(session.Events, events);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+
+        await session.SetBreakpointAsync("DebugTarget.dll", workToken, ilOffset: 0, ct: TestContext.Current.CancellationToken);
+        await session.ContinueAsync(TestContext.Current.CancellationToken);
+
+        // 等首个断点命中（进程停在断点）
+        var hitDeadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < hitDeadline && !events.Any(e => e.Kind == DebugEventKind.BreakpointHit))
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        Assert.Contains(events, e => e.Kind == DebugEventKind.BreakpointHit);
+
+        // 停在断点时 detach：任务要求「断开前兜底 resume」——detach 后目标应继续运行、不被挂起
+        var beforeExit = target.Output.ToString();
+        await session.DisconnectAsync(TestContext.Current.CancellationToken);
+
+        // 可观测判据（DebugTarget 是控制台程序、无窗口 → Responding/SendMessageTimeout 不适用）：stdout 心跳
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        string after = beforeExit;
+        while (DateTime.UtcNow < deadline)
+        {
+            lock (target.Output) after = target.Output.ToString();
+            if (after.Length > beforeExit.Length || target.HasExited) break; // 有新输出（继续跑）或已跑完退出
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+        }
+        Assert.True(after.Length > beforeExit.Length || target.HasExited,
+            $"detach 后目标未恢复运行（stdout 无新输出且未退出）。输出：{after}");
+
+        await readerTask.WaitBounded(2000, TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task SetBreakpoint_OnWorkEntry_HitsAndResumes()
     {
         var exe = TestPaths.DebugTargetExe;
