@@ -34,7 +34,7 @@ internal static class HandshakeText
         "- **当需要向用户或自己实时展示调试现场（网页监视器：断点/单步/变量/动作时间线）时**，调用 web_open 打开（幂等；仅为可选展示，不影响 agent 独立完成调试）。\n";
     private const string UseUi =
         "- **当需要操作桌面 GUI 到某状态（点按钮 / 勾选 / 切下拉 / 填输入框 / 滚动）时**，使用 UI 自动化工具 ui_find（列控件与能力）→ ui_action/ui_input（语义动作/写值）→ ui_wait（等状态变化）→ ui_get（读值）；全 UIA 语义，不移动光标、不注入输入、不抢前台，且不要求活动调试会话（可先摆好 UI 状态再 debug_attach）。单次 UIA 调用默认 5s 护栏，目标响应慢时用 timeoutSeconds 调大（超时≠环境 UIA 不可用）。目标无 Invoke/SelectionItem（如部分 WPF-UI 导航项）时可显式 ui_action clickPoint=true 走真实点击——会移动光标/注入点击/可能抢前台，性能类排查勿用。\n" +
-        "- **注意**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。\n";
+        "- **注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。\n";
     private const string UseScreenshot =
         "- **当需要观察 GUI 窗口/屏幕画面（看控件状态、布局冒烟）时**，调用 screenshot 截图：可按全屏/指定显示器（副屏）/窗口（pid、标题、前台、句柄）/窗口客户区/屏幕区域/UIA 单个元素寻址，返回图片；头部给出 原点/帧 坐标元数据（图像为原生 1:1，本服务器不做缩放），可选叠加光标（includeCursor），图片过大会改为落盘返回路径。寻址参数不确定时先列清单：显示器用 `screenshot_displays`、可见窗口用 `screenshot_windows`（hwnd/标题/pid，不限 .NET 进程）；按控件截图先 `ui_find` 取 index/名与帧号。`ui_find` 输出的 `帧: frameId=N` 可回传给 `ui_action`/`ui_input`/`ui_get` 与 screenshot，用于拦截引用旧画面的操作。\n";
 

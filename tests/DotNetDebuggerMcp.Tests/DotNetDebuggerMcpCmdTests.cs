@@ -164,6 +164,10 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("screenshot_displays", text); // 视觉族发现：显示器清单（喂 display）
         Assert.Contains("screenshot_windows", text);  // 视觉族发现：窗口清单（喂 hwnd/windowTitle/processId）
         Assert.Contains("web_open", text);
+        // P1–P6（2026-10-15）：冻结态可读栈 / clickPoint 物理输入声明 / ui_* 观测扰动
+        Assert.Contains("冻结", text);          // P1：attach/launch 冻结态即可读栈
+        Assert.Contains("clickPoint", text);   // P3：显式真实点击开关
+        Assert.Contains("观测扰动", text);     // P6：ui_* 注入 UIA 客户端声明
         Assert.Contains("## 何时使用", text);
         Assert.DoesNotContain("## 工具一览", text);
     }

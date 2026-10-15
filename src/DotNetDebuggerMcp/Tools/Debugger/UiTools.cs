@@ -22,7 +22,7 @@ public static class UiTools
 
     /// <summary>按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单与各控件支持的 pattern）。</summary>
     [McpServerTool]
-    [Description("按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单供选择，含 index/Name/Type/AutoId/patterns 能力清单/Rect 与同名成员语义候选；语义候选可用 decompile_member <类型> <成员> 看实现）。全部走 UIA 语义，不移动光标、不注入输入、不抢前台。进程需已运行且是 .NET UI 应用（WPF/WinForms/…）；窗口树里没有的虚拟化项查不到。大 UI 树/长列表（如 999 行 DataGrid）用 scope（限定子树）+ depth（限定层数）缩小范围以免超时；带 scope/depth 的 index 仅限本次结果，截图请用无过滤 ui_find 的 index。**注意**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。")]
+    [Description("按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单供选择，含 index/Name/Type/AutoId/patterns 能力清单/Rect 与同名成员语义候选；语义候选可用 decompile_member <类型> <成员> 看实现）。全部走 UIA 语义，不移动光标、不注入输入、不抢前台。进程需已运行且是 .NET UI 应用（WPF/WinForms/…）；窗口树里没有的虚拟化项查不到。大 UI 树/长列表（如 999 行 DataGrid）用 scope（限定子树）+ depth（限定层数）缩小范围以免超时；带 scope/depth 的 index 仅限本次结果，截图请用无过滤 ui_find 的 index。**注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。")]
     public static async Task<string> UiFind(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示），如 UiSampleApp、1234。")] string process = "",
         [Description("窗口标题精确匹配；空 = 该进程首个顶层窗口。")] string title = "",
@@ -79,7 +79,7 @@ public static class UiTools
 
     /// <summary>对 UI 控件执行语义动作（真实操作，有产线副作用）。</summary>
     [McpServerTool]
-    [Description("对 UI 控件执行语义动作（真实操作，有产线副作用——会影响目标应用状态与数据）。全 UIA 语义 pattern：不移动光标、不注入输入、不抢前台（仅窗口最小化时经 WindowPattern 还原）。verb 必填，可选 invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate——按控件能力分派而非固定「点一下」：复选框用 toggle、列表/树/页签项用 select、下拉/树节点用 expand。**无右键/双击**：UIA 无该类入口、物理输入已移除，传 rightclick/doubleclick 会返回明确中文拒绝并引导改用等价菜单/命令的 verb=invoke。定位用 index（上次 ui_find 序号，优先——但 index 只在紧邻上一次 ui_find 内有效，中间任何 ui_find 都会冲掉）或 name/type（name+type 组合可唯一化、最稳；歧义返回候选清单）；verb=windowstate 忽略 index/name/type，按 process 定位顶层窗口。执行动作会写入 AgentActionLog 供复盘。")]
+    [Description("对 UI 控件执行语义动作（真实操作，有产线副作用——会影响目标应用状态与数据）。全 UIA 语义 pattern：不移动光标、不注入输入、不抢前台（仅窗口最小化时经 WindowPattern 还原）。verb 必填，可选 invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate——按控件能力分派而非固定「点一下」：复选框用 toggle、列表/树/页签项用 select、下拉/树节点用 expand。**无右键/双击**：UIA 无该类入口、物理输入已移除，传 rightclick/doubleclick 会返回明确中文拒绝并引导改用等价菜单/命令的 verb=invoke。命中 legacy 兜底（控件仅暴露 legacy）时结果标注**可能不生效**；此时可显式 **clickPoint=true**（仅 invoke/select）走真实点击——会移动光标/注入输入/可能抢前台，仅在语义动作被证实无效时用。定位用 index（上次 ui_find 序号，优先——但 index 只在紧邻上一次 ui_find 内有效，中间任何 ui_find 都会冲掉）或 name/type（name+type 组合可唯一化、最稳；歧义返回候选清单）；verb=windowstate 忽略 index/name/type，按 process 定位顶层窗口。执行动作会写入 AgentActionLog 供复盘。")]
     public static async Task<string> UiAction(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("语义动词（必填）：invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate。")] string verb = "",

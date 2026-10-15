@@ -56,6 +56,16 @@ public sealed class AgentCopyGuardTests
         // 视觉族发现工具（只为 screenshot 寻址服务；只读）
         { nameof(ScreenshotDisplaysTool.ScreenshotDisplays), "显示器" },              // 列显示器清单
         { nameof(ScreenshotWindowsTool.ScreenshotWindows), "可见顶层窗口" },          // 列窗口清单
+        // P1–P6 修复补录（2026-10-15）：
+        { nameof(DebugSessionTool.DebugLaunch), "直接读栈" },            // P1：冻结态即可读栈
+        { nameof(DebugSessionTool.DebugAttach), "直接读栈" },            // P1：attach 冻结即可读栈
+        { nameof(DebugSessionTool.DebugAttach), "已有活动会话" },        // P2：已有会话拒绝
+        { nameof(DebugSessionTool.DebugReset), "不杀目标进程" },         // P2：debug_reset 不杀目标
+        { nameof(DebugInspectTool.DebugStack), "全部托管线程" },         // P1：all/冻结态列全部线程
+        { nameof(UiTools.UiAction), "clickPoint" },                      // P3：显式真实点击开关
+        { nameof(UiTools.UiAction), "可能不生效" },                      // P3：legacy 命中标注可能无效
+        { nameof(UiTools.UiFind), "scope" },                             // P5：限定子树
+        { nameof(UiTools.UiFind), "观测扰动" },                          // P6：UIA 注入声明
     };
 
     // 每项 = (工具方法名, 参数名, 该参数 Description 必含关键片段) —— 参数级契约。

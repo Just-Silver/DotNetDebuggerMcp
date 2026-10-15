@@ -6,15 +6,25 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
-## [Unreleased]
+## [2.3.0] - 2026-10-15
 
 ### Added
 
 - **能力族开关 `--features` / `DOTNETDEBUGGERMCP_FEATURES`**：可选 `decompile`/`debug`/`ui`/`screenshot`（逗号分隔）。**默认只启用 `decompile`**——调试 / UI 自动化 / 截图三族需显式开启；未启用的族其工具**不进 MCP 工具目录**、握手简介也**不提及**。只作用于 MCP 面，CLI 执行路径（`-a`/`-l`/`-dbg`/`-c`）不受影响。
+- 新增 `debug_reset`：强制释放调试会话（**不杀目标进程**），用于 `debug_disconnect` 失败或会话书签与引擎状态不一致时收口。
+- `debug_stack` 新增 `all`：一次列出全部托管线程的调用栈（死锁/卡死排查）。
+- `ui_action` 新增 `clickPoint`（默认 `false`）：目标控件无 `Invoke`/`SelectionItemPattern`（如部分 WPF-UI 导航项）时，可显式走真实点击——**会移动光标、注入输入、可能抢前台**。
+- `ui_find` 新增 `scope`（限定子树，默认不限）与 `depth`（限定层数，默认不限）：大 UI 树/长列表可缩小枚举范围以免超时。
 
 ### Changed
 
 - **默认工具面收窄（破坏性）**：不传 `--features` 时服务器**只暴露反编译/静态分析工具**；要使用 `debug_*`、`ui_*`、`screenshot*`、`web_open`，需在 MCP 客户端配置里给启动参数加 `--features=decompile,debug,ui,screenshot`（或设环境变量 `DOTNETDEBUGGERMCP_FEATURES`）。升级后若发现调试/UI/截图工具「消失」，即为此因。
+- **附加/启动后即可读栈**：`debug_attach`/`debug_launch` 后进程冻结期间，`debug_stack`（及 `debug_wait`/`debug_state`）直接可用，无需先 `debug_continue`——修复「附加后读不到栈、无法排查卡死」。
+- **重复附加改为明确拒绝**：已有活动调试会话时 `debug_attach` 返回中文提示（先 `debug_disconnect`/`debug_reset`），不再抛出裸 `ERROR_INVALID_PARAMETER`；附加失败的 COM 错误也一并中文化。
+- **`ui_action` 命中 legacy 兜底时标注「可能不生效」**：不再对仅暴露 `legacy` 的控件（如 WPF-UI 导航项）报无条件「已 select」假成功。
+- **`index` 失效文案纠正**：区分「pid 不符」与「缓存已被后续 `ui_find` 覆盖」，并引导用 `name`+`type` 唯一化定位。
+- **`debug_disconnect` 失败不再静默**：断开失败如实上报（不再谎报「已断开」）。
+- **`ui_*` 用完释放 UI Automation 客户端**：减少对目标性能观测的扰动；工具说明与握手均声明「性能/卡顿类排查优先用 `debug_*` + 截图」。
 
 ## [2.2.0] - 2026-09-28
 

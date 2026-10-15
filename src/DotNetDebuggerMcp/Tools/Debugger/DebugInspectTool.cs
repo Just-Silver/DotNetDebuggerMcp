@@ -19,6 +19,7 @@ public static class DebugInspectTool
     /// 每帧输出 类型.方法 [token]，附位置（模块!token+ILoffset，仅当类型/方法名缺失时）。
     /// </summary>
     /// <param name="threadId">线程 id；缺省 0 = 用最近停点线程。</param>
+    /// <param name="all">列出全部托管线程的调用栈（默认 false）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>调用栈文本或错误提示。</returns>
     [McpServerTool]
