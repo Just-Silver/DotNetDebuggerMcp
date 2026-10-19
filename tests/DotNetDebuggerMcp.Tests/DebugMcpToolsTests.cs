@@ -1,4 +1,4 @@
-﻿using DotNetDebuggerMcp.Tests;
+using DotNetDebuggerMcp.Tests;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Diagnostics;
@@ -50,14 +50,14 @@ public sealed class DebugMcpToolsTests
 
         // 2. pending 断点：错误模块名不再报错，登记待绑定；list 可见、remove 可删
         var pending = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "NoSuchModule.dll", ["methodToken"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
+            new Dictionary<string, object?> { ["moduleName"] = "NoSuchModule.dll", ["token"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
         Assert.True(pending.IsError != true, pending.Text());
         Assert.Contains("断点已登记", pending.Text());
         var listPending = await CallAsync(mcp, "debug_breakpoint_list", new Dictionary<string, object?>());
         Assert.Contains("未绑定", listPending.Text());
         var pendingId = ParseBreakpointId(pending.Text());
         var rmPending = await CallAsync(mcp, "debug_breakpoint_remove",
-            new Dictionary<string, object?> { ["breakpointId"] = pendingId });
+            new Dictionary<string, object?> { ["id"] = pendingId });
         Assert.True(rmPending.IsError != true, rmPending.Text());
 
         // 3. debug_continue 先行（CI 实录：launch 返回时模块登记可能缺目标模块——attach 竞速窗口；
@@ -70,7 +70,7 @@ public sealed class DebugMcpToolsTests
         // 语义上 pending 随后自动补绑并命中（排查探针实测 100% 闭环），故等待绑定到「已绑定」再断言，
         // 而非要求 set 立即返回「断点已设」。若 15s 内未绑定（模块未加载/token 无效）WaitBoundAsync 断言失败。
         var bp = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{workToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bp.IsError != true, bp.Text());
         var bpId = ParseBreakpointId(bp.Text());
         await WaitBoundAsync(mcp, bpId);
@@ -108,7 +108,7 @@ public sealed class DebugMcpToolsTests
         Assert.DoesNotContain("状态机", stack.Text());
 
         // 7b. debug_step 负路径（B①）：停在普通同步方法（Work），step 返回不得附 async 状态机引导
-        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["stepType"] = "into" });
+        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["kind"] = "into" });
         Assert.True(step.IsError != true, step.Text());
         Assert.Contains("已提交 step into", step.Text());
         // V4 文案契约：step 提交后返回须含 debug_wait 引导（agent 知道用 debug_wait 等单步停下的新停点）
@@ -605,10 +605,10 @@ public sealed class DebugMcpToolsTests
 
         // 数组任意下标：删 WorkBag 行断点 → 锚 WorkScores 入口（scores={3,1,4,1,5}）
         var rm = await CallAsync(mcp, "debug_breakpoint_remove",
-            new Dictionary<string, object?> { ["breakpointId"] = setBpId });
+            new Dictionary<string, object?> { ["id"] = setBpId });
         Assert.True(rm.IsError != true, rm.Text());
         var setScores = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workScoresToken:x8}", ["ilOffset"] = 0 });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{workScoresToken:x8}", ["ilOffset"] = 0 });
         Assert.True(setScores.IsError != true, setScores.Text());
         // module-load 竞态：set 可能返回 pending——等待绑定到「已绑定」（pending 随后自动补绑并命中）
         await WaitBoundAsync(mcp, ParseBreakpointId(setScores.Text()));
@@ -689,7 +689,7 @@ public sealed class DebugMcpToolsTests
         Assert.True(setFail.IsError != true, setFail.Text());
         await WaitBoundAsync(mcp, ParseBreakpointId(setFail.Text()));
         var rm = await CallAsync(mcp, "debug_breakpoint_remove",
-            new Dictionary<string, object?> { ["breakpointId"] = condBpId });
+            new Dictionary<string, object?> { ["id"] = condBpId });
         Assert.True(rm.IsError != true, rm.Text());
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         var waitExit = await CallAsync(mcp, "debug_wait",
@@ -730,7 +730,7 @@ public sealed class DebugMcpToolsTests
         // 先 continue（进入 delay 窗口）再设 MoveNext 断点（CI 实录：launch 返回时模块登记可能缺目标模块）
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         var bp = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{moveNextToken:x8}", ["ilOffset"] = 0 });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{moveNextToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bp.IsError != true, bp.Text());
         await WaitBoundAsync(mcp, ParseBreakpointId(bp.Text()));
 
@@ -756,7 +756,7 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("RunAsync", st.Text());
 
         // B① 正路径：debug_step 在状态机帧内提交 → 返回附「async 状态机帧」引导
-        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["stepType"] = "into" });
+        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["kind"] = "into" });
         Assert.True(step.IsError != true, step.Text());
         Assert.Contains("已提交 step into", step.Text());
         Assert.Contains("async 状态机帧", step.Text());
@@ -892,7 +892,7 @@ public sealed class DebugMcpToolsTests
 
         // 停 WorkBag 入口（token 断点；竞态下 set 返回 pending——等绑定终态）
         var bpSet = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workBagToken:x8}", ["ilOffset"] = 0 });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{workBagToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bpSet.IsError != true, bpSet.Text());
         var workBagBpId = ParseBreakpointId(bpSet.Text());
         await WaitBoundAsync(mcp, workBagBpId);
@@ -941,7 +941,7 @@ public sealed class DebugMcpToolsTests
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
 
         var bpSet = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{workBagToken:x8}", ["ilOffset"] = 0 });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{workBagToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bpSet.IsError != true, bpSet.Text());
         await WaitBoundAsync(mcp, ParseBreakpointId(bpSet.Text()));
         var waitBag = await CallAsync(mcp, "debug_wait",
@@ -949,7 +949,7 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("已停下", waitBag.Text());
 
         // 单步一步（不等待其停点）→ 立刻 run_to：此刻单步完成事件可能仍在途/未消费
-        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["stepType"] = "over" });
+        var step = await CallAsync(mcp, "debug_step", new Dictionary<string, object?> { ["kind"] = "over" });
         Assert.True(step.IsError != true, step.Text());
 
         var runTo = await CallAsync(mcp, "debug_run_to",
@@ -1139,7 +1139,7 @@ public sealed class DebugMcpToolsTests
 
         // trace 断点：Work(1) 内 Compute 命中 1 次（不停，记轨迹入时间线 trc 行）
         var set = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{computeToken:x8}", ["ilOffset"] = 0, ["mode"] = "trace" });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{computeToken:x8}", ["ilOffset"] = 0, ["mode"] = "trace" });
         Assert.True(set.IsError != true, set.Text());
         await WaitBoundAsync(mcp, ParseBreakpointId(set.Text()));
 
@@ -1260,7 +1260,7 @@ public sealed class DebugMcpToolsTests
         Assert.True(cont.IsError != true, cont.Text());
 
         var bp = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{runToken:x8}", ["ilOffset"] = 0 });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{runToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bp.IsError != true, bp.Text());
         await WaitBoundAsync(mcp, ParseBreakpointId(bp.Text()));
 
@@ -1378,7 +1378,7 @@ public sealed class DebugMcpToolsTests
         Assert.True(cont.IsError != true, cont.Text());
 
         var bp = await CallAsync(mcp, "debug_breakpoint_set",
-            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["methodToken"] = $"0x{drillToken:x8}", ["ilOffset"] = 0 });
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{drillToken:x8}", ["ilOffset"] = 0 });
         Assert.True(bp.IsError != true, bp.Text());
         await WaitBoundAsync(mcp, ParseBreakpointId(bp.Text()));
 

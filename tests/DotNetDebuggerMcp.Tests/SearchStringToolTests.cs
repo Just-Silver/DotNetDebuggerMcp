@@ -98,11 +98,11 @@ public class SearchStringToolTests
     }
 
     [Fact]
-    public async Task SearchString_缺search_返回必填提示()
+    public async Task SearchString_缺contains_返回必填提示()
     {
         var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "", cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Contains("请指定 search", result);
+        Assert.Contains("请指定 contains", result);
     }
 
     [Fact]

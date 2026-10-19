@@ -23,13 +23,13 @@ public static class DebugBreakpointTool
 {
     /// <summary>行断点定位失败的通用指引（CI 实录：刚 launch 的目标模块可能尚未完成加载——attach 窗口竞速）。</summary>
     private const string LineBreakpointRetryHint =
-        "刚 debug_launch 的目标其模块可能尚未加载完（attach 竞速窗口）——先 debug_continue 进入运行（目标带启动延迟则停在其窗口内）再设行断点，或用 methodToken 方式登记待绑定。";
+        "刚 debug_launch 的目标其模块可能尚未加载完（attach 竞速窗口）——先 debug_continue 进入运行（目标带启动延迟则停在其窗口内）再设行断点，或用 token 方式登记待绑定。";
     /// <summary>
     /// 设置断点：按 模块名 + 方法 token（0x06 开头）+ IL offset 定位，或 typeName+memberName 成员级、typeName+line 反编译行、sourcePath+line 源码行定位。模块已加载即绑定；
     /// 未加载登记为 pending（加载后自动绑定）。返回断点 id。
     /// </summary>
     /// <param name="moduleName">模块名（如 DebugTarget.dll）；token 方式必填；行/成员定位方式可省（省缺在已加载模块中解析）。</param>
-    /// <param name="methodToken">方法 token（0x06000005，从反编译 signature 行尾取）；提供时按 token 定位（优先）。</param>
+    /// <param name="token">方法 token（0x06000005，从反编译 signature 行尾取）；提供时按 token 定位（优先）。</param>
     /// <param name="ilOffset">IL offset，默认 0（方法入口）。</param>
     /// <param name="typeName">类型全名（与 decompile 输出同格式）；与 memberName 组合按成员级定位（方法名子串），或与 line 组合按反编译视图行定位（需模块已加载）。</param>
     /// <param name="memberName">成员名（方法，子串忽略大小写）；与 typeName 组合按成员级定位（line 忽略，命中方法即设断点）。</param>
@@ -41,13 +41,13 @@ public static class DebugBreakpointTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示（断点 id）或错误提示。</returns>
     [McpServerTool]
-    [Description("设置断点，四种定位方式：① token：moduleName+methodToken（0x06 开头，signature 行尾取）+ilOffset（须落在 IL 指令边界/序列点——非边界或越界会被运行时拒绝并返回中文提示；未加载模块登记待绑定，加载后自动绑定）；② 成员：typeName+memberName（类型内方法名子串，忽略大小写，命中唯一方法即设断点；属性/事件/字段成员会提示；多方法匹配返回 #MEMBER 清单，取 methodToken 精确重设）；③ 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；④ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，需模块旁有 PDB；模块未加载/未命中时登记延迟项，模块加载后自动解析绑定）。memberName 提供时成员级优先（line 忽略）。同一 (模块, token, IL offset) 重复设置会替换旧断点（不产生同址多断点）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
+    [Description("设置断点，四种定位方式：① token：moduleName+token（0x06 开头，signature 行尾取）+ilOffset（须落在 IL 指令边界/序列点——非边界或越界会被运行时拒绝并返回中文提示；未加载模块登记待绑定，加载后自动绑定）；② 成员：typeName+memberName（类型内方法名子串，忽略大小写，命中唯一方法即设断点；属性/事件/字段成员会提示；多方法匹配返回 #MEMBER 清单，取 token 精确重设）；③ 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；④ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，需模块旁有 PDB；模块未加载/未命中时登记延迟项，模块加载后自动解析绑定）。memberName 提供时成员级优先（line 忽略）。同一 (模块, token, IL offset) 重复设置会替换旧断点（不产生同址多断点）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
     public static async Task<string> DebugBreakpointSet(
         [Description("模块名（如 DebugTarget.dll）；token 方式必填；行/成员定位方式可省，省缺在已加载模块中解析。")] string moduleName = "",
-        [Description("方法 token（0x06000005，从反编译 signature 行尾或 #MEMBER 取）；提供时优先按 token 定位。")] string methodToken = "",
+        [Description("方法 token（0x06000005，从反编译 signature 行尾或 #MEMBER 取）；提供时优先按 token 定位。")] string token = "",
         [Description("IL offset，默认 0（方法入口）。")] int ilOffset = 0,
         [Description("类型全名（与 decompile 输出同格式）；与 memberName 组合按成员级定位（方法名子串，命中方法即设断点），或与 line 组合按反编译视图行定位。")] string typeName = "",
-        [Description("成员名（方法，子串忽略大小写，默认空=不启用）；与 typeName 组合按成员级定位——命中唯一方法即设断点（line 忽略）；属性/事件/字段成员会提示改用方法或访问器；多方法匹配返回 #MEMBER 清单，用返回的 methodToken 精确重设。")] string memberName = "",
+        [Description("成员名（方法，子串忽略大小写，默认空=不启用）；与 typeName 组合按成员级定位——命中唯一方法即设断点（line 忽略）；属性/事件/字段成员会提示改用方法或访问器；多方法匹配返回 #MEMBER 清单，用返回的 token 精确重设。")] string memberName = "",
         [Description("源文件路径（绝对/相对/仅文件名如 Program.cs）；与 line 组合按 PDB 源码行定位。")] string sourcePath = "",
         [Description("行号（1-based）：typeName 方式=decompile 输出行号；sourcePath 方式=源码行号；默认 0=未提供。")] int line = 0,
         [Description("开始生效的命中次数：第 N 次命中起每次都停/记录，默认 1=每次。")] int hitCount = 1,
@@ -56,18 +56,18 @@ public static class DebugBreakpointTool
         CancellationToken cancellationToken = default)
     {
         // 公开入口与 debug_run_to 共用同一套「校验→定位→设置」内部入口（SetResolvedAsync），保证定位语义一致
-        return await SetResolvedAsync(moduleName, methodToken, ilOffset, typeName, memberName,
+        return await SetResolvedAsync(moduleName, token, ilOffset, typeName, memberName,
             sourcePath, line, hitCount, mode, condition, cancellationToken);
     }
 
     /// <summary>
     /// 断点「校验→定位→设置」统一内部入口（I1 debug_run_to 与 debug_breakpoint_set 共用同一套逻辑）：
-    /// 校验 → 按 methodToken→memberName→sourcePath→typeName 优先级分发到各 SetBy* 分支。
+    /// 校验 → 按 token→memberName→sourcePath→typeName 优先级分发到各 SetBy* 分支。
     /// 返回设置/失败/指引文本（与公开工具同文案）；成功文本必含 "id=N"（调用方用 <see cref="ParseBreakpointIdText"/>
     /// 提取断点 id 后编排后续——run_to 设临时断点即复用本入口，无需复制各分支的定位解析）。
     /// </summary>
     internal static async Task<string> SetResolvedAsync(
-        string moduleName, string methodToken, int ilOffset, string typeName, string memberName,
+        string moduleName, string token, int ilOffset, string typeName, string memberName,
         string sourcePath, int line, int hitCount, string mode, string? condition, CancellationToken ct)
     {
         var active = DebugSessionService.Manager.Active;
@@ -86,11 +86,11 @@ public static class DebugBreakpointTool
         }
 
         // E：memberName 定位优先于 sourcePath/typeName 行定位（memberName+line 同给时以成员级为准，line 忽略）
-        if (!string.IsNullOrWhiteSpace(methodToken)) return await SetByTokenAsync(active, moduleName, methodToken, ilOffset, hitCount, modeValue, conditionNorm, ct);
+        if (!string.IsNullOrWhiteSpace(token)) return await SetByTokenAsync(active, moduleName, token, ilOffset, hitCount, modeValue, conditionNorm, ct);
         if (!string.IsNullOrWhiteSpace(memberName)) return await SetByMemberAsync(active, moduleName, typeName, memberName, hitCount, modeValue, conditionNorm, ct);
         if (!string.IsNullOrWhiteSpace(sourcePath)) return await SetBySourceLineAsync(active, moduleName, sourcePath, line, hitCount, modeValue, conditionNorm, ct);
         if (!string.IsNullOrWhiteSpace(typeName)) return await SetByTypeLineAsync(active, moduleName, typeName, line, hitCount, modeValue, conditionNorm, ct);
-        return "请提供定位方式之一：methodToken（token 定位）、typeName+memberName（成员级）、typeName+line（反编译视图行）、sourcePath+line（PDB 源码行）。";
+        return "请提供定位方式之一：token（moduleName+token+ilOffset）、typeName+memberName（成员级）、typeName+line（反编译视图行）、sourcePath+line（PDB 源码行）。";
     }
 
     /// <summary>从断点设置成功文本（"断点已设: id=N …"）提取断点 id；非成功文本（定位失败/指引）返回 null。</summary>
@@ -101,16 +101,16 @@ public static class DebugBreakpointTool
     }
 
     /// <summary>token 分支（现状语义）：模块必填；未加载登记 pending。</summary>
-    private static async Task<string> SetByTokenAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string methodToken, int ilOffset, int hitCount, DebugBreakpointMode modeValue, string? condition, CancellationToken ct)
+    private static async Task<string> SetByTokenAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string token, int ilOffset, int hitCount, DebugBreakpointMode modeValue, string? condition, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(moduleName)) return "请指定模块名（moduleName，token 定位方式必填）。";
-        if (!TryParseToken(methodToken, out var token))
-            return $"方法 token 格式无效：{methodToken}（应为 0x06000005 形式的十六进制）。";
+        if (!TryParseToken(token, out var parsedToken))
+            return $"方法 token 格式无效：{token}（应为 0x06000005 形式的十六进制）。";
 
         try
         {
-            var bp = await active.Session.SetBreakpointAsync(moduleName, token, ilOffset, hitCount, modeValue, condition, ct);
-            DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{moduleName} {methodToken}+{ilOffset}", $"id={bp.Id}");
+            var bp = await active.Session.SetBreakpointAsync(moduleName, parsedToken, ilOffset, hitCount, modeValue, condition, ct);
+            DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{moduleName} {token}+{ilOffset}", $"id={bp.Id}");
             return DescribeSet(bp);
         }
         catch (Exception ex)
@@ -179,7 +179,7 @@ public static class DebugBreakpointTool
             if (doc.Error is not null) return doc.Error;
             var target = DocumentService.GetBreakpointTargetAtLine(doc, line);
             if (target is null)
-                return $"类型 {fullName} 第 {line} 行无法定位到语句（不在任何方法区间，如 usings/类声明行）。请改用 methodToken 方式。";
+                return $"类型 {fullName} 第 {line} 行无法定位到语句（不在任何方法区间，如 usings/类声明行）。请改用 token 方式。";
 
             var bp = await active.Session.SetBreakpointAsync(module, target.Value.MethodToken, target.Value.IlOffset, hitCount, modeValue, condition, ct);
             DebugSessionService.Manager.Actions.Log("debug_breakpoint_set", $"{fullName} line {line}", $"id={bp.Id}");
@@ -196,7 +196,7 @@ public static class DebugBreakpointTool
     /// <summary>成员级分支（E）：typeName 全名定位类型 → MemberResolver 类型内按方法名子串定位 → 0x06 方法 token → 断点。
     /// 解析规则：先 FindTypes 判歧义/未找到（仿 decompile_member LocateMembers——MemberResolver.FindMembers 内部 FindType 取首个候选会吞歧义）；
     /// 唯一候选类型全名再 FindMembers；token 按前缀过滤（字段 0x04/属性 0x17/事件 0x14 不能作函数断点——Bind 用 GetFunctionFromToken），
-    /// 仅 0x06 方法为候选：唯一方法即设断点，多方法返回 #MEMBER 清单（methodToken 闭环重设）。</summary>
+    /// 仅 0x06 方法为候选：唯一方法即设断点，多方法返回 #MEMBER 清单（token 闭环重设）。</summary>
     private static async Task<string> SetByMemberAsync(DotNetDebugger.Session.ActiveDebugSession active, string moduleName, string typeName, string memberName, int hitCount, DebugBreakpointMode modeValue, string? condition, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(typeName)) return "请提供 typeName（成员级定位需类型全名，如 DebugTarget.Program；memberName 在其内定位方法）。";
@@ -250,14 +250,14 @@ public static class DebugBreakpointTool
                     var kind = only.Token.StartsWith("0x04") ? "字段" : only.Token.StartsWith("0x17") ? "属性" : only.Token.StartsWith("0x14") ? "事件" : "成员";
                     // 只给可落地的替代路径，不承诺 decompile_member 搜访问器名（memberName 搜索默认排除 get_/set_，搜不到）：
                     // ① decompile 该类型定位该成员访问器方法体（属性/事件）或读写/使用该成员的代码行（字段），typeName+line 断所在方法体行；
-                    // ② signature 列该类型签名（方法行行尾 0x06 token）或 decompile_member 定位方法后，取方法 token 以 methodToken 设置。
-                    return $"成员 {only.Name} 是{kind}，不能设方法断点（token {only.Token} 非 0x06 方法）。请改用：① decompile 该类型定位访问器方法体（属性/事件）或读写/使用处代码行（字段），typeName+line 断所在方法体行；② signature 列该类型签名行或 decompile_member 定位方法，取 0x06 方法 token 后以 methodToken 设置；③ memberName 改输入普通方法名。";
+                    // ② signature 列该类型签名（方法行行尾 0x06 token）或 decompile_member 定位方法后，取方法 token 以 token 设置。
+                    return $"成员 {only.Name} 是{kind}，不能设方法断点（token {only.Token} 非 0x06 方法）。请改用：① decompile 该类型定位访问器方法体（属性/事件）或读写/使用处代码行（字段），typeName+line 断所在方法体行；② signature 列该类型签名行或 decompile_member 定位方法，取 0x06 方法 token 后以 token 设置；③ memberName 改输入普通方法名。";
                 }
                 if (search.Matches.Count > 1)
-                    return $"类型 {fullName} 中名称含 \"{memberName}\" 的 {search.Matches.Count} 个成员均非方法（属性/事件/字段），不能设方法断点——请改用 decompile 该类型定位访问器方法体/使用处代码行后 typeName+line 设断，或取 signature/decompile_member 的方法 0x06 token 以 methodToken 设置。";
+                    return $"类型 {fullName} 中名称含 \"{memberName}\" 的 {search.Matches.Count} 个成员均非方法（属性/事件/字段），不能设方法断点——请改用 decompile 该类型定位访问器方法体/使用处代码行后 typeName+line 设断，或取 signature/decompile_member 的方法 0x06 token 以 token 设置。";
                 var message = $"类型 {fullName} 中未找到名称含 \"{memberName}\" 的方法成员";
                 if (search.SimilarNames.Count > 0) message += $"。相近成员：{string.Join("、", search.SimilarNames)}";
-                return message + "。可 decompile_member 按成员名定位确认实际名称，或用 methodToken 方式。";
+                return message + "。可 decompile_member 按成员名定位确认实际名称，或用 token 方式。";
             }
 
             if (methodCandidates.Count == 1)
@@ -269,9 +269,9 @@ public static class DebugBreakpointTool
                 return DescribeSetWithPosition(bp, $"类型 {fullName} 成员 {match.Name} → {module}!0x{token:x8}+0x0");
             }
 
-            // 多方法匹配：返回 #MEMBER 签名清单（token 可闭环 methodToken 重设），不设断点
+            // 多方法匹配：返回 #MEMBER 签名清单（token 可闭环 token 重设），不设断点
             return RenderMemberListing(modulePath, fullName, memberName, methodCandidates)
-                + $"匹配 {methodCandidates.Count} 个方法成员（子串忽略大小写），未设断点——用返回的 methodToken 精确重设（或缩小 memberName）。";
+                + $"匹配 {methodCandidates.Count} 个方法成员（子串忽略大小写），未设断点——用返回的 token 精确重设（或缩小 memberName）。";
         }
         catch (Exception ex)
         {
@@ -456,22 +456,22 @@ public static class DebugBreakpointTool
     /// <summary>
     /// 移除指定断点。
     /// </summary>
-    /// <param name="breakpointId">断点 id（debug_breakpoint_set 返回）（必填）。</param>
+    /// <param name="id">断点 id（debug_breakpoint_set 返回）（默认 0 → 返回缺参提示）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
     [McpServerTool]
     [Description("移除指定断点（id 由 debug_breakpoint_set 返回）。")]
     public static async Task<string> DebugBreakpointRemove(
-        [Description("断点 id（debug_breakpoint_set 返回）（必填）。")] int breakpointId = 0,
+        [Description("断点 id（debug_breakpoint_set 返回；默认 0 → 返回缺参提示）。")] int id = 0,
         CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
         if (active is null) return "当前无活动调试会话。";
-        if (breakpointId <= 0) return "请指定断点 id（breakpointId 必填）。";
+        if (id <= 0) return "请指定断点 id（id 必填，取值见 debug_breakpoint_list 的 id=N）。";
 
-        var removed = await active.Session.RemoveBreakpointAsync(breakpointId, cancellationToken);
-        DebugSessionService.Manager.Actions.Log("debug_breakpoint_remove", breakpointId.ToString(), removed ? "ok" : "not-found");
-        return removed ? $"断点 {breakpointId} 已移除。" : $"未找到断点 {breakpointId}。";
+        var removed = await active.Session.RemoveBreakpointAsync(id, cancellationToken);
+        DebugSessionService.Manager.Actions.Log("debug_breakpoint_remove", id.ToString(), removed ? "ok" : "not-found");
+        return removed ? $"断点 {id} 已移除。" : $"未找到断点 {id}。";
     }
 
     /// <summary>

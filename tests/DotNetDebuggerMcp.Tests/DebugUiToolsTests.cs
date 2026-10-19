@@ -565,7 +565,7 @@ public sealed class DebugUiToolsTests
             Assert.True(cont.IsError != true, cont.Text());
             var set = await DebugMcpToolsTests.CallAsync(mcp, "debug_breakpoint_set", new Dictionary<string, object?>
             {
-                ["moduleName"] = "UiSampleApp.dll", ["methodToken"] = $"0x{toggleToken:x8}", ["ilOffset"] = 0,
+                ["moduleName"] = "UiSampleApp.dll", ["token"] = $"0x{toggleToken:x8}", ["ilOffset"] = 0,
             });
             Assert.True(set.IsError != true, set.Text());
             await DebugMcpToolsTests.WaitBoundAsync(mcp, DebugMcpToolsTests.ParseBreakpointId(set.Text()));

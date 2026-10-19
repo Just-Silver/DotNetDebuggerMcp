@@ -125,7 +125,7 @@ public sealed class McpSessionConcurrencyTests
             ("dependencies", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Uses" }),
             ("call_graph", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Caller" }),
             ("assembly_info", new Dictionary<string, object?> { ["assembly"] = dll }),
-            ("search_string", new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "big" }),
+            ("search_string", new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "big" }),
             ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Circle" }),
             ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.IAnimal", ["includeIndirect"] = true }),
             ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["categories"] = "ide" }),

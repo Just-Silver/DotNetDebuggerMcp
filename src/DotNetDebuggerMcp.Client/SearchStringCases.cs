@@ -9,27 +9,27 @@ public static class SearchStringCases
     {
         // StringHolder.Log 含 "不支持高性能计数器"：全程序集反查应命中并输出 类型::成员签名 + 转义字符串 + token
         new ToolCallCase("search_string", "按中文文案反查命中 StringHolder.Log",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "不支持高性能计数器" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "不支持高性能计数器" },
             ExpectedContains: $"{TestDataHelper.SamplesNamespace}.StringHolder::", MustNotContain: "at System"),
         // 忽略大小写：小写 "order by" 应命中 Query 的大写 "ORDER BY GetDate()"
         new ToolCallCase("search_string", "忽略大小写命中 Query 的 ORDER BY",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "order by" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "order by" },
             ExpectedContains: "\"ORDER BY GetDate()\"", MustNotContain: "at System"),
         // 未命中：输出零匹配头部而非报错
         new ToolCallCase("search_string", "未命中返回零匹配",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "不存在的字符串xyz" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "不存在的字符串xyz" },
             ExpectedContains: "匹配实体: 0 个", MustNotContain: "at System"),
         // typeName 限定：仅在 StringHolder 内反查
         new ToolCallCase("search_string", "typeName 限定仅在 StringHolder 内反查",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "Order", ["typeName"] = $"{TestDataHelper.SamplesNamespace}.StringHolder" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "Order", ["typeName"] = $"{TestDataHelper.SamplesNamespace}.StringHolder" },
             ExpectedContains: $"{TestDataHelper.SamplesNamespace}.StringHolder::", MustNotContain: "at System"),
         // typeName 不存在应返回中文提示而非异常堆栈
         new ToolCallCase("search_string", "typeName 不存在（应返回提示）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "Order", ["typeName"] = "No.Such.Type" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "Order", ["typeName"] = "No.Such.Type" },
             ExpectedContains: "未找到类型", MustNotContain: "at System", ExpectSuccess: false),
         // 缺 search 应返回中文提示而非异常堆栈
         new ToolCallCase("search_string", "缺 search（应返回提示）",
-            new Dictionary<string, object?> { ["assembly"] = dll, ["search"] = "" },
+            new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "" },
             ExpectedContains: "请指定 search", MustNotContain: "at System", ExpectSuccess: false),
     };
 }

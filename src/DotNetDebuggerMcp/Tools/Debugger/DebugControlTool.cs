@@ -95,18 +95,18 @@ public static class DebugControlTool
     }
 
     /// <summary>
-    /// 单步执行（进程需已停在断点/异常）。stepType：into=进入被调方法 / over=不进入 / out=步出当前方法。
+    /// 单步执行（进程需已停在断点/异常）。kind：into=进入被调方法 / over=不进入 / out=步出当前方法。
     /// 单步命令提交后进程将停在新位置（异步，通常瞬时），用 debug_wait 等停或 debug_state 查询。
     /// 当前停点顶帧在编译器生成的 async 状态机（&lt;X&gt;d__N）内时，返回附行断点引导（async 业务逻辑建议
     /// 改用 typeName+line 断还原源码的 await 行，勿 step into 状态机 MoveNext）。
     /// </summary>
-    /// <param name="stepType">单步类型：into/over/out，默认 over。</param>
+    /// <param name="kind">单步类型：into/over/out，默认 over。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("单步执行（进程需已停在断点/异常）。stepType：into=进入被调方法 / over=不进入 / out=步出当前方法。单步命令提交后进程将停在新位置（通常瞬时）——用 debug_wait 等停（默认 10s，通常秒内即回），或 debug_state/debug_stack 观察新位置。停在编译器生成的 async 状态机帧（类型形如 <Foo>d__N）时返回附引导：建议改用 debug_breakpoint_set typeName+line 断还原源码的 await 行 + debug_continue（勿 step into 状态机 MoveNext）。")]
+    [Description("单步执行（进程需已停在断点/异常）。kind：into=进入被调方法 / over=不进入 / out=步出当前方法。单步命令提交后进程将停在新位置（通常瞬时）——用 debug_wait 等停（默认 10s，通常秒内即回），或 debug_state/debug_stack 观察新位置。停在编译器生成的 async 状态机帧（类型形如 <Foo>d__N）时返回附引导：建议改用 debug_breakpoint_set typeName+line 断还原源码的 await 行 + debug_continue（勿 step into 状态机 MoveNext）。")]
     public static async Task<string> DebugStep(
-        [Description("单步类型：into=进入被调方法 / over=不进入 / out=步出当前方法，默认 over。")] string stepType = "over",
+        [Description("单步类型：into=进入被调方法 / over=不进入 / out=步出当前方法，默认 over。")] string kind = "over",
         CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
@@ -128,14 +128,14 @@ public static class DebugControlTool
                     "（勿继续 step into——会停在编译器生成的状态机里无源码）。";
             }
 
-            switch (stepType.Trim().ToLowerInvariant())
+            switch (kind.Trim().ToLowerInvariant())
             {
                 case "into": await active.Session.StepIntoAsync(cancellationToken); break;
                 case "out": await active.Session.StepOutAsync(cancellationToken); break;
                 default: await active.Session.StepOverAsync(cancellationToken); break;
             }
-            DebugSessionService.Manager.Actions.Log("debug_step", stepType, "ok");
-            var result = $"已提交 step {stepType} 命令。进程将停在新位置（通常瞬时）——用 debug_wait 等停，或 debug_state 确认 Stopped 后 debug_stack/debug_variables 观察。";
+            DebugSessionService.Manager.Actions.Log("debug_step", kind, "ok");
+            var result = $"已提交 step {kind} 命令。进程将停在新位置（通常瞬时）——用 debug_wait 等停，或 debug_state 确认 Stopped 后 debug_stack/debug_variables 观察。";
             return stateMachineHint is null ? result : result + Environment.NewLine + stateMachineHint;
         }
         catch (Exception ex)

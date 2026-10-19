@@ -29,14 +29,17 @@ public sealed class ToolSurfaceContractTests
             TestDataPaths.RepositoryRoot, "tests", "DotNetDebuggerMcp.Tests", "Snapshots", "tool-surface.txt");
         var actual = ToolSurface.Snapshot();
 
-        if (!File.Exists(snapshotPath))
+        var updateRequested = Environment.GetEnvironmentVariable("UPDATE_TOOL_SURFACE_SNAPSHOT") == "1";
+        if (updateRequested || !File.Exists(snapshotPath))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(snapshotPath)!);
             File.WriteAllText(snapshotPath, actual);
-            Assert.Fail($"工具面快照基线已生成：{snapshotPath}——请复核内容后重新运行。");
+            if (!updateRequested)
+                Assert.Fail($"工具面快照基线已生成：{snapshotPath}——请复核内容后重新运行。");
+            return;
         }
 
-        Assert.Equal(File.ReadAllText(snapshotPath), actual);
+        Assert.Equal(File.ReadAllText(snapshotPath).ReplaceLineEndings("\n"), actual);
     }
 
     [Fact]

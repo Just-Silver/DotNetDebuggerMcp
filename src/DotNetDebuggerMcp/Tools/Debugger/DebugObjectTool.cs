@@ -29,7 +29,7 @@ public static class DebugObjectTool
     [McpServerTool]
     [Description("查看对象/数组的下一级结构（受控递归下钻，进程需停）：path 用 P6 文法定位对象（根=栈顶帧局部/参数，支持 $exception 伪根），depth 递归层数（默认 2，上限 6），limit 每层字段/元素上限（默认 32，范围 1-128），同路径环输出 <cyclic>。返回 children 递归清单。与 debug_evaluate 分工：debug_evaluate 取标量值，debug_object 探索对象结构。")]
     public static async Task<string> DebugObject(
-        [Description("对象路径（必填），如 order.Customer、$exception.InnerException（根为栈顶帧局部/参数名）。")] string path,
+        [Description("对象路径（默认空 → 返回缺参提示），如 order.Customer、$exception.InnerException（根为栈顶帧局部/参数名）。")] string path = "",
         [Description("递归深度（默认 2，范围 1-6）。")] int depth = 2,
         [Description("每层字段/元素上限（默认 32，范围 1-128）。")] int limit = 32,
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
