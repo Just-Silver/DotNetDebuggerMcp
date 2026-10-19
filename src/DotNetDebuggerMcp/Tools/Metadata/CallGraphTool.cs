@@ -6,6 +6,7 @@ using DotNetDebuggerMcp.Validation;
 using ModelContextProtocol.Server;
 
 using System.ComponentModel;
+using System.Reflection.Metadata;
 
 namespace DotNetDebuggerMcp.Tools.Metadata;
 
@@ -102,12 +103,27 @@ public static class CallGraphTool
 
         // 元数据读取经共享缓存（命中直接返回，头部标注缓存命中）
         var tokenSignature = $"{CacheSignatures.CallGraphToken}{CacheSignatures.Separator}{token}";
-        return Task.FromResult(ToolExecutor.RunMetadataPe(tokenAssemblyFull, tokenSignature, lines, tokenContext, (pe, _) =>
+        return Task.FromResult(ToolExecutor.RunMetadataPe(tokenAssemblyFull, tokenSignature, lines, tokenContext, (pe, reader) =>
         {
             var callers = CallGraphExtractor.FindMethodCallers(pe, token);
             var outputLines = new List<string>();
             SectionBuilder.Append(outputLines, "方法体调用此方法的成员:", callers);
+            // async 方法体的调用点被编译器搬进 <X>d__N.MoveNext，本提取器不扫状态机；空结果必须说明，
+            // 否则 agent 会把「未收录」误判成「无人调用」
+            if (callers.Count == 0 && HasAsyncStateMachine(reader))
+                outputLines.Add("（注：程序集内含 async 状态机——async 方法体内的调用点未收录，不代表无人调用；待 ROADMAP）");
             return outputLines;
         }, cancellationToken));
+    }
+
+    /// <summary>程序集内是否存在 C# async 状态机类型（名字形如 &lt;Foo&gt;d__N）。</summary>
+    private static bool HasAsyncStateMachine(MetadataReader reader)
+    {
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var name = reader.GetString(reader.GetTypeDefinition(handle).Name);
+            if (name.StartsWith('<') && name.Contains(">d__", StringComparison.Ordinal)) return true;
+        }
+        return false;
     }
 }

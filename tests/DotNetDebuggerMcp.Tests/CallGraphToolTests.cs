@@ -1,4 +1,5 @@
 using DotNetDebuggerMcp.Tools.Metadata;
+using System.Reflection.Metadata;
 using Xunit;
 
 namespace DotNetDebuggerMcp.Tests;
@@ -101,6 +102,36 @@ public class CallGraphToolTests
         Assert.Contains("方法体调用此方法的成员:", result);
         Assert.Contains($"{TestDataPaths.SamplesNamespace}.Caller::", result);
         Assert.DoesNotContain("方法体调用的内部类型:", result);
+    }
+
+    [Fact]
+    public async Task CallGraph_token_调用者只在async方法体内_提示状态机未收录()
+    {
+        var token = FindMethodTokenInType("AsyncCallerSample", "OnlyCalledFromAsync");
+        var result = await CallGraphTool.CallEdges(TestDataPaths.TestSamplesDll, token: token, cancellationToken: TestContext.Current.CancellationToken);
+
+        // 调用点在编译器生成的 <RunAsync>d__N.MoveNext 里：不假装「无人调用」，而是明确告知未收录
+        Assert.Contains("async", result);
+        Assert.Contains("未收录", result);
+    }
+
+    private static string FindMethodTokenInType(string typeName, string methodName)
+    {
+        using var fs = File.OpenRead(TestDataPaths.TestSamplesDll);
+        using var pe = new System.Reflection.PortableExecutable.PEReader(fs);
+        var reader = pe.GetMetadataReader();
+        foreach (var handle in reader.TypeDefinitions)
+        {
+            var type = reader.GetTypeDefinition(handle);
+            if (reader.GetString(type.Name) != typeName) continue;
+            foreach (var mh in type.GetMethods())
+            {
+                var method = reader.GetMethodDefinition(mh);
+                if (reader.GetString(method.Name) == methodName)
+                    return $"0x{System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(mh):x8}";
+            }
+        }
+        throw new InvalidOperationException($"TestSamples 未找到 {typeName}.{methodName}");
     }
 
     [Fact]
