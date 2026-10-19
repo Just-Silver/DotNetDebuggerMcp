@@ -46,13 +46,13 @@ internal static class HandshakeText
     private const string ToolListDecompile = "`decompile` 等语义前缀，静态工具另有 `signature`/`list_types`/`call_*`/`hierarchy`/`dependencies`/`interface_usage`/`field_access`/`search_literals`";
     private const string ToolListDebug = "调试 `debug_*`";
     private const string ToolListUi = "UI `ui_*`";
-    private const string ToolListScreenshot = "视觉 `screenshot`/`screenshot(mode=list-displays)`/`screenshot(mode=list-windows)`";
+    private const string ToolListScreenshot = "视觉 `screenshot`（含 `mode=list-displays` / `list-windows` 只读清单）";
     private const string ToolListSuffix = "）。\n";
 
     private const string ConventionStatic =
         "程序集/目标文件路径基于当前工作目录；反编译与元数据结果带行号、支持 `lines=\"start-end\"` 分页。";
     private const string ConventionDebug =
-        "动态调试控制类工具异步返回（带默认超时），进程停点信息用查询类工具（`debug_wait`/`debug_frame`/`debug_frame`）获取。";
+        "动态调试控制类工具异步返回（带默认超时），进程停点信息用查询类工具（`debug_wait`/`debug_frame`）获取。";
     private const string ConventionDebugFrozen =
         "attach/launch 后进程即冻结，可直接读栈。";
 
