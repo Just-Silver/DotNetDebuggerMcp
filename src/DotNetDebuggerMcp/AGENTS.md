@@ -52,4 +52,4 @@ dotnet run -c Release --project src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.C
 
 - 测试需先 `generate-testdata.ps1` 生成 `tests/TestData/*.dll`（git 忽略，CI 已自动跑脚本）。
 - 关键回归：`McpSessionConcurrencyTests`（stdout 零噪声护栏）、`DebugMcpToolsTests`（真实子进程 debug_launch→断点→continue→state→stack/variables→disconnect 闭环）、`McpWebCoexistTests`（MCP+Web 同进程）、`CacheStatsToolTests`/`ToolPipelineTests` 等 AppServices collection 串行。
-- 本地调试注意：根 `opencode.json` 把本仓库 MCP server 绑定到 `bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe`（带 `--web` 仅为联调），改代码需重新 build + 重启 opencode 才生效；会话内 `dotnetdebugger_*` 反映旧二进制，验证新行为以 Client/CLI 输出为准。
+- 本地调试注意：根 `opencode.json` 把本仓库 MCP server 绑定到 `bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe`（带 `--web` 仅为联调）；改代码后按根 `AGENTS.md`「本地调试注意」的热重载步骤生效（改 `opencode.json` 再改回即触发动态重载，无需重启 opencode），会话内 `dotnetdebugger_*` 随之反映新二进制。
