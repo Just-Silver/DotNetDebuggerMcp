@@ -2,7 +2,7 @@
 // 控件覆盖各 UIA pattern：Button/Menu(invoke)、CheckBox(toggle)、ComboBox(expandcollapse)、ListBox/ListItem(selectionitem)、
 // TrackBar(rangevalue)、TextBox(value + 只读)、RichTextBox(尽量暴露 scroll)、MenuItem(Legacy)。
 // 窗口标题 UiSample；控件名（AutomationId）/文本/处理器方法名即测试契约，改动前看 DebugUiToolsTests.cs。
-// 处理器方法为 debug_breakpoint_set typeName+memberName 断点锚点——勿改方法名。
+// 处理器方法为 debug_breakpoint(action=set) typeName+memberName 断点锚点——勿改方法名。
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;

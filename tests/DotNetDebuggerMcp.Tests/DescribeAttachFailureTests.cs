@@ -15,14 +15,14 @@ public sealed class DescribeAttachFailureTests
     {
         var text = DebugSessionTool.DescribeAttachFailure(new InvalidOperationException(raw));
         Assert.Contains("已被", text);
-        Assert.Contains("debug_disconnect", text);
+        Assert.Contains("debug_session(action=disconnect)", text);
         Assert.DoesNotContain("ERROR_INVALID_PARAMETER", text); // 原文不再裸露
     }
 
     [Fact]
     public void 已有会话的中文提示_原样返回()
     {
-        const string msg = "已有活动调试会话（pid=123）。同一时刻仅支持一个调试会话，请先 debug_disconnect 或 debug_terminate 后再附加。";
+        const string msg = "已有活动调试会话（pid=123）。同一时刻仅支持一个调试会话，请先 debug_session(action=disconnect) 或 debug_session(action=terminate) 后再附加。";
         var text = DebugSessionTool.DescribeAttachFailure(new InvalidOperationException(msg));
         Assert.Equal(msg, text);
     }

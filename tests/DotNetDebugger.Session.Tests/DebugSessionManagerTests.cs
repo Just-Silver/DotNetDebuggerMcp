@@ -1,4 +1,4 @@
-﻿using DotNetDebugger.Engine.Models;
+using DotNetDebugger.Engine.Models;
 using DotNetDebugger.Engine.Session;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
@@ -244,7 +244,7 @@ public sealed class DebugSessionManagerTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => manager.AttachAsync(first.ProcessId, TestContext.Current.CancellationToken));
         Assert.Contains("已有活动调试会话", ex.Message);
-        Assert.Contains("debug_disconnect", ex.Message);
+        Assert.Contains("debug_session(action=disconnect)", ex.Message);
         Assert.Same(first, manager.Active); // 原会话保留
 
         await manager.CloseAsync(TestContext.Current.CancellationToken);

@@ -104,7 +104,7 @@ public static class DebugControlTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("单步执行（进程需已停在断点/异常）。kind：into=进入被调方法 / over=不进入 / out=步出当前方法。单步命令提交后进程将停在新位置（通常瞬时）——用 debug_wait 等停（默认 10s，通常秒内即回），或 debug_state/debug_stack 观察新位置。停在编译器生成的 async 状态机帧（类型形如 <Foo>d__N）时返回附引导：建议改用 debug_breakpoint_set typeName+line 断还原源码的 await 行 + debug_continue（勿 step into 状态机 MoveNext）。")]
+    [Description("单步执行（进程需已停在断点/异常）。kind：into=进入被调方法 / over=不进入 / out=步出当前方法。单步命令提交后进程将停在新位置（通常瞬时）——用 debug_wait 等停（默认 10s，通常秒内即回），或 debug_state/debug_stack 观察新位置。停在编译器生成的 async 状态机帧（类型形如 <Foo>d__N）时返回附引导：建议改用 debug_breakpoint(action=set) typeName+line 断还原源码的 await 行 + debug_continue（勿 step into 状态机 MoveNext）。")]
     public static async Task<string> DebugStep(
         [Description("单步类型：into=进入被调方法 / over=不进入 / out=步出当前方法，默认 over。")] string kind = "over",
         CancellationToken cancellationToken = default)
@@ -124,7 +124,7 @@ public static class DebugControlTool
             if (await StateMachineFrameHelper.TryResolveTopFrameStateMachineAsync(active, active.Buffer.LastStop?.TopFrame, cancellationToken) is { } sm)
             {
                 stateMachineHint = $"提示：当前在 async 状态机帧（对应 async 方法 {sm.MethodName}）。" +
-                    "async 业务逻辑建议改用行断点：debug_breakpoint_set typeName+line 断还原源码的 await 行 + debug_continue" +
+                    "async 业务逻辑建议改用行断点：debug_breakpoint(action=set) typeName+line 断还原源码的 await 行 + debug_continue" +
                     "（勿继续 step into——会停在编译器生成的状态机里无源码）。";
             }
 

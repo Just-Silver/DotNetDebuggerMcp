@@ -47,7 +47,7 @@ public sealed class ToolSurfaceContractTests
     {
         // 工具名是 agent 唯一的发现通道：这里固化「方法名 → 工具名」的规则，防止 SDK 升级后静默改名。
         Assert.Equal("assembly_info", ToolSurface.ToSnakeCase("AssemblyInfo"));
-        Assert.Equal("debug_breakpoint_set", ToolSurface.ToSnakeCase("DebugBreakpointSet"));
+        Assert.Equal("debug_breakpoint(action=set)", ToolSurface.ToSnakeCase("DebugBreakpointSet"));
         Assert.Equal("decompile_to_dir", ToolSurface.ToSnakeCase("DecompileToDir"));
     }
 }

@@ -47,7 +47,7 @@ public static class DebugSessionTool
             var active = await DebugSessionService.Manager.LaunchAndAttachAsync(commandLine, timeoutSeconds, workingDirectory, environment, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_launch", commandLine, "ok");
             return $"已启动并附加调试会话。目标 pid={active.ProcessId}：{commandLine}。工作目录：{active.WorkingDirectory}。" +
-                   "进程已冻结在 Main 前（状态 Attaching/Stopped 视事件追赶而定）；用 debug_breakpoint_set 下断点（未加载模块自动待绑定）后 debug_continue 运行。";
+                   "进程已冻结在 Main 前（状态 Attaching/Stopped 视事件追赶而定）；用 debug_breakpoint(action=set) 下断点（未加载模块自动待绑定）后 debug_continue 运行。";
         }
         catch (Exception ex)
         {
@@ -62,7 +62,7 @@ public static class DebugSessionTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("附加到已运行的 .NET 进程进行调试。返回目标 pid 与初始状态；附加后进程**冻结**在附加时刻的执行点（非 Main 前——launch 才是冻结在 Main 前），**冻结期间即可直接读栈**（debug_stack 缺省列全部线程）；可设断点（未加载模块自动待绑定）后 debug_continue 运行至停点。若已有活动会话会拒绝（请先 debug_disconnect）。")]
+    [Description("附加到已运行的 .NET 进程进行调试。返回目标 pid 与初始状态；附加后进程**冻结**在附加时刻的执行点（非 Main 前——launch 才是冻结在 Main 前），**冻结期间即可直接读栈**（debug_stack 缺省列全部线程）；可设断点（未加载模块自动待绑定）后 debug_continue 运行至停点。若已有活动会话会拒绝（请先 debug_session(action=disconnect)）。")]
     public static async Task<string> DebugAttach(
         [Description("目标进程 id（必填）。")] int processId = 0,
         CancellationToken cancellationToken = default)
@@ -75,7 +75,7 @@ public static class DebugSessionTool
             var active = await DebugSessionService.Manager.AttachAsync(processId, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_attach", $"pid={processId}", "ok");
             return $"已附加调试会话。目标 pid={processId}。当前状态：{StateText(active.Buffer.CurrentState)}。" +
-                   "用 debug_state 查询状态；用 debug_breakpoint_set 下断点后 debug_continue 运行。";
+                   "用 debug_state 查询状态；用 debug_breakpoint(action=set) 下断点后 debug_continue 运行。";
         }
         catch (Exception ex)
         {
@@ -95,7 +95,7 @@ public static class DebugSessionTool
         {
             if (raw.Contains("已有活动调试会话")) return raw; // 已是可操作中文（带 disconnect 引导），原样返回
             return $"附加调试失败：目标进程可能已被本服务器或其它调试器附加，或权限不足（管理员进程需同权限）。" +
-                   $"先 debug_disconnect（或 debug_reset）释放本会话；若为其它调试器占用，需关闭该调试器或重启目标。";
+                   $"先 debug_session(action=disconnect)（或 action=reset）释放本会话；若为其它调试器占用，需关闭该调试器或重启目标。";
         }
         return $"附加调试失败：{raw}";
     }
@@ -107,13 +107,38 @@ public static class DebugSessionTool
         || message.Contains("CORDBG_E", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// 调试会话收尾统一入口：按 action 分派到 disconnect/terminate/reset。
+    /// </summary>
+    /// <param name="action">操作类型：disconnect/terminate/reset（默认空=返回合法值提示）。</param>
+    /// <param name="exitCode">目标进程退出码（仅 terminate）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>中文结果提示。</returns>
+    [McpServerTool]
+    [Description("调试会话收尾（action 必填）：disconnect=断开调试、目标继续独立运行 / terminate=强制结束目标进程（默认退出码 0）/ reset=强制释放会话但不杀目标（用于 disconnect 失败或会话状态不一致时收口）。")]
+    public static async Task<string> DebugSession(
+        [Description("操作类型：disconnect / terminate / reset（默认空 → 返回合法值提示）。")] string action = "",
+        [Description("目标进程退出码（仅 terminate，默认 0）。")] int exitCode = 0,
+        CancellationToken cancellationToken = default)
+    {
+        switch (action.Trim().ToLowerInvariant())
+        {
+            case "disconnect":
+                return await DebugDisconnect(cancellationToken);
+            case "terminate":
+                return await DebugTerminate(exitCode, cancellationToken);
+            case "reset":
+                return await DebugReset(cancellationToken);
+            default:
+                return $"未知的 action：{action}。合法取值为 disconnect/terminate/reset。";
+        }
+    }
+
+    /// <summary>
     /// 断开当前调试会话（目标进程继续独立运行）。无活动会话返回提示。
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
-    [McpServerTool]
-    [Description("断开当前调试会话（目标进程继续独立运行）。断开失败会如实报错（不谎报成功）。")]
-    public static async Task<string> DebugDisconnect(CancellationToken cancellationToken = default)
+    internal static async Task<string> DebugDisconnect(CancellationToken cancellationToken = default)
     {
         if (DebugSessionService.Manager.Active is null)
             return "当前无活动调试会话。";
@@ -123,10 +148,10 @@ public static class DebugSessionTool
         }
         catch (Exception ex)
         {
-            DebugSessionService.Manager.Actions.Log("debug_disconnect", "", $"fail: {ex.Message}");
+            DebugSessionService.Manager.Actions.Log("debug_session(action=disconnect)", "", $"fail: {ex.Message}");
             return $"断开调试会话失败：{ex.Message}";
         }
-        DebugSessionService.Manager.Actions.Log("debug_disconnect", "", "ok");
+        DebugSessionService.Manager.Actions.Log("debug_session(action=disconnect)", "", "ok");
         return "已断开调试会话（目标进程继续独立运行）。若目标随后不响应，可能是外部因素（外部调试器残留附加 / NtSuspendProcess / 系统挂起）——可重启目标恢复。";
     }
 
@@ -135,15 +160,14 @@ public static class DebugSessionTool
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
-    [McpServerTool]
-    [Description("强制释放当前调试会话（**不杀目标进程**，目标继续独立运行）。用于 debug_disconnect 失败、或会话书签与引擎状态不一致（报无会话但仍附加）时收口。与 debug_terminate 不同：本工具不结束目标进程。注意：若目标被外部调试器残留附加，本工具无法解除（需重启目标）。")]
+    [Description("强制释放当前调试会话（**不杀目标进程**，目标继续独立运行）。用于 debug_session(action=disconnect) 失败、或会话书签与引擎状态不一致（报无会话但仍附加）时收口。与 debug_session(action=terminate) 不同：本工具不结束目标进程。注意：若目标被外部调试器残留附加，本工具无法解除（需重启目标）。")]
     public static async Task<string> DebugReset(CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
         if (active is null) return "当前无活动调试会话。";
         var pid = active.ProcessId;
         await DebugSessionService.Manager.ForceResetAsync(cancellationToken);
-        DebugSessionService.Manager.Actions.Log("debug_reset", $"pid={pid}", "ok");
+        DebugSessionService.Manager.Actions.Log("debug_session(action=reset)", $"pid={pid}", "ok");
         return $"已强制释放调试会话（pid={pid}，目标进程继续独立运行）。";
     }
 
@@ -153,8 +177,7 @@ public static class DebugSessionTool
     /// <param name="exitCode">目标进程退出码（默认 0）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
-    [McpServerTool]
-    [Description("终止当前调试会话的目标进程（强制结束，非正常退出）并关闭调试会话。用于调试/复验结束后收口——debug_disconnect 只断开调试、目标进程继续独立运行；本工具直接结束目标。")]
+    [Description("终止当前调试会话的目标进程（强制结束，非正常退出）并关闭调试会话。用于调试/复验结束后收口——debug_session(action=disconnect) 只断开调试、目标进程继续独立运行；本工具直接结束目标。")]
     public static async Task<string> DebugTerminate(
         [Description("目标进程退出码（默认 0）。")] int exitCode = 0,
         CancellationToken cancellationToken = default)
@@ -166,7 +189,7 @@ public static class DebugSessionTool
         try
         {
             var terminated = await DebugSessionService.Manager.TerminateAsync(exitCode, cancellationToken);
-            DebugSessionService.Manager.Actions.Log("debug_terminate", $"pid={pid} exitCode={exitCode}", terminated ? "ok" : "会话已变更");
+            DebugSessionService.Manager.Actions.Log("debug_session(action=terminate)", $"pid={pid} exitCode={exitCode}", terminated ? "ok" : "会话已变更");
             return terminated
                 ? $"已终止目标进程 pid={pid}（exitCode={exitCode}）并关闭调试会话。"
                 : "终止时活动会话已变更（可能已被其它操作关闭）。";

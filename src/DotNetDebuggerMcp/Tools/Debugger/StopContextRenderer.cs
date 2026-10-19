@@ -7,7 +7,7 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 
 /// <summary>
 /// 停点上下文渲染（P4）：把停点帧（模块+方法 token+IL）映射到反编译视图，附当前语句周边代码。
-/// 行号与 decompile 输出同系（P3 渲染统一），agent 可直接用该行号走 debug_breakpoint_set(typeName, line)。
+/// 行号与 decompile 输出同系（P3 渲染统一），agent 可直接用该行号走 debug_breakpoint(action=set)(typeName, line)。
 /// 预算语义（AppConfig.DefaultStopContextBudgetLines / contextLines 参数）：方法完整行数 ≤ 预算显示整个函数；
 /// 超出按当前语句截取预算行并注明。任何映射失败降级为一句说明，不影响工具主返回。
 /// </summary>
@@ -33,7 +33,7 @@ internal static class StopContextRenderer
             {
                 return $"备注：编译器生成 async 状态机（对应 async 方法 {sm.MethodName}）。" +
                     "业务代码见该方法的还原源码（decompile_member 取外壳方法）；建议用行断点 " +
-                    "debug_breakpoint_set typeName+line 断 await 行跟踪业务逻辑。" +
+                    "debug_breakpoint(action=set) typeName+line 断 await 行跟踪业务逻辑。" +
                     $"（当前帧 {typeFullName}.MoveNext 为编译器生成步骤，无业务源码可展示。）";
             }
 

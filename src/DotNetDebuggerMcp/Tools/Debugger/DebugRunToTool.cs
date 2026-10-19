@@ -33,7 +33,7 @@ public static class DebugRunToTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、临时断点自动移除——用 debug_stack/debug_variables 观察现场。定位同 debug_breakpoint_set：token（moduleName+token+ilOffset）或 typeName+line（decompile 输出行号）或 typeName+memberName（方法名子串，命中唯一方法）；moduleName 可省。超时/命中其它断点/进程退出时返回对应提示且临时断点一并自动清理。注意边界：run_to 只对「目标会被进程自然执行到」有效——当前执行路径若不会走向目标（停住不自己走的分支/等待），run_to 将等到超时，此类场景请改用 debug_breakpoint_set 设普通断点 + debug_continue。")]
+    [Description("运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、临时断点自动移除——用 debug_stack/debug_variables 观察现场。定位同 debug_breakpoint(action=set)：token（moduleName+token+ilOffset）或 typeName+line（decompile 输出行号）或 typeName+memberName（方法名子串，命中唯一方法）；moduleName 可省。超时/命中其它断点/进程退出时返回对应提示且临时断点一并自动清理。注意边界：run_to 只对「目标会被进程自然执行到」有效——当前执行路径若不会走向目标（停住不自己走的分支/等待），run_to 将等到超时，此类场景请改用 debug_breakpoint(action=set) 设普通断点 + debug_continue。")]
     public static async Task<string> DebugRunTo(
         [Description("类型全名（与 decompile 输出同格式，默认空）；与 line 组合按反编译视图行定位，或与 memberName 组合按成员级定位——typeName+line / typeName+memberName 二选一必填。")] string typeName = "",
         [Description("行号（1-based，decompile 输出行号，默认 0=未提供）；与 typeName 组合按反编译视图行定位。")] int line = 0,
@@ -55,7 +55,7 @@ public static class DebugRunToTool
         if (!hasToken && string.IsNullOrWhiteSpace(memberName) && line <= 0)
             return "请提供 line（typeName+line 定位，decompile 输出行号）或 memberName（typeName+memberName 定位），二选一必填。";
 
-        // 2. 设一次性临时断点（与 debug_breakpoint_set 完全同款定位/设置逻辑，取回断点 id）
+        // 2. 设一次性临时断点（与 debug_breakpoint(action=set) 完全同款定位/设置逻辑，取回断点 id）
         var setText = await DebugBreakpointTool.SetResolvedAsync(moduleName, token, ilOffset, typeName, memberName, "", line, 1, "stop", null, cancellationToken);
         var targetId = DebugBreakpointTool.ParseBreakpointIdText(setText);
         if (targetId is null)
@@ -106,7 +106,7 @@ public static class DebugRunToTool
             else if (stop is null)
             {
                 message = $"等待 {timeoutSeconds} 秒未命中（当前 {DebugSessionTool.StateText(state)}）。run-to 只对「目标会被进程自然执行到」有效；" +
-                          "可再 debug_run_to 继续等，或改用 debug_breakpoint_set 设普通断点 + debug_continue。";
+                          "可再 debug_run_to 继续等，或改用 debug_breakpoint(action=set) 设普通断点 + debug_continue。";
             }
             else if (stop.BreakpointId == targetId)
             {
@@ -115,7 +115,7 @@ public static class DebugRunToTool
             else if (stop.Kind == DebugEventKind.BreakpointHit && stop.BreakpointId is not null)
             {
                 message = $"已停下但先命中了其它断点 id={stop.BreakpointId}，非本次 run-to 目标。临时断点 {targetId.Value} 已自动清理；" +
-                          "可 debug_continue 继续跑向目标，或 debug_breakpoint_remove 清理已命中的其它断点后再试。";
+                          "可 debug_continue 继续跑向目标，或 debug_breakpoint(action=remove) 清理已命中的其它断点后再试。";
             }
             else if (stop.Kind == DebugEventKind.ExceptionHit)
             {

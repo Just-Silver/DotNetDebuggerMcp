@@ -8,8 +8,8 @@
 
 - `Tools/`（`DotNetDebuggerMcp.Tools`）— 反编译 5（Decompile/DecompileMember/DecompileIl/DecompileToDir/DecompileToProject）+ 元数据 13（ListTypes/Signature/Hierarchy/Dependencies/CallGraph/AssemblyInfo/InterfaceUsage/GenericInstantiation/SearchString/FieldAccess/CallChain/CacheStats/…）+ **`Debugger/`（`debug_*` 工具类 + `UiTools` UI 自动化）** + **`Screenshot/`（独立截图工具，见下）**
 - `Tools/Debugger/` — **动态调试 MCP 工具面**：
-  - `DebugSessionTool`：`debug_launch`/`debug_attach`/`debug_disconnect`/`debug_state`
-  - `DebugBreakpointTool`：`debug_breakpoint_set`(模块名+token+IL offset；模块未加载=登记待绑定)/`_remove`/`_clear`/`_list`(含绑定状态)
+  - `DebugSessionTool`：`debug_launch`/`debug_attach`/`debug_session(action=disconnect)`/`debug_state`
+  - `DebugBreakpointTool`：`debug_breakpoint(action=set)`(模块名+token+IL offset；模块未加载=登记待绑定)/`_remove`/`_clear`/`_list`(含绑定状态)
   - `DebugControlTool`：`debug_continue`/`debug_step`(into/over/out)/`debug_wait`(等停点 1-300s 直接返回停点现场，超时返回当前状态不报错)
   - `DebugInspectTool`：`debug_stack`/`debug_threads`/`debug_variables`
   - `DebugExceptionTool`：`debug_exceptions`(typeName 空=全部，精确过滤 v2)/`_clear`

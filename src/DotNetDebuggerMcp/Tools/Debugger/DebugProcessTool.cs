@@ -64,7 +64,7 @@ public static class DebugProcessTool
                 sb.Append($"{Environment.NewLine}  … 其余 {sorted.Count - maxShown} 个已省略，用 filter 缩小范围。");
             sb.Append($"{Environment.NewLine}用 debug_attach(processId) 附加调试。");
             if (chain.Count > 0)
-                sb.Append($"{Environment.NewLine}发现 {chain.Count} 个会话目标的 .NET 子进程链——业务代码在子进程时需停当前会话（debug_disconnect/停断点）后 debug_attach <childPid> 单独调试（子进程输出不在 debug_output 范围）。");
+                sb.Append($"{Environment.NewLine}发现 {chain.Count} 个会话目标的 .NET 子进程链——业务代码在子进程时需停当前会话（debug_session(action=disconnect)/停断点）后 debug_attach <childPid> 单独调试（子进程输出不在 debug_output 范围）。");
             if (currentPid > 0 && parentMap.Count == 0)
                 sb.Append($"{Environment.NewLine}无法判定父子关系（进程快照失败），子进程链标注不可用。");
             return Task.FromResult(sb.ToString());

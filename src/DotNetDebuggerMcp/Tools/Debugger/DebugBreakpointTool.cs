@@ -40,9 +40,8 @@ public static class DebugBreakpointTool
     /// <param name="condition">P6 子集条件表达式，默认空=无条件；为真才停/记（语法错当场拒绝，求值失败计入未通过反馈）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示（断点 id）或错误提示。</returns>
-    [McpServerTool]
     [Description("设置断点，四种定位方式：① token：moduleName+token（0x06 开头，signature 行尾取）+ilOffset（须落在 IL 指令边界/序列点——非边界或越界会被运行时拒绝并返回中文提示；未加载模块登记待绑定，加载后自动绑定）；② 成员：typeName+memberName（类型内方法名子串，忽略大小写，命中唯一方法即设断点；属性/事件/字段成员会提示；多方法匹配返回 #MEMBER 清单，取 token 精确重设）；③ 反编译行：typeName+line（line 为 decompile 输出的行号，需模块已加载）；④ 源码行：sourcePath+line（源文件绝对/相对/仅文件名，按 PDB 序列点定位，需模块旁有 PDB；模块未加载/未命中时登记延迟项，模块加载后自动解析绑定）。memberName 提供时成员级优先（line 忽略）。同一 (模块, token, IL offset) 重复设置会替换旧断点（不产生同址多断点）。可选 hitCount（第 N 次命中起生效）与 mode（stop=命中停 / trace=命中不停记轨迹，经 debug_wait 批量取回）。返回断点 id；设好后 debug_continue 运行至命中。")]
-    public static async Task<string> DebugBreakpointSet(
+    internal static async Task<string> DebugBreakpointSet(
         [Description("模块名（如 DebugTarget.dll）；token 方式必填；行/成员定位方式可省，省缺在已加载模块中解析。")] string moduleName = "",
         [Description("方法 token（0x06000005，从反编译 signature 行尾或 #MEMBER 取）；提供时优先按 token 定位。")] string token = "",
         [Description("IL offset，默认 0（方法入口）。")] int ilOffset = 0,
@@ -61,7 +60,57 @@ public static class DebugBreakpointTool
     }
 
     /// <summary>
-    /// 断点「校验→定位→设置」统一内部入口（I1 debug_run_to 与 debug_breakpoint_set 共用同一套逻辑）：
+    /// 断点管理统一入口：按 action 分派到 set/list/remove/clear（合并四个独立工具）。
+    /// </summary>
+    /// <param name="action">操作类型：set/list/remove/clear（默认 set）。</param>
+    /// <param name="moduleName">模块名（set 的 token 定位必填）。</param>
+    /// <param name="token">方法 token（set 的 token 定位）。</param>
+    /// <param name="ilOffset">IL offset（默认 0）。</param>
+    /// <param name="typeName">类型全名（set 的成员/行定位）。</param>
+    /// <param name="memberName">成员名子串（set 的成员定位）。</param>
+    /// <param name="sourcePath">源文件路径（set 的 PDB 源码行定位）。</param>
+    /// <param name="line">行号（1-based）。</param>
+    /// <param name="hitCount">开始生效的命中次数。</param>
+    /// <param name="mode">命中行为 stop/trace。</param>
+    /// <param name="condition">条件表达式（P6 子集）。</param>
+    /// <param name="id">断点 id（remove 必填，取值见 list 输出的 id=N）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>中文结果提示。</returns>
+    [McpServerTool]
+    [Description("断点管理（action 默认 set）：set=设置 / list=清单（含绑定状态）/ remove=移除 / clear=清空。set 四种定位：① token：moduleName+token（0x06 开头，signature 行尾取）+ilOffset；② typeName+memberName（方法名子串，命中唯一方法）；③ typeName+line（decompile 输出行号，需模块已加载）；④ sourcePath+line（PDB 源码行）。可选 hitCount（第 N 次起生效）与 mode（stop=命中停 / trace=命中不停记轨迹）。remove 需 id（取 list 输出的 id=N）。")]
+    public static async Task<string> DebugBreakpoint(
+        [Description("操作类型：set=设置（默认）/ list=列出 / remove=移除 / clear=清空。")] string action = "set",
+        [Description("模块名（如 DebugTarget.dll）；set 的 token 定位必填，行/成员定位可省。")] string moduleName = "",
+        [Description("方法 token（0x06000005，从 signature 行尾或 #MEMBER 取）；set 时提供则按 token 定位。")] string token = "",
+        [Description("IL offset，默认 0（方法入口）。")] int ilOffset = 0,
+        [Description("类型全名；set 时与 memberName 组合按成员级定位，或与 line 组合按反编译视图行定位。")] string typeName = "",
+        [Description("成员名（方法，子串忽略大小写）；set 时与 typeName 组合按成员级定位。")] string memberName = "",
+        [Description("源文件路径（绝对/相对/仅文件名）；set 时与 line 组合按 PDB 源码行定位。")] string sourcePath = "",
+        [Description("行号（1-based）：typeName 方式=decompile 输出行号；sourcePath 方式=源码行号。")] int line = 0,
+        [Description("开始生效的命中次数：第 N 次命中起每次都停/记录，默认 1=每次。")] int hitCount = 1,
+        [Description("命中行为：stop=命中停进程（默认）；trace=命中不停、快照变量记轨迹。")] string mode = "stop",
+        [Description("条件表达式（P6 子集），默认空=无条件；为真才停/记。")] string condition = "",
+        [Description("断点 id（remove 必填，取值见 list 输出的 id=N）。")] int id = 0,
+        CancellationToken cancellationToken = default)
+    {
+        switch (action.Trim().ToLowerInvariant())
+        {
+            case "" or "set":
+                return await DebugBreakpointSet(moduleName, token, ilOffset, typeName, memberName,
+                    sourcePath, line, hitCount, mode, condition, cancellationToken);
+            case "list":
+                return await DebugBreakpointList(cancellationToken);
+            case "remove":
+                return await DebugBreakpointRemove(id, cancellationToken);
+            case "clear":
+                return await DebugBreakpointClear(cancellationToken);
+            default:
+                return $"未知的 action：{action}。合法取值为 set/list/remove/clear。";
+        }
+    }
+
+    /// <summary>
+    /// 断点「校验→定位→设置」统一内部入口（I1 debug_run_to 与 debug_breakpoint(action=set) 共用同一套逻辑）：
     /// 校验 → 按 token→memberName→sourcePath→typeName 优先级分发到各 SetBy* 分支。
     /// 返回设置/失败/指引文本（与公开工具同文案）；成功文本必含 "id=N"（调用方用 <see cref="ParseBreakpointIdText"/>
     /// 提取断点 id 后编排后续——run_to 设临时断点即复用本入口，无需复制各分支的定位解析）。
@@ -130,7 +179,7 @@ public static class DebugBreakpointTool
         return bp.IsBound
             ? $"断点已设: id={bp.Id} 位置={bp}{modeTag}{hitTag}{conditionTag}。用 debug_continue 运行至命中。"
             : $"断点已登记: id={bp.Id} 位置={bp}{modeTag}{hitTag}{conditionTag}（模块 {bp.ModuleName} 尚未加载，加载后自动绑定）。" +
-              "模块名需与已加载模块一致；绑定状态用 debug_breakpoint_list 查看。用 debug_continue 运行至命中。";
+              "模块名需与已加载模块一致；绑定状态用 debug_breakpoint(action=list) 查看。用 debug_continue 运行至命中。";
     }
 
     /// <summary>反编译视图行分支（P3-3a）：typeName 全名定位类型 → DocumentService 行映射 → token+IL → 断点。</summary>
@@ -426,7 +475,6 @@ public static class DebugBreakpointTool
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>断点清单或无断点提示。</returns>
-    [McpServerTool]
     [Description("列出当前会话的全部断点（id、模块、方法 token、IL offset、绑定状态）。无断点返回提示。")]
     public static async Task<string> DebugBreakpointList(CancellationToken cancellationToken = default)
     {
@@ -436,7 +484,7 @@ public static class DebugBreakpointTool
         var bps = await active.Session.GetBreakpointsAsync(cancellationToken);
         DebugSessionService.Manager.Actions.Log("debug_breakpoint_list", "", $"{bps.Count} 个");
         if (bps.Count == 0)
-            return "当前无断点。用 debug_breakpoint_set 设置。";
+            return "当前无断点。用 debug_breakpoint(action=set) 设置。";
         var pendingTraces = active.Buffer.PendingTraceCount;
         var lines = bps.Select(b =>
             "  id=" + b.Id + " "
@@ -456,18 +504,17 @@ public static class DebugBreakpointTool
     /// <summary>
     /// 移除指定断点。
     /// </summary>
-    /// <param name="id">断点 id（debug_breakpoint_set 返回）（默认 0 → 返回缺参提示）。</param>
+    /// <param name="id">断点 id（debug_breakpoint(action=set) 返回）（默认 0 → 返回缺参提示）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
-    [McpServerTool]
-    [Description("移除指定断点（id 由 debug_breakpoint_set 返回）。")]
+    [Description("移除指定断点（id 由 debug_breakpoint(action=set) 返回）。")]
     public static async Task<string> DebugBreakpointRemove(
-        [Description("断点 id（debug_breakpoint_set 返回；默认 0 → 返回缺参提示）。")] int id = 0,
+        [Description("断点 id（debug_breakpoint(action=set) 返回；默认 0 → 返回缺参提示）。")] int id = 0,
         CancellationToken cancellationToken = default)
     {
         var active = DebugSessionService.Manager.Active;
         if (active is null) return "当前无活动调试会话。";
-        if (id <= 0) return "请指定断点 id（id 必填，取值见 debug_breakpoint_list 的 id=N）。";
+        if (id <= 0) return "请指定断点 id（id 必填，取值见 debug_breakpoint(action=list) 的 id=N）。";
 
         var removed = await active.Session.RemoveBreakpointAsync(id, cancellationToken);
         DebugSessionService.Manager.Actions.Log("debug_breakpoint_remove", id.ToString(), removed ? "ok" : "not-found");
@@ -479,7 +526,6 @@ public static class DebugBreakpointTool
     /// </summary>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
-    [McpServerTool]
     [Description("清除当前会话的全部断点。")]
     public static async Task<string> DebugBreakpointClear(CancellationToken cancellationToken = default)
     {

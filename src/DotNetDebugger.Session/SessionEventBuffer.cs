@@ -50,7 +50,7 @@ public sealed class SessionEventBuffer : IAsyncDisposable
         }
     }
 
-    /// <summary>当前未读取的 trace 轨迹条数（debug_breakpoint_list 展示用，不消费）。</summary>
+    /// <summary>当前未读取的 trace 轨迹条数（debug_breakpoint(action=list) 展示用，不消费）。</summary>
     public int PendingTraceCount { get { lock (_gate) return _traces.Count; } }
 
     /// <summary>

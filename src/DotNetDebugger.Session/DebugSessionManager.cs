@@ -107,13 +107,13 @@ public sealed class DebugSessionManager : IAsyncDisposable
         return Activate(session, $"launch {commandLine}");
     }
 
-    /// <summary>附加到已运行进程。已有活动会话时**拒绝**（v1 单活动会话；请先 debug_disconnect/debug_terminate），
+    /// <summary>附加到已运行进程。已有活动会话时**拒绝**（v1 单活动会话；请先 debug_session(action=disconnect/terminate)），
     /// 避免把已建立会话的目标悄悄换掉、或对已被调试的进程重复附加产生裸 COM 错误。</summary>
     public async Task<ActiveDebugSession> AttachAsync(int processId, CancellationToken ct = default)
     {
         if (Active is { } existing)
             throw new InvalidOperationException(
-                $"已有活动调试会话（pid={existing.ProcessId}）。同一时刻仅支持一个调试会话，请先 debug_disconnect 或 debug_terminate 后再附加。");
+                $"已有活动调试会话（pid={existing.ProcessId}）。同一时刻仅支持一个调试会话，请先 debug_session(action=disconnect) 或 debug_session(action=terminate) 后再附加。");
         var session = await DebugSession.AttachAsync(processId, ExpressionConditionEvaluator.Instance, ct: ct,
             sourceLineResolver: SourceLineBreakpointResolver.Instance).ConfigureAwait(false);
         return Activate(session, $"attach pid={processId}", processId: processId, isAttach: true);

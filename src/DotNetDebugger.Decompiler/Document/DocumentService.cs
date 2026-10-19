@@ -100,7 +100,7 @@ public static class DocumentService
     }
 
     /// <summary>
-    /// 编辑器行 → 断点落点（行断点用，Web glyph 与 MCP debug_breakpoint_set 共用）：Exact=true 该行有语句序列点
+    /// 编辑器行 → 断点落点（行断点用，Web glyph 与 MCP debug_breakpoint(action=set) 共用）：Exact=true 该行有语句序列点
     /// (token, ilStart)；false = 行无独立序列点（大括号/签名/空行），落到所在方法首条语句；null = 无法定位。
     /// </summary>
     public static (int MethodToken, int IlOffset, bool Exact)? GetBreakpointTargetAtLine(SourceDocument doc, int line)

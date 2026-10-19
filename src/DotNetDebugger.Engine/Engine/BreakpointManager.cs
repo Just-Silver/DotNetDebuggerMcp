@@ -57,7 +57,7 @@ public sealed class BreakpointManager
             }
             catch
             {
-                // 重绑失败（token 无效/无 IL）：保持未绑定，agent 经 debug_breakpoint_list 可见，不阻塞进程
+                // 重绑失败（token 无效/无 IL）：保持未绑定，agent 经 debug_breakpoint(action=list) 可见，不阻塞进程
             }
         }
         return rebound;
@@ -118,7 +118,7 @@ public sealed class BreakpointManager
     /// 登记源行型断点（R6）：sourcePath+line 在模块未加载时登记为 pending（IsBound=false），
     /// 模块加载时 TrackModule 经 ISourceLineBreakpointResolver 解析出 token+IL 再绑定；
     /// 若 moduleName 指定则只在该模块加载时尝试，空串=任意模块（sharpdbg 语义）。
-    /// 未注入 resolver 或模块始终不加载 → 保持 pending（agent 经 debug_breakpoint_list 可见）。
+    /// 未注入 resolver 或模块始终不加载 → 保持 pending（agent 经 debug_breakpoint(action=list) 可见）。
     /// </summary>
     public DebugBreakpoint AddSourceLine(string sourcePath, int line, string moduleName = "", int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null)
     {

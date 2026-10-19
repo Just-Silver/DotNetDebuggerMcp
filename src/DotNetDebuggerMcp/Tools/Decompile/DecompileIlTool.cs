@@ -12,7 +12,7 @@ namespace DotNetDebuggerMcp.Tools.Decompile;
 /// <summary>
 /// 反汇编指定方法的方法体为 IL 文本（按方法元数据 token，如 0x06000005）。
 /// IL 是 async 状态机等编译器生成类型反编译为 C# 失败/难读场景的兜底——逐指令还原方法体真相，
-/// 供 agent 定位真实控制流后回到 debug 断点闭环（token 直接可用于 debug_breakpoint_set）。
+/// 供 agent 定位真实控制流后回到 debug 断点闭环（token 直接可用于 debug_breakpoint(action=set)）。
 /// </summary>
 [McpServerToolType]
 public static class DecompileIlTool

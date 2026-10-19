@@ -563,7 +563,7 @@ public sealed class DebugUiToolsTests
 
             var cont = await DebugMcpToolsTests.CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
             Assert.True(cont.IsError != true, cont.Text());
-            var set = await DebugMcpToolsTests.CallAsync(mcp, "debug_breakpoint_set", new Dictionary<string, object?>
+            var set = await DebugMcpToolsTests.CallAsync(mcp, "debug_breakpoint", new Dictionary<string, object?>
             {
                 ["moduleName"] = "UiSampleApp.dll", ["token"] = $"0x{toggleToken:x8}", ["ilOffset"] = 0,
             });
@@ -580,7 +580,7 @@ public sealed class DebugUiToolsTests
             Assert.True(wait.IsError != true, wait.Text());
             Assert.Contains("已停下", wait.Text());
 
-            var disc = await DebugMcpToolsTests.CallAsync(mcp, "debug_disconnect", new Dictionary<string, object?>());
+            var disc = await DebugMcpToolsTests.CallAsync(mcp, "debug_session", new Dictionary<string, object?> { ["action"] = "disconnect" });
             Assert.True(disc.IsError != true, disc.Text());
         }
         finally

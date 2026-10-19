@@ -23,7 +23,7 @@ public static class DebugInspectTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>调用栈文本或错误提示。</returns>
     [McpServerTool]
-    [Description("读取调用栈（进程需停在断点/异常/单步，或处于 attach/launch 后的初始冻结态）。每帧输出 类型.方法 [token]（解析失败降级为 模块!token+ILoffset）。缺省读最近停点线程；threadId 指定时读该线程；all=true 或进程处于初始冻结态（无停点线程）时列出全部托管线程的栈（死锁/卡死排查）。停在编译器生成的 async 状态机帧时可能读不到栈（返回空栈提示）——此时改用 debug_breakpoint_set typeName+line 断还原源码的 await 行。")]
+    [Description("读取调用栈（进程需停在断点/异常/单步，或处于 attach/launch 后的初始冻结态）。每帧输出 类型.方法 [token]（解析失败降级为 模块!token+ILoffset）。缺省读最近停点线程；threadId 指定时读该线程；all=true 或进程处于初始冻结态（无停点线程）时列出全部托管线程的栈（死锁/卡死排查）。停在编译器生成的 async 状态机帧时可能读不到栈（返回空栈提示）——此时改用 debug_breakpoint(action=set) typeName+line 断还原源码的 await 行。")]
     public static async Task<string> DebugStack(
         [Description("线程 id；缺省 0 = 用最近停点线程（初始冻结态下无此线程则列全部线程）。")] int threadId = 0,
         [Description("列出全部托管线程的调用栈（默认 false=只读单线程；初始冻结态自动启用）。死锁/卡死排查用。")] bool all = false,
@@ -78,7 +78,7 @@ public static class DebugInspectTool
         // C④：类型名是编译器生成的 async 状态机（Ns.Outer+<Foo>d__N）时，在帧名上标注原 async 方法并归一化方法名。
         if (name is not null && StateMachineFrameHelper.TryParseStateMachine(f.TypeName!) is { } sm)
             name = $"{f.TypeName} (状态机 {sm.MethodName}).{f.MethodName}";
-        var tokenSuffix = $"  [{loc.MethodTokenText}]"; // token 保留，供 debug_breakpoint_set 下断点
+        var tokenSuffix = $"  [{loc.MethodTokenText}]"; // token 保留，供 debug_breakpoint(action=set) 下断点
         var pos = $"{loc.ModuleName}!{loc.MethodTokenText}+0x{loc.IlOffset:x}";
         return $"  {f.FrameIndex}: {name ?? pos}{tokenSuffix}";
     }

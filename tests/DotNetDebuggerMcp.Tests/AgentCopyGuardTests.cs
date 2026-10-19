@@ -22,10 +22,10 @@ public sealed class AgentCopyGuardTests
         { nameof(DebugRunToTool.DebugRunTo), "临时断点" },              // run_to 一次性临时断点语义（命中即移除）
         { nameof(DebugSessionTool.DebugLaunch), "冻结在 Main 前" },     // launch 早期冻结语义（无需目标配合）
         { nameof(DebugSessionTool.DebugState), "Stopped" },             // 读栈/变量前先 debug_state 确认 Stopped
-        { nameof(DebugSessionTool.DebugTerminate), "强制结束" },        // debug_terminate 结束目标进程（区别于 disconnect）
+        { nameof(DebugSessionTool.DebugSession), "强制结束" },        // debug_session(action=terminate) 结束目标进程（区别于 disconnect）
         { nameof(DebugSessionTool.DebugModules), "已加载的模块" },      // debug_modules 列已加载模块（断点定位排障）
         { nameof(DebugInspectTool.DebugVariables), "$exception" },      // 异常停点观察口
-        { nameof(DebugBreakpointTool.DebugBreakpointList), "绑定" },    // list 返回含绑定状态
+        { nameof(DebugBreakpointTool.DebugBreakpoint), "绑定" },    // list 返回含绑定状态
         { nameof(DebugExceptionTool.DebugExceptions), "first-chance" }, // 异常断点语义
         // W1/V3/D1 已落地工具补录（描述已含片段，直接固化进契约）：
         { nameof(DebugSetTool.DebugSet), "原值" },                      // 改值返回「原值 → 新值」回显
@@ -60,7 +60,7 @@ public sealed class AgentCopyGuardTests
         { nameof(DebugSessionTool.DebugLaunch), "直接读栈" },            // P1：冻结态即可读栈
         { nameof(DebugSessionTool.DebugAttach), "直接读栈" },            // P1：attach 冻结即可读栈
         { nameof(DebugSessionTool.DebugAttach), "已有活动会话" },        // P2：已有会话拒绝
-        { nameof(DebugSessionTool.DebugReset), "不杀目标进程" },         // P2：debug_reset 不杀目标
+        { nameof(DebugSessionTool.DebugSession), "不杀目标" },         // P2：debug_session(action=reset) 不杀目标
         { nameof(DebugInspectTool.DebugStack), "全部托管线程" },         // P1：all/冻结态列全部线程
         { nameof(UiTools.UiAction), "clickPoint" },                      // P3：显式真实点击开关
         { nameof(UiTools.UiAction), "可能不生效" },                      // P3：legacy 命中标注可能无效
