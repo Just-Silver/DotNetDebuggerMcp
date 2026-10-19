@@ -8,10 +8,10 @@
 
 - `Tools/`（`DotNetDebuggerMcp.Tools`）— 反编译 5（Decompile/DecompileMember/DecompileIl/DecompileToDir/DecompileToProject）+ 元数据 13（ListTypes/Signature/Hierarchy/Dependencies/CallGraph/AssemblyInfo/InterfaceUsage/GenericInstantiation/SearchString/FieldAccess/CallChain/CacheStats/…）+ **`Debugger/`（`debug_*` 工具类 + `UiTools` UI 自动化）** + **`Screenshot/`（独立截图工具，见下）**
 - `Tools/Debugger/` — **动态调试 MCP 工具面**：
-  - `DebugSessionTool`：`debug_launch`/`debug_attach`/`debug_session(action=disconnect)`/`debug_state`
+  - `DebugSessionTool`：`debug_launch`/`debug_attach`/`debug_session(action=disconnect)`/`debug_wait`
   - `DebugBreakpointTool`：`debug_breakpoint(action=set)`(模块名+token+IL offset；模块未加载=登记待绑定)/`_remove`/`_clear`/`_list`(含绑定状态)
   - `DebugControlTool`：`debug_continue`/`debug_step`(into/over/out)/`debug_wait`(等停点 1-300s 直接返回停点现场，超时返回当前状态不报错)
-  - `DebugInspectTool`：`debug_stack`/`debug_threads`/`debug_variables`
+  - `DebugInspectTool`：`debug_frame`/`debug_threads`/`debug_frame`
   - `DebugExceptionTool`：`debug_exceptions`(typeName 空=全部，精确过滤 v2)/`_clear`
   - 全部是 `Services.DebugSessionService.Manager` 的薄包装；**控制工具异步返回（带默认超时），不等停点**（`debug_wait` 例外：其职责就是等停点，同样带超时上限与「超时=放弃等待」约定）；栈/变量读取前置校验 `Buffer.CurrentState == Stopped`（否则提示先 debug_continue 到停点）；缺省 threadId=0 用 `Buffer.StoppedThreadId`。每个工具调用后写 `Manager.Actions.Log(...)` 供 Web 回放。
   - `UiTools`：`ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait`——**全 UIA 语义 pattern，无物理输入**（不移动光标/不注入输入/不抢前台）。元素定位/语义 pattern 分派/状态读取/事件等待/帧登记（`FrameRegistry`）已迁出至 **`SharpSight.UiAutomation`** 能力库，本类为薄包装。`ui_find` 头部返回 `帧: frameId=N`；`ui_action`/`ui_input`/`ui_get` 有可选 `frameId`（= `ui_find` 帧号）**旧帧护栏**——非当前帧即拒绝并提示重新 `ui_find`/`screenshot`（0=不校验）。不要求活动 debug 会话。

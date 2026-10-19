@@ -39,20 +39,20 @@ internal static class HandshakeText
     private const string UseUiObserveNoDebug = "- **注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请勿依赖 ui_*。\n";
     private const string UseUiObserveWithScreenshot = "- **注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。\n";
     private const string UseScreenshot =
-        "- **当需要观察 GUI 窗口/屏幕画面（看控件状态、布局冒烟）时**，调用 screenshot 截图：可按全屏/指定显示器（副屏）/窗口（pid、标题、前台、句柄）/窗口客户区/屏幕区域/UIA 单个元素寻址，返回图片；头部给出 原点/帧 坐标元数据（图像为原生 1:1，本服务器不做缩放），可选叠加光标（includeCursor），图片过大会改为落盘返回路径。寻址参数不确定时先列清单：显示器用 `screenshot_displays`、可见窗口用 `screenshot_windows`（hwnd/标题/pid，不限 .NET 进程）。\n";
+        "- **当需要观察 GUI 窗口/屏幕画面（看控件状态、布局冒烟）时**，调用 screenshot 截图：可按全屏/指定显示器（副屏）/窗口（pid、标题、前台、句柄）/窗口客户区/屏幕区域/UIA 单个元素寻址，返回图片；头部给出 原点/帧 坐标元数据（图像为原生 1:1，本服务器不做缩放），可选叠加光标（includeCursor），图片过大会改为落盘返回路径。寻址参数不确定时先列清单：显示器用 `screenshot(mode=list-displays)`、可见窗口用 `screenshot(mode=list-windows)`（hwnd/标题/pid，不限 .NET 进程）。\n";
     private const string UseScreenshotElementUi = "- 按控件截图先 `ui_find` 取 index/名与帧号；`ui_find` 输出的 `帧: frameId=N` 可回传给 `ui_action`/`ui_input`/`ui_get` 与 screenshot，用于拦截引用旧画面的操作。\n";
 
     private const string ToolListPrefix = "具体工具清单见 MCP 工具目录（";
     private const string ToolListDecompile = "`decompile` 等语义前缀，静态工具另有 `signature`/`list_types`/`call_*`/`hierarchy`/`dependencies`/`interface_usage`/`field_access`/`search_literals`";
     private const string ToolListDebug = "调试 `debug_*`";
     private const string ToolListUi = "UI `ui_*`";
-    private const string ToolListScreenshot = "视觉 `screenshot`/`screenshot_displays`/`screenshot_windows`";
+    private const string ToolListScreenshot = "视觉 `screenshot`/`screenshot(mode=list-displays)`/`screenshot(mode=list-windows)`";
     private const string ToolListSuffix = "）。\n";
 
     private const string ConventionStatic =
         "程序集/目标文件路径基于当前工作目录；反编译与元数据结果带行号、支持 `lines=\"start-end\"` 分页。";
     private const string ConventionDebug =
-        "动态调试控制类工具异步返回（带默认超时），进程停点信息用查询类工具（`debug_state`/`debug_stack`/`debug_variables`）获取。";
+        "动态调试控制类工具异步返回（带默认超时），进程停点信息用查询类工具（`debug_wait`/`debug_frame`/`debug_frame`）获取。";
     private const string ConventionDebugFrozen =
         "attach/launch 后进程即冻结，可直接读栈。";
 

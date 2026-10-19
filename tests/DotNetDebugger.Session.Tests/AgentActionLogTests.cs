@@ -9,12 +9,12 @@ public sealed class AgentActionLogTests
     {
         var log = new AgentActionLog();
         log.Log("debug_launch", "exe", "ok");
-        log.Log("debug_state", "", "running");
+        log.Log("debug_wait", "", "running");
 
         var snap = log.Snapshot();
         Assert.Equal(2, snap.Count);
         Assert.Equal("debug_launch", snap[0].Tool);
-        Assert.Equal("debug_state", snap[1].Tool);
+        Assert.Equal("debug_wait", snap[1].Tool);
         Assert.True(snap[1].Sequence > snap[0].Sequence);
     }
 

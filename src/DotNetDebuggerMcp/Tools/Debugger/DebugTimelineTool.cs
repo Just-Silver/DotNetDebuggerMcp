@@ -54,7 +54,7 @@ public static class DebugTimelineTool
             sb.AppendLine();
             sb.Append("attach 会话：已附加成功，目标进程继续独立运行（不会自行停下）；设断点后 debug_continue/debug_wait 等待命中。");
         }
-        // attach 会话退出（顺手项①，对齐 debug_state）：退出码不可得
+        // attach 会话退出（顺手项①，对齐 debug_wait）：退出码不可得
         if (active.IsAttach && active.Buffer.CurrentState == DotNetDebugger.Engine.Models.DebugSessionState.Exited)
             sb.AppendLine().Append("（attach 会话：退出码不可得——ICorDebug 不提供，目标独立于调试器退出）");
         DebugSessionService.Manager.Actions.Log("debug_timeline", $"lines={n} filter={filter} kind={kindNorm}", $"{rows.Count} 行"); // 轨迹惯例

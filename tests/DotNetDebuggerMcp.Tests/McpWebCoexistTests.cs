@@ -1,4 +1,4 @@
-﻿using ModelContextProtocol.Client;
+using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using System.Net;
 using System.Net.Sockets;
@@ -20,8 +20,8 @@ public sealed class McpWebCoexistTests
         // 宿主子进程带 --web 启动（MCP stdio 常驻 + Web 同进程）
         await using var mcp = await ConnectAsync($" --web --web-port {port}");
 
-        // 1. MCP 工具可用：debug_state 无会话提示（说明 MCP 协议正常）
-        var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        // 1. MCP 工具可用：debug_wait 无会话提示（说明 MCP 协议正常）
+        var st = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
         Assert.True(st.IsError != true, st.Text());
         Assert.Contains("无活动调试会话", st.Text());
 

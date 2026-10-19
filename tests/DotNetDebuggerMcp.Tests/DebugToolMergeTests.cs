@@ -42,6 +42,14 @@ public sealed class DebugToolMergeTests
     }
 
     [Fact]
+    public async Task 现场工具_无会话时给中文提示()
+    {
+        var result = await DebugInspectTool.DebugFrame(cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Contains("无活动调试会话", result);
+    }
+
+    [Fact]
     public async Task 会话工具_未知action_列出合法值()
     {
         var result = await DebugSessionTool.DebugSession("bogus", cancellationToken: TestContext.Current.CancellationToken);

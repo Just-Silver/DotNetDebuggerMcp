@@ -11,7 +11,7 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 
 /// <summary>
 /// 调试会话管理工具：启动/附加/断开 .NET 进程进行动态调试，查询会话状态。
-/// 控制工具异步返回（带默认超时），停点信息经 debug_state/debug_stack 查询。
+/// 控制工具异步返回（带默认超时），停点信息经 debug_wait/debug_frame 查询。
 /// </summary>
 [McpServerToolType]
 public static class DebugSessionTool
@@ -19,7 +19,7 @@ public static class DebugSessionTool
     /// <summary>
     /// 启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。返回会话 id 与实际生效工作目录；
     /// 进程冻结在 Main 前的初始同步点（P9 蹲守 CLR 启动），agent 从容设断点（未加载模块 pending）
-    /// 后 debug_continue——目标无需任何启动配合。实时状态经 debug_state 查询。
+    /// 后 debug_continue——目标无需任何启动配合。实时状态经 debug_wait 查询。
     /// </summary>
     /// <param name="commandLine">目标可执行文件路径（可含参数，空格分隔），相对当前工作目录（必填）。</param>
     /// <param name="timeoutSeconds">等待目标 CLR 启动的秒数上限，默认 30。</param>
@@ -28,7 +28,7 @@ public static class DebugSessionTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>中文结果提示（会话 id、实际工作目录与初始冻结说明）或错误提示。</returns>
     [McpServerTool]
-    [Description("启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。进程冻结在 Main 前的初始同步点——**冻结期间即可直接读栈**（debug_stack 缺省列全部线程），任意 .NET 程序无需启动配合即可从第一行业务代码前调试：设断点（未加载模块自动登记待绑定）后 debug_continue。返回会话 id、实际生效工作目录，进程已冻结在 Main 前（实时状态经 debug_state 查询）；命中断点后用 debug_state/debug_stack/debug_variables 查询。")]
+    [Description("启动并附加一个 .NET 进程进行调试（异步返回，不等停点）。进程冻结在 Main 前的初始同步点——**冻结期间即可直接读栈**（debug_frame 缺省列全部线程），任意 .NET 程序无需启动配合即可从第一行业务代码前调试：设断点（未加载模块自动登记待绑定）后 debug_continue。返回会话 id、实际生效工作目录，进程已冻结在 Main 前（实时状态经 debug_wait 查询）；命中断点后用 debug_wait/debug_frame 查询。")]
     public static async Task<string> DebugLaunch(
         [Description("目标可执行文件路径（可含参数，如 DebugTarget.exe 3 8），相对当前工作目录（必填）。")] string commandLine = "",
         [Description("等待目标 CLR 启动的秒数上限，默认 30。")] int timeoutSeconds = 30,
@@ -62,7 +62,7 @@ public static class DebugSessionTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("附加到已运行的 .NET 进程进行调试。返回目标 pid 与初始状态；附加后进程**冻结**在附加时刻的执行点（非 Main 前——launch 才是冻结在 Main 前），**冻结期间即可直接读栈**（debug_stack 缺省列全部线程）；可设断点（未加载模块自动待绑定）后 debug_continue 运行至停点。若已有活动会话会拒绝（请先 debug_session(action=disconnect)）。")]
+    [Description("附加到已运行的 .NET 进程进行调试。返回目标 pid 与初始状态；附加后进程**冻结**在附加时刻的执行点（非 Main 前——launch 才是冻结在 Main 前），**冻结期间即可直接读栈**（debug_frame 缺省列全部线程）；可设断点（未加载模块自动待绑定）后 debug_continue 运行至停点。若已有活动会话会拒绝（请先 debug_session(action=disconnect)）。")]
     public static async Task<string> DebugAttach(
         [Description("目标进程 id（必填）。")] int processId = 0,
         CancellationToken cancellationToken = default)
@@ -75,7 +75,7 @@ public static class DebugSessionTool
             var active = await DebugSessionService.Manager.AttachAsync(processId, cancellationToken);
             DebugSessionService.Manager.Actions.Log("debug_attach", $"pid={processId}", "ok");
             return $"已附加调试会话。目标 pid={processId}。当前状态：{StateText(active.Buffer.CurrentState)}。" +
-                   "用 debug_state 查询状态；用 debug_breakpoint(action=set) 下断点后 debug_continue 运行。";
+                   "用 debug_wait 查询状态；用 debug_breakpoint(action=set) 下断点后 debug_continue 运行。";
         }
         catch (Exception ex)
         {
@@ -237,9 +237,8 @@ public static class DebugSessionTool
     /// <param name="contextLines">停点上下文行数预算，默认见 AppConfig（100），0=不附。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>会话摘要文本。</returns>
-    [McpServerTool]
-    [Description("查询当前调试会话状态：有无活动会话、会话状态（Running/Stopped/Exited…）、最近停点现场（断点/异常/单步）。立即返回，不等停；进程停在断点时先调此工具确认 Stopped 再 debug_stack/debug_variables。停点时默认附反编译视图上下文（当前语句周边代码，行号=decompile 输出行号，contextLines 可调/0 关闭）。")]
-    public static async Task<string> DebugState(
+    [Description("查询当前调试会话状态：有无活动会话、会话状态（Running/Stopped/Exited…）、最近停点现场（断点/异常/单步）。立即返回，不等停；进程停在断点时先调此工具确认 Stopped 再 debug_frame。停点时默认附反编译视图上下文（当前语句周边代码，行号=decompile 输出行号，contextLines 可调/0 关闭）。")]
+    internal static async Task<string> DebugState(
         [Description(ToolParameterText.ContextLinesParam)] int contextLines = AppConfig.DefaultStopContextBudgetLines,
         CancellationToken cancellationToken = default)
     {
@@ -275,7 +274,7 @@ public static class DebugSessionTool
             lines.Add("attach 会话：已附加成功，进程继续独立运行（无停点不会自行停下）；设断点后 debug_continue/debug_wait 等待命中。");
         // 初始冻结态（attach/launch 后、尚未 continue）：进程已停住全局、栈可直接读——不必先 debug_continue
         if (DebugInspectTool.IsFrozenReadableState(buffer.CurrentState))
-            lines.Add("进程处于初始冻结态（非运行中）——可直接读栈（debug_stack 缺省列全部线程）；debug_continue 后运行至断点停下。");
+            lines.Add("进程处于初始冻结态（非运行中）——可直接读栈（debug_frame 缺省列全部线程）；debug_continue 后运行至断点停下。");
         DebugSessionService.Manager.Actions.Log("debug_state", "", string.Join("; ", lines));
         return string.Join(Environment.NewLine, lines);
     }
@@ -328,7 +327,7 @@ public static class DebugSessionTool
 
     internal static string StateText(DotNetDebugger.Engine.Models.DebugSessionState state) => state switch
     {
-        DotNetDebugger.Engine.Models.DebugSessionState.None => "未就绪（会话刚建立，事件缓冲尚未追上——用 debug_state 查询最新状态）",
+        DotNetDebugger.Engine.Models.DebugSessionState.None => "未就绪（会话刚建立，事件缓冲尚未追上——用 debug_wait 查询最新状态）",
         DotNetDebugger.Engine.Models.DebugSessionState.Running => "运行中 (Running)",
         DotNetDebugger.Engine.Models.DebugSessionState.Stopped => "已停止 (Stopped，停在断点/异常/单步)",
         DotNetDebugger.Engine.Models.DebugSessionState.Exited => "已退出 (Exited)",

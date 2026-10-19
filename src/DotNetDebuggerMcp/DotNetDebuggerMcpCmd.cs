@@ -253,11 +253,11 @@ public class DotNetDebuggerMcpCmd
         }
         if (project && !string.IsNullOrEmpty(outputDir))
         {
-            return await DecompileToProjectTool.DecompileToProject(assembly, outputDir, nestedDirectories, timeoutSeconds, cancellationToken);
+            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, "", project: true, nestedDirectories, timeoutSeconds, cancellationToken);
         }
         if (!string.IsNullOrEmpty(outputDir))
         {
-            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, typeName, timeoutSeconds, cancellationToken);
+            return await DecompileToDirTool.DecompileToDir(assembly, outputDir, typeName, timeoutSeconds: timeoutSeconds, cancellationToken: cancellationToken);
         }
         if (signatures)
         {

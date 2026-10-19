@@ -91,15 +91,15 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("停点上下文", wait.Text()); // P4：默认附当前语句反编译上下文
         Assert.Contains("← 当前语句", wait.Text());
 
-        // 6. debug_state 确认 Stopped（默认附停点上下文；Work 停点是 DebugTarget.Program——普通同步类型）
-        var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        // 6. debug_wait 确认 Stopped（默认附停点上下文；Work 停点是 DebugTarget.Program——普通同步类型）
+        var st = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
         Assert.Contains("已停止", st.Text());
         // B① 负路径：普通同步类型停点上下文不得带「编译器生成 async 状态机」备注
         Assert.Contains("停点上下文", st.Text());
         Assert.DoesNotContain("编译器生成 async 状态机", st.Text());
 
-        // 7. debug_stack：读调用栈（应含 Work 帧，真名 类型.方法 + token 后缀）
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        // 7. debug_frame：读调用栈（应含 Work 帧，真名 类型.方法 + token 后缀）
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(stack.IsError != true, stack.Text());
         Assert.Contains("调用栈", stack.Text());
         Assert.Contains("DebugTarget.Program.Work", stack.Text()); // C：帧名真名化（类型.方法）
@@ -115,10 +115,10 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("debug_wait", step.Text());
         Assert.DoesNotContain("async 状态机帧", step.Text());
 
-        // 8. debug_variables：读局部变量（step 后仍处停点——wait 等 step 完成的新停点）
+        // 8. debug_frame：读局部变量（step 后仍处停点——wait 等 step 完成的新停点）
         var waitStep = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", waitStep.Text());
-        var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        var vars = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(vars.IsError != true, vars.Text());
         Assert.Contains("局部变量", vars.Text());
 
@@ -157,12 +157,12 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("value is zero", wait.Text()); // 停点现场附异常 Message
 
         // $exception 伪变量：类型 + Message + 一级字段
-        var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        var vars = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(vars.IsError != true, vars.Text());
         Assert.Contains("$exception", vars.Text());
         Assert.Contains("System.DivideByZeroException", vars.Text());
 
-        // $exception 伪根也可直接用于 debug_evaluate（此前仅 debug_variables/debug_object 支持）
+        // $exception 伪根也可直接用于 debug_evaluate（此前仅 debug_frame/debug_object 支持）
         var evalExc = await CallAsync(mcp, "debug_evaluate",
             new Dictionary<string, object?> { ["expression"] = "$exception._message" });
         Assert.True(evalExc.IsError != true, evalExc.Text());
@@ -215,7 +215,7 @@ public sealed class DebugMcpToolsTests
         // 命中 3a 断点（delay 结束进 Work）
         var waitA = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
         Assert.Contains("已停下", waitA.Text());
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.Contains($"0x{workToken:x8}", stack.Text()); // 栈帧以 token 形式展示，命中方法即 Work
 
         // 3b：sourcePath+line 设断点（Work 方法内靠后源码行），continue 后循环迭代再命中。
@@ -228,7 +228,7 @@ public sealed class DebugMcpToolsTests
         await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
         var waitB = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0 });
         Assert.Contains("已停下", waitB.Text());
-        var stackB = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        var stackB = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.Contains($"0x{workToken:x8}", stackB.Text());
 
         var disc = await CallAsync(mcp, "debug_session", new Dictionary<string, object?> { ["action"] = "disconnect" });
@@ -312,7 +312,7 @@ public sealed class DebugMcpToolsTests
         Assert.True(wait.IsError != true, wait.Text());
         Assert.Contains("已停下", wait.Text());
         Assert.Contains("breakpoint", wait.Text());
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.Contains($"0x{computeToken:x8}", stack.Text()); // 栈帧含 Compute 方法 token → 命中的正是成员定位的方法
 
         var disc = await CallAsync(mcp, "debug_session", new Dictionary<string, object?> { ["action"] = "disconnect" });
@@ -436,7 +436,7 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("已附加", att.Text());
         Assert.Contains($"pid={childPid}", att.Text());
 
-        var state = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        var state = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
         Assert.True(state.IsError != true, state.Text());
         Assert.Contains($"目标 pid: {childPid}", state.Text()); // 会话已切到子进程
 
@@ -458,7 +458,7 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("已启动", launch.Text());
 
         // 不 continue：直接读栈应可用（冻结态 = 全部线程可读），不再回「无停点线程可读」
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(stack.IsError != true, stack.Text());
         Assert.DoesNotContain("无停点线程可读", stack.Text());
         Assert.DoesNotContain("进程未停在断点", stack.Text());
@@ -468,13 +468,13 @@ public sealed class DebugMcpToolsTests
         // 目标程序集（Main 前的冻结点在运行时引导栈上）；只断言「至少一个线程帧数 > 0」。
         Assert.Matches(@"thread \d+（[1-9]\d* 帧）", stack.Text());
 
-        // debug_state 标注冻结态可读
-        var state = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        // debug_wait 标注冻结态可读
+        var state = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
         Assert.True(state.IsError != true, state.Text());
         Assert.Contains("冻结", state.Text());
 
         // all=true 显式请求全部线程
-        var all = await CallAsync(mcp, "debug_stack",
+        var all = await CallAsync(mcp, "debug_frame",
             new Dictionary<string, object?> { ["all"] = true });
         Assert.True(all.IsError != true, all.Text());
         Assert.Contains("调用栈", all.Text());
@@ -493,10 +493,10 @@ public sealed class DebugMcpToolsTests
             new Dictionary<string, object?> { ["commandLine"] = $"{exe} 3 6", ["timeoutSeconds"] = 20 });
         Assert.True(launch.IsError != true, launch.Text());
 
-        // 单会话内并发 12 路 debug_state：验证 Session 管理器线程安全 + stdio 不撕帧
+        // 单会话内并发 12 路 debug_wait：验证 Session 管理器线程安全 + stdio 不撕帧
         var tasks = Enumerable.Range(0, 12).Select(async _ =>
         {
-            var r = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+            var r = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
             return r;
         }).ToArray();
         var results = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
@@ -560,7 +560,7 @@ public sealed class DebugMcpToolsTests
             new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", wait.Text());
 
-        // 字段链 + 字符串索引 + 标量（与 debug_variables 同款展示）
+        // 字段链 + 字符串索引 + 标量（与 debug_frame 同款展示）
         var field = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.A" });
         Assert.Contains("表达式: b.A = 7（System.Int32）", field.Text());
         var str = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b.S" });
@@ -584,11 +584,11 @@ public sealed class DebugMcpToolsTests
         var paren = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "!(i > 0)" });
         Assert.Contains("不支持", paren.Text());
 
-        // 对象终值：children 一级与 debug_variables 一致
+        // 对象终值：children 一级与 debug_frame 一致
         var whole = await CallAsync(mcp, "debug_evaluate", new Dictionary<string, object?> { ["expression"] = "b" });
         Assert.Contains("A = 7", whole.Text());
         Assert.Contains("S = \"sx\"", whole.Text());
-        var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        var vars = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.Contains("A = 7", vars.Text());
 
         // 错误语义：缺字段附可用清单 / 未知根附可用变量 / 语法越子集
@@ -741,15 +741,15 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("已停下", wait.Text());
         Assert.Contains("breakpoint", wait.Text());
 
-        // C④ 正路径：debug_stack 状态机帧应带 "<RunAsync>" + "(状态机 RunAsync)" 标注
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        // C④ 正路径：debug_frame 状态机帧应带 "<RunAsync>" + "(状态机 RunAsync)" 标注
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(stack.IsError != true, stack.Text());
         Assert.Contains("<RunAsync>", stack.Text());
         Assert.Contains("(状态机 RunAsync)", stack.Text());
         Assert.Contains("MoveNext", stack.Text());
 
-        // B① 正路径：debug_state 停点上下文应带「编译器生成 async 状态机（对应 async 方法 RunAsync）」备注
-        var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        // B① 正路径：debug_wait 停点上下文应带「编译器生成 async 状态机（对应 async 方法 RunAsync）」备注
+        var st = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
         Assert.True(st.IsError != true, st.Text());
         // 状态机帧的备注独立于 doc 渲染（StopContextRenderer 对状态机直接返回备注，不尝试渲染 MoveNext）
         Assert.Contains("编译器生成 async 状态机", st.Text());
@@ -810,8 +810,8 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("已运行到目标", runToText);
         Assert.Contains("自动移除", runToText);
 
-        // 命中现场：进程停在 Work（栈帧含 Work token）——run_to 停点可直接接 debug_stack/debug_variables
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        // 命中现场：进程停在 Work（栈帧含 Work token）——run_to 停点可直接接 debug_frame
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(stack.IsError != true, stack.Text());
         Assert.Contains($"0x{workToken:x8}", stack.Text());
 
@@ -899,7 +899,7 @@ public sealed class DebugMcpToolsTests
         Assert.True(runTo.IsError != true, runTo.Text());
         Assert.Contains("已运行到目标", runTo.Text());
 
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.Contains($"0x{workScoresToken:x8}", stack.Text());
     }
 
@@ -941,7 +941,7 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("自动移除", runTo.Text());
 
         // 停在 WorkScores（栈帧含其 token）
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(stack.IsError != true, stack.Text());
         Assert.Contains($"0x{workScoresToken:x8}", stack.Text());
 
@@ -990,7 +990,7 @@ public sealed class DebugMcpToolsTests
         Assert.True(runTo.IsError != true, runTo.Text());
         Assert.Contains("已运行到目标", runTo.Text());
 
-        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        var stack = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.Contains($"0x{workScoresToken:x8}", stack.Text());
 
         await CallAsync(mcp, "debug_session", new Dictionary<string, object?> { ["action"] = "disconnect" });
@@ -1044,7 +1044,7 @@ public sealed class DebugMcpToolsTests
         Assert.False(System.Diagnostics.Process.GetProcesses().Any(p => p.Id == pid), "debug_session(action=terminate) 后目标进程仍在");
 
         // 会话已关闭：无活动会话
-        var state = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+        var state = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
         Assert.Contains("无活动调试会话", state.Text());
     }
 
@@ -1069,13 +1069,13 @@ public sealed class DebugMcpToolsTests
         var running = false;
         while (DateTime.UtcNow < runDeadline)
         {
-            var st = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+            var st = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
             if (st.Text().Contains("运行中")) { running = true; break; }
             await Task.Delay(100, TestContext.Current.CancellationToken);
         }
         Assert.True(running, "目标未进入运行态，无法覆盖运行态终止");
         Assert.True(System.Diagnostics.Process.GetProcesses().Any(p => p.Id == pid), "运行中目标进程应仍存活");
-        // 关键：等待进程真正恢复运行（debug_state 的「运行中」在 Continue 后立即发布，此刻进程可能尚未脱离同步点，
+        // 关键：等待进程真正恢复运行（debug_wait 的「运行中」在 Continue 后立即发布，此刻进程可能尚未脱离同步点，
         // 过早 terminate 会在「已停」态成功而漏掉运行态缺陷——stdio 复现脚本同样在 Continue 后等待再终止）。
         await Task.Delay(900, TestContext.Current.CancellationToken);
 
@@ -1222,12 +1222,12 @@ public sealed class DebugMcpToolsTests
         Assert.True(wait.IsError != true, wait.Text());
         Assert.Contains("进程已退出", wait.Text());
 
-        // exitCode 由 server 侧 process.Exited 捕获——轮询 debug_state 直到 Exited 行显示 exitCode=0
+        // exitCode 由 server 侧 process.Exited 捕获——轮询 debug_wait 直到 Exited 行显示 exitCode=0
         string st = "";
         var deadline = DateTime.UtcNow.AddSeconds(10);
         while (DateTime.UtcNow < deadline)
         {
-            var r = await CallAsync(mcp, "debug_state", new Dictionary<string, object?>());
+            var r = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?>());
             Assert.True(r.IsError != true, r.Text());
             st = r.Text();
             if (st.Contains("exitCode=0")) break;
@@ -1302,8 +1302,8 @@ public sealed class DebugMcpToolsTests
         Assert.True(wait.IsError != true, wait.Text());
         Assert.Contains("已停下", wait.Text());
 
-        // 写前 debug_variables 正常（写不影响读链路的前置确认）
-        var varsBefore = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        // 写前 debug_frame 正常（写不影响读链路的前置确认）
+        var varsBefore = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(varsBefore.IsError != true, varsBefore.Text());
         Assert.Contains("局部变量", varsBefore.Text());
 
@@ -1315,12 +1315,12 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("原值 5", set.Text());
         Assert.Contains("新值 99", set.Text());
 
-        // 复核：debug_evaluate h.N 读回 99；debug_variables 停点后仍正常可读
+        // 复核：debug_evaluate h.N 读回 99；debug_frame 停点后仍正常可读
         var eval = await CallAsync(mcp, "debug_evaluate",
             new Dictionary<string, object?> { ["expression"] = "h.N" });
         Assert.True(eval.IsError != true, eval.Text());
         Assert.Contains("99", eval.Text());
-        var varsAfter = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        var varsAfter = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(varsAfter.IsError != true, varsAfter.Text());
         Assert.Contains("局部变量", varsAfter.Text());
 
@@ -1494,8 +1494,8 @@ public sealed class DebugMcpToolsTests
             new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", wait.Text());
 
-        // debug_variables：Password/Token 占位符 + 顶部计数提示；普通字段原样；原始凭据不出现在输出
-        var vars = await CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        // debug_frame：Password/Token 占位符 + 顶部计数提示；普通字段原样；原始凭据不出现在输出
+        var vars = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(vars.IsError != true, vars.Text());
         Assert.Contains("局部变量/参数", vars.Text());
         Assert.Contains($"2 个值{notice}", vars.Text());
@@ -1729,7 +1729,7 @@ public sealed class DebugMcpToolsTests
 }
 
 /// <summary>
-/// DB2 debug_variables names 按名白名单端到端：bag 模式停 WorkBag 循环体——白名单命中（忽略大小写）/
+/// DB2 debug_frame names 按名白名单端到端：bag 模式停 WorkBag 循环体——白名单命中（忽略大小写）/
 /// 未知名零值反馈/超 50 拒绝/空=全量回归/与 DB1 脱敏叠加交叉；异常停点 names="$exception" 只返异常节。
 /// </summary>
 public sealed class DebugVariablesNamesWhitelistTests
@@ -1776,7 +1776,7 @@ public sealed class DebugVariablesNamesWhitelistTests
         Assert.Contains("已停下", wait.Text());
 
         // 1. 空 names = 全量回归（头不带白名单；locals 与 arguments 节都在）
-        var full = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        var full = await DebugMcpToolsTests.CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(full.IsError != true, full.Text());
         Assert.Contains("局部变量/参数", full.Text());
         Assert.DoesNotContain("白名单", full.Text());
@@ -1786,7 +1786,7 @@ public sealed class DebugVariablesNamesWhitelistTests
         Assert.Contains("n = 5", full.Text());
 
         // 2. names="b,n"：只渲染命中项（arguments 节），未请求的 local i 不出现
-        var two = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+        var two = await DebugMcpToolsTests.CallAsync(mcp, "debug_frame",
             new Dictionary<string, object?> { ["names"] = "b,n" });
         Assert.True(two.IsError != true, two.Text());
         Assert.Contains("白名单 2 项 → 命中 2 项", two.Text());
@@ -1797,14 +1797,14 @@ public sealed class DebugVariablesNamesWhitelistTests
         Assert.DoesNotContain("hunter2", two.Text());
 
         // 3. 忽略大小写：names="B,N" 同命中
-        var ci = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+        var ci = await DebugMcpToolsTests.CallAsync(mcp, "debug_frame",
             new Dictionary<string, object?> { ["names"] = "B,N" });
         Assert.True(ci.IsError != true, ci.Text());
         Assert.Contains("白名单 2 项 → 命中 2 项", ci.Text());
         Assert.Contains("n = 5", ci.Text());
 
         // 4. 未知名零值反馈：names="b,NoSuch" → b 命中 + 未找到 NoSuch + 可用名清单（不含值）
-        var unknown = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+        var unknown = await DebugMcpToolsTests.CallAsync(mcp, "debug_frame",
             new Dictionary<string, object?> { ["names"] = "b,NoSuch" });
         Assert.True(unknown.IsError != true, unknown.Text());
         Assert.Contains("白名单 2 项 → 命中 1 项", unknown.Text());
@@ -1818,14 +1818,14 @@ public sealed class DebugVariablesNamesWhitelistTests
 
         // 5. 白名单项数 >50 → 中文拒绝（防整帧当白名单）
         var many = string.Join(",", Enumerable.Range(1, 51).Select(i => "v" + i));
-        var over = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+        var over = await DebugMcpToolsTests.CallAsync(mcp, "debug_frame",
             new Dictionary<string, object?> { ["names"] = many });
         Assert.True(over.IsError != true, over.Text());
         Assert.Contains("names 项数 51 超上限 50", over.Text());
         Assert.DoesNotContain("命中", over.Text());
 
         // 6. 白名单 + DB1 脱敏叠加：names="b" 命中的对象 children 敏感字段仍被脱敏（交叉断言）
-        var one = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+        var one = await DebugMcpToolsTests.CallAsync(mcp, "debug_frame",
             new Dictionary<string, object?> { ["names"] = "b" });
         Assert.True(one.IsError != true, one.Text());
         Assert.Contains("白名单 1 项 → 命中 1 项", one.Text());
@@ -1860,7 +1860,7 @@ public sealed class DebugVariablesNamesWhitelistTests
         Assert.Contains("已停下", wait.Text());
 
         // names="$exception"：只返回异常节（$exception 伪变量命中），locals/arguments 节不渲染
-        var exc = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables",
+        var exc = await DebugMcpToolsTests.CallAsync(mcp, "debug_frame",
             new Dictionary<string, object?> { ["names"] = "$exception" });
         Assert.True(exc.IsError != true, exc.Text());
         Assert.Contains("白名单 1 项 → 命中 1 项", exc.Text());
@@ -1872,7 +1872,7 @@ public sealed class DebugVariablesNamesWhitelistTests
         Assert.DoesNotContain("[arguments]", exc.Text());
 
         // 对照：空 names 全量仍含 exception 节头（白名单不破坏全量路径）
-        var full = await DebugMcpToolsTests.CallAsync(mcp, "debug_variables", new Dictionary<string, object?>());
+        var full = await DebugMcpToolsTests.CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
         Assert.True(full.IsError != true, full.Text());
         Assert.Contains("[exception]", full.Text());
         Assert.DoesNotContain("白名单", full.Text());

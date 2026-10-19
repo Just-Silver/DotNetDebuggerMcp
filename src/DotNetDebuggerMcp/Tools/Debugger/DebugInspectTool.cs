@@ -15,6 +15,33 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 public static class DebugInspectTool
 {
     /// <summary>
+    /// 一次读取停点现场：调用栈 + 当前帧变量（合并原 debug_frame 与 debug_frame）。
+    /// </summary>
+    /// <param name="threadId">线程 id；缺省 0 = 用最近停点线程。</param>
+    /// <param name="all">列出全部托管线程的调用栈（默认 false）。</param>
+    /// <param name="names">变量名白名单（逗号分隔，忽略大小写，默认空=全量）。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>调用栈 + 变量文本或错误提示。</returns>
+    [McpServerTool]
+    [Description("一次读取停点现场：调用栈 + 当前帧变量（合并原两次调用，避免连调）。缺省读最近停点线程；threadId 指定读该线程；all=true 或初始冻结态列全部托管线程的栈（死锁/卡死排查）。names 为变量名白名单（逗号分隔，忽略大小写，空=全量；命中对象照常逐字段脱敏）；异常停点可用 $exception 查看异常对象。停在 async 状态机帧读不到栈时改用 debug_breakpoint(action=set) typeName+line。")]
+    public static async Task<string> DebugFrame(
+        [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
+        [Description("列出全部托管线程的调用栈（默认 false=只读单线程；初始冻结态自动启用）。")] bool all = false,
+        [Description("变量名白名单（逗号分隔，忽略大小写，默认空=全量）。")] string names = "",
+        CancellationToken cancellationToken = default)
+    {
+        var stack = await DebugStack(threadId, all, cancellationToken);
+
+        // 变量只在该线程处于停点时可读；初始冻结态/运行中只给栈（避免把「读不到变量」当错误噪音）
+        var active = DebugSessionService.Manager.Active;
+        if (active is null || active.Buffer.CurrentState != DebugSessionState.Stopped)
+            return stack + Environment.NewLine + "变量：当前非停点状态（初始冻结态/运行中）——运行至断点后再读。";
+
+        var variables = await DebugVariables(threadId, names, cancellationToken);
+        return stack + Environment.NewLine + variables;
+    }
+
+    /// <summary>
     /// 读取调用栈（进程需停在断点/异常/单步）。缺省读最近停点线程；threadId 指定时读该线程。
     /// 每帧输出 类型.方法 [token]，附位置（模块!token+ILoffset，仅当类型/方法名缺失时）。
     /// </summary>
@@ -22,9 +49,8 @@ public static class DebugInspectTool
     /// <param name="all">列出全部托管线程的调用栈（默认 false）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>调用栈文本或错误提示。</returns>
-    [McpServerTool]
     [Description("读取调用栈（进程需停在断点/异常/单步，或处于 attach/launch 后的初始冻结态）。每帧输出 类型.方法 [token]（解析失败降级为 模块!token+ILoffset）。缺省读最近停点线程；threadId 指定时读该线程；all=true 或进程处于初始冻结态（无停点线程）时列出全部托管线程的栈（死锁/卡死排查）。停在编译器生成的 async 状态机帧时可能读不到栈（返回空栈提示）——此时改用 debug_breakpoint(action=set) typeName+line 断还原源码的 await 行。")]
-    public static async Task<string> DebugStack(
+    internal static async Task<string> DebugStack(
         [Description("线程 id；缺省 0 = 用最近停点线程（初始冻结态下无此线程则列全部线程）。")] int threadId = 0,
         [Description("列出全部托管线程的调用栈（默认 false=只读单线程；初始冻结态自动启用）。死锁/卡死排查用。")] bool all = false,
         CancellationToken cancellationToken = default)
@@ -116,9 +142,8 @@ public static class DebugInspectTool
     /// <param name="names">按名白名单（逗号分隔，空=全量）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>变量文本或错误提示。</returns>
-    [McpServerTool]
     [Description("读取栈顶帧的局部变量与参数（进程需停）；异常停点额外返回 $exception 节（当前异常对象：类型/Message/一级字段）。")]
-    public static async Task<string> DebugVariables(
+    internal static async Task<string> DebugVariables(
         [Description("线程 id；缺省 0 = 用最近停点线程。")] int threadId = 0,
         [Description("按名白名单（逗号分隔，空=全量）。精确忽略大小写匹配 局部/参数名（无符号名用 slotN）与 $exception；最多 50 项；未知名会在返回中列出可用名。")] string names = "",
         CancellationToken cancellationToken = default)
@@ -138,7 +163,7 @@ public static class DebugInspectTool
             var (lines, hits, redacted) = BuildVariablesLines(vars, requested);
             var detail = requested is not null ? $"thread={tid}，names={requested.Count}" : $"thread={tid}";
             DebugSessionService.Manager.Actions.Log("debug_variables", detail, "ok");
-            var header = $"局部变量/参数（thread={tid}";
+            var header = $"局部变量/参数（thread={tid}）:";
             if (requested is not null) header += $"，白名单 {requested.Count} 项 → 命中 {hits} 项";
             if (redacted > 0) header += $"，{redacted} 个值{SensitiveValueRedactor.Notice}";
             header += "）";
@@ -241,7 +266,7 @@ public static class DebugInspectTool
     internal static string RenderVariable(DotNetDebugger.Engine.Models.DebugVariable v, int depth)
         => RenderVariable(v, depth, out _);
 
-    /// <summary>单次递归渲染并回传子树脱敏命中数（计数与占位符恒一致；debug_variables 顶部计数用）。</summary>
+    /// <summary>单次递归渲染并回传子树脱敏命中数（计数与占位符恒一致；debug_frame 顶部计数用）。</summary>
     private static string RenderVariable(DotNetDebugger.Engine.Models.DebugVariable v, int depth, out int redacted)
     {
         var indent = new string(' ', depth * 2);
@@ -282,8 +307,8 @@ public static class DebugInspectTool
     }
 
     /// <summary>
-    /// **仅 <c>debug_stack</c> 用**的前置校验：会话存在且进程**可读栈**——停点态（Stopped）或 attach/launch 后的**初始冻结态**
-    /// （None/Attaching/Launching，引擎已停住全局）。冻结态下**没有停点线程**，故 <c>debug_stack</c> 必须列全部线程；
+    /// **仅 <c>debug_frame</c> 用**的前置校验：会话存在且进程**可读栈**——停点态（Stopped）或 attach/launch 后的**初始冻结态**
+    /// （None/Attaching/Launching，引擎已停住全局）。冻结态下**没有停点线程**，故 <c>debug_frame</c> 必须列全部线程；
     /// 需要「某线程栈顶帧」的工具（variables/evaluate/object/读值）**不得**用它——冻结态给不出栈顶帧，放行只会产出
     /// 半截提示（回归 <c>DebugObject_DrillTree_...AndNotStopped</c>）。
     /// </summary>

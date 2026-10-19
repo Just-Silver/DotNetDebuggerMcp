@@ -187,8 +187,8 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("includeCursor", text); // 光标
         Assert.Contains("原点", text);          // origin/scale 坐标元数据
         Assert.Contains("frameId", text);       // 代际护栏（ui_find ↔ ui_action/screenshot）
-        Assert.Contains("screenshot_displays", text); // 视觉族发现：显示器清单（喂 display）
-        Assert.Contains("screenshot_windows", text);  // 视觉族发现：窗口清单（喂 hwnd/windowTitle/processId）
+        Assert.Contains("screenshot(mode=list-displays)", text); // 视觉族发现：显示器清单（喂 display）
+        Assert.Contains("screenshot(mode=list-windows)", text);  // 视觉族发现：窗口清单（喂 hwnd/windowTitle/processId）
         Assert.Contains("web_open", text);
         // P1–P6（2026-10-15）：冻结态可读栈 / clickPoint 物理输入声明 / ui_* 观测扰动
         Assert.Contains("冻结", text);          // P1：attach/launch 冻结态即可读栈

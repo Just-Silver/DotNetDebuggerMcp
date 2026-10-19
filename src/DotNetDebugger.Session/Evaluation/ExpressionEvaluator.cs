@@ -5,13 +5,13 @@ namespace DotNetDebugger.Session;
 
 /// <summary>
 /// 表达式读值安全子集求值器（P6）：解析（<see cref="ExpressionParser"/>）+ AST 求值调度。
-/// 路径节点经 Engine <c>EvaluatePathAsync</c> 逐段解引用（纯读、无 FuncEval，与 debug_variables 同一来源）；
+/// 路径节点经 Engine <c>EvaluatePathAsync</c> 逐段解引用（纯读、无 FuncEval，与 debug_frame 同一来源）；
 /// 一元 ! 与单次比较在本层标量化判定（数值统一 decimal、字符串 Ordinal、布尔仅 ==/!=）。
 /// 失败抛 <see cref="ExpressionEvaluationException"/>（中文可诊断，宿主直接展示；P7 条件断点据此判不命中）。
 /// </summary>
 public static class ExpressionEvaluator
 {
-    /// <summary>求值表达式（进程需停在断点/异常；threadId 与 debug_variables 一致，0 = 最近停点线程）。</summary>
+    /// <summary>求值表达式（进程需停在断点/异常；threadId 与 debug_frame 一致，0 = 最近停点线程）。</summary>
     public static Task<DebugEvalResult> EvaluateAsync(DebugSession session, int threadId, string expression, CancellationToken ct = default)
     {
         var ast = ExpressionParser.Parse(expression);

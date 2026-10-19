@@ -5,7 +5,7 @@ using DotNetDebugger.Session.Models;
 namespace DotNetDebugger.Session;
 
 /// <summary>
-/// 消费 DebugSession 的 DebugEvent 流，维护线程安全的最新状态快照（供 debug_state/debug_stack 等查询工具读取，
+/// 消费 DebugSession 的 DebugEvent 流，维护线程安全的最新状态快照（供 debug_wait/debug_frame 等查询工具读取，
 /// 不等停）。后台任务从 session.Events 读取，更新 CurrentState/LastStop。
 /// </summary>
 public sealed class SessionEventBuffer : IAsyncDisposable
@@ -36,7 +36,7 @@ public sealed class SessionEventBuffer : IAsyncDisposable
 
     /// <summary>
     /// 取走自上次消费以来被异常过滤器跳过的异常统计（次数 + 最近类型），并清零。
-    /// 「期间」语义由消费方驱动：debug_wait/debug_state 每次调用时取走，向 agent 反馈
+    /// 「期间」语义由消费方驱动：debug_wait/debug_wait 每次调用时取走，向 agent 反馈
     /// 「过滤器在工作、不命中」——防「设错类型名导致断点永不命中」的静默空等。
     /// </summary>
     public (int Count, string? LastType) ConsumeSkippedExceptions()
@@ -55,7 +55,7 @@ public sealed class SessionEventBuffer : IAsyncDisposable
 
     /// <summary>
     /// 取走自上次消费以来「断点条件求值失败」统计（P7：次数 + 最近断点 id + 最近错误），并清零。
-    /// consume 式（P2 skipped 同款）：debug_wait/debug_state 每次调用取走，向 agent 反馈
+    /// consume 式（P2 skipped 同款）：debug_wait/debug_wait 每次调用取走，向 agent 反馈
     /// 「条件写错/变量不可见导致永不命中」——防静默空等。真性 false（条件正常但不成立）不计数。
     /// </summary>
     public (int Count, int BreakpointId, string? LastError) ConsumeConditionFailures()
@@ -211,7 +211,7 @@ public sealed class SessionEventBuffer : IAsyncDisposable
                 }
                 break;
             case DebugEventKind.ExceptionSkipped:
-                // 过滤器跳过的异常：不计状态/停点，只累计给 debug_wait/debug_state 的不命中反馈
+                // 过滤器跳过的异常：不计状态/停点，只累计给 debug_wait/debug_wait 的不命中反馈
                 if (e.Payload is ExceptionSkippedPayload sk)
                 {
                     lock (_gate)
@@ -222,7 +222,7 @@ public sealed class SessionEventBuffer : IAsyncDisposable
                 }
                 break;
             case DebugEventKind.TraceHit:
-                // trace 断点命中：折叠进环形轨迹（不停进程），debug_wait/debug_state 批量消费
+                // trace 断点命中：折叠进环形轨迹（不停进程），debug_wait/debug_wait 批量消费
                 if (e.Payload is TraceHitPayload th)
                 {
                     lock (_gate)
@@ -237,7 +237,7 @@ public sealed class SessionEventBuffer : IAsyncDisposable
                 }
                 break;
             case DebugEventKind.BreakpointConditionFailed:
-                // P7 条件求值失败：不计状态/停点，只累计给 debug_wait/debug_state 的不命中反馈
+                // P7 条件求值失败：不计状态/停点，只累计给 debug_wait/debug_wait 的不命中反馈
                 if (e.Payload is BreakpointConditionFailedPayload cf)
                 {
                     lock (_gate)

@@ -4,7 +4,7 @@ namespace DotNetDebuggerMcp.Services;
 
 /// <summary>
 /// 停点上下文用的反编译文档缓存（P4）：按 模块路径+类型全名 缓存 DocumentService 产物，
-/// 避免每次 debug_wait/debug_state 重复反编译同一类型。超容量整体清空（简单诚实；进程内缓存，
+/// 避免每次 debug_wait/debug_wait 重复反编译同一类型。超容量整体清空（简单诚实；进程内缓存，
 /// 键含模块路径，跨会话复用同 DLL 的文档亦正确）。线程安全（debug 工具可能并发调用）。
 /// </summary>
 internal sealed class DebugDocumentCache

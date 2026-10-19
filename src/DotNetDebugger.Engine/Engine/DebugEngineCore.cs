@@ -897,7 +897,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
         if (thread.ActiveFrame is not CorDebugILFrame ilf)
             throw new InvalidOperationException($"栈顶非 IL 帧，无法解析变量「{rootName}」。");
 
-        // 名字来源与 ReadVariablesForThread 同一管线：参数名取元数据、局部名取 PDB（缺失时 debug_variables 以 slotN 展示）
+        // 名字来源与 ReadVariablesForThread 同一管线：参数名取元数据、局部名取 PDB（缺失时 debug_frame 以 slotN 展示）
         string?[] argNames = [], localNames = [];
         var top = ReadTopFrame(thread);
         if (top is not null)
@@ -1065,13 +1065,13 @@ public sealed class DebugEngineCore : IAsyncDisposable
                 throw new InvalidOperationException($"第 {segNo} 段 {segText}：数组无字段，取元素请用 [n] 索引。");
             case CorDebugStringValue:
                 throw new InvalidOperationException(
-                    $"第 {segNo} 段 {segText}：字符串不支持成员访问（Length 亦不支持），可用 [n] 取单字符或经 debug_variables 查看整体。");
+                    $"第 {segNo} 段 {segText}：字符串不支持成员访问（Length 亦不支持），可用 [n] 取单字符或经 debug_frame 查看整体。");
             default:
                 throw new InvalidOperationException($"第 {segNo} 段 {segText}：{ResolveValueTypeName(v) ?? "<未知类型>"} 为标量值，无字段可取。");
         }
     }
 
-    /// <summary>终值 → DebugEvalResult：Display/Children 复用 ReadValue(expand:true)（与 debug_variables 同款），Kind/ScalarValue 供比较与布尔判定。</summary>
+    /// <summary>终值 → DebugEvalResult：Display/Children 复用 ReadValue(expand:true)（与 debug_frame 同款），Kind/ScalarValue 供比较与布尔判定。</summary>
     private static DebugEvalResult ToEvalResult(EvalValue value)
         => value switch
         {
@@ -1586,7 +1586,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
             new ExceptionHitPayload(threadId, type, message, top)));
     }
 
-    /// <summary>异常被过滤器跳过（不停进程、不改状态；Session 计数给 debug_wait/debug_state 不命中反馈）。</summary>
+    /// <summary>异常被过滤器跳过（不停进程、不改状态；Session 计数给 debug_wait/debug_wait 不命中反馈）。</summary>
     internal void PublishExceptionSkipped(int threadId, string type, string? message)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.ExceptionSkipped,
             new ExceptionSkippedPayload(threadId, type, message)));
@@ -1596,7 +1596,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.TraceHit,
             new TraceHitPayload(breakpointId, threadId, DateTimeOffset.UtcNow, top, variables)));
 
-    /// <summary>断点条件求值失败（P7：不停进程；Session consume 式计数，debug_wait/debug_state 反馈防静默空等）。</summary>
+    /// <summary>断点条件求值失败（P7：不停进程；Session consume 式计数，debug_wait/debug_wait 反馈防静默空等）。</summary>
     internal void PublishConditionFailed(int breakpointId, int threadId, string error)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.BreakpointConditionFailed,
             new BreakpointConditionFailedPayload(breakpointId, threadId, error)));

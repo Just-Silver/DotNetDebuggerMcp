@@ -169,7 +169,7 @@ public static class ScreenCapture
     /// 读窗口标题（上限 <see cref="TitleCapacity"/>-1 字符）。读满缓冲（可能被截断）时末尾补 <c>…</c> 明示——
     /// <para>2026-09-28 修（batch3 D6）：此前固定 <c>StringBuilder(256)</c> 且**不加标记**，超长标题被静默截到 255、
     /// 看似"标题就这么长"，误导排查。此处仅加 <c>…</c>；**刻意不返回完整标题**：完整标题对 agent 定位（按标题子串/pid）
-    /// 无价值，却会让 <c>screenshot_windows</c>（最多 200 行）等输出灌爆上下文。截断只影响展示，标题匹配仍按月/pid 正常。</para>
+    /// 无价值，却会让 <c>screenshot(mode=list-windows)</c>（最多 200 行）等输出灌爆上下文。截断只影响展示，标题匹配仍按月/pid 正常。</para>
     /// </summary>
     private static string ReadWindowTitle(IntPtr hwnd)
     {

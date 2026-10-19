@@ -148,7 +148,7 @@ public sealed class DebugViewService
         {
             var tid = active.Buffer.StoppedThreadId;
             if (tid > 0) return await active.Session.GetStackFramesAsync(tid, ct);
-            // 冻结态（无停点线程）：与 MCP debug_stack 同口径，合并全部托管线程的栈
+            // 冻结态（无停点线程）：与 MCP debug_frame 同口径，合并全部托管线程的栈
             var all = new List<DebugStackFrame>();
             foreach (var t in await active.Session.GetThreadsAsync(ct))
             {

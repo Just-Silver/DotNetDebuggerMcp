@@ -4,7 +4,7 @@ using Xunit;
 namespace SharpSight.Capture.Tests;
 
 /// <summary>
-/// 可见顶层窗口枚举单测（宿主 screenshot_windows 的数据源）：只出根窗口、每条带有效 hwnd/pid，
+/// 可见顶层窗口枚举单测（宿主 screenshot(mode=list-windows) 的数据源）：只出根窗口、每条带有效 hwnd/pid，
 /// MatchCount 无选择器语义恒 1。不读屏幕 DC，锁屏/无头会话亦可用（条目数可为 0，不做非空断言）。
 /// </summary>
 public sealed class WindowEnumeratorTests

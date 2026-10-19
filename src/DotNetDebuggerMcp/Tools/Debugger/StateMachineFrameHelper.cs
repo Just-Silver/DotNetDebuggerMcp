@@ -8,7 +8,7 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 /// async 状态机帧识别/标注助手（C④ + B①，宿主提示层）。
 /// Task 2（C）后栈帧 TypeName 是真名（嵌套类型用「+」）；async 方法 Foo 的编译器生成状态机
 /// 类型形如「Ns.Outer+&lt;Foo&gt;d__44」/「&lt;Foo&gt;d__44」。本助手从全名解析「&lt;原方法名&gt;d__N」
-/// 形态，供 debug_stack 帧标注（C④）、debug_step 引导与停点上下文备注（B①）三处使用。
+/// 形态，供 debug_frame 帧标注（C④）、debug_step 引导与停点上下文备注（B①）三处使用。
 /// 刻意比 Decompiler 的 CompilerGeneratedFilter（名含「&lt;」即编译器生成）收窄——lambda 闭包
 /// &lt;&gt;c__DisplayClass 等不含「&gt;d__」形态，不视为 async 状态机。
 /// </summary>

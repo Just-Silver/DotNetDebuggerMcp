@@ -33,7 +33,7 @@ public static class DebugRunToTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、临时断点自动移除——用 debug_stack/debug_variables 观察现场。定位同 debug_breakpoint(action=set)：token（moduleName+token+ilOffset）或 typeName+line（decompile 输出行号）或 typeName+memberName（方法名子串，命中唯一方法）；moduleName 可省。超时/命中其它断点/进程退出时返回对应提示且临时断点一并自动清理。注意边界：run_to 只对「目标会被进程自然执行到」有效——当前执行路径若不会走向目标（停住不自己走的分支/等待），run_to 将等到超时，此类场景请改用 debug_breakpoint(action=set) 设普通断点 + debug_continue。")]
+    [Description("运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、临时断点自动移除——用 debug_frame 观察现场。定位同 debug_breakpoint(action=set)：token（moduleName+token+ilOffset）或 typeName+line（decompile 输出行号）或 typeName+memberName（方法名子串，命中唯一方法）；moduleName 可省。超时/命中其它断点/进程退出时返回对应提示且临时断点一并自动清理。注意边界：run_to 只对「目标会被进程自然执行到」有效——当前执行路径若不会走向目标（停住不自己走的分支/等待），run_to 将等到超时，此类场景请改用 debug_breakpoint(action=set) 设普通断点 + debug_continue。")]
     public static async Task<string> DebugRunTo(
         [Description("类型全名（与 decompile 输出同格式，默认空）；与 line 组合按反编译视图行定位，或与 memberName 组合按成员级定位——typeName+line / typeName+memberName 二选一必填。")] string typeName = "",
         [Description("行号（1-based，decompile 输出行号，默认 0=未提供）；与 typeName 组合按反编译视图行定位。")] int line = 0,
@@ -110,7 +110,7 @@ public static class DebugRunToTool
             }
             else if (stop.BreakpointId == targetId)
             {
-                message = $"已运行到目标。临时断点 {targetId.Value} 命中并已自动移除。用 debug_stack/debug_variables 观察。";
+                message = $"已运行到目标。临时断点 {targetId.Value} 命中并已自动移除。用 debug_frame 观察。";
             }
             else if (stop.Kind == DebugEventKind.BreakpointHit && stop.BreakpointId is not null)
             {
@@ -120,7 +120,7 @@ public static class DebugRunToTool
             else if (stop.Kind == DebugEventKind.ExceptionHit)
             {
                 message = $"进程停在异常（{stop.Reason}），未到 run-to 目标。临时断点 {targetId.Value} 已自动清理。" +
-                          $"用 debug_state 看异常现场（附 $exception）；处理后可 debug_continue 继续跑向目标。";
+                          $"用 debug_wait 看异常现场（附 $exception）；处理后可 debug_continue 继续跑向目标。";
             }
             else
             {

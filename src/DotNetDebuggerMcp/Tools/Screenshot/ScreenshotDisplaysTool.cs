@@ -16,7 +16,6 @@ namespace DotNetDebuggerMcp.Tools.Screenshot;
 public static class ScreenshotDisplaysTool
 {
     /// <summary>列出本机显示器（1 基编号/主屏/物理边界/缩放），供 screenshot 的 display 参数取值。</summary>
-    [McpServerTool]
     [Description("列出本机显示器清单（1 基编号、是否主屏、物理边界、缩放比），用于填 screenshot 的 display：编号=第 N 台、primary=主屏、left/right=主屏左/右侧相邻显示器。只读，不截图、不要求调试会话。")]
     public static Task<string> ScreenshotDisplays(CancellationToken cancellationToken = default)
     {

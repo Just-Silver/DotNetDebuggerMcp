@@ -56,7 +56,7 @@ public sealed class EvaluatePathTests
         Assert.Equal("\"s\"", ch.Display);
         Assert.Equal("s", Assert.IsType<string>(ch.ScalarValue));
 
-        // 对象终值：与 debug_variables 同款（Display + children 一级）
+        // 对象终值：与 debug_frame 同款（Display + children 一级）
         var whole = await session.EvaluatePathAsync(tid, "b", [], TestContext.Current.CancellationToken);
         Assert.Equal(DebugEvalKind.Object, whole.Kind);
         Assert.NotNull(whole.Children);

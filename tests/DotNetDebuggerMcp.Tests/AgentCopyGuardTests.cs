@@ -21,10 +21,10 @@ public sealed class AgentCopyGuardTests
         { nameof(DebugControlTool.DebugStep), "debug_wait" },          // step 提交后引导「用 debug_wait 等停」
         { nameof(DebugRunToTool.DebugRunTo), "临时断点" },              // run_to 一次性临时断点语义（命中即移除）
         { nameof(DebugSessionTool.DebugLaunch), "冻结在 Main 前" },     // launch 早期冻结语义（无需目标配合）
-        { nameof(DebugSessionTool.DebugState), "Stopped" },             // 读栈/变量前先 debug_state 确认 Stopped
+        { nameof(DebugControlTool.DebugWait), "当前会话状态" },             // 读栈/变量前先 debug_wait 确认 Stopped
         { nameof(DebugSessionTool.DebugSession), "强制结束" },        // debug_session(action=terminate) 结束目标进程（区别于 disconnect）
         { nameof(DebugSessionTool.DebugModules), "已加载的模块" },      // debug_modules 列已加载模块（断点定位排障）
-        { nameof(DebugInspectTool.DebugVariables), "$exception" },      // 异常停点观察口
+        { nameof(DebugInspectTool.DebugFrame), "$exception" },      // 异常停点观察口
         { nameof(DebugBreakpointTool.DebugBreakpoint), "绑定" },    // list 返回含绑定状态
         { nameof(DebugExceptionTool.DebugExceptions), "first-chance" }, // 异常断点语义
         // W1/V3/D1 已落地工具补录（描述已含片段，直接固化进契约）：
@@ -54,14 +54,14 @@ public sealed class AgentCopyGuardTests
         { nameof(ScreenshotTool.Screenshot), "仅 element 模式输出" },   // `帧` 字段只在 element 模式出现（P4 说明与输出对齐）
         { nameof(ScreenshotTool.Screenshot), "window 整窗走 WGC" },     // 大图落盘预警：WGC 整窗 PNG 明显大于 screen
         // 视觉族发现工具（只为 screenshot 寻址服务；只读）
-        { nameof(ScreenshotDisplaysTool.ScreenshotDisplays), "显示器" },              // 列显示器清单
-        { nameof(ScreenshotWindowsTool.ScreenshotWindows), "可见顶层窗口" },          // 列窗口清单
+        { nameof(ScreenshotTool.Screenshot), "list-displays" },              // 列显示器清单
+        { nameof(ScreenshotTool.Screenshot), "list-windows" },          // 列窗口清单
         // P1–P6 修复补录（2026-10-15）：
         { nameof(DebugSessionTool.DebugLaunch), "直接读栈" },            // P1：冻结态即可读栈
         { nameof(DebugSessionTool.DebugAttach), "直接读栈" },            // P1：attach 冻结即可读栈
         { nameof(DebugSessionTool.DebugAttach), "已有活动会话" },        // P2：已有会话拒绝
         { nameof(DebugSessionTool.DebugSession), "不杀目标" },         // P2：debug_session(action=reset) 不杀目标
-        { nameof(DebugInspectTool.DebugStack), "全部托管线程" },         // P1：all/冻结态列全部线程
+        { nameof(DebugInspectTool.DebugFrame), "全部托管线程" },         // P1：all/冻结态列全部线程
         { nameof(UiTools.UiAction), "clickPoint" },                      // P3：显式真实点击开关
         { nameof(UiTools.UiAction), "可能不生效" },                      // P3：legacy 命中标注可能无效
         { nameof(UiTools.UiFind), "scope" },                             // P5：限定子树
@@ -85,10 +85,10 @@ public sealed class AgentCopyGuardTests
         { nameof(ScreenshotTool.Screenshot), "filePath", "临时目录" },          // 落盘基准=临时目录（防污染调用方项目）
         { nameof(ScreenshotTool.Screenshot), "filePath", "不再附图片" },        // 落盘后不内联返回图片（需自行读文件）——agent 必须知道
         // 寻址参数的「取值来源」必须对 agent 可见（跨工具指路；漏改等于 agent 又回到靠猜）
-        { nameof(ScreenshotTool.Screenshot), "display", "screenshot_displays" },
-        { nameof(ScreenshotTool.Screenshot), "hwnd", "screenshot_windows" },
-        { nameof(ScreenshotTool.Screenshot), "windowTitle", "screenshot_windows" },
-        { nameof(ScreenshotTool.Screenshot), "processId", "screenshot_windows" },
+        { nameof(ScreenshotTool.Screenshot), "display", "screenshot(mode=list-displays)" },
+        { nameof(ScreenshotTool.Screenshot), "hwnd", "screenshot(mode=list-windows)" },
+        { nameof(ScreenshotTool.Screenshot), "windowTitle", "screenshot(mode=list-windows)" },
+        { nameof(ScreenshotTool.Screenshot), "processId", "screenshot(mode=list-windows)" },
         { nameof(ScreenshotTool.Screenshot), "region", "先截一张" },
         { nameof(ScreenshotTool.Screenshot), "element", "无过滤" },
         { nameof(UiTools.UiAction), "frameId", "旧画面" },

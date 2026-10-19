@@ -1,10 +1,11 @@
 using DotNetDebuggerMcp.Tools.Screenshot;
+using System.Reflection;
 using Xunit;
 
 namespace DotNetDebuggerMcp.Tests;
 
 /// <summary>
-/// screenshot_windows 单测（视觉族寻址发现）：输出须给出 <c>hwnd</c>/<c>pid</c>/标题三元组
+/// screenshot(mode=list-windows) 单测（视觉族寻址发现）：输出须给出 <c>hwnd</c>/<c>pid</c>/标题三元组
 /// （agent 据此填 screenshot 的 hwnd/windowTitle/processId），并验证 <c>filter</c> 正反向。
 /// 无桌面会话（枚举为空）时跳过不红。
 /// </summary>
@@ -27,13 +28,14 @@ public sealed class ScreenshotWindowsToolTests
             Assert.Matches(@"另有 \d+ 个无标题或零尺寸窗口未列出", text);   // 过滤计数提示格式
     }
 
-    /// <summary>agent 是靠 MCP 工具名发现它的——名字必须是 snake_case 的 `screenshot_windows`（SDK 由方法名派生）。</summary>
+    /// <summary>发现入口已并入 screenshot：mode 取值必须在 agent 可见的参数说明里（否则等于不可发现）。</summary>
     [Fact]
-    public async Task McpToolList_ExposesSnakeCaseName()
+    public void 发现入口在screenshot的mode参数说明里()
     {
-        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
-        var tools = await mcp.ListToolsAsync(options: null, cancellationToken: TestContext.Current.CancellationToken);
-        Assert.Contains(tools, t => t.Name == "screenshot_windows");
+        var method = typeof(ScreenshotTool).GetMethod(nameof(ScreenshotTool.Screenshot))!;
+        var mode = method.GetParameters().First(p => p.Name == "mode");
+        var description = mode.GetCustomAttribute<System.ComponentModel.DescriptionAttribute>()!.Description!;
+        Assert.Contains("list-windows", description);
     }
 
     [Fact]

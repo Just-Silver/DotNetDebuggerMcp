@@ -55,7 +55,7 @@ public sealed class DebugTimelineTests
             new("s", 6, T("2026-09-09T12:00:07"), DebugEventKind.TraceHit, new TraceHitPayload(5, 8, T("2026-09-09T12:00:07"), null, [])),
             new("s", 7, T("2026-09-09T12:00:08"), DebugEventKind.EngineLog, new EngineLogPayload("info", "engine-hello")),
         };
-        var actions = new[] { new AgentAction(1, T("2026-09-09T12:00:09"), "debug_state", "", "running") };
+        var actions = new[] { new AgentAction(1, T("2026-09-09T12:00:09"), "debug_wait", "", "running") };
 
         foreach (var kind in new[] { "log", "act", "bp", "step", "exc", "skip", "trc", "state", "engine" })
         {

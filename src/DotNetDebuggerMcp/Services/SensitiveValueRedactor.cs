@@ -14,7 +14,7 @@ internal static class SensitiveValueRedactor
     /// <summary>脱敏占位符：命中疑似凭据后替换原值。</summary>
     internal const string Placeholder = "[已脱敏:疑似凭据]";
 
-    /// <summary>提示后半句（占位符含义 + 判读建议）；各出口拼前缀：debug_variables 头部计数 / debug_evaluate 行内单次提示。
+    /// <summary>提示后半句（占位符含义 + 判读建议）；各出口拼前缀：debug_frame 头部计数 / debug_evaluate 行内单次提示。
     /// 不承诺每个出口都提供类型/长度（变量出口仅有「名称 = 占位符」）——措辞限于「该出口提供的非敏感信息」。</summary>
     internal const string Notice = "疑似凭据已脱敏——请用该出口提供的类型/长度/null 等非敏感信息判断，勿读原始值";
 

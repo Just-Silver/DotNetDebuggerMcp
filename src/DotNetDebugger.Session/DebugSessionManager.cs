@@ -273,7 +273,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
         return true;
     }
 
-    /// <summary>会话摘要（供 debug_state）。无活动会话返回 null。</summary>
+    /// <summary>会话摘要（供 debug_wait）。无活动会话返回 null。</summary>
     public DebugSessionInfo? GetInfo()
     {
         var active = Active;

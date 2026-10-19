@@ -40,7 +40,7 @@ public sealed class ReadObjectDrillTests
         await session.ContinueAsync(TestContext.Current.CancellationToken);
         var tid = await WaitForHitAsync(events, 0);
 
-        // depth=1：仅一层 children（与 debug_variables/Evaluate 一致）
+        // depth=1：仅一层 children（与 debug_frame/Evaluate 一致）
         var d1 = await session.ReadObjectAtPathAsync(tid, "root", [], 1, ct: TestContext.Current.CancellationToken);
         Assert.NotNull(d1.Children);
         Assert.Contains(d1.Children!, c => c.Name == "Next");

@@ -19,7 +19,7 @@ public static class DebugExceptionTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
     [McpServerTool]
-    [Description("异常断点（action 默认 set）：set=设置 first-chance 异常断点（typeName 空=全部异常；否则异常类型全名相等或以「.typeName」结尾才停，不匹配的跳过并在 debug_wait/debug_state 提示）；clear=清除（异常不再停下）。设好后 debug_continue，异常抛出时进程停，debug_variables 可观察 $exception。")]
+    [Description("异常断点（action 默认 set）：set=设置 first-chance 异常断点（typeName 空=全部异常；否则异常类型全名相等或以「.typeName」结尾才停，不匹配的跳过并在 debug_wait/debug_wait 提示）；clear=清除（异常不再停下）。设好后 debug_continue，异常抛出时进程停，debug_frame 可观察 $exception。")]
     public static async Task<string> DebugExceptions(
         [Description("操作类型：set=设置（默认）/ clear=清除。")] string action = "set",
         [Description("异常类型名（set 用）：全名（System.DivideByZeroException）或短名（DivideByZeroException），忽略大小写；空 = 全部异常停下。")] string typeName = "",
@@ -39,8 +39,8 @@ public static class DebugExceptionTool
     /// <summary>
     /// 设置 first-chance 异常断点：进程后续抛匹配的异常时停下（typeName 空 = 全部异常停下；
     /// 否则异常类型全名与 typeName 相等或以「.typeName」结尾即命中，忽略大小写）。
-    /// 不匹配的异常跳过不停，debug_wait/debug_state 会提示跳过了哪些类型（防类型名写错静默空等）。
-    /// 设好后 debug_continue，异常抛出时进程停，用 debug_state/debug_stack/debug_variables（含 $exception）观察。
+    /// 不匹配的异常跳过不停，debug_wait/debug_wait 会提示跳过了哪些类型（防类型名写错静默空等）。
+    /// 设好后 debug_continue，异常抛出时进程停，用 debug_wait/debug_frame（含 $exception）观察。
     /// </summary>
     /// <param name="typeName">异常类型名（全名如 System.DivideByZeroException 或短名 DivideByZeroException，忽略大小写）；缺省空 = 全部异常停下。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -59,7 +59,7 @@ public static class DebugExceptionTool
             DebugSessionService.Manager.Actions.Log("debug_exceptions", typeName, "ok");
             return string.IsNullOrWhiteSpace(typeName)
                 ? "已设异常断点：全部 first-chance 异常将停下进程。"
-                : $"已设异常断点：异常类型全名与 {typeName.Trim()} 相等或以其结尾（短名，忽略大小写）时停下；不匹配的异常跳过并在 debug_wait/debug_state 提示。";
+                : $"已设异常断点：异常类型全名与 {typeName.Trim()} 相等或以其结尾（短名，忽略大小写）时停下；不匹配的异常跳过并在 debug_wait/debug_wait 提示。";
         }
         catch (Exception ex)
         {

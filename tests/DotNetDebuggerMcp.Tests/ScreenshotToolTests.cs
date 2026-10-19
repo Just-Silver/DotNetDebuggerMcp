@@ -85,6 +85,24 @@ public sealed class ScreenshotToolTests
     // ===== 参数校验（spec §5.2 逐条文案）=====
 
     [Fact]
+    public async Task ListWindowsMode_ReturnsWindowList()
+    {
+        var r = await ScreenshotTool.Screenshot(mode: "list-windows", cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(r.IsError != true, r.Text());
+        Assert.Contains("可见顶层窗口", r.Text());
+    }
+
+    [Fact]
+    public async Task ListDisplaysMode_ReturnsDisplayList()
+    {
+        var r = await ScreenshotTool.Screenshot(mode: "list-displays", cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(r.IsError != true, r.Text());
+        Assert.Contains("显示器", r.Text());
+    }
+
+    [Fact]
     public async Task InvalidMode_ReturnsSpecMessage()
     {
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();
@@ -93,7 +111,7 @@ public sealed class ScreenshotToolTests
             ["mode"] = "box",
         });
         Assert.True(r.IsError != true, r.Text());
-        Assert.Equal("mode 无效：\"box\"（可选 auto/screen/display/window/foreground/region/element）。", r.Text());
+        Assert.Equal("mode 无效：\"box\"（可选 auto/screen/display/window/foreground/region/element/list-displays/list-windows）。", r.Text());
     }
 
     [Fact]
@@ -478,7 +496,7 @@ public sealed class ScreenshotToolTests
     {
         // D4：说明承诺「缩放比」，100% 也必须输出。
         await using var mcp = await DebugMcpToolsTests.ConnectAsync();
-        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot_displays", new Dictionary<string, object?>());
+        var r = await DebugMcpToolsTests.CallAsync(mcp, "screenshot", new Dictionary<string, object?> { ["mode"] = "list-displays" });
         Assert.True(r.IsError != true, r.Text());
         if (r.Text().Contains("显示器: 0 台")) Assert.Skip("无显示器（无桌面会话）");
         Assert.Contains("缩放", r.Text());
@@ -642,18 +660,18 @@ public sealed class ScreenshotToolTests
     [InlineData(false)]
     public void NoTitleNote_ReflectsWhetherInWindowsList(bool listedInWindows)
     {
-        // screenshot_windows 只列「有标题」的窗口，但**前台**窗口即使无标题也会以 (无标题) 列出——
-        // 备注须如实区分（2026-09-28 修：此前一律写「不在 screenshot_windows 清单里」，与前台无标题窗被列出矛盾）。
+        // screenshot(mode=list-windows) 只列「有标题」的窗口，但**前台**窗口即使无标题也会以 (无标题) 列出——
+        // 备注须如实区分（2026-09-28 修：此前一律写「不在 screenshot(mode=list-windows) 清单里」，与前台无标题窗被列出矛盾）。
         var note = ScreenshotTool.NoTitleNote(1576568, listedInWindows);
         Assert.Contains("hwnd=1576568", note);
         if (listedInWindows)
         {
             Assert.Contains("标为 (无标题)", note);
-            Assert.DoesNotContain("不在 screenshot_windows 清单里", note);
+            Assert.DoesNotContain("不在 screenshot(mode=list-windows) 清单里", note);
         }
         else
         {
-            Assert.Contains("不在 screenshot_windows 清单里", note);
+            Assert.Contains("不在 screenshot(mode=list-windows) 清单里", note);
             Assert.DoesNotContain("标为 (无标题)", note);
         }
     }

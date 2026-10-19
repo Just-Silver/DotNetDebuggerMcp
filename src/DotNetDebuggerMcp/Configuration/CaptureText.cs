@@ -9,7 +9,7 @@ internal static class CaptureText
 {
     /// <summary>mode 非法（未知模式名）。</summary>
     public static string InvalidMode(string mode)
-        => $"mode 无效：\"{mode}\"（可选 auto/screen/display/window/foreground/region/element）。";
+        => $"mode 无效：\"{mode}\"（可选 auto/screen/display/window/foreground/region/element/list-displays/list-windows）。";
 
     /// <summary>region 字符串格式错误（需 <c>"x,y,w,h"</c> 且 w/h 为正）。</summary>
     public const string RegionMalformed =
@@ -64,6 +64,6 @@ internal static class CaptureText
     /// <summary>提交给取消令牌的取消提示（放弃等待、可重试，不走缓存）。</summary>
     public const string Canceled = "screenshot 已取消（可重试）。";
 
-    /// <summary>发现类只读工具（screenshot_displays / screenshot_windows）的取消提示（不绑定 screenshot 字样）。</summary>
+    /// <summary>发现类只读工具（screenshot(mode=list-displays) / screenshot(mode=list-windows)）的取消提示（不绑定 screenshot 字样）。</summary>
     public const string CanceledGeneric = "已取消（可重试）。";
 }
