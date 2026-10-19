@@ -6,6 +6,28 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Breaking
+
+- **工具面重构（53 → 42 个工具）**，工具名与参数名变更（agent 侧契约，破坏性）：
+  - 改名：`call_chain` → `call_sequence`、`call_graph` → `call_edges`、`search_string` → `search_literals`
+  - 合并：`debug_breakpoint_set|list|remove|clear` → `debug_breakpoint(action=set|list|remove|clear)`；`debug_exceptions`/`debug_exceptions_clear` → `debug_exceptions(action=set|clear)`；`debug_disconnect|terminate|reset` → `debug_session(action=disconnect|terminate|reset)`；`debug_state` → `debug_wait(waitSeconds=0)`；`debug_stack` + `debug_variables` → `debug_frame`；`decompile_to_project` → `decompile_to_dir(project=true)`；`screenshot_displays` / `screenshot_windows` → `screenshot(mode=list-displays|list-windows)`
+  - 参数改名：`debug_breakpoint_set.methodToken` → `token`、`debug_breakpoint_remove.breakpointId` → `id`、`debug_step.stepType` → `kind`、`search_literals.search` → `contains`
+  - 必填参数归零：`debug_set`（`path`/`value`）、`debug_evaluate`（`expression`）、`debug_object`（`path`）均带默认值，缺参改为方法体中文提示（原为客户端绑定阶段英文错误）
+
+### Added
+
+- `decompile_il` 支持 `memberName`/`typeName` 定位（与 `decompile_member` 对齐，多匹配列候选）。
+- `debug_run_to` 支持 `token` / `moduleName`+`ilOffset` 定位（与 `debug_breakpoint` 四路定位对齐）。
+- `screenshot` 新增 `mode=list-displays` / `list-windows` 只读清单模式与 `filter` 参数。
+
+### Fixed
+
+- apphost `.exe`（.NET Core 启动器）返回中文引导并指向同名 `.dll`，不再暴露英文 `PE image does not have metadata`。
+- `call_edges`（原 `call_graph`）在结果为空且程序集含 async 状态机时标注「async 方法体内的调用点未收录」，避免误判无人调用。
+- `debug_set` 成功文案补「方法入口断点处局部变量尚未初始化，单步后可能被覆盖」。
+
 ## [2.3.0] - 2026-10-15
 
 ### Added

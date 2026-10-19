@@ -1,6 +1,6 @@
 <!-- 职责：MCP 工具面重构（命名统一/改名/合并/缺陷修复/描述瘦身）的逐任务实施步骤；不写：设计依据与取舍（见 specs/2026-10-20-mcp-tool-surface-design.md）。 -->
 
-# MCP 工具面重构 实施计划
+# MCP 工具面重构 实施计划（已执行）
 
 > **For agentic workers:** REQUIRED SUB-SKILL: 用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans` 逐任务实施。步骤用 `- [ ]` 复选框跟踪。
 
