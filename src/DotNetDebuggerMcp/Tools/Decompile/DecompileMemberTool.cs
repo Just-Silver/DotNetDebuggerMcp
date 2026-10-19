@@ -116,7 +116,7 @@ public static class DecompileMemberTool
     /// 判定歧义/未找到（歧义返回歧义提示、未找到返回附相近类型名的未找到提示），唯一候选再在类型内按 memberName 搜索（Error 非空，元数据秒回）；IO 类异常同样以
     /// Error 返回「无法读取程序集元数据」提示。 EffectiveTypeName 非空表示本次是类型内搜索（供调用方做目标描述与「未找到」消息），typeToken/typeName 定位成功时返回类型全名。
     /// </summary>
-    private static (IReadOnlyList<MemberMatch> Matches, IReadOnlyList<string> SimilarNames, string? EffectiveTypeName, string? Error)
+    internal static (IReadOnlyList<MemberMatch> Matches, IReadOnlyList<string> SimilarNames, string? EffectiveTypeName, string? Error)
         LocateMembers(string assemblyFull, string typeName, string typeToken, string memberName)
     {
         // typeToken 分支：非空时按类型定义 token 精确定位类型（typeName 歧义消歧），再在类型内按 memberName 搜索

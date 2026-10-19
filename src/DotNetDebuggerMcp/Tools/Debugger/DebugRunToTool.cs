@@ -31,12 +31,14 @@ public static class DebugRunToTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、临时断点自动移除——用 debug_stack/debug_variables 观察现场。目标定位同 debug_breakpoint_set 的 typeName+line（line 为 decompile 输出行号）或 typeName+memberName（方法名子串，命中唯一方法）；moduleName 可省。超时/命中其它断点/进程退出时返回对应提示且临时断点一并自动清理。注意边界：run_to 只对「目标会被进程自然执行到」有效——当前执行路径若不会走向目标（停住不自己走的分支/等待），run_to 将等到超时，此类场景请改用 debug_breakpoint_set 设普通断点 + debug_continue。")]
+    [Description("运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、临时断点自动移除——用 debug_stack/debug_variables 观察现场。定位同 debug_breakpoint_set：token（moduleName+token+ilOffset）或 typeName+line（decompile 输出行号）或 typeName+memberName（方法名子串，命中唯一方法）；moduleName 可省。超时/命中其它断点/进程退出时返回对应提示且临时断点一并自动清理。注意边界：run_to 只对「目标会被进程自然执行到」有效——当前执行路径若不会走向目标（停住不自己走的分支/等待），run_to 将等到超时，此类场景请改用 debug_breakpoint_set 设普通断点 + debug_continue。")]
     public static async Task<string> DebugRunTo(
         [Description("类型全名（与 decompile 输出同格式，默认空）；与 line 组合按反编译视图行定位，或与 memberName 组合按成员级定位——typeName+line / typeName+memberName 二选一必填。")] string typeName = "",
         [Description("行号（1-based，decompile 输出行号，默认 0=未提供）；与 typeName 组合按反编译视图行定位。")] int line = 0,
         [Description("成员名（方法，子串忽略大小写，默认空=不启用）；与 typeName 组合按成员级定位——命中唯一方法即设临时断点（line 忽略）。")] string memberName = "",
         [Description("模块名（如 DebugTarget.dll，默认空）；行/成员定位省缺时在已加载模块中解析。")] string moduleName = "",
+        [Description("方法元数据 token（0x06 开头，取 signature 行尾，默认空=不启用）；提供时按 token 定位，typeName 可不填。")] string token = "",
+        [Description("IL 偏移（默认 0=方法入口）；token 定位时使用。")] int ilOffset = 0,
         [Description("等待命中秒数上限，默认 30。")] int timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
     {
@@ -44,14 +46,15 @@ public static class DebugRunToTool
         if (active is null) return "当前无活动调试会话。先用 debug_launch / debug_attach 建立会话。";
         if (timeoutSeconds < 1) return "timeoutSeconds 须 ≥ 1（等待命中秒数上限，默认 30）。";
 
-        // 1. 定位参数校验（run_to 目标定位为行/成员两种；校验在设断点前给清晰提示）
-        if (string.IsNullOrWhiteSpace(typeName))
-            return "请提供 typeName：run_to 目标定位为 typeName+line（decompile 输出行号）或 typeName+memberName（方法名子串），二选一必填。";
-        if (string.IsNullOrWhiteSpace(memberName) && line <= 0)
+        // 1. 定位参数校验（token 定位，或 typeName+line / typeName+memberName 两种；校验在设断点前给清晰提示）
+        var hasToken = !string.IsNullOrWhiteSpace(token);
+        if (!hasToken && string.IsNullOrWhiteSpace(typeName))
+            return "请提供 token 或 typeName：token 定位（signature 行尾的 0x06 token），或 typeName+line（decompile 输出行号）/ typeName+memberName（方法名子串）。";
+        if (!hasToken && string.IsNullOrWhiteSpace(memberName) && line <= 0)
             return "请提供 line（typeName+line 定位，decompile 输出行号）或 memberName（typeName+memberName 定位），二选一必填。";
 
         // 2. 设一次性临时断点（与 debug_breakpoint_set 完全同款定位/设置逻辑，取回断点 id）
-        var setText = await DebugBreakpointTool.SetResolvedAsync(moduleName, "", 0, typeName, memberName, "", line, 1, "stop", null, cancellationToken);
+        var setText = await DebugBreakpointTool.SetResolvedAsync(moduleName, token, ilOffset, typeName, memberName, "", line, 1, "stop", null, cancellationToken);
         var targetId = DebugBreakpointTool.ParseBreakpointIdText(setText);
         if (targetId is null)
             return setText.Contains("匹配", StringComparison.Ordinal) && setText.Contains("方法成员", StringComparison.Ordinal)

@@ -871,6 +871,39 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task RunTo_ByToken_ReachesTarget()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        Assert.True(File.Exists(exe), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+        var workBagToken = ReadMethodToken(dll, "WorkBag");
+        var workScoresToken = ReadMethodToken(dll, "WorkScores");
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} bag 8", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+
+        var bpSet = await CallAsync(mcp, "debug_breakpoint_set",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{workBagToken:x8}", ["ilOffset"] = 0 });
+        Assert.True(bpSet.IsError != true, bpSet.Text());
+        await WaitBoundAsync(mcp, ParseBreakpointId(bpSet.Text()));
+        var waitBag = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
+        Assert.Contains("已停下", waitBag.Text());
+
+        // token 定位（不提供 typeName/memberName）：与 debug_breakpoint_set 的四种定位方式对齐
+        var runTo = await CallAsync(mcp, "debug_run_to",
+            new Dictionary<string, object?> { ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{workScoresToken:x8}", ["timeoutSeconds"] = 25 });
+        Assert.True(runTo.IsError != true, runTo.Text());
+        Assert.Contains("已运行到目标", runTo.Text());
+
+        var stack = await CallAsync(mcp, "debug_stack", new Dictionary<string, object?>());
+        Assert.Contains($"0x{workScoresToken:x8}", stack.Text());
+    }
+
+    [Fact]
     public async Task RunTo_FromStoppedBreakpoint_ContinuesAndHitsTarget()
     {
         var exe = DebugTargetExe;

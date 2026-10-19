@@ -103,6 +103,47 @@ public class DecompileIlToolTests
     }
 
     [Fact]
+    public async Task 按成员名反汇编_与token反汇编同一方法()
+    {
+        AppServices.ConfigureForTest();
+        try
+        {
+            // 与 decompile_member 对齐：不提供 token 时按 memberName（可选 typeName 限定）定位唯一方法
+            var byName = await DecompileIlTool.DecompileIl(
+                TestDataPaths.TestSamplesDll, memberName: "BigMethod", typeName: $"{TestDataPaths.SamplesNamespace}.BigClass",
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Contains("IL 反汇编", byName);
+            Assert.Contains("// Method begins at RVA", byName);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
+    public async Task 成员名多匹配_提示用token精确定位()
+    {
+        AppServices.ConfigureForTest();
+        try
+        {
+            // "Help" 在 TestSamples 中跨类型多匹配：不能猜一个，必须要求 token 闭环
+            var result = await DecompileIlTool.DecompileIl(
+                TestDataPaths.TestSamplesDll, memberName: "Help",
+                cancellationToken: TestContext.Current.CancellationToken);
+
+            Assert.Contains("匹配", result);
+            Assert.Contains("0x06", result);
+            Assert.DoesNotContain("IL_0000:", result);
+        }
+        finally
+        {
+            AppServices.ResetForTest();
+        }
+    }
+
+    [Fact]
     public async Task 缺token_返回必填提示()
     {
         AppServices.ConfigureForTest();
