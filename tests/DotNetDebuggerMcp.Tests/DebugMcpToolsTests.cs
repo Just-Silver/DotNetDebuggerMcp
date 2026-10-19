@@ -904,6 +904,31 @@ public sealed class DebugMcpToolsTests
     }
 
     [Fact]
+    public async Task Launch_ImmediatePendingBreakpoint_WaitDoesNotMisfireExited()
+    {
+        var exe = DebugTargetExe;
+        var dll = Path.ChangeExtension(exe, ".dll");
+        var workToken = ReadMethodToken(dll, "Work");
+
+        await using var mcp = await ConnectAsync();
+        var launch = await CallAsync(mcp, "debug_launch",
+            new Dictionary<string, object?> { ["commandLine"] = $"{exe} 5", ["timeoutSeconds"] = 20 });
+        Assert.True(launch.IsError != true, launch.Text());
+
+        // launch 后立刻设断点：模块可能尚未加载 → 登记 pending；此前该路径下 wait 偶发误报「进程已退出」
+        var set = await CallAsync(mcp, "debug_breakpoint",
+            new Dictionary<string, object?> { ["action"] = "set", ["moduleName"] = "DebugTarget.dll", ["token"] = $"0x{workToken:x8}" });
+        Assert.True(set.IsError != true, set.Text());
+
+        await CallAsync(mcp, "debug_continue", new Dictionary<string, object?>());
+        var wait = await CallAsync(mcp, "debug_wait",
+            new Dictionary<string, object?> { ["waitSeconds"] = 10, ["outputLines"] = 0, ["contextLines"] = 0 });
+
+        Assert.DoesNotContain("进程已退出", wait.Text());
+        Assert.Contains("已停下", wait.Text());
+    }
+
+    [Fact]
     public async Task RunTo_FromStoppedBreakpoint_ContinuesAndHitsTarget()
     {
         var exe = DebugTargetExe;
