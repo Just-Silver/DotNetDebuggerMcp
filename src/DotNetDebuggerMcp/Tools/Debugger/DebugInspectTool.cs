@@ -163,7 +163,7 @@ public static class DebugInspectTool
             var (lines, hits, redacted) = BuildVariablesLines(vars, requested);
             var detail = requested is not null ? $"thread={tid}，names={requested.Count}" : $"thread={tid}";
             DebugSessionService.Manager.Actions.Log("debug_variables", detail, "ok");
-            var header = $"局部变量/参数（thread={tid}）:";
+            var header = $"局部变量/参数（thread={tid}";
             if (requested is not null) header += $"，白名单 {requested.Count} 项 → 命中 {hits} 项";
             if (redacted > 0) header += $"，{redacted} 个值{SensitiveValueRedactor.Notice}";
             header += "）";

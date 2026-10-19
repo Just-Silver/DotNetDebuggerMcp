@@ -23,7 +23,7 @@ internal static class AppConfig
     public const int MaxMemberMatches = 20;
 
     /// <summary>
-    /// debug_wait/debug_wait 停点上下文的默认行数预算：方法完整行数 ≤ 预算显示整个函数，超出则按当前语句截取预算行
+    /// debug_wait 停点上下文的默认行数预算：方法完整行数 ≤ 预算显示整个函数，超出则按当前语句截取预算行
     /// （0=关闭）。工具参数默认值与实现引用此常量；[Description] 文案（ToolParameterText.ContextLinesParam）中
     /// 「默认 100」为编译期常量限制下的文本副本，改预算两处同步。
     /// </summary>

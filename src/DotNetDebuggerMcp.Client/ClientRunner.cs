@@ -52,7 +52,6 @@ public sealed class ClientRunner
             && names.Contains("decompile_il")
             && names.Contains("list_types")
             && names.Contains("decompile_to_dir")
-            && names.Contains("decompile_to_project")
             && names.Contains("signature")
             && names.Contains("hierarchy")
             && names.Contains("dependencies")
@@ -63,7 +62,7 @@ public sealed class ClientRunner
             && names.Contains("field_access");
         if (pass)
         {
-            Console.WriteLine("[PASS] 工具数量 >= 13 且含 decompile/decompile_member/decompile_il/list_types/decompile_to_dir/decompile_to_project/signature/hierarchy/dependencies/call_edges/call_sequence/assembly_info/search_literals/field_access");
+            Console.WriteLine("[PASS] 工具数量 >= 13 且含 decompile/decompile_member/decompile_il/list_types/decompile_to_dir/signature/hierarchy/dependencies/call_edges/call_sequence/assembly_info/search_literals/field_access");
         }
         else
         {

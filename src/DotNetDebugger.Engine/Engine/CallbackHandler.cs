@@ -137,7 +137,7 @@ public sealed class CallbackHandler
     /// 仅在 FIRST_CHANCE 阶段决策停/跳（USER_FIRST_CHANCE/CATCH_HANDLER_FOUND 是同一异常传播的后续阶段，
     /// 重复停/重复计数只会干扰调试）；过滤器 null = 全部放行（含 UNHANDLED，保持 v1 行为）。
     /// 匹配语义：异常类型全名与过滤名相等或以「.过滤名」结尾（忽略大小写）——不匹配则发 skipped 事件后放行
-    /// （Session 计数，供 debug_wait/debug_wait 给不命中反馈；对齐 sharpdbg「不停即 Continue」模式）。
+    /// （Session 计数，供 debug_wait 给不命中反馈；对齐 sharpdbg「不停即 Continue」模式）。
     /// </summary>
     private bool HandleException2(Exception2CorDebugManagedCallbackEventArgs e)
     {

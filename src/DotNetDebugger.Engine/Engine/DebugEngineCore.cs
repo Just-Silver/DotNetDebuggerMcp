@@ -1586,7 +1586,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
             new ExceptionHitPayload(threadId, type, message, top)));
     }
 
-    /// <summary>异常被过滤器跳过（不停进程、不改状态；Session 计数给 debug_wait/debug_wait 不命中反馈）。</summary>
+    /// <summary>异常被过滤器跳过（不停进程、不改状态；Session 计数给 debug_wait 不命中反馈）。</summary>
     internal void PublishExceptionSkipped(int threadId, string type, string? message)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.ExceptionSkipped,
             new ExceptionSkippedPayload(threadId, type, message)));
@@ -1596,7 +1596,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.TraceHit,
             new TraceHitPayload(breakpointId, threadId, DateTimeOffset.UtcNow, top, variables)));
 
-    /// <summary>断点条件求值失败（P7：不停进程；Session consume 式计数，debug_wait/debug_wait 反馈防静默空等）。</summary>
+    /// <summary>断点条件求值失败（P7：不停进程；Session consume 式计数，debug_wait 反馈防静默空等）。</summary>
     internal void PublishConditionFailed(int breakpointId, int threadId, string error)
         => Publish(new DebugEvent("session", NextSeq(), DateTimeOffset.UtcNow, DebugEventKind.BreakpointConditionFailed,
             new BreakpointConditionFailedPayload(breakpointId, threadId, error)));

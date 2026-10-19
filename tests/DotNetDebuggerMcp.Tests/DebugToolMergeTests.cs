@@ -26,7 +26,7 @@ public sealed class DebugToolMergeTests
     }
 
     [Fact]
-    public async Task 断点工具_action移除_缺id给中文提示()
+    public async Task 断点工具_action移除_无会话时给中文提示()
     {
         var result = await DebugBreakpointTool.DebugBreakpoint("remove", cancellationToken: TestContext.Current.CancellationToken);
 

@@ -115,12 +115,13 @@ public sealed class DebugMcpToolsTests
         Assert.Contains("debug_wait", step.Text());
         Assert.DoesNotContain("async 状态机帧", step.Text());
 
-        // 8. debug_frame：读局部变量（step 后仍处停点——wait 等 step 完成的新停点）
+        // 8. debug_frame：一次调用必须同时给出调用栈与当前帧变量（合并后的核心契约）
         var waitStep = await CallAsync(mcp, "debug_wait", new Dictionary<string, object?> { ["waitSeconds"] = 20, ["outputLines"] = 0, ["contextLines"] = 0 });
         Assert.Contains("已停下", waitStep.Text());
-        var vars = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
-        Assert.True(vars.IsError != true, vars.Text());
-        Assert.Contains("局部变量", vars.Text());
+        var frame = await CallAsync(mcp, "debug_frame", new Dictionary<string, object?>());
+        Assert.True(frame.IsError != true, frame.Text());
+        Assert.Contains("调用栈", frame.Text());
+        Assert.Contains("局部变量", frame.Text());
 
         // 9. debug_session(action=disconnect) 清理
         var disc = await CallAsync(mcp, "debug_session", new Dictionary<string, object?> { ["action"] = "disconnect" });

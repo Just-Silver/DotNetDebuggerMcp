@@ -30,6 +30,6 @@ public static class SearchStringCases
         // 缺 search 应返回中文提示而非异常堆栈
         new ToolCallCase("search_literals", "缺 search（应返回提示）",
             new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "" },
-            ExpectedContains: "请指定 search", MustNotContain: "at System", ExpectSuccess: false),
+            ExpectedContains: "请指定 contains", MustNotContain: "at System", ExpectSuccess: false),
     };
 }

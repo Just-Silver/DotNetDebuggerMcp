@@ -125,7 +125,7 @@
 | 现状 | 合并后 | 减量 | 合并条件（必须同时满足） |
 |---|---|---|---|
 | `debug_breakpoint_set/list/remove/clear` | `debug_breakpoint(action=set/list/remove/clear)` | −3 | 纯 CRUD，参数是并集子集 |
-| `debug_exceptions` / `debug_exceptions_clear` | `debug_exceptions(action=list/clear)` | −1 | 同上 |
+| `debug_exceptions` / `debug_exceptions_clear` | `debug_exceptions(action=set/clear)`（该工具原语义是「设置」，无 list 能力；实施时按实际修正） | −1 | 同上 |
 | `debug_disconnect` / `debug_terminate` / `debug_reset` | `debug_session(action=disconnect/terminate/reset)` | −2 | 无参收尾动作 |
 | `debug_state` / `debug_wait` | `debug_wait(waitSeconds=0)` | −1 | `state` 本质是 `wait(0)`；默认 0 时立即返回当前状态 |
 | `debug_stack` / `debug_variables` | `debug_frame` | −1 | 同一停点的栈与当前帧变量，agent 每次都要连调 |
@@ -178,9 +178,9 @@
 - `lines` 分页模板目前在 4 个工具正文里逐字重复，统一收进参数描述。
 - 工具正文目标：中位数 ≤ 160 字符，最长 ≤ 400 字符（现为 224 / 658）。
 
-### 7.3 输出侧
+### 7.3 输出侧（**实施时未采纳**）
 
-- 头部 `程序集: <绝对路径>` 改为 `程序集: <文件名>`，完整路径仅在写盘/报错时出现。
+- ~~头部 `程序集: <绝对路径>` 改为 `程序集: <文件名>`~~ —— 实施时判定：绝对路径是同名 dll 多目录场景的唯一区分依据，且大量断言依赖，保留（Ruling 记录于 ledger）。
 - 预估：每次调用省约 60–120 字符，且不损失可定位性（路径可由参数还原）。
 
 ## 8. 验收
@@ -191,7 +191,7 @@
 |---|---|---|
 | 工具数 | 53 | 42 |
 | `tools/list` JSON | 70 KB | ≤ 45 KB |
-| 描述正文 | 11 871 字符 | ≤ 8 000 字符 |
+| 描述正文 | 11 871 字符 | ≤ 8 000 字符（实际 10 217：压缩会丢 verb 分派/value 文法，未采纳，见 ledger Ruling） |
 | `inputSchema.required` 非空工具 | 3 | 0 |
 | 描述中位数 / 最长 | 224 / 658 | ≤ 160 / ≤ 400 |
 

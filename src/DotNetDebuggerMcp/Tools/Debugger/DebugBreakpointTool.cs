@@ -50,8 +50,8 @@ public static class DebugBreakpointTool
         [Description("源文件路径（绝对/相对/仅文件名如 Program.cs）；与 line 组合按 PDB 源码行定位。")] string sourcePath = "",
         [Description("行号（1-based）：typeName 方式=decompile 输出行号；sourcePath 方式=源码行号；默认 0=未提供。")] int line = 0,
         [Description("开始生效的命中次数：第 N 次命中起每次都停/记录，默认 1=每次。")] int hitCount = 1,
-        [Description("命中行为：stop=命中停进程（默认）；trace=命中不停、快照变量记轨迹（debug_wait/debug_wait 批量取回，环形上限 100 条）。")] string mode = "stop",
-        [Description("条件表达式（P6 子集：成员访问/索引/一元 !/单次比较），默认空=无条件。条件为真才停/记——Hits 只数条件为真次数；语法错当场拒绝；命中时求值失败（未知名/缺字段/非布尔）放行并计入 debug_wait/debug_wait 的「条件未通过」反馈。如 i == 3、b.A > 0。")] string condition = "",
+        [Description("命中行为：stop=命中停进程（默认）；trace=命中不停、快照变量记轨迹（debug_wait 批量取回，环形上限 100 条）。")] string mode = "stop",
+        [Description("条件表达式（P6 子集：成员访问/索引/一元 !/单次比较），默认空=无条件。条件为真才停/记——Hits 只数条件为真次数；语法错当场拒绝；命中时求值失败（未知名/缺字段/非布尔）放行并计入 debug_wait 的「条件未通过」反馈。如 i == 3、b.A > 0。")] string condition = "",
         CancellationToken cancellationToken = default)
     {
         // 公开入口与 debug_run_to 共用同一套「校验→定位→设置」内部入口（SetResolvedAsync），保证定位语义一致
@@ -172,7 +172,7 @@ public static class DebugBreakpointTool
     private static string DescribeSet(DebugBreakpoint bp)
     {
         var modeTag = bp.Mode == DebugBreakpointMode.Trace
-            ? $" [trace]（命中不停记轨迹，debug_wait/debug_wait 批量取回；当前未读 {DebugSessionService.Manager.Active?.Buffer.PendingTraceCount ?? 0} 条）"
+            ? $" [trace]（命中不停记轨迹，debug_wait 批量取回；当前未读 {DebugSessionService.Manager.Active?.Buffer.PendingTraceCount ?? 0} 条）"
             : "";
         var hitTag = bp.HitCount > 1 ? $" [hitCount={bp.HitCount}，当前已命中 {bp.Hits}]" : "";
         var conditionTag = bp.Condition is not null ? $" [条件: {bp.Condition}——为真才停，命中 N 计条件为真次数]" : "";
@@ -426,7 +426,7 @@ public static class DebugBreakpointTool
     private static string DescribeSetWithPosition(DebugBreakpoint bp, string at)
     {
         var modeTag = bp.Mode == DebugBreakpointMode.Trace
-            ? $" [trace]（命中不停记轨迹，debug_wait/debug_wait 批量取回；当前未读 {DebugSessionService.Manager.Active?.Buffer.PendingTraceCount ?? 0} 条）"
+            ? $" [trace]（命中不停记轨迹，debug_wait 批量取回；当前未读 {DebugSessionService.Manager.Active?.Buffer.PendingTraceCount ?? 0} 条）"
             : "";
         var hitTag = bp.HitCount > 1 ? $" [hitCount={bp.HitCount}，当前已命中 {bp.Hits}]" : "";
         var conditionTag = bp.Condition is not null ? $" [条件: {bp.Condition}——为真才停，命中 N 计条件为真次数]" : "";

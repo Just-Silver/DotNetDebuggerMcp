@@ -44,10 +44,10 @@ internal static class ToolParameterText
         "是否包含间接后代（如接口的所有实现者、基类的所有子孙，默认 false）";
 
     /// <summary>
-    /// contextLines 参数描述（debug_wait/debug_wait 共用）：行数预算语义与默认值引用 AppConfig.DefaultStopContextBudgetLines（改预算一处同步）。
+    /// contextLines 参数描述（debug_wait 共用）：行数预算语义与默认值引用 AppConfig.DefaultStopContextBudgetLines（改预算一处同步）。
     /// </summary>
     /// <summary>
-    /// contextLines 参数描述（debug_wait/debug_wait 共用）。文案中「默认 100」须与 AppConfig.DefaultStopContextBudgetLines 同步——
+    /// contextLines 参数描述（debug_wait 共用）。文案中「默认 100」须与 AppConfig.DefaultStopContextBudgetLines 同步——
     /// [Description] 要求编译期常量，const int 无法参与 const string 拼接（int→string 非常量转换，TimeoutParam 同款先例）。
     /// </summary>
     public const string ContextLinesParam =
