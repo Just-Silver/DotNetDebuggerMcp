@@ -25,7 +25,7 @@ public static class DecompileTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的反编译结果或错误提示文本。</returns>
     [McpServerTool]
-    [Description("反编译指定类型的源码到标准输出（类型级，含全部成员）。输出每行带行号，可直接引用具体行。单成员反编译用 decompile_member；需要完整源码写盘用 decompile_to_dir。未找到类型时返回相近类型名提示。" + ToolParameterText.FooterPagination)]
+    [Description("反编译指定类型的源码到标准输出（类型级，含全部成员）。输出每行带行号，可直接引用具体行。单成员反编译用 decompile_member；需要完整源码写盘用 decompile_to_dir。未找到类型时返回相近类型名提示。")]
     public static async Task<string> Decompile(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("要反编译的类型全名（必填），格式与 list_types 输出一致（命名空间.类型，嵌套类型用 + 或 . 分隔，泛型带 arity 如 GenericBox`1）")] string typeName = "",

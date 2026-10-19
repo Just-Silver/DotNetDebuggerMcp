@@ -30,7 +30,7 @@ public static class InterfaceUsageTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的接口实现者/调用点/引用三段或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出指定接口的使用情况（对接口的一次性组合视图，含 hierarchy 的实现者段、call_edges 的调用点段、dependencies 的引用段，无需再分别调用）：程序集内实现它的类型（includeIndirect=true 时含全部间接实现者，如子接口、实现者及其子类）、方法体调用接口成员的调用点（类型全名::成员名 → 接口成员名 行）、以及成员签名引用该接口的类型。空段输出（无）占位。未找到类型时返回相近类型名提示；非接口类型返回中文提示（查类的继承/后代请用 hierarchy）。" + ToolParameterText.FooterPagination)]
+    [Description("输出指定接口的使用情况（对接口的一次性组合视图，含 hierarchy 的实现者段、call_edges 的调用点段、dependencies 的引用段，无需再分别调用）：程序集内实现它的类型（includeIndirect=true 时含全部间接实现者，如子接口、实现者及其子类）、方法体调用接口成员的调用点（类型全名::成员名 → 接口成员名 行）、以及成员签名引用该接口的类型。空段输出（无）占位。未找到类型时返回相近类型名提示；非接口类型返回中文提示（查类的继承/后代请用 hierarchy）。")]
     public static Task<string> InterfaceUsage(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("接口类型全名（必填），格式与 list_types 输出一致")] string typeName = "",

@@ -13,6 +13,20 @@ public class AssemblyInfoToolTests
     private static readonly string MainAssembly = typeof(OutputFormatter).Assembly.Location;
 
     [Fact]
+    public async Task AssemblyInfo_apphost可执行文件_提示改用同名dll()
+    {
+        // .NET Core 的 .exe 是 apphost（原生启动器），托管元数据在同名 .dll 里
+        var apphost = Path.Combine(TestDataPaths.RepositoryRoot, "tests", "TestData", "DebugTarget.exe");
+        Assert.True(File.Exists(apphost), "DebugTarget.exe 不存在，请先运行 generate-testdata.ps1");
+
+        var result = await AssemblyInfoTool.AssemblyInfo(apphost, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Contains("apphost", result);
+        Assert.Contains(".dll", result);
+        Assert.DoesNotContain("PE image does not have metadata", result);
+    }
+
+    [Fact]
     public async Task AssemblyInfo_测试程序集_含程序集名版本目标框架类型计数引用与入口点()
     {
         var result = await AssemblyInfoTool.AssemblyInfo(TestDataPaths.TestSamplesDll, cancellationToken: TestContext.Current.CancellationToken);

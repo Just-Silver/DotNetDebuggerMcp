@@ -37,7 +37,7 @@ public static class CallChainTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>调用序列 + 被调用成员反编译的合并输出（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出从指定起始方法出发的方法级正向调用序列（一条执行链），并对被调用的程序集内部成员逐条反编译组合输出（序列+成员体一次拿全）。反向『谁调用了某方法/某类型』请用 call_edges（本工具只做正向）。起始方法按 token 或 typeName+memberName 定位：名称匹配多个时先返回 #MEMBER 签名清单（定位步骤，不反编译），用其中 token 精确定位。序列行 序号. 类型::成员() + 内部成员 token。includeExternal=true 时保留跨程序集外部调用行（格式 全名::成员名 [程序集名]）并尝试展开为被调方法体子序列，解析失败的行尾标注终止。被调用的内部成员超过 20 个时仅返回其签名清单（不反编译）；否则各成员体前有 #MEMBER JSON 分隔行。" + ToolParameterText.FooterPagination)]
+    [Description("输出从指定起始方法出发的方法级正向调用序列（一条执行链），并对被调用的程序集内部成员逐条反编译组合输出（序列+成员体一次拿全）。反向『谁调用了某方法/某类型』请用 call_edges（本工具只做正向）。起始方法按 token 或 typeName+memberName 定位：名称匹配多个时先返回 #MEMBER 签名清单（定位步骤，不反编译），用其中 token 精确定位。序列行 序号. 类型::成员() + 内部成员 token。includeExternal=true 时保留跨程序集外部调用行（格式 全名::成员名 [程序集名]）并尝试展开为被调方法体子序列，解析失败的行尾标注终止。被调用的内部成员超过 20 个时仅返回其签名清单（不反编译）；否则各成员体前有 #MEMBER JSON 分隔行。")]
     public static async Task<string> CallSequence(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("起始方法所属类型全名（格式与 list_types 输出一致）；提供 token 时可不填")] string typeName = "",

@@ -33,7 +33,7 @@ public static class HierarchyTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的继承/接口关系或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出指定类型的继承/接口关系：基类链（上溯 System.Object）、实现的接口、程序集内直接继承/实现它的类型。includeIndirect=true 时继承段含全部间接后代（接口的所有实现者及其子类、基类的所有子孙），一次拿全。接口的完整使用情况（实现者+调用点+签名引用）请用 interface_usage。未找到类型时返回相近类型名提示。" + ToolParameterText.FooterPagination)]
+    [Description("输出指定类型的继承/接口关系：基类链（上溯 System.Object）、实现的接口、程序集内直接继承/实现它的类型。includeIndirect=true 时继承段含全部间接后代（接口的所有实现者及其子类、基类的所有子孙），一次拿全。接口的完整使用情况（实现者+调用点+签名引用）请用 interface_usage。未找到类型时返回相近类型名提示。")]
     public static Task<string> Hierarchy(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("类型全名（必填），格式与 list_types 输出一致")] string typeName = "",

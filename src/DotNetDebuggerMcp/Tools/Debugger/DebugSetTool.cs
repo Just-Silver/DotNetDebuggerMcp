@@ -63,7 +63,8 @@ public static class DebugSetTool
             return $"路径 {path} 已改：原值 {oldText} → 新值 {newText}" +
                    (result.TypeName is null ? "" : $"（{result.TypeName}）") +
                    (oldRedacted || newRedacted ? $"（{SensitiveValueRedactor.Notice}）" : "") +
-                   "。进程仍在停点——可用 debug_evaluate 复核；debug_continue 运行观察行为变化。";
+                   "。进程仍在停点——可用 debug_evaluate 复核；debug_continue 运行观察行为变化。" +
+                   "提示：若断点设在方法入口，局部变量尚未初始化，单步后可能被重新赋值覆盖。";
         }
         catch (ExpressionEvaluationException ex)
         {

@@ -33,7 +33,7 @@ public static class FieldAccessTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的字段读取/写入/取地址三段或错误提示文本。</returns>
     [McpServerTool]
-    [Description("追踪指定字段在程序集内的读取/写入/取地址位置：反向扫描全部类型的方法体，输出读取/写入/取地址三段来源成员（类型全名::成员签名，空段输出（无））。按 fieldToken（0x04 开头）或 typeName+fieldName（忽略大小写，typeName 省略时跨程序集搜索）定位字段；字段名匹配多个时返回 #MEMBER 签名清单，用其中 token 作 fieldToken 精确定位。适用于判断字段是否仍被使用。" + ToolParameterText.FooterPagination)]
+    [Description("追踪指定字段在程序集内的读取/写入/取地址位置：反向扫描全部类型的方法体，输出读取/写入/取地址三段来源成员（类型全名::成员签名，空段输出（无））。按 fieldToken（0x04 开头）或 typeName+fieldName（忽略大小写，typeName 省略时跨程序集搜索）定位字段；字段名匹配多个时返回 #MEMBER 签名清单，用其中 token 作 fieldToken 精确定位。适用于判断字段是否仍被使用。")]
     public static Task<string> FieldAccess(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("字段所属类型全名（格式与 list_types 输出一致）；省略则跨程序集按 fieldName 搜索全部类型（提供 fieldToken 时可不填）")] string typeName = "",

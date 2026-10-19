@@ -40,7 +40,7 @@ public static class ListTypesTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的类型列表或错误提示文本。</returns>
     [McpServerTool]
-    [Description("列出程序集中指定类别的实体类型，默认过滤编译器生成类型（async 状态机、闭包/显示类等）。支持 nameContains 按类型名子串过滤、namespaceContains 按命名空间子串过滤（均忽略大小写）。输出行首类别前缀（如 class Foo.Bar）可直接复制作 typeName 使用。" + ToolParameterText.FooterPagination)]
+    [Description("列出程序集中指定类别的实体类型，默认过滤编译器生成类型（async 状态机、闭包/显示类等）。支持 nameContains 按类型名子串过滤、namespaceContains 按命名空间子串过滤（均忽略大小写）。输出行首类别前缀（如 class Foo.Bar）可直接复制作 typeName 使用。")]
     public static Task<string> ListTypes(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("实体类型类别：c=class, i=interface, s=struct, d=delegate, e=enum；可组合多个字母，如 csi（必填）")] string categories = "",

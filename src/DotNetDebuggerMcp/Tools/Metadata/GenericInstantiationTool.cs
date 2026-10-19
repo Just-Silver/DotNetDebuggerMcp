@@ -27,7 +27,7 @@ public static class GenericInstantiationTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的实例化使用点两段或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出指定泛型类型在程序集内被具体实例化的使用点两段：成员签名中的实例化（如 GenericBox<int>）与方法体调用中的实例化（如 new GenericBox<int>()、调用泛型方法 Echo<int>）。空段输出（无）占位。typeName 可带 arity（GenericBox`1）也可省略（GenericBox，短名亦命中）。" + ToolParameterText.FooterPagination)]
+    [Description("输出指定泛型类型在程序集内被具体实例化的使用点两段：成员签名中的实例化（如 GenericBox<int>）与方法体调用中的实例化（如 new GenericBox<int>()、调用泛型方法 Echo<int>）。空段输出（无）占位。typeName 可带 arity（GenericBox`1）也可省略（GenericBox，短名亦命中）。")]
     public static Task<string> GenericInstantiations(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("泛型类型全名（必填），可带 arity（GenericBox`1）或省略（GenericBox），短名亦命中；格式与 list_types 输出一致")] string typeName = "",

@@ -29,7 +29,7 @@ public static class DependenciesTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的内部类型引用关系或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出指定类型成员签名（方法参数/返回、字段、属性、事件类型）引用的程序集内部类型，以及程序集内哪些类型签名引用了它（反向扫描）。includeExternal=true 时追加输出跨程序集外部类型（格式 全名 [程序集名]）。不含继承关系（用 hierarchy）。未找到类型时返回相近类型名提示。" + ToolParameterText.FooterPagination)]
+    [Description("输出指定类型成员签名（方法参数/返回、字段、属性、事件类型）引用的程序集内部类型，以及程序集内哪些类型签名引用了它（反向扫描）。includeExternal=true 时追加输出跨程序集外部类型（格式 全名 [程序集名]）。不含继承关系（用 hierarchy）。未找到类型时返回相近类型名提示。")]
     public static Task<string> Dependencies(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("类型全名（必填），格式与 list_types 输出一致")] string typeName = "",

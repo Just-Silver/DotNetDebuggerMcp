@@ -34,7 +34,7 @@ public static class DecompileMemberTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>匹配成员反编译合并结果（带行号）或错误提示文本。</returns>
     [McpServerTool]
-    [Description("反编译指定类型内一个或多个成员的实现体（方法级；整类型源码用 decompile）。按 memberName 子串定位（忽略大小写，默认排除属性/事件访问器）：提供 typeName 时仅在该类型内搜索、省略则跨程序集搜索全部类型。多个匹配全部反编译合并输出，各成员前有 #MEMBER JSON 分隔行（含 name/token/type，token 可直接用于本工具）；匹配超过 20 个时仅返回签名清单。提供 token 按元数据 token 直接反编译单个成员（typeName 可不填）；提供 typeToken（0x02 开头）在 typeName 有歧义时精确定位类型后再搜索。无匹配时提示未找到；存在相近成员名时附相近列表。" + ToolParameterText.FooterPagination)]
+    [Description("反编译指定类型内一个或多个成员的实现体（方法级；整类型源码用 decompile）。按 memberName 子串定位（忽略大小写，默认排除属性/事件访问器）：提供 typeName 时仅在该类型内搜索、省略则跨程序集搜索全部类型。多个匹配全部反编译合并输出，各成员前有 #MEMBER JSON 分隔行（含 name/token/type，token 可直接用于本工具）；匹配超过 20 个时仅返回签名清单。提供 token 按元数据 token 直接反编译单个成员（typeName 可不填）；提供 typeToken（0x02 开头）在 typeName 有歧义时精确定位类型后再搜索。无匹配时提示未找到；存在相近成员名时附相近列表。")]
     public static async Task<string> DecompileMember(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("在指定类型内搜索成员，类型全名（格式与 list_types 输出一致）；省略则跨程序集搜索全部类型（提供 token 时可不填）")] string typeName = "",

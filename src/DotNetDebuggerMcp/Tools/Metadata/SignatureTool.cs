@@ -26,7 +26,7 @@ public static class SignatureTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的成员签名列表或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图。每行行尾附成员 token（如 0x06000005），可直接用于 decompile_member 的 token 参数反编译该成员。未找到类型时返回相近类型名提示。" + ToolParameterText.FooterPagination)]
+    [Description("输出指定类型全部成员（字段/方法/属性/事件）每成员一行 C# 签名，作 API 地图。每行行尾附成员 token（如 0x06000005），可直接用于 decompile_member 的 token 参数反编译该成员。未找到类型时返回相近类型名提示。")]
     public static Task<string> Signature(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("目标类型全名（必填），格式与 list_types 输出一致")] string typeName = "",

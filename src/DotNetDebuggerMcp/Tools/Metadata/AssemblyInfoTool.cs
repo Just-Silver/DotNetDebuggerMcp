@@ -26,7 +26,7 @@ public static class AssemblyInfoTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的程序集概览或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出程序集概览：程序集名与版本、目标框架、引用的程序集清单（名+版本）、实体类型计数（过滤编译器生成类型）与入口点。元数据读取秒回，适合作为接触陌生程序集的第一站。" + ToolParameterText.FooterPagination)]
+    [Description("输出程序集概览：程序集名与版本、目标框架、引用的程序集清单（名+版本）、实体类型计数（过滤编译器生成类型）与入口点。元数据读取秒回，适合作为接触陌生程序集的第一站。")]
     public static Task<string> AssemblyInfo(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description(ToolParameterText.LinesParam)] string lines = "",

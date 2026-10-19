@@ -116,9 +116,17 @@ internal static class ToolExecutor
         {
             result = produce(cancellationToken);
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("does not have metadata", StringComparison.OrdinalIgnoreCase))
+        {
+            return DescribeAppHost(assemblyFull);
+        }
         catch (InvalidOperationException ex)
         {
             return ex.Message;
+        }
+        catch (BadImageFormatException ex) when (ex.Message.Contains("does not have metadata", StringComparison.OrdinalIgnoreCase))
+        {
+            return DescribeAppHost(assemblyFull);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
         {
@@ -131,6 +139,21 @@ internal static class ToolExecutor
             if (degraded > 0) context = context with { Degraded = degraded };
         }
         return OutputFormatter.Format(result, lines, context);
+    }
+
+    /// <summary>
+    /// apphost（.NET Core 的 .exe 原生启动器）无托管元数据时的中文提示：直接指向同名 .dll，
+    /// 避免 agent 把英文 BadImageFormatException 当成程序集损坏。
+    /// </summary>
+    private static string DescribeAppHost(string assemblyFull)
+    {
+        var sameNameDll = Path.Combine(
+            Path.GetDirectoryName(assemblyFull) ?? "",
+            Path.GetFileNameWithoutExtension(assemblyFull) + ".dll");
+        var hint = File.Exists(sameNameDll)
+            ? $"请改用同名托管程序集：{sameNameDll}"
+            : "托管代码通常在同名 .dll 中";
+        return $"该文件是 apphost（无托管元数据）——{hint}。";
     }
 
     /// <summary>

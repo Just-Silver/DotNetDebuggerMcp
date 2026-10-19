@@ -17,7 +17,7 @@ internal static class ToolParameterText
     /// lines 参数描述（15 个工具共用）。
     /// </summary>
     public const string LinesParam =
-        "按行号范围读取结果，格式 \"start-end\"（1-based 含两端），如 \"200-400\"；缺省返回前约 8 KB";
+        "按行号范围读取结果，格式 \"start-end\"（1-based 含两端），如 \"200-400\"；缺省返回前约 8 KB，长结果用本参数拉后续";
 
     /// <summary>
     /// stdout 反编译类工具的 timeoutSeconds 参数描述（decompile/decompile_member/call_sequence 共用）。

@@ -29,7 +29,7 @@ public static class DecompileIlTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的 IL 文本或错误提示文本。</returns>
     [McpServerTool]
-    [Description("反汇编方法体为 IL 文本（async 状态机等编译器生成类型反编译为 C# 失败/难读时的兜底）。定位二选一：token（0x06 开头，取 signature 行尾或 #MEMBER 分隔行）或 memberName（方法名子串，可配 typeName 限定，多匹配会列候选并提示改用 token）。IL 逐指令还原方法体真相，IL 偏移/调用目标可直接用于调试断点分析。仅接受方法：字段/属性/事件 token 返回提示。输出行号体系独立于 C# 反编译视图（不与 decompile 行号对齐）。" + ToolParameterText.FooterPagination)]
+    [Description("反汇编方法体为 IL 文本（async 状态机等编译器生成类型反编译为 C# 失败/难读时的兜底）。定位二选一：token（0x06 开头，取 signature 行尾或 #MEMBER 分隔行）或 memberName（方法名子串，可配 typeName 限定，多匹配会列候选并提示改用 token）。IL 逐指令还原方法体真相，IL 偏移/调用目标可直接用于调试断点分析。仅接受方法：字段/属性/事件 token 返回提示。输出行号体系独立于 C# 反编译视图（不与 decompile 行号对齐）。")]
     public static async Task<string> DecompileIl(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("方法定义元数据 token，0x 开头的十六进制，如 0x06000005（取 signature 行尾或 #MEMBER 分隔行的 token；与 memberName 二选一）")] string token = "",
