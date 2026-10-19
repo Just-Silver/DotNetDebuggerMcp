@@ -93,7 +93,7 @@ public class DotNetDebuggerMcpCmd
     public bool CallChain { get; }
 
     /// <summary>
-    /// dependencies/call_graph 同时输出跨程序集外部类型引用，需配合 -d 或 -cg。
+    /// dependencies/call_edges 同时输出跨程序集外部类型引用，需配合 -d 或 -cg。
     /// </summary>
     [Option("-x|--external", "同时输出跨程序集外部类型引用（配合 -d/-cg/-cc）。", CommandOptionType.NoValue)]
     public bool External { get; }
@@ -226,11 +226,11 @@ public class DotNetDebuggerMcpCmd
 
     /// <summary>
     /// 命令行分发：-c 走环境自检，-ai 走 assembly_info，-p 走 decompile_to_project，-o 走 decompile_to_dir，
-    /// -s/-hc/-d/-cg/-iu/-gi/-cc 分别走 signature/hierarchy/dependencies/call_graph/interface_usage/generic_instantiations/call_chain
+    /// -s/-hc/-d/-cg/-iu/-gi/-cc 分别走 signature/hierarchy/dependencies/call_edges/interface_usage/generic_instantiations/call_sequence
     /// （-i 让 hierarchy 含间接后代、interface_usage 含全部间接实现者，
-    /// -x 让 dependencies/call_graph 同时输出跨程序集外部类型引用、-cc 让 call_chain 保留外部调用行，
+    /// -x 让 dependencies/call_edges 同时输出跨程序集外部类型引用、-cc 让 call_sequence 保留外部调用行，
     /// -tk 配合 -cg 按方法 token 反向定位调用点、配合 -cc 直接定位起始方法），-l 走 list_types （-nc 提供类型名子串过滤、-ns
-    /// 提供命名空间子串过滤），-ss 走 search_string（-t 限定类型），-fa 走 field_access （-fn 指定字段名、-tk 指定字段 token、-t
+    /// 提供命名空间子串过滤），-ss 走 search_literals（-t 限定类型），-fa 走 field_access （-fn 指定字段名、-tk 指定字段 token、-t
     /// 限定字段所属类型），-mn 走 decompile_member （-tt 按类型 token 精确定位，typeName 歧义消歧），否则走 decompile；均复用对应 MCP 工具的校验与执行逻辑。
     /// </summary>
     internal static async Task<string> DispatchCliAsync(
@@ -281,11 +281,11 @@ public class DotNetDebuggerMcpCmd
         }
         if (callGraph)
         {
-            return await CallGraphTool.CallGraph(assembly, typeName, token, includeExternal: external, lines, cancellationToken);
+            return await CallGraphTool.CallEdges(assembly, typeName, token, includeExternal: external, lines, cancellationToken);
         }
         if (callChain)
         {
-            return await CallChainTool.CallChain(assembly, typeName, memberName, token, includeExternal: external, lines, timeoutSeconds, cancellationToken);
+            return await CallChainTool.CallSequence(assembly, typeName, memberName, token, includeExternal: external, lines, timeoutSeconds, cancellationToken);
         }
         if (fieldAccess)
         {
@@ -293,7 +293,7 @@ public class DotNetDebuggerMcpCmd
         }
         if (!string.IsNullOrEmpty(searchString))
         {
-            return await SearchStringTool.SearchString(assembly, searchString, typeName, includeCompilerGenerated: false, lines, cancellationToken);
+            return await SearchStringTool.SearchLiterals(assembly, searchString, typeName, includeCompilerGenerated: false, lines, cancellationToken);
         }
         if (!string.IsNullOrEmpty(entityTypes))
         {

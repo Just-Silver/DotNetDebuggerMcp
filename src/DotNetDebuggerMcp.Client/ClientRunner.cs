@@ -56,14 +56,14 @@ public sealed class ClientRunner
             && names.Contains("signature")
             && names.Contains("hierarchy")
             && names.Contains("dependencies")
-            && names.Contains("call_graph")
-            && names.Contains("call_chain")
+            && names.Contains("call_edges")
+            && names.Contains("call_sequence")
             && names.Contains("assembly_info")
-            && names.Contains("search_string")
+            && names.Contains("search_literals")
             && names.Contains("field_access");
         if (pass)
         {
-            Console.WriteLine("[PASS] 工具数量 >= 13 且含 decompile/decompile_member/decompile_il/list_types/decompile_to_dir/decompile_to_project/signature/hierarchy/dependencies/call_graph/call_chain/assembly_info/search_string/field_access");
+            Console.WriteLine("[PASS] 工具数量 >= 13 且含 decompile/decompile_member/decompile_il/list_types/decompile_to_dir/decompile_to_project/signature/hierarchy/dependencies/call_edges/call_sequence/assembly_info/search_literals/field_access");
         }
         else
         {

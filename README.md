@@ -101,7 +101,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 - **行号与分页**：结果按 `行号<TAB>内容` 输出，默认返回前约 8 KB，可用 `lines="start-end"`（如 `200-400`）按行号分页，单次最多约 32 KB。
 - **缓存**：除写盘工具外全部结果按 `程序集 + 参数` 共享缓存（64 MB LRU，固定 30 分钟滑动过期 + 5 分钟定时清理，程序集更新自动失效），超时/失败不入缓存。
 - **类型名格式**：与 `dotnetdebugger_list_types` 输出一致（`命名空间.类型`，嵌套用 `+`，泛型带 arity 如 ``GenericBox`1``），行首类别前缀（如 `class Foo.Bar`）可直接复用。
-- **Token 闭环**：`dotnetdebugger_signature` 每行行尾附成员 token（`0x06…`），`#MEMBER` 分隔行含 `token`，均可直接用于 `dotnetdebugger_decompile_member` / `dotnetdebugger_decompile_il` / `dotnetdebugger_call_graph` / `dotnetdebugger_call_chain` / `dotnetdebugger_field_access` 精确定位。
+- **Token 闭环**：`dotnetdebugger_signature` 每行行尾附成员 token（`0x06…`），`#MEMBER` 分隔行含 `token`，均可直接用于 `dotnetdebugger_decompile_member` / `dotnetdebugger_decompile_il` / `dotnetdebugger_call_edges` / `dotnetdebugger_call_sequence` / `dotnetdebugger_field_access` 精确定位。
 
 ## 工具一览
 
@@ -114,7 +114,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_decompile_il` | 按方法 token（`0x06…`）反汇编方法体为 IL 文本——async 状态机等编译器生成类型反编译为 C# 失败/难读时的 IL 兜底 |
 | `dotnetdebugger_decompile_to_dir` | 反编译写入目录（全量或 `typeName` 逗号分隔批量，单文件输出） |
 | `dotnetdebugger_decompile_to_project` | 以可编译项目形式反编译整个程序集到目录（按命名空间嵌套） |
-| `dotnetdebugger_call_chain` | 从起始方法出发的正向调用序列 + 被调用内部成员反编译 |
+| `dotnetdebugger_call_sequence` | 从起始方法出发的正向调用序列 + 被调用内部成员反编译 |
 
 ### 结构探测（纯元数据，秒回）
 
@@ -124,10 +124,10 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_signature` | 类型成员签名 API 地图（字段/方法/属性/事件），行尾附 token（`0x06` 方法/`0x04` 字段等） |
 | `dotnetdebugger_hierarchy` | 基类链（上溯 `System.Object`）/ 接口 / 程序集内继承实现者；`includeIndirect=true` 一次返回全部间接后代 |
 | `dotnetdebugger_dependencies` | 成员签名引用的内部类型及反向引用；`includeExternal=true` 追加 `全名 [程序集名]` 外部类型 |
-| `dotnetdebugger_call_graph` | 方法体调用关系清单（双向，扫描 `call`/`callvirt`/`newobj` 等）；`token` 模式反向定位调用点，`includeExternal` 同上 |
+| `dotnetdebugger_call_edges` | 方法体调用关系清单（双向，扫描 `call`/`callvirt`/`newobj` 等）；`token` 模式反向定位调用点，`includeExternal` 同上 |
 | `dotnetdebugger_interface_usage` | 接口组合视图：实现者 + 调用点（`类型::成员 → 接口成员`）+ 签名引用；`includeIndirect` 含子接口/实现者子类 |
 | `dotnetdebugger_generic_instantiations` | 泛型实例化的两段使用点：签名中 / 方法体调用中；`typeName` 可带或不带 `` `1`` arity |
-| `dotnetdebugger_search_string` | 按字符串字面量子串反查成员（忽略大小写），输出 `类型::成员 字符串值 token`。默认跳过编译器生成类型；找 async 方法/lambda 里的字面量（位于生成的状态机/闭包类型内）需 `includeCompilerGenerated=true` |
+| `dotnetdebugger_search_literals` | 按字符串字面量子串反查成员（忽略大小写），输出 `类型::成员 字符串值 token`。默认跳过编译器生成类型；找 async 方法/lambda 里的字面量（位于生成的状态机/闭包类型内）需 `includeCompilerGenerated=true` |
 | `dotnetdebugger_field_access` | 追踪字段的读/写/取地址三段来源（空段输出 `（无）`） |
 | `dotnetdebugger_assembly_info` | 程序集概览：名称版本、目标框架、引用清单、类型计数、入口点 |
 
@@ -224,14 +224,14 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -l c -nc Box -ns MyApp.Core            
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -s                        # dotnetdebugger_signature
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -hc [-i]                  # dotnetdebugger_hierarchy (-i 含间接后代)
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -d [-x]                   # dotnetdebugger_dependencies (-x 含外部)
-DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg [-x]                  # dotnetdebugger_call_graph
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -cg [-x]                  # dotnetdebugger_call_edges
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cg -tk 0x06000005                         # 按方法 token 反向定位调用者
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.IWorker -iu [-i]                  # dotnetdebugger_interface_usage
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.GenericBox -gi                    # dotnetdebugger_generic_instantiations
-DotNetDebuggerMcp -a bin/Debug/MyApp.dll -ss "配置Key" [-t MyApp.Program]           # dotnetdebugger_search_string
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -ss "配置Key" [-t MyApp.Program]           # dotnetdebugger_search_literals
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -fa -t MyApp.Program -fn _count            # dotnetdebugger_field_access 按名
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -fa -tk 0x04000005                         # 按字段 token
-DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc [-x]        # dotnetdebugger_call_chain
+DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc [-x]        # dotnetdebugger_call_sequence
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按方法 token 定位起始方法
 ```
 
@@ -345,25 +345,25 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `dotnetdebugger_interface_usage` | `assembly` + `typeName`（须为接口）必填，`includeIndirect` 默认 false，`lines` | 实现者 + 调用点 + 签名引用组合视图；非接口提示用 `hierarchy` |
 | `dotnetdebugger_generic_instantiations` | `assembly` + `typeName` 必填，`lines` | 签名中 / 方法体中的两段实例化；`typeName` 可带/不带 `` `1``，短名亦命中 |
 
-### `dotnetdebugger_dependencies` / `dotnetdebugger_call_graph`
+### `dotnetdebugger_dependencies` / `dotnetdebugger_call_edges`
 
 | 工具 | 参数 | 说明 |
 | ---- | ---- | ---- |
 | `dotnetdebugger_dependencies` | `assembly` + `typeName` 必填，`includeExternal` 默认 false，`lines` | 签名引用内部类型及反向引用；外部格式 `全名 [程序集名]` |
-| `dotnetdebugger_call_graph` | `assembly` 必填，`typeName`（`token` 模式可不填）+ `token`/`includeExternal`/`lines` | 类型级双向调用；`token` 模式反向输出 `类型::成员` 调用点行 |
+| `dotnetdebugger_call_edges` | `assembly` 必填，`typeName`（`token` 模式可不填）+ `token`/`includeExternal`/`lines` | 类型级双向调用；`token` 模式反向输出 `类型::成员` 调用点行 |
 
-### `dotnetdebugger_search_string` / `dotnetdebugger_field_access` / `dotnetdebugger_assembly_info` / `dotnetdebugger_cache_stats`
+### `dotnetdebugger_search_literals` / `dotnetdebugger_field_access` / `dotnetdebugger_assembly_info` / `dotnetdebugger_cache_stats`
 
 | 工具 | 参数 | 说明 |
 | ---- | ---- | ---- |
-| `dotnetdebugger_search_string` | `assembly` + `search` 必填，`typeName?` + `includeCompilerGenerated?` + `lines` | 字符串字面量反查，忽略大小写；输出 `类型::成员 字符串值 token`。默认跳过编译器生成类型；`includeCompilerGenerated=true` 含 async 状态机/lambda 闭包里的字面量 |
+| `dotnetdebugger_search_literals` | `assembly` + `search` 必填，`typeName?` + `includeCompilerGenerated?` + `lines` | 字符串字面量反查，忽略大小写；输出 `类型::成员 字符串值 token`。默认跳过编译器生成类型；`includeCompilerGenerated=true` 含 async 状态机/lambda 闭包里的字面量 |
 | `dotnetdebugger_field_access` | `assembly` 必填，`typeName?` + `fieldName`/`fieldToken` + `lines` | 读/写/取地址三段来源，空段 `（无）`；`fieldToken` 为 `0x04` 开头 |
 | `dotnetdebugger_assembly_info` | `assembly` 必填，`lines` | 程序集概览（元数据秒回） |
 | `dotnetdebugger_cache_stats` | 仅 `lines` | 无 `assembly` 参数；按占用降序列条目 |
 
 > 以上未找到类型时均附相近类型名提示；除 `cache_stats` 外结果均可缓存，命中时头部标注。
 
-### `dotnetdebugger_call_chain`
+### `dotnetdebugger_call_sequence`
 
 | 参数 | 说明 | 必填 | 默认 |
 | ---- | ---- | ---- | ---- |
@@ -439,8 +439,8 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 **调用关系**
 
 - > 查询 `MyApp.Program` 的方法体调用了哪些类型 / 哪些类型调用了它（含外部）
-- > 查询哪些方法调用了 `MyApp.Program.Parse`（先 `signature` 取 token，再 `dotnetdebugger_call_graph token=...`）
-- > 追踪 `MyApp.Program.Parse` 的正向调用序列并反编译被调成员（`dotnetdebugger_call_chain`，`includeExternal=true` 展开同目录/NuGet 可解析的外部调用）
+- > 查询哪些方法调用了 `MyApp.Program.Parse`（先 `signature` 取 token，再 `dotnetdebugger_call_edges token=...`）
+- > 追踪 `MyApp.Program.Parse` 的正向调用序列并反编译被调成员（`dotnetdebugger_call_sequence`，`includeExternal=true` 展开同目录/NuGet 可解析的外部调用）
 
 **搜索与字段**
 

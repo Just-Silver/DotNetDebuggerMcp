@@ -301,7 +301,7 @@ public sealed class CallChainScanner
     }
 
     /// <summary>
-    /// 泛型参数上下文：call_chain 只需参数个数与底层类型，不关心泛型参数名，统一空上下文。
+    /// 泛型参数上下文：call_sequence 只需参数个数与底层类型，不关心泛型参数名，统一空上下文。
     /// </summary>
     private readonly record struct EmptyGenericParams();
 

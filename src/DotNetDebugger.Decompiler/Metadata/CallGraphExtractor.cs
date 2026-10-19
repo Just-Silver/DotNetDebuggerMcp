@@ -8,7 +8,7 @@ namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
 /// 纯元数据「方法体调用图」：扫描类型全部方法体 IL 的调用指令（call/callvirt/newobj/ldftn/ldvirtftn/jmp/calli），
-/// 提取程序集内部被调用的类型（编译器生成类型不计）与跨程序集外部类型（WithExternal 路径，带程序集归属），供 call_graph 工具使用。与 ReferenceExtractor
+/// 提取程序集内部被调用的类型（编译器生成类型不计）与跨程序集外部类型（WithExternal 路径，带程序集归属），供 call_edges 工具使用。与 ReferenceExtractor
 /// 的签名级引用互补：本类基于方法体执行流而非成员签名。 IL 解码经共享 IlScanHelper（基于 ICSharpCode.Decompiler.Disassembler.ILParser
 /// 权威跳表）：只提取调用边 token， 解码异常安全中止并累计降级计数； 同程序集成员调用编译器通常发 MethodDef/FieldDef 直接 token，MemberRef 兜底沿
 /// ResolutionScope 回溯判定内部/外部。
@@ -83,7 +83,7 @@ public static class CallGraphExtractor
 
     /// <summary>
     /// 方法级反向调用点：遍历程序集全部非编译器生成类型的方法体，凡调用指令指向指定方法 token 的来源方法， 以 <c>类型全名::成员签名</c> 行收集（泛型实例化
-    /// MethodSpec 调用解包归约到目标方法；编译器生成类型的方法体不计）。 供 call_graph 的 token 参数做类型级反查的细化——直接回答「程序集内哪些方法体调用了这个具体方法」。
+    /// MethodSpec 调用解包归约到目标方法；编译器生成类型的方法体不计）。 供 call_edges 的 token 参数做类型级反查的细化——直接回答「程序集内哪些方法体调用了这个具体方法」。
     /// </summary>
     /// <param name="pe">程序集 PE 读取器。</param>
     /// <param name="token">目标方法元数据 token（0x 开头的十六进制，如 0x06000005）。</param>

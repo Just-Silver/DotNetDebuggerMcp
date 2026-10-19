@@ -8,7 +8,7 @@ using Xunit;
 namespace DotNetDebuggerMcp.Tests;
 
 /// <summary>
-/// CLI 入口测试：版本号与 -cg/-cc/-tk 分发。分发改用 AppServices 集合串行化（-cc 走 call_chain 进程内反编译，
+/// CLI 入口测试：版本号与 -cg/-cc/-tk 分发。分发改用 AppServices 集合串行化（-cc 走 call_sequence 进程内反编译，
 /// 触碰 AppServices 静态状态）；命令行分发复用对应工具（已在工具层测试覆盖），端到端 CLI 行为由 dotnet run 手工验证。
 /// </summary>
 [Collection("AppServices")]
@@ -25,7 +25,7 @@ public class DotNetDebuggerMcpCmdTests
     [Fact]
     public async Task DispatchCliAsync_cg加tk_输出方法级调用点()
     {
-        // -cg -tk 分发走 call_graph 的 token 分支（纯元数据，不触碰 AppServices），应输出 Caller:: 调用点行
+        // -cg -tk 分发走 call_edges 的 token 分支（纯元数据，不触碰 AppServices），应输出 Caller:: 调用点行
         var token = TestDataPaths.FirstCalleeMethodToken(TestDataPaths.TestSamplesDll);
         var result = await DotNetDebuggerMcpCmd.DispatchCliAsync(
             assembly: TestDataPaths.TestSamplesDll, typeName: "", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",
@@ -42,7 +42,7 @@ public class DotNetDebuggerMcpCmdTests
     [Fact]
     public async Task DispatchCliAsync_cc_输出调用序列与反编译()
     {
-        // -cc -tk 分发走 call_chain 的 token 分支（进程内反编译，串行化使用 AppServices）
+        // -cc -tk 分发走 call_sequence 的 token 分支（进程内反编译，串行化使用 AppServices）
         var token = ChainTopRunToken();
         var result = await DotNetDebuggerMcpCmd.DispatchCliAsync(
             assembly: TestDataPaths.TestSamplesDll, typeName: "", memberName: "", entityTypes: "", nameContains: "", namespaceContains: "",

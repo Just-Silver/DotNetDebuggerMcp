@@ -20,7 +20,7 @@ internal static class ToolParameterText
         "按行号范围读取结果，格式 \"start-end\"（1-based 含两端），如 \"200-400\"；缺省返回前约 8 KB";
 
     /// <summary>
-    /// stdout 反编译类工具的 timeoutSeconds 参数描述（decompile/decompile_member/call_chain 共用）。
+    /// stdout 反编译类工具的 timeoutSeconds 参数描述（decompile/decompile_member/call_sequence 共用）。
     /// </summary>
     public const string TimeoutParam =
         "本次反编译超时秒数，默认 30；超时则放弃本次（结果不入缓存），可调大后重试";
@@ -32,7 +32,7 @@ internal static class ToolParameterText
         "本次反编译写盘超时秒数，默认 30；全量写盘大程序集可调大";
 
     /// <summary>
-    /// includeExternal 参数描述（dependencies/call_graph 共用；call_chain 含展开语义，单独写）。
+    /// includeExternal 参数描述（dependencies/call_edges 共用；call_sequence 含展开语义，单独写）。
     /// </summary>
     public const string IncludeExternalParam =
         "是否同时输出跨程序集外部类型引用（带程序集归属，格式 全名 [程序集名]，默认 false）";

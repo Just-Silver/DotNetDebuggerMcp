@@ -72,7 +72,7 @@ public static class HierarchyTool
                 throw new InvalidOperationException($"类型 {typeName} 无继承与接口信息");
             }
 
-            // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；空段输出（无）占位（与 dependencies/call_graph 等
+            // 段落标题与全名均作为行进入 OutputFormatter（会被标注行号）；空段输出（无）占位（与 dependencies/call_edges 等
             // 同族工具占位惯例一致，避免 agent 把「整段省略」误判为输出不完整）
             var outputLines = new List<string>();
             SectionBuilder.Append(outputLines, "基类链:", baseChain);

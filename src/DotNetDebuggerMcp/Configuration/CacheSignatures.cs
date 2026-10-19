@@ -24,7 +24,7 @@ internal static class CacheSignatures
     public const string Type = "type";
 
     /// <summary>
-    /// decompile_member / call_chain 的成员反编译。
+    /// decompile_member / call_sequence 的成员反编译。
     /// </summary>
     public const string Member = "member";
 
@@ -61,12 +61,12 @@ internal static class CacheSignatures
     public const string Dependencies = "dependencies";
 
     /// <summary>
-    /// call_graph（类型级）。
+    /// call_edges（类型级）。
     /// </summary>
     public const string CallGraph = "call-graph";
 
     /// <summary>
-    /// call_graph（token 级反向调用点）。
+    /// call_edges（token 级反向调用点）。
     /// </summary>
     public const string CallGraphToken = "call-graph-token";
 
@@ -91,7 +91,7 @@ internal static class CacheSignatures
     public const string FieldAccessList = "field-access-list";
 
     /// <summary>
-    /// search_string。
+    /// search_literals。
     /// </summary>
     public const string SearchString = "search-string";
 

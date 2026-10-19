@@ -30,7 +30,7 @@
 
 ## 入口（DotNetDebuggerMcpCmd.cs）
 
-- 业务参数：`-a` 反编译系 / `-l -nc -ns` list_types / `-s -hc -d -cg -iu -gi -cc -ai` 元数据系 / `-ss` search_string / `-fa -fn` field_access / `-mn -tt` decompile_member / `-tk` token 定位 / `-o [-p]` 写盘 / `-ln` 分页 / `--timeout`(默认 30) / `-c` 更新检查 / **`-dbg <exe>` + `-dbg-bp <token>` + `-dbg-offset`** 一次性调试 / **`--web` + `--web-port`** Web 模式 / `-v` `-h`。分发逻辑在 `DispatchCliAsync`（与 MCP 工具同一执行逻辑）。
+- 业务参数：`-a` 反编译系 / `-l -nc -ns` list_types / `-s -hc -d -cg -iu -gi -cc -ai` 元数据系 / `-ss` search_literals / `-fa -fn` field_access / `-mn -tt` decompile_member / `-tk` token 定位 / `-o [-p]` 写盘 / `-ln` 分页 / `--timeout`(默认 30) / `-c` 更新检查 / **`-dbg <exe>` + `-dbg-bp <token>` + `-dbg-offset`** 一次性调试 / **`--web` + `--web-port`** Web 模式 / `-v` `-h`。分发逻辑在 `DispatchCliAsync`（与 MCP 工具同一执行逻辑）。
 - `--web` 分支（L350-360）：`WebHostBootstrap.Configure(Manager, AgentView)` → `Build(port)` → 并联 `Task.WhenAll(mcpTask, webTask)`（任一侧结束等另一侧自然完成）。
 - MCP 启动分支：`builder.Logging.ClearProviders()` + `AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace)`——**严禁删除或改动**（stdout 只承载 MCP 协议帧；并发下 Console 日志与响应交错会撕坏帧，回归护栏 `McpSessionConcurrencyTests`）。启动期按 `FeatureFlags` 决定注册哪些能力族的工具（`ToolFeatureRegistry.EnabledToolTypes`，**未启用族不进工具目录**），并组装按族拼装的握手简介（`HandshakeText.Build`）+ 「更新状态」段（`EnvironmentChecker.BuildHandshakeText`）注入 `ServerInstructions`；未知/零能力族取值 → stderr 中文 + 非零退出。后台 fire-and-forget `RefreshIfStaleAsync`。
 

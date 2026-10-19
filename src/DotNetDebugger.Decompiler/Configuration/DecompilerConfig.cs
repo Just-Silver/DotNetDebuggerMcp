@@ -17,12 +17,12 @@ internal static class DecompilerConfig
     public const PEStreamOptions DependencyStreamOptions = PEStreamOptions.PrefetchMetadata;
 
     /// <summary>
-    /// call_chain 跨程序集调用展开的最大递归深度（原 AppConfig.ExternalExpandMaxDepth）。
+    /// call_sequence 跨程序集调用展开的最大递归深度（原 AppConfig.ExternalExpandMaxDepth）。
     /// </summary>
     public const int ExternalExpandMaxDepth = 5;
 
     /// <summary>
-    /// call_chain 单次跨程序集调用展开最多展开的外部节点数（原 AppConfig.ExternalExpandMaxNodes）。
+    /// call_sequence 单次跨程序集调用展开最多展开的外部节点数（原 AppConfig.ExternalExpandMaxNodes）。
     /// </summary>
     public const int ExternalExpandMaxNodes = 200;
 

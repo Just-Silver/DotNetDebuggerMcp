@@ -123,13 +123,13 @@ public sealed class McpSessionConcurrencyTests
             ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.BigClass" }),
             ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.DerivedClass" }),
             ("dependencies", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Uses" }),
-            ("call_graph", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Caller" }),
+            ("call_edges", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Caller" }),
             ("assembly_info", new Dictionary<string, object?> { ["assembly"] = dll }),
-            ("search_string", new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "big" }),
+            ("search_literals", new Dictionary<string, object?> { ["assembly"] = dll, ["contains"] = "big" }),
             ("signature", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.Circle" }),
             ("hierarchy", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.IAnimal", ["includeIndirect"] = true }),
             ("list_types", new Dictionary<string, object?> { ["assembly"] = dll, ["categories"] = "ide" }),
-            ("call_graph", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.GenericCaller" }),
+            ("call_edges", new Dictionary<string, object?> { ["assembly"] = dll, ["typeName"] = $"{TestDataPaths.SamplesNamespace}.GenericCaller" }),
         };
 
         var sw = Stopwatch.StartNew();

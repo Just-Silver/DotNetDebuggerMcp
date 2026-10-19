@@ -31,7 +31,7 @@ public static class SearchStringTool
     /// <returns>带行号的命中成员行或错误提示文本。</returns>
     [McpServerTool]
     [Description("在方法体的字符串字面量中按子串反查成员（忽略大小写）：扫描全部（或 typeName 限定）类型的方法体，匹配业务文案、SQL 片段、配置 Key 等，输出每行 类型全名::成员签名 字符串值 成员token（token 可直接用于 decompile_member 反编译对应成员）。同一成员内多个匹配各占一行，匹配数可能很多。默认跳过编译器生成类型；async/lambda 方法里的字面量位于生成的状态机/闭包类型内，需 includeCompilerGenerated=true 才可见。" + ToolParameterText.FooterPagination)]
-    public static Task<string> SearchString(
+    public static Task<string> SearchLiterals(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("要搜索的字符串字面量子串（忽略大小写，必填）")] string contains = "",
         [Description("限定仅在指定类型内反查，类型全名（格式与 list_types 输出一致）；省略则跨程序集全部类型（默认空=全程序集）")] string typeName = "",

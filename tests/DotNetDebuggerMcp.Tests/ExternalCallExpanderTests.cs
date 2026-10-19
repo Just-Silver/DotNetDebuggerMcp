@@ -54,7 +54,7 @@ public class ExternalCallExpanderTests
     public void 展开方法体解码中止_累计降级计数()
     {
         // 把 TestSamplesExt 复制到临时目录并放置合成同名 TestSamples.dll（Callee 方法体 IL 截断 → 解码中止）： resolver 经主 dll
-        // 同目录定位到合成程序集，展开中止的方法体须累计进 AbortedBodies（供 call_chain 降级提示并入）。
+        // 同目录定位到合成程序集，展开中止的方法体须累计进 AbortedBodies（供 call_sequence 降级提示并入）。
         var tempDir = Path.Combine(Path.GetTempPath(), "DotNetDebuggerMcp-expander-abort-test");
         Directory.CreateDirectory(tempDir);
         try

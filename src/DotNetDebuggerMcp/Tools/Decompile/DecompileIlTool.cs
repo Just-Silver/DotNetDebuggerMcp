@@ -21,7 +21,9 @@ public static class DecompileIlTool
     /// 按方法 token 反汇编方法体为 IL 文本，经共享管道缓存与 lines 分页。
     /// </summary>
     /// <param name="assembly">要反汇编的程序集文件路径（.dll 或 .exe），可为相对当前工作目录的路径（必填）。</param>
-    /// <param name="token">方法定义元数据 token，0x 开头的十六进制，如 0x06000005（必填）。</param>
+    /// <param name="token">方法定义元数据 token，0x 开头的十六进制，如 0x06000005（与 memberName 二选一）。</param>
+    /// <param name="memberName">成员名子串（忽略大小写）；未提供 token 时按成员名定位唯一方法。</param>
+    /// <param name="typeName">限定在指定类型内按成员名定位（默认空=跨程序集）。</param>
     /// <param name="lines">按行号范围读取结果，格式 "start-end"（1-based 含两端，单次最多约 32 KB）；缺省返回前约 8 KB。</param>
     /// <param name="timeoutSeconds">本次反汇编超时秒数（默认 30）。</param>
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>

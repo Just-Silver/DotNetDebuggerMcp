@@ -21,12 +21,12 @@ internal static class AppText
     public const string IlFailurePrefix = DecompilerText.IlFailurePrefix;
 
     /// <summary>
-    /// 匹配数量超过上限时「仅列出签名」的头部标注（decompile_member / call_chain 共用）。
+    /// 匹配数量超过上限时「仅列出签名」的头部标注（decompile_member / call_sequence 共用）。
     /// </summary>
     public const string OverLimitOnlySignatures = "超过上限，仅列出签名";
 
     /// <summary>
-    /// call_chain 跨程序集调用解析失败时行尾标注模板（{0} 为程序集短名；Description 侧引用同文案需自行拼写）。
+    /// call_sequence 跨程序集调用解析失败时行尾标注模板（{0} 为程序集短名；Description 侧引用同文案需自行拼写）。
     /// </summary>
     public const string UnresolvedAssemblyAnnotation = "未找到程序集 {0}，视为框架/外部调用未展开";
 

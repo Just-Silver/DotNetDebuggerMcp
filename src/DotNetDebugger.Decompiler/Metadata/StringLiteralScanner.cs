@@ -5,7 +5,7 @@ using System.Reflection.PortableExecutable;
 namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
-/// 纯元数据「字符串字面量反查」：扫描程序集全部（或指定）类型的方法体 IL 的 ldstr 指令， 按用户字符串子串（忽略大小写）匹配，反查字符串字面量所在的成员，供 search_string
+/// 纯元数据「字符串字面量反查」：扫描程序集全部（或指定）类型的方法体 IL 的 ldstr 指令， 按用户字符串子串（忽略大小写）匹配，反查字符串字面量所在的成员，供 search_literals
 /// 工具使用。 方法体读取经 PEReader.GetMethodBody，IL 解码经共享 IlScanHelper；解码异常安全中止并累计降级计数。
 /// </summary>
 public sealed class StringLiteralScanner

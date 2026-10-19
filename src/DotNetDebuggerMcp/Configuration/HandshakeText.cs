@@ -43,7 +43,7 @@ internal static class HandshakeText
     private const string UseScreenshotElementUi = "- 按控件截图先 `ui_find` 取 index/名与帧号；`ui_find` 输出的 `帧: frameId=N` 可回传给 `ui_action`/`ui_input`/`ui_get` 与 screenshot，用于拦截引用旧画面的操作。\n";
 
     private const string ToolListPrefix = "具体工具清单见 MCP 工具目录（";
-    private const string ToolListDecompile = "`decompile` 等语义前缀，静态工具另有 `signature`/`list_types`/`call_*`/`hierarchy`/`dependencies`/`interface_usage`/`field_access`/`search_string`";
+    private const string ToolListDecompile = "`decompile` 等语义前缀，静态工具另有 `signature`/`list_types`/`call_*`/`hierarchy`/`dependencies`/`interface_usage`/`field_access`/`search_literals`";
     private const string ToolListDebug = "调试 `debug_*`";
     private const string ToolListUi = "UI `ui_*`";
     private const string ToolListScreenshot = "视觉 `screenshot`/`screenshot_displays`/`screenshot_windows`";

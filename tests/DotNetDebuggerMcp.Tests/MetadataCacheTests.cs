@@ -193,8 +193,8 @@ public class MetadataCacheTests
         Init();
         try
         {
-            var first = await CallGraphTool.CallGraph(SamplesDll, typeName: $"{TestDataPaths.SamplesNamespace}.Caller", cancellationToken: TestContext.Current.CancellationToken);
-            var second = await CallGraphTool.CallGraph(SamplesDll, typeName: $"{TestDataPaths.SamplesNamespace}.Caller", cancellationToken: TestContext.Current.CancellationToken);
+            var first = await CallGraphTool.CallEdges(SamplesDll, typeName: $"{TestDataPaths.SamplesNamespace}.Caller", cancellationToken: TestContext.Current.CancellationToken);
+            var second = await CallGraphTool.CallEdges(SamplesDll, typeName: $"{TestDataPaths.SamplesNamespace}.Caller", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain("缓存:   命中", first);
             Assert.Contains("缓存:   命中", second);
@@ -212,8 +212,8 @@ public class MetadataCacheTests
         try
         {
             var token = TestDataPaths.FirstCalleeMethodToken(SamplesDll);
-            var first = await CallGraphTool.CallGraph(SamplesDll, token: token, cancellationToken: TestContext.Current.CancellationToken);
-            var second = await CallGraphTool.CallGraph(SamplesDll, token: token, cancellationToken: TestContext.Current.CancellationToken);
+            var first = await CallGraphTool.CallEdges(SamplesDll, token: token, cancellationToken: TestContext.Current.CancellationToken);
+            var second = await CallGraphTool.CallEdges(SamplesDll, token: token, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.DoesNotContain("缓存:   命中", first);
             Assert.Contains("缓存:   命中", second);

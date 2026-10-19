@@ -39,7 +39,7 @@ public static class OutputFormatter
     /// </summary>
 
     /// <summary>
-    /// 成员 JSON 分隔行前缀（#MEMBER 空格 + JSON），供 decompile_member/call_chain/field_access 多匹配与超限清单统一生成。
+    /// 成员 JSON 分隔行前缀（#MEMBER 空格 + JSON），供 decompile_member/call_sequence/field_access 多匹配与超限清单统一生成。
     /// </summary>
     public const string MemberLinePrefix = "#MEMBER ";
 
@@ -48,7 +48,7 @@ public static class OutputFormatter
 
     /// <summary>
     /// 生成成员 JSON 分隔行（含 #MEMBER 前缀）：`#MEMBER {MemberJson(...)}`。供
-    /// decompile_member/call_chain/field_access 多匹配清单与分隔行统一拼接，避免各处手写前缀造成格式漂移。
+    /// decompile_member/call_sequence/field_access 多匹配清单与分隔行统一拼接，避免各处手写前缀造成格式漂移。
     /// </summary>
     public static string MemberLine(string name, string token, string? signature = null, string? type = null)
         => $"{MemberLinePrefix}{MemberJson(name, token, signature, type)}";

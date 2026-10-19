@@ -57,12 +57,12 @@ public static class TestDataHelper
     public const string UsesTypeName = SamplesNamespace + ".Uses";
 
     /// <summary>
-    /// 方法体调用内部方法（call_graph 正向调用验证）。
+    /// 方法体调用内部方法（call_edges 正向调用验证）。
     /// </summary>
     public const string CallerTypeName = SamplesNamespace + ".Caller";
 
     /// <summary>
-    /// 被调用方（call_graph token 方法级调用点验证：Callee 方法被 Caller 调用）。
+    /// 被调用方（call_edges token 方法级调用点验证：Callee 方法被 Caller 调用）。
     /// </summary>
     public const string CalleeTypeName = SamplesNamespace + ".Callee";
 
@@ -78,7 +78,7 @@ public static class TestDataHelper
     public static string Dll { get; } = Path.Combine(RepoRoot, "tests", "TestData", TestSamplesAssemblyName + ".dll");
 
     /// <summary>
-    /// 跨程序集测试程序集（引用 TestSamples.dll 的 Callee），供 call_chain includeExternal 跨程序集展开用例。
+    /// 跨程序集测试程序集（引用 TestSamples.dll 的 Callee），供 call_sequence includeExternal 跨程序集展开用例。
     /// </summary>
     public static string ExtDll { get; } = Path.Combine(RepoRoot, "tests", "TestData", TestSamplesExtAssemblyName + ".dll");
 

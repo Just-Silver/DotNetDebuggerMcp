@@ -93,7 +93,7 @@ public static class MetadataNaming
 
     /// <summary>
     /// 渲染跨程序集外部类型的归属条目： <c>全名 [程序集名]</c>（如 <c>System.Console [System.Console]</c>）； 归属未知（如
-    /// ModuleReference 作用域）时输出 <c>全名 [&lt;外部&gt;]</c>。供 dependencies/call_graph 的外部段使用。
+    /// ModuleReference 作用域）时输出 <c>全名 [&lt;外部&gt;]</c>。供 dependencies/call_edges 的外部段使用。
     /// </summary>
     /// <param name="fullName">类型全名（建议来自 <see cref="TypeReferenceFullName"/>）。</param>
     /// <param name="assemblyName">归属程序集名；未知时传 null。</param>

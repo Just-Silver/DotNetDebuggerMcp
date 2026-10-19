@@ -5,7 +5,7 @@ using Xunit;
 namespace DotNetDebuggerMcp.Tests;
 
 /// <summary>
-/// search_string 工具层用例：命中 StringHolder 字符串 / 未命中 / typeName 限定 / 参数校验。 经
+/// search_literals 工具层用例：命中 StringHolder 字符串 / 未命中 / typeName 限定 / 参数校验。 经
 /// AppServices.ConfigureForTest 注入隔离缓存，与 ToolPipelineTests 等同属 AppServices collection 串行执行。
 /// </summary>
 [Collection("AppServices")]
@@ -17,7 +17,7 @@ public class SearchStringToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "不支持高性能计数器", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await SearchStringTool.SearchLiterals(TestDataPaths.TestSamplesDll, "不支持高性能计数器", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains($"{TestDataPaths.SamplesNamespace}.StringHolder::", result);
             Assert.Contains("\"不支持高性能计数器\"", result);
@@ -36,7 +36,7 @@ public class SearchStringToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "order by", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await SearchStringTool.SearchLiterals(TestDataPaths.TestSamplesDll, "order by", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("Query", result);
             Assert.Contains("\"ORDER BY GetDate()\"", result);
@@ -53,7 +53,7 @@ public class SearchStringToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "不存在的字符串字面量xyz", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await SearchStringTool.SearchLiterals(TestDataPaths.TestSamplesDll, "不存在的字符串字面量xyz", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("匹配实体: 0 个", result);
             Assert.DoesNotContain("at System", result);
@@ -70,7 +70,7 @@ public class SearchStringToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "Order", $"{TestDataPaths.SamplesNamespace}.StringHolder", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await SearchStringTool.SearchLiterals(TestDataPaths.TestSamplesDll, "Order", $"{TestDataPaths.SamplesNamespace}.StringHolder", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains($"{TestDataPaths.SamplesNamespace}.StringHolder::", result);
             Assert.DoesNotContain("No.Such", result);
@@ -87,7 +87,7 @@ public class SearchStringToolTests
         AppServices.ConfigureForTest();
         try
         {
-            var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "Order", "No.Such.Type", cancellationToken: TestContext.Current.CancellationToken);
+            var result = await SearchStringTool.SearchLiterals(TestDataPaths.TestSamplesDll, "Order", "No.Such.Type", cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Contains("未找到类型", result);
         }
@@ -100,7 +100,7 @@ public class SearchStringToolTests
     [Fact]
     public async Task SearchString_缺contains_返回必填提示()
     {
-        var result = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "", cancellationToken: TestContext.Current.CancellationToken);
+        var result = await SearchStringTool.SearchLiterals(TestDataPaths.TestSamplesDll, "", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains("请指定 contains", result);
     }
@@ -112,11 +112,11 @@ public class SearchStringToolTests
         try
         {
             // 默认：生成类型被跳过 → 零匹配
-            var byDefault = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "async状态机字面量XYZ", cancellationToken: TestContext.Current.CancellationToken);
+            var byDefault = await SearchStringTool.SearchLiterals(TestDataPaths.TestSamplesDll, "async状态机字面量XYZ", cancellationToken: TestContext.Current.CancellationToken);
             Assert.Contains("匹配实体: 0 个", byDefault);
 
             // includeCompilerGenerated=true：命中 <Go>d__N 状态机里的字面量
-            var included = await SearchStringTool.SearchString(TestDataPaths.TestSamplesDll, "async状态机字面量XYZ", includeCompilerGenerated: true, cancellationToken: TestContext.Current.CancellationToken);
+            var included = await SearchStringTool.SearchLiterals(TestDataPaths.TestSamplesDll, "async状态机字面量XYZ", includeCompilerGenerated: true, cancellationToken: TestContext.Current.CancellationToken);
             Assert.Contains("async状态机字面量XYZ", included);
             Assert.Contains("<Go>", included);
         }

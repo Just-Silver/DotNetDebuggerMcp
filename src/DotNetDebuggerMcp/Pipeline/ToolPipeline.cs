@@ -205,8 +205,8 @@ public sealed class ToolPipeline
     }
 
     /// <summary>
-    /// 取指定调用的全量纯净行列表：缓存命中直接返回；未命中则并发单飞回源后写缓存。错误向上抛出，由调用方转为提示文本。 供既有执行入口与 call_chain
-    /// 组合输出等场景复用（call_chain 需逐成员取体行后自行合并布局）。
+    /// 取指定调用的全量纯净行列表：缓存命中直接返回；未命中则并发单飞回源后写缓存。错误向上抛出，由调用方转为提示文本。 供既有执行入口与 call_sequence
+    /// 组合输出等场景复用（call_sequence 需逐成员取体行后自行合并布局）。
     /// </summary>
     /// <param name="command">调用描述（程序集路径 + 反编译请求）。</param>
     /// <param name="timeout">本次回源超时。</param>

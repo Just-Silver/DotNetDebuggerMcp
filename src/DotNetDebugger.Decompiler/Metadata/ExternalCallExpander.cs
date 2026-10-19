@@ -8,7 +8,7 @@ using AssemblyNameRef = ICSharpCode.Decompiler.Metadata.AssemblyNameReference;
 namespace DotNetDebugger.Decompiler.Metadata;
 
 /// <summary>
-/// 跨程序集调用链展开：将 call_chain 的外部调用点解析到磁盘程序集（主 dll 同目录 / CWD / searchDirs / deps.json NuGet 缓存 / 共享框架 /
+/// 跨程序集调用链展开：将 call_sequence 的外部调用点解析到磁盘程序集（主 dll 同目录 / CWD / searchDirs / deps.json NuGet 缓存 / 共享框架 /
 /// GAC，解析优先级由 UniversalAssemblyResolver 内置），在该程序集定位被调方法并扫描其方法体子序列，
 /// 子序列内的跨程序集调用递归展开（行随深度缩进）。纯元数据读取，不加载程序集、不反编译 IL；解析失败/找不到/防环 均返回空列表（调用方标注终止）。解码中止计数跨展开过程累计。
 /// </summary>

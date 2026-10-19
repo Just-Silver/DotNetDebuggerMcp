@@ -27,6 +27,8 @@ public static class DebugRunToTool
     /// <param name="line">行号（1-based，decompile 输出行号）；与 typeName 组合时提供（默认 0=未提供）。</param>
     /// <param name="memberName">成员名（方法，子串忽略大小写，默认空=不启用）；与 typeName 组合按成员级定位（命中唯一方法即设断点，line 忽略）。</param>
     /// <param name="moduleName">模块名（如 DebugTarget.dll）；行/成员定位省缺时在已加载模块中解析（默认空）。</param>
+    /// <param name="token">方法元数据 token（0x06 开头）；提供时按 token 定位，typeName 可不填。</param>
+    /// <param name="ilOffset">IL 偏移（默认 0=方法入口）；token 定位时使用。</param>
     /// <param name="timeoutSeconds">等待命中秒数上限，默认 30；超时返回提示。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
