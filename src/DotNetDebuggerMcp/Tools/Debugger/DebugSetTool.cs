@@ -31,7 +31,7 @@ public static class DebugSetTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果（含原值→新值回显）或中文提示。</returns>
     [McpServerTool]
-    [Description("改写停点现场的值后继续（进程需停在断点/异常）：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显。path 为目标路径（根=栈顶帧局部/参数名，支持字段 .a 与数组下标 [n]，同 debug_evaluate）。value 支持：null（引用置空）/ true|false / 数字（无符号 0x 十六进制，或带符号十进制整数/小数/科学计数，可带 m/f/d 后缀——浮点目标接受小数/后缀，整型拒后缀；枚举仅底层 GenericValue 形态可写整数值，enum 对象字段 v1 降级）/ 或同帧另一条对象路径（引用重定向，如 cfg.Backup）。不支持：改 readonly/const/静态字段、构造新对象、改字符串内容（双引号/单引号文本不在文法内，char 请用整数码点 0-65535）、表达式/方法调用；decimal 字段目标 v1 不支持整值写（引擎给中文降级提示）。注意风险：写目标进程内存可能使其崩溃，只改你确认的变量；目标引用为 null 时的重定向无类型校验，请保证源与目标同型；改完用 debug_continue 观察行为是否变化。敏感路径（如 b.Password）的「原值 → 新值」回显同样过敏感脱敏。")]
+    [Description("改写停点现场的值（进程需停在断点/异常）：局部变量/参数/对象字段/数组元素，返回「原值 → 新值」回显。path 同 debug_evaluate。value 支持 null / true|false / 数字（0x 或十进制，可带 m/f/d 后缀，整型拒后缀）/ 同帧另一对象路径（引用重定向）。不支持 readonly/const/静态字段、构造对象、改字符串内容、表达式；decimal 与 enum 对象字段 v1 降级。风险：写内存可能崩目标；重定向无类型校验。敏感路径的原值/新值同样脱敏。")]
     public static async Task<string> DebugSet(
         [Description("目标路径（默认空 → 返回缺参提示），如 scores[2]、b.A、i、cfg.Current（根为栈顶帧局部/参数名）。")] string path = "",
         [Description("新值（默认空 → 返回缺参提示）：null / true|false / 数字（无符号 0x 十六进制，或带符号十进制整数/小数/科学计数，可带 m/f/d 后缀）/ 同帧对象路径（引用重定向）。")] string value = "",

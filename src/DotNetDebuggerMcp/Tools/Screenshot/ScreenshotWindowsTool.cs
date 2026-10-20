@@ -16,13 +16,13 @@ namespace DotNetDebuggerMcp.Tools.Screenshot;
 [McpServerToolType]
 public static class ScreenshotWindowsTool
 {
-    /// <summary>输出条数上限（防超长；超出提示用 filter 缩小）。</summary>
+    /// <summary>输出条数上限（防超长；超出提示用 contains 缩小）。</summary>
     private const int MaxRows = 200;
 
     /// <summary>列出可见顶层窗口（hwnd/pid/标题/最小化/前台），供 screenshot 的 hwnd/windowTitle/processId 取值。</summary>
     [Description("列出本机可见顶层窗口（Z 序：hwnd 十进制、pid、标题、是否前台/最小化），用于填 screenshot 的 hwnd / windowTitle（标题子串）/ processId。枚举不限 .NET 进程（debug_processes 只列可附加的 .NET 进程）。只列**有标题且尺寸大于 0**的可截窗口（系统 shell 助手/阴影层/消息泵停车窗等不可寻址目标已过滤；前台窗口即使无标题也保留并标 (无标题)）。只读，不截图、不要求调试会话。")]
     public static Task<string> ScreenshotWindows(
-        [Description("标题子串过滤（忽略大小写），默认空=列出全部可见顶层窗口。")] string filter = "",
+        [Description("标题子串过滤（忽略大小写），默认空=列出全部可见顶层窗口。")] string contains = "",
         CancellationToken cancellationToken = default)
     {
         try
@@ -42,7 +42,7 @@ public static class ScreenshotWindowsTool
                 .ToArray();
             var dropped = all.Length - candidates.Length;
 
-            var query = filter.Trim();
+            var query = contains.Trim();
             var hits = string.IsNullOrEmpty(query)
                 ? candidates
                 : candidates.Where(w => w.Title.Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -71,7 +71,7 @@ public static class ScreenshotWindowsTool
             if (hits.Length > shown.Length)
             {
                 sb.AppendLine();
-                sb.Append($"（已达上限 {MaxRows} 行，可用 filter 缩小范围）");
+                sb.Append($"（已达上限 {MaxRows} 行，可用 contains 缩小范围）");
             }
             return Task.FromResult(sb.ToString());
         }

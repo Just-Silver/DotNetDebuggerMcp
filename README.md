@@ -140,12 +140,12 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 | 工具 | 用途 |
 | ---- | ---- |
-| `dotnetdebugger_debug_processes` | 列出本机可附加的 .NET 进程（pid/进程名/CLR 版本，dbgshim 权威探测——只列实际探测到 CLR 的进程，无 CLR 进程不误列；调试器自身已排除；`filter` 进程名子串过滤；进程名排序，当前会话目标行标注「← 当前会话」，超 100 条截断提示用 filter）——选 pid 后 `debug_attach`。存在当前会话目标时，其 .NET 子孙进程行尾标注父链（「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」）并附切换引导 |
+| `dotnetdebugger_debug_processes` | 列出本机可附加的 .NET 进程（pid/进程名/CLR 版本，dbgshim 权威探测——只列实际探测到 CLR 的进程，无 CLR 进程不误列；调试器自身已排除；`contains` 进程名子串过滤；进程名排序，当前会话目标行标注「← 当前会话」，超 100 条截断提示用 contains）——选 pid 后 `debug_attach`。存在当前会话目标时，其 .NET 子孙进程行尾标注父链（「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」）并附切换引导 |
 | `dotnetdebugger_debug_launch` / `dotnetdebugger_debug_attach` | 启动或附加 .NET 进程建立调试会话（异步返回，带默认超时）。launch 蹲守 CLR 启动、停在 Main 前——任意程序无需启动配合即可从第一行业务代码前调试。`debug_launch` 可传 `workingDirectory`（默认空=目标 exe 所在目录，对齐手动启动 exe；Web 应用等以工作目录定位 appsettings/静态资源的目标应显式传 bin/publish 目录）与 `environment`（KEY=VALUE 多行或分号，如 `ASPNETCORE_ENVIRONMENT=Development`）；返回与 `debug_wait` 均含目标 pid，launch 返回另含实际生效工作目录 |
 | `dotnetdebugger_debug_breakpoint` | 断点管理（`action=set`(默认)/`list`/`remove`/`clear`），四种定位：模块+方法 token+IL offset（未加载模块登记待绑定）、`typeName`+`memberName`、`typeName`+`line`、`sourcePath`+`line`（PDB 源码行）；可选 `hitCount` 与 `mode`（stop/trace）、`condition`；`remove` 用 `id`（取 `list` 输出的 `id=N`） |
 | `dotnetdebugger_debug_continue` / `dotnetdebugger_debug_step` / `dotnetdebugger_debug_wait` | 继续执行 / 单步（`kind=into/over/out`，进程需停在断点）/ 查看或等待停点（`waitSeconds=0`(默认)立即返回会话状态，>0 等待命中，直接返回停点现场） |
 | `dotnetdebugger_debug_run_to` | 运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、**临时断点自动移除**。目标定位同 `debug_breakpoint` 的 `typeName`+`line`（decompile 输出行号）或 `typeName`+`memberName`（方法名子串，命中唯一方法）。超时 / 命中其它断点 / 进程退出均返回对应提示且临时断点一并自动清理。单步后立即调用亦可靠（自动跳过 continue 前旧快照与残留单步停点）。边界：只对「目标会被进程自然执行到」有效——停住不自己走的路径请改用普通断点 + `debug_continue` |
-| `dotnetdebugger_debug_timeline` | 查看当前会话的日志+事件+agent 动作统一时间线（按时间对齐复盘：先 A 日志→命中 B 断点→agent 改值→再 C 异常）。三源：目标进程输出（`log`，仅 launch 会话有）、调试事件（`bp`/`step`/`exc`/`skip`/`trc`/`state`/`engine`）、agent 动作（`act`）。`lines` 取最近 N 条（默认 100），`filter` 子串过滤（忽略大小写），`kind` 按源筛选；头部报告三源总量与显示行数、时间范围 |
+| `dotnetdebugger_debug_timeline` | 查看当前会话的日志+事件+agent 动作统一时间线（按时间对齐复盘：先 A 日志→命中 B 断点→agent 改值→再 C 异常）。三源：目标进程输出（`log`，仅 launch 会话有）、调试事件（`bp`/`step`/`exc`/`skip`/`trc`/`state`/`engine`）、agent 动作（`act`）。`lines` 取最近 N 条（默认 100），`contains` 子串过滤（忽略大小写），`kind` 按源筛选；头部报告三源总量与显示行数、时间范围 |
 | `dotnetdebugger_debug_output` | 查看被调试进程的控制台输出（stdout/stderr，旧→新；仅 launch 会话捕获，运行中可随时拉取） |
 | `dotnetdebugger_debug_frame` / `dotnetdebugger_debug_threads` | 一次读停点现场（调用栈 + 当前帧变量，`names` 按名白名单）/ 列托管线程 |
 | `dotnetdebugger_debug_modules` | 列出当前调试会话已加载的模块（短名 + 磁盘路径）——确认目标程序集是否已加载，行/成员/源码行断点定位排障 |
@@ -382,12 +382,12 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | | `environment` | 附加环境变量，KEY=VALUE 多行或分号分隔（如 `ASPNETCORE_ENVIRONMENT=Development;MY_KEY=1`），默认空=继承 server 环境 |
 | `debug_attach` | `processId`（必填） | 目标进程 id（用 `debug_processes` 查） |
 | `debug_wait` | `contextLines` | 停点上下文行数预算，默认 100，0=不附。返回含目标 pid、会话状态（Attaching=进程冻结在 Main 前可设断点后 continue 放行）、最近停点；进程已退出时附退出码（launch 会话）；attach 会话且进程在跑时提示「已附加成功、进程独立运行」 |
-| `debug_timeline` | `lines` / `filter` / `kind` | 取最近 N 条（默认 100，范围 1-1000）/ 子串过滤（忽略大小写）/ 按源筛选：all/log/act/bp/step/exc/skip/trc/state/engine。返回三源统一时间行（`[HH:mm:ss.fff] tag 内容`）与头部总量/时间范围 |
+| `debug_timeline` | `lines` / `contains` / `kind` | 取最近 N 条（默认 100，范围 1-1000）/ 子串过滤（忽略大小写）/ 按源筛选：all/log/act/bp/step/exc/skip/trc/state/engine。返回三源统一时间行（`[HH:mm:ss.fff] tag 内容`）与头部总量/时间范围 |
 | `debug_step` | `kind` | into/over/out，默认 over。返回「已提交 step 命令」——用 `debug_wait` 等停（通常瞬时）Stopped。停在编译器生成的 async 状态机帧时返回附行断点引导（断还原源码的 await 行） |
 | `debug_output` | `lines` | 返回最近行数，默认 50，范围 1-2000 |
-| | `filter` | 只返回含该子串的行（忽略大小写），默认空=全部。高频日志下筛关键行（如 `filter=Now listening` / `filter=error`） |
+| | `contains` | 只返回含该子串的行（忽略大小写），默认空=全部。高频日志下筛关键行（如 `contains=Now listening` / `contains=error`） |
 | `debug_wait` | `waitSeconds` / `outputLines` / `outputFilter` / `contextLines` | 等停秒数（默认 0=立即返回会话状态；>0 等待）/ 附输出行数（默认 20，0=不附）/ 附输出只留含该子串的行 / 停点上下文预算 |
-| `debug_processes` | `filter` | 进程名子串过滤，忽略大小写；缺省空=全部。进程名排序，当前会话目标行标注「← 当前会话」，超 100 条截断提示用 filter。存在当前会话目标时，其 .NET 子孙进程（dbgshim 探测到 CLR 的子/孙进程链）行尾标注「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」，返回尾部附切换引导——**单活动会话**：业务代码跑在子进程时需停当前会话（debug_session(action=disconnect)/停断点）后 `debug_attach <childPid>` 单独调试；子进程自身输出不在 debug_output 捕获范围（launch 只捕获父进程 stdout/stderr） |
+| `debug_processes` | `contains` | 进程名子串过滤，忽略大小写；缺省空=全部。进程名排序，当前会话目标行标注「← 当前会话」，超 100 条截断提示用 contains。存在当前会话目标时，其 .NET 子孙进程（dbgshim 探测到 CLR 的子/孙进程链）行尾标注「← 会话目标(X) 的子进程/第N代孙进程（父 Y）」，返回尾部附切换引导——**单活动会话**：业务代码跑在子进程时需停当前会话（debug_session(action=disconnect)/停断点）后 `debug_attach <childPid>` 单独调试；子进程自身输出不在 debug_output 捕获范围（launch 只捕获父进程 stdout/stderr） |
 | `debug_breakpoint` | `action=set`(默认)/`list`/`remove`/`clear`；`moduleName`+`token`+`ilOffset` / `typeName`+`memberName` / `typeName`+`line` / `sourcePath`+`line` | 四种定位方式；`typeName`+`memberName` 按类型内方法名子串定位（唯一命中即设断点，多方法匹配返回 `#MEMBER` 清单，属性/事件/字段成员提示）；`sourcePath`+`line` 模块未加载/未命中时登记延迟项（模块加载后自动按 PDB 解析绑定）；可选 `hitCount`、`mode`（stop/trace）、`condition`（P6 子集表达式，为真才停/记）；同一 `(模块, token, IL offset)` 重复设置会替换旧断点（不产生同址多断点）。token 方式的 `ilOffset` 须落在 IL 指令边界（否则中文提示须用视图行或入口 0） |
 | `debug_run_to` | `typeName`+`line` / `typeName`+`memberName` | 运行到目标位置后停下（对标 VS Run to Cursor）：设一次性临时断点 + 继续运行，命中即停且**自动移除**临时断点。`typeName` 必填，`line`（decompile 输出行号）或 `memberName` 二选一，`moduleName` 可省；`timeoutSeconds` 等待命中上限（默认 30）。超时/命中其它断点/进程退出都返回提示并清理临时断点。只对「目标会被自然执行到」有效 |
 | `debug_object` | `path`（必填）+ `depth` + `limit` + `threadId` | **对象结构受控递归下钻（D1）**：`path` 同 `debug_evaluate`（如 `order.Customer`、`$exception.InnerException`，根=栈顶帧局部/参数名 + 字段/下标）；`depth` 递归层数（默认 2，范围 1-6）、`limit` 每层字段/元素上限（默认 32，范围 1-128）；同路径环输出 `<cyclic>` 占位不再下钻；标量/字符串/null 目标返回中文「不是对象/数组」提示。缺省 `threadId=0` 用最近停点线程 |
@@ -407,7 +407,7 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `ui_get` | `process`（必填）+ `what`（必填）+ `index` + `name` + `type` + `frameId` + `timeoutSeconds` | `what`=value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext；定位同 ui_action（含可选 `frameId` 旧帧护栏）；`timeoutSeconds`=单次 UIA 调用超时（默认 5，1-300）。读值展示前经 DB1 敏感脱敏 |
 | `ui_wait` | `process`（必填）+ `text` + `type` + `textChangedFrom` + `textChangedTo` + `timeoutSeconds` | `text` 与 `textChangedFrom/To` 二选一（前者等控件文本出现，后者等文本从 X 变 Y，可配 `type` 限定）；事件化 + 200ms 轮询兜底；`timeoutSeconds` 最长等待（默认 30，1-300），同时作单次 UIA 调用护栏。命中返回 出现/已变化；超时返回当前状态提示、不报错 |
 
-> 输出捕获仅 `debug_launch` 会话可用（attach 已运行进程无法重定向）；缓冲保留最近 2000 行，被高频日志淹没时用 `filter` 筛关键行。
+> 输出捕获仅 `debug_launch` 会话可用（attach 已运行进程无法重定向）；缓冲保留最近 2000 行，被高频日志淹没时用 `contains` 筛关键行。
 
 ## 使用示例
 

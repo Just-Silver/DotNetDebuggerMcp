@@ -31,7 +31,7 @@ public static class CallGraphTool
     /// <param name="cancellationToken">取消令牌（MCP 客户端取消调用时由框架注入）。</param>
     /// <returns>带行号的方法体调用关系或错误提示文本。</returns>
     [McpServerTool]
-    [Description("输出双向方法体调用关系清单（元数据秒回，不反编译）：类型级给出该类型方法体调用的内部类型、跨程序集外部类型（includeExternal=true 时，格式 全名 [程序集名]）与程序集内方法体调用该类型的类型（双向）。提供 token 时收敛为反向定位调用该具体方法的成员（输出 类型全名::成员签名 调用点行，typeName 可不填、includeExternal 忽略）。与 call_sequence 分工：本工具是关系清单（默认双向、不反编译）；『从某方法正向展开调用序列并反编译被调成员体』请用 call_sequence，『签名级引用』请用 dependencies。")]
+    [Description("输出双向方法体调用关系清单（元数据秒回，不反编译）：类型级给出本类型调用的内部/外部类型（includeExternal=true）与调用本类型的类型。提供 token 时收敛为反向定位调用该方法的成员。正向展开并反编译被调成员体用 call_sequence；签名级引用用 dependencies。")]
     public static Task<string> CallEdges(
         [Description(ToolParameterText.AssemblyParam)] string assembly = "",
         [Description("类型全名（必填；提供 token 时可不填），格式与 list_types 输出一致")] string typeName = "",

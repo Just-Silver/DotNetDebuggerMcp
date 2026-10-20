@@ -20,7 +20,7 @@ public static class DebugVerifyTool
     /// 改完源码后用它自证修复。
     /// </summary>
     [McpServerTool]
-    [Description("一键复验：读场景 JSON 文件（target 启动快照 + 可选 build 重编译 + steps 断言序列）并执行到 PASS/FAIL。build 分支自动重编译场景工程并按项目默认输出路径拿产物（不设置 OutputPath），commandLine 写工程入口 exe 文件名+参数（首段文件名须与编译产物同名）；无 build 时 commandLine 用完整路径。启动/断点/evaluate/output 断言走本进程调试会话，断言失败即停（fail-fast），返回 PASS/FAIL 汇总与失败步骤实际上下文。改完 bug 后用它自证修复。场景含 uiAction/uiAssert 步骤时**需服务端已启用 ui 能力族**（--features 含 ui），否则运行期报错。场景格式示例见 README（debug_verify 段）。")]
+    [Description("一键复验：读场景 JSON（target 启动快照 + 可选 build 重编译 + steps 断言序列）执行到 PASS/FAIL，断言失败即停（fail-fast）并附失败步骤上下文。build 时按项目默认输出路径自动拿产物（commandLine 写入口 exe 文件名+参数，须同名）；无 build 用完整路径。场景格式见 README（debug_verify 段）；uiAction/uiAssert 步骤需启用 ui 能力族。")]
     public static async Task<string> DebugVerify(
         [Description("场景 JSON 文件绝对路径（必填）。")] string scenarioPath = "",
         CancellationToken cancellationToken = default)

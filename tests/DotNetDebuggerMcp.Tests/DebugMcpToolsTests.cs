@@ -417,7 +417,7 @@ public sealed class DebugMcpToolsTests
 
         // debug_processes（D2）：当前会话目标的子进程行尾标注 + 返回尾部引导；会话目标行仍标 ← 当前会话
         var proc = await CallAsync(mcp, "debug_processes",
-            new Dictionary<string, object?> { ["filter"] = "DebugTarget" });
+            new Dictionary<string, object?> { ["contains"] = "DebugTarget" });
         Assert.True(proc.IsError != true, proc.Text());
         Assert.True(proc.Text().Contains($"pid={childPid}"), proc.Text());
         Assert.True(proc.Text().Contains($"pid={parentPid}"), proc.Text());

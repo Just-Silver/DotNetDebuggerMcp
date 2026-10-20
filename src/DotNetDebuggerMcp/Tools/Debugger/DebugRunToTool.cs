@@ -33,7 +33,7 @@ public static class DebugRunToTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("运行到目标位置后停下（对标 VS 运行到光标处 / Run to Cursor）：在目标处设一次性临时断点并继续运行，命中即停、临时断点自动移除——用 debug_frame 观察现场。定位同 debug_breakpoint(action=set)：token（moduleName+token+ilOffset）或 typeName+line（decompile 输出行号）或 typeName+memberName（方法名子串，命中唯一方法）；moduleName 可省。超时/命中其它断点/进程退出时返回对应提示且临时断点一并自动清理。注意边界：run_to 只对「目标会被进程自然执行到」有效——当前执行路径若不会走向目标（停住不自己走的分支/等待），run_to 将等到超时，此类场景请改用 debug_breakpoint(action=set) 设普通断点 + debug_continue。")]
+    [Description("运行到目标位置后停下（对标 VS 运行到光标处）：设一次性临时断点并继续运行，命中即停、临时断点自动移除。定位同 debug_breakpoint：token（moduleName+token+ilOffset）或 typeName+line（decompile 行号）或 typeName+memberName。超时/命中其它断点/进程退出均返回提示并清理临时断点。边界：目标必须会被进程自然执行到，否则等到超时——此类场景改用普通断点 + debug_continue。")]
     public static async Task<string> DebugRunTo(
         [Description("类型全名（与 decompile 输出同格式，默认空）；与 line 组合按反编译视图行定位，或与 memberName 组合按成员级定位——typeName+line / typeName+memberName 二选一必填。")] string typeName = "",
         [Description("行号（1-based，decompile 输出行号，默认 0=未提供）；与 typeName 组合按反编译视图行定位。")] int line = 0,

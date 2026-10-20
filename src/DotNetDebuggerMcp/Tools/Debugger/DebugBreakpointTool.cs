@@ -77,7 +77,7 @@ public static class DebugBreakpointTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
     [McpServerTool]
-    [Description("断点管理（action 默认 set）：set=设置 / list=清单（含绑定状态）/ remove=移除 / clear=清空。set 四种定位：① token：moduleName+token（0x06 开头，signature 行尾取）+ilOffset；② typeName+memberName（方法名子串，命中唯一方法）；③ typeName+line（decompile 输出行号，需模块已加载）；④ sourcePath+line（PDB 源码行）。可选 hitCount（第 N 次起生效）与 mode（stop=命中停 / trace=命中不停记轨迹）。remove 需 id（取 list 输出的 id=N）。")]
+    [Description("断点管理（action 默认 set）：set / list（含绑定状态）/ remove（需 id，取 list 输出的 id=N）/ clear。set 四种定位：moduleName+token+ilOffset；typeName+memberName（方法名子串，命中唯一方法）；typeName+line（decompile 行号，需模块已加载）；sourcePath+line（PDB 源码行，模块未加载时登记延迟绑定）。可选 hitCount（第 N 次命中起生效）、mode（stop=命中停 / trace=记录）、condition（P6 子集，为真才停）。")]
     public static async Task<string> DebugBreakpoint(
         [Description("操作类型：set=设置（默认）/ list=列出 / remove=移除 / clear=清空。")] string action = "set",
         [Description("模块名（如 DebugTarget.dll）；set 的 token 定位必填，行/成员定位可省。")] string moduleName = "",

@@ -17,13 +17,13 @@ public static class DebugTimelineTool
     /// <summary>
     /// 查看当前调试会话的日志+事件+agent动作统一时间线。三源各自保留内存环形缓冲（输出 2000 行 / 事件 500 条 / 动作 1000 条），
     /// 拉取时按 UTC 归并排序（同毫秒按源内序号稳定）；取最近 N 条（默认 100，不做 start-end 翻页）；
-    /// filter 子串过滤（忽略大小写）；kind 按源筛选。
+    /// contains 子串过滤（忽略大小写）；kind 按源筛选。
     /// </summary>
     [McpServerTool]
-    [Description("查看当前调试会话的日志+事件+agent动作统一时间线（按时间对齐复盘：先 A 日志→命中 B 断点→agent 改值→再 C 异常）。三源：目标进程输出（log，仅 launch 会话有）、调试事件（bp/step/exc/skip/trc/state/engine）、agent 动作（act）。lines 取最近 N 条（默认 100，v1 不做 start-end 翻页）；filter 子串过滤（忽略大小写）；kind 可选 all/log/act/bp/step/exc/skip/trc/state/engine 按源筛选。")]
+    [Description("查看当前会话的日志+事件+agent 动作统一时间线（按时间对齐复盘）。三源：目标输出（log，仅 launch）、调试事件（bp/step/exc/skip/trc/state/engine）、agent 动作（act）。lines 取最近 N 条（默认 100）；contains 子串过滤；kind 按源筛选。")]
     public static async Task<string> DebugTimeline(
         [Description("取最近 N 条（默认 100）。")] int lines = 100,
-        [Description("子串过滤（忽略大小写），只保留文本含该子串的行。")] string filter = "",
+        [Description("子串过滤（忽略大小写），只保留文本含该子串的行。")] string contains = "",
         [Description("按源筛选：all/log/act/bp/step/exc/skip/trc/state/engine。")] string kind = "all",
         CancellationToken cancellationToken = default)
     {
@@ -38,7 +38,7 @@ public static class DebugTimelineTool
         var logs = active.Output?.Snapshot() ?? Array.Empty<DotNetDebugger.Session.ProcessOutputLine>();
         var history = active.Buffer.SnapshotHistory();
         var actions = active.Actions.Snapshot();
-        var rows = DotNetDebugger.Session.DebugTimeline.Build(logs, history, actions, n, filter, kindNorm);
+        var rows = DotNetDebugger.Session.DebugTimeline.Build(logs, history, actions, n, contains, kindNorm);
 
         var sb = new StringBuilder();
         var target = active.ProcessId > 0 ? $"目标 pid={active.ProcessId}" : "目标 ?";
@@ -57,7 +57,7 @@ public static class DebugTimelineTool
         // attach 会话退出（顺手项①，对齐 debug_wait）：退出码不可得
         if (active.IsAttach && active.Buffer.CurrentState == DotNetDebugger.Engine.Models.DebugSessionState.Exited)
             sb.AppendLine().Append("（attach 会话：退出码不可得——ICorDebug 不提供，目标独立于调试器退出）");
-        DebugSessionService.Manager.Actions.Log("debug_timeline", $"lines={n} filter={filter} kind={kindNorm}", $"{rows.Count} 行"); // 轨迹惯例
+        DebugSessionService.Manager.Actions.Log("debug_timeline", $"lines={n} contains={contains} kind={kindNorm}", $"{rows.Count} 行"); // 轨迹惯例
         foreach (var row in rows)
         {
             sb.AppendLine();

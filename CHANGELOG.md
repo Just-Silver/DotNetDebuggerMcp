@@ -13,7 +13,7 @@
 - **工具面重构（53 → 42 个工具）**，工具名与参数名变更（agent 侧契约，破坏性）：
   - 改名：`call_chain` → `call_sequence`、`call_graph` → `call_edges`、`search_string` → `search_literals`
   - 合并：`debug_breakpoint_set|list|remove|clear` → `debug_breakpoint(action=set|list|remove|clear)`；`debug_exceptions`/`debug_exceptions_clear` → `debug_exceptions(action=set|clear)`；`debug_disconnect|terminate|reset` → `debug_session(action=disconnect|terminate|reset)`；`debug_state` → `debug_wait(waitSeconds=0)`；`debug_stack` + `debug_variables` → `debug_frame`；`decompile_to_project` → `decompile_to_dir(project=true)`；`screenshot_displays` / `screenshot_windows` → `screenshot(mode=list-displays|list-windows)`
-  - 参数改名：`debug_breakpoint_set.methodToken` → `token`、`debug_breakpoint_remove.breakpointId` → `id`、`debug_step.stepType` → `kind`、`search_literals.search` → `contains`
+  - 参数改名：`debug_breakpoint_set.methodToken` → `token`、`debug_breakpoint_remove.breakpointId` → `id`、`debug_step.stepType` → `kind`、`search_literals.search` → `contains`；子串过滤统一为 `contains`：`debug_output.filter` / `debug_processes.filter` / `debug_timeline.filter` / `screenshot.filter` / `debug_wait.outputFilter` → `contains`
   - 必填参数归零：`debug_set`（`path`/`value`）、`debug_evaluate`（`expression`）、`debug_object`（`path`）均带默认值，缺参改为方法体中文提示（原为客户端绑定阶段英文错误）
 
 ### Added

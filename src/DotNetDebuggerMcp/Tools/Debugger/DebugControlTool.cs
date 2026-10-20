@@ -48,16 +48,16 @@ public static class DebugControlTool
     /// </summary>
     /// <param name="waitSeconds">最长等待秒数（1-300），默认 10。</param>
     /// <param name="outputLines">随返回附目标输出最近行数，默认 20，0=不附（仅 launch 会话有输出）。</param>
-    /// <param name="outputFilter">随返回附的目标输出只保留含该子串的行（忽略大小写），默认空=全部。</param>
+    /// <param name="contains">随返回附的目标输出只保留含该子串的行（忽略大小写），默认空=全部。</param>
     /// <param name="contextLines">停点上下文行数预算，默认见 AppConfig（100），0=不附。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>停点现场、退出提示或超时提示（可附上下文/目标输出）。</returns>
     [McpServerTool]
-    [Description("查看/等待停点：waitSeconds=0（默认）立即返回当前会话状态（pid/状态/最近停点/退出码）；waitSeconds>0 等待进程停在断点/异常/单步或退出，最多该秒数（已在停点/已退出立即返回）。返回最近停点现场可直接接 debug_frame；默认附停点上下文（反编译视图当前语句周边，行号=decompile 行号，contextLines 可调/0 关闭）与目标进程最近控制台输出（outputLines 可调/0 关闭；outputFilter 只保留含关键字的行）。")]
+    [Description("查看/等待停点：waitSeconds=0（默认）立即返回当前会话状态（pid/状态/最近停点/退出码）；waitSeconds>0 等待进程停在断点/异常/单步或退出，最多该秒数（已在停点/已退出立即返回）。返回最近停点现场可直接接 debug_frame；默认附停点上下文（反编译视图当前语句周边，行号=decompile 行号，contextLines 可调/0 关闭）与目标进程最近控制台输出（outputLines 可调/0 关闭；contains 只保留含关键字的行）。")]
     public static async Task<string> DebugWait(
         [Description("最长等待秒数：0=不等待、立即返回当前状态（默认）；1-300=等待停点。")] int waitSeconds = 0,
         [Description("随返回附目标进程最近控制台输出的行数，默认 20，0=不附（仅 debug_launch 会话有输出）。")] int outputLines = 20,
-        [Description("随返回附的目标输出只保留含该子串的行（忽略大小写），默认空=全部。高频日志下筛关键行。")] string outputFilter = "",
+        [Description("随返回附的目标输出只保留含该子串的行（忽略大小写），默认空=全部。高频日志下筛关键行。")] string contains = "",
         [Description(ToolParameterText.ContextLinesParam)] int contextLines = AppConfig.DefaultStopContextBudgetLines,
         CancellationToken cancellationToken = default)
     {
@@ -68,7 +68,7 @@ public static class DebugControlTool
         if (waitSeconds <= 0)
         {
             var snapshot = await DebugSessionTool.DebugState(contextLines, cancellationToken);
-            return DebugOutputTool.AppendTargetOutput(active, snapshot, outputLines, outputFilter);
+            return DebugOutputTool.AppendTargetOutput(active, snapshot, outputLines, contains);
         }
 
         var seconds = Math.Clamp(waitSeconds, 1, 300);
@@ -98,7 +98,7 @@ public static class DebugControlTool
 
         var conditionFailures = DebugSessionTool.ConditionFailuresText(active.Buffer);
         if (conditionFailures is not null) result += Environment.NewLine + conditionFailures;
-        return DebugOutputTool.AppendTargetOutput(active, result, outputLines, outputFilter);
+        return DebugOutputTool.AppendTargetOutput(active, result, outputLines, contains);
     }
 
     /// <summary>
@@ -111,7 +111,7 @@ public static class DebugControlTool
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示或错误提示。</returns>
     [McpServerTool]
-    [Description("单步执行（进程需已停在断点/异常）。kind：into=进入被调方法 / over=不进入 / out=步出当前方法。单步命令提交后进程将停在新位置（通常瞬时）——用 debug_wait 等停（默认 10s，通常秒内即回），或 debug_wait/debug_frame 观察新位置。停在编译器生成的 async 状态机帧（类型形如 <Foo>d__N）时返回附引导：建议改用 debug_breakpoint(action=set) typeName+line 断还原源码的 await 行 + debug_continue（勿 step into 状态机 MoveNext）。")]
+    [Description("单步执行（进程需停在断点/异常）。kind：into=进入被调方法 / over=不进入 / out=步出。命令提交后进程停在新位置（通常瞬时），用 debug_wait 等停再 debug_frame 观察。停在 async 状态机帧（<Foo>d__N）时附引导：改用 debug_breakpoint typeName+line 断源码 await 行，勿 step into MoveNext。")]
     public static async Task<string> DebugStep(
         [Description("单步类型：into=进入被调方法 / over=不进入 / out=步出当前方法，默认 over。")] string kind = "over",
         CancellationToken cancellationToken = default)
