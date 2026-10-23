@@ -16,9 +16,11 @@ internal enum FeatureFamily
 }
 
 /// <summary>
-/// 能力族开关解析：CLI <c>--features</c> 优先于环境变量 <c>DOTNETDEBUGGERMCP_FEATURES</c>；两者都未指定则默认
-/// 只启用反编译。语义要点——McMaster 下「不给参数」是 <c>null</c>、「--features=」是空串 <c>""</c>，故
-/// <c>null</c>=未指定（回落默认/env）、<c>""</c>=显式零能力，两者不可混为一谈。
+/// 能力族开关解析：CLI <c>--features</c> 优先于环境变量 <c>DOTNETDEBUGGERMCP_FEATURES</c>；两者都未指定则
+/// **默认启用全部能力族**。该参数是「裁剪」而非「开关」：未列出的族不注册、握手不提，列出的族照常启用。
+/// <para><b>反编译族恒启用、不可关闭</b>（它是本服务器的基础能力，且必须有工具可暴露）——传空串
+/// <c>--features=</c> 等价于「只启用反编译」。语义要点：McMaster 下「不给参数」是 <c>null</c>（未指定，回落
+/// 默认/env）、<c>"--features="</c> 是空串 <c>""</c>（只留反编译），两者不同。</para>
 /// </summary>
 internal static class FeatureFlags
 {
@@ -29,8 +31,8 @@ internal static class FeatureFlags
     internal static readonly string[] FeatureNames = ["decompile", "debug", "ui", "screenshot"];
 
     /// <summary>
-    /// 解析取值串：空/空白 → <see cref="FeatureFamily.None"/>（显式零能力）；逗号分隔、忽略大小写与空白、
-    /// 忽略重复；未知 token → 中文错误（列出合法取值）。
+    /// 解析取值串：空/空白 → <see cref="FeatureFamily.None"/>（由 <see cref="Resolve"/> 补上恒启用的反编译族）；
+    /// 逗号分隔、忽略大小写与空白、忽略重复；未知 token → 中文错误（列出合法取值）。
     /// </summary>
     internal static (FeatureFamily Family, string? Error) TryParse(string value)
     {
@@ -55,8 +57,8 @@ internal static class FeatureFlags
     }
 
     /// <summary>
-    /// CLI 优先于环境变量并应用默认：<paramref name="cliValue"/> 非 null 即权威（含空串=零能力）；
-    /// 为 null 时才看环境变量（非空白才解析）；两者皆空 → 默认只启用反编译。未知取值抛
+    /// CLI 优先于环境变量并应用默认：<paramref name="cliValue"/> 非 null 即权威（含空串=只启用反编译）；
+    /// 为 null 时才看环境变量（非空白才解析）；两者皆空 → **启用全部能力族**。未知取值抛
     /// <see cref="InvalidOperationException"/>（消息即中文提示）——启动路径应改用 <see cref="Resolve"/> 以报错退出。
     /// </summary>
     internal static FeatureFamily Parse(string? cliValue, string? envValue)
@@ -68,18 +70,15 @@ internal static class FeatureFlags
 
     /// <summary>
     /// 同 <see cref="Parse"/> 但不抛异常：未知取值时返回 <c>(None, 中文错误)</c>，供启动路径 <c>Console.Error</c> + 非零退出。
-    /// <para><b>零能力也报错</b>：一个不注册任何工具的 MCP 服务器会让客户端 <c>tools/list</c> 拿协议错误、
-    /// 完全不可用（实测），故「一个族都不启用」视为无效配置而非合法状态。</para>
+    /// <para>返回值恒含 <see cref="FeatureFamily.Decompile"/>（不可关闭）；因此不存在「零能力」配置——一个不注册任何
+    /// 工具的 MCP 服务器会让客户端 <c>tools/list</c> 拿协议错误（实测）。</para>
     /// </summary>
     internal static (FeatureFamily Family, string? Error) Resolve(string? cliValue, string? envValue)
     {
         var (family, error) = cliValue is not null ? TryParse(cliValue)
             : !string.IsNullOrWhiteSpace(envValue) ? TryParse(envValue)
-            : (FeatureFamily.Decompile, null);
+            : (FeatureFamily.All, null);
         if (error is not null) return (FeatureFamily.None, error);
-        if (family == FeatureFamily.None)
-            return (FeatureFamily.None,
-                $"至少需启用一个能力族（{string.Join("/", FeatureNames)}）——一个族都不启用的服务器无任何工具可暴露。");
-        return (family, null);
+        return (family | FeatureFamily.Decompile, null);
     }
 }

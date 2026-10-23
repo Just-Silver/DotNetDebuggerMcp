@@ -2,12 +2,12 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "description": "内置反编译与调试能力的 .NET MCP 服务器（DotNetDebuggerMcp）。",
   "name": "io.github.just-silver/DotNetDebuggerMcp",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "packages": [
     {
       "registryType": "nuget",
       "identifier": "DotNetDebuggerMcp",
-      "version": "2.4.1",
+      "version": "2.4.2",
       "transport": {
         "type": "stdio"
       },
@@ -15,7 +15,7 @@
       "environmentVariables": [
         {
           "name": "DOTNETDEBUGGERMCP_FEATURES",
-          "description": "启用的能力族（逗号分隔：decompile/debug/ui/screenshot）；默认只启用 decompile（反编译/静态分析）。仅作用于 MCP 面（工具注册与握手注入），CLI 参数不受影响。等价于命令行参数 --features。",
+          "description": "能力族裁剪（逗号分隔：decompile/debug/ui/screenshot）；默认全部启用，反编译恒启用、无法关闭（传空串=仅反编译）。仅作用于 MCP 面（工具注册与握手注入），CLI 参数不受影响。等价于命令行参数 --features。",
           "isRequired": false,
           "isSecret": false
         }

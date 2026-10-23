@@ -78,19 +78,21 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 ## 能力开关
 
-默认**只启用反编译/静态分析**能力。调试 / UI 自动化 / 截图三族需显式开启——用命令行参数 `--features=<逗号分隔>`（或环境变量 `DOTNETDEBUGGERMCP_FEATURES`，命令行优先），取值 `decompile` / `debug` / `ui` / `screenshot`：
+默认**全部能力族启用**。可用命令行参数 `--features=<逗号分隔>`（或环境变量 `DOTNETDEBUGGERMCP_FEATURES`，命令行优先）**裁剪**不需要的族，取值 `decompile` / `debug` / `ui` / `screenshot`：
 
 ```jsonc
-"command": ["DotNetDebuggerMcp", "--features=decompile,debug,ui,screenshot"]
+// 只要反编译 + 调试，关掉 UI 自动化和截图
+"command": ["DotNetDebuggerMcp", "--features=decompile,debug"]
 ```
 
-- **未启用的族**：其工具**不进 MCP 工具目录**（`tools/list` 里看不到），握手简介里也**完全不提**。
+- **反编译恒启用、无法关闭**：它是本服务器的基础能力，且必须有工具可暴露。传 `--features=`（空串）等于只启用反编译。
+- **未列出的族**：其工具**不进 MCP 工具目录**（`tools/list` 里看不到），握手简介里也**完全不提**。
 - **只作用于 MCP 面**：CLI 执行路径（`-a` 反编译、`-l` 列类型、`-dbg` 一次性调试、`-c` 检查更新）**不受开关影响**。
-- 缺省不传 = 仅 `decompile`；未知取值或一个族都不启用会给出中文错误并以非零码退出（零工具的服务器会让客户端 `tools/list` 报协议错误、完全不可用）。
+- 未知取值会给出中文错误并以非零码退出。
 
 | 开关 | 覆盖能力 |
 | ---- | -------- |
-| `decompile` | 反编译 + 元数据/静态分析工具（默认开启） |
+| `decompile` | 反编译 + 元数据/静态分析工具（**恒启用**） |
 | `debug` | `debug_*` 动态调试全族 + `debug_verify` |
 | `ui` | `ui_find` / `ui_action` / `ui_input` / `ui_get` / `ui_wait` |
 | `screenshot` | `screenshot`（含 `mode=list-displays` / `mode=list-windows` 只读清单） |
