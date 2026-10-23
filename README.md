@@ -92,7 +92,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 | 开关 | 覆盖能力 |
 | ---- | -------- |
-| `decompile` | 反编译 + 元数据/静态分析工具（**恒启用**） |
+| `decompile` | 反编译 + 元数据/静态分析工具（**恒启用，无法关闭**） |
 | `debug` | `debug_*` 动态调试全族 + `debug_verify` |
 | `ui` | `ui_find` / `ui_action` / `ui_input` / `ui_get` / `ui_wait` |
 | `screenshot` | `screenshot`（含 `mode=list-displays` / `mode=list-windows` 只读清单） |
