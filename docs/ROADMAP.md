@@ -1,6 +1,6 @@
 # ROADMAP（远期待办）
 
-> 记录「暂不做、以后再评估」的功能想法，防止丢失。当前迭代范围见 `CHANGELOG.md` 的 `[Unreleased]` 段；**近期待办见各项目目录 `TODO.md`**（Engine/Session/Web/宿主各自独立）。
+> 记录「暂不做、以后再评估」的功能想法，防止丢失。当前迭代范围见 `CHANGELOG.md` 的 `[Unreleased]` 段；**近期待办见各项目目录 `TODO.md`**（Engine/Session/宿主各自独立）。
 
 ## v2 候选（vision §4.3「后做」，不阻塞当前）
 
@@ -23,7 +23,7 @@
 > 来源：对照 [zhaoxuya520/reverse-skill](https://github.com/zhaoxuya520/reverse-skill)（34.9k★，MIT，安全逆向技能路由器）的 `skills/dotnet-reverse/` 模块与 README_AI agent 引导架构，在「**agent 主导编程、人类配合**」前提下提炼的候选能力项。全为远期评估、**做不做待后续拍板**；若要提升为近期，须按项目规矩先立方案/spec。原「IL 视图输出」候选经真实 CoreMes WPF 动态调试实证**立论错误已撤销**（改为反向的 async 状态机语义还原候选，见下）；语料回归/握手流程近期价值不低，列此仅为遵循「全部先进 ROADMAP、再判断」的决策。
 
 - **async 状态机内部无源码可看（实证，替代原「IL 视图输出」候选）**——reverse-skill「IL 优先于 C#」的静态逆向教训**不适用于我们的动态调试场景**，此前「补 IL 视图」候选立论错误、已撤销。真实实证（CoreMes WPF，断主界面手自动切换 `MainViewModel.SwitchAutoState` async 方法）：断点命中方法入口时反编译上下文**能**映射回源码（MainViewModel:345）；但 **step into 后落进编译器生成的 `<SwitchAutoState>d__44.MoveNext`（token 0x060006fb），停点上下文报「未找到类型 MainViewModel+\<SwitchAutoState\>d__44」（状态机类型被 CompilerGeneratedFilter 过滤、无 C# 可渲染）**，栈帧呈现 外壳方法(0x06000117)→状态机 MoveNext(0x060006fb)，局部变量只有 `<>1__state`/`<>t__builder`/`<>4__this`/`<>u__1` 编译器字段、无业务变量名——agent 在 async 内部面对纯 IL 状态机世界（无源码/无方法名/无业务变量），与 R5「agent 主导下状态机不可读非问题」的判断一致且 R5 已接受。若未来要改善，方向不是「补 IL 视图」（IL/状态机本来就在那），而是**反向**：在停点上下文/帧名给 async 状态机**还原回原 async 方法语义**（dnSpy 式 async debug info：状态机 token→原方法名+await 位置映射，Decompiler 大工程，1-2 周+）；低配版可先做停点标注「当前在 async 状态机内部帧 \<Foo\>d__N.MoveNext（编译器生成），对应 async 方法 Foo」（debug_stack 帧名真名化已完成，见 R5 节注）。触发：收到 agent「step into async 后看不懂停在哪/无从下手」类反馈。
-- **web 引导措辞易诱导 agent 以为需人类参与（实证文案问题）**——`AppText.HandshakeFeatureIntro`「当需要**向用户实时展示**调试现场…时，调用 web_open」与 `web_open` Description「浏览器**实时观看**调试现场」措辞面向 agent 但定位成「给人看/等人看」，易诱导 agent 误以为要先开 web 让人类参与、然后停下来等人确认——与 D13「agent 主导、人类不开 Web 也能用 agent、Web 是可选的监视器/观看席」定位直接冲突。修复方向（文案级小改，非工具行为）：改为中性描述如「可选开启浏览器监视器（实时展示 agent 自身调试动作，**无需人类在场/等待**）」并在 Description/握手文案明示「web_open 仅为可选展示，不影响 agent 独立完成调试；不要为此等待用户」。若做须同步根 README（打包给使用者的工具表）与 `WebOpenTool` Description。
+- **web 引导措辞易诱导 agent 以为需人类参与（实证文案问题）**——**已作废（2026-10-23）**：`web_open` 工具已随 Web 整体移除（见 `decisions.md` D28），本条不再适用。
 
 > **已落地移出**：① 「agent 意图 → 引导文案/行为」语料级回归护栏 **已完成**——V4 `AgentCopyGuardTests`（反射各 `debug_*`/`ui_*` 工具 `[Description]`，断言关键引导片段，改文案须同步契约否则即红）；② 调试-修复-重验证闭环 **已完成**——V1 `debug_verify`（场景 JSON：`target` 启动快照 + 可选 build 重编译 + 断点/断言序列，执行到 PASS/FAIL、fail-fast）。
 
@@ -41,11 +41,9 @@
 - **W3 数据断点（值变化即停）**（原宿主 TODO W3，spec `2026-09-08-w3-data-breakpoint.md`，计划 `plans/2026-09-09-w3-data-breakpoint.md`）——**转远期理由（2026-09-10 spike 实测）**：ICorDebug 通道两路均不可行——① A `CorDebugValue.CreateBreakpoint()`：真实 attach 停点对活局部/活字段值对象调用恒抛 `E_NOTIMPL`（.NET 运行时源码 `src/coreclr/debug/di/divalue.cpp` `CordbValue::CreateBreakpoint => return E_NOTIMPL`，所有 ICorDebugValue 派生共用，非值对象存活问题）；② B `OnDataBreakpoint`：ClrDebug 全 `ICorDebugProcess*`（1-11）无任何数据断点创建方法（`CreateDataBreakpoint` 仅在 DbgEng/WinDbg 服务接口），回调只带 Process/Thread/Context 且 attach+运行全程零触发——VS .NET Core 3.0+「值变化断点」是 VS 自有机制（内部读地址 + 线程硬件寄存器 DR0-DR3 + 运行时通知）实现，非公开 ICorDebug 创建口。**现用替代**：已知写入点条件断点比较（`debug_breakpoint_set condition` 如 `h.Counter != 期望`）或 trace/单步定位写入方（根 README debug_breakpoint_set 行已注明）。**触发条件**：未来 .NET 若在 ICorDebug/诊断口暴露数据断点创建 API（或 agent 反馈「条件断点无法定位未知写入方」且代价可接受时再评估硬件寄存器方案）。spec §2 结论、README 指引、宿主 TODO W3=已评估转 ROADMAP（2026-09-10，零 Engine 代码）。
 - **`frameIndex` 调用栈帧选择（读非栈顶帧变量/表达式）**（2026-09-10 CoreMes 实证盘点缺口，宿主 TODO 转来）——**转远期理由（2026-09-10）**：价值中等偏低——对 agent 驱动调试是**便利性增强而非能力跃迁**。agent 可自由 `debug_step out` / 在上层方法设断点 / 从顶帧按字段链 `debug_evaluate`（顶帧常持有调用者对象引用）覆盖绝大多数「看调用者」需求；真实空白仅剩「关心的是调用者的**局部变量**且顶帧不可达」。当前 `debug_variables`/`debug_evaluate`/`debug_object` 只读栈顶帧（Engine `thread.ActiveFrame`）。**技术要点/边界**：Engine `ResolvePathValue`/`GetVariablesForThread` 均取栈顶帧，需改 `CreateStackWalk` 走到第 N 个 IL 帧后取 `CorDebugILFrame.LocalVariables/Arguments`；**非活动帧局部变量在优化/寄存器分配（enregistered）下可能读不到**——须先做纯 Engine spike 验证可读性/稳定性，再决定是否值得加参数（避免做出「时灵时不灵」的参数降低工具可信度）。**成本**：跨 Engine（按帧取变量）+ Session 透传 + 宿主三工具加 `frameIndex` 参数。**触发条件**：出现「连续 step out 才能看上层、且 step 有副作用/时序敏感」的实际场景（可量化收益 = 省掉数次 step）。**建议第一步**：纯 Engine spike。
 
-## WebUI 后续（P4 收尾后的体验项）
+## WebUI 后续（P4 收尾后的体验项，**已作废**）
 
-> P4-2 全部待办（断点红点、刷新保持、树/编辑器双向联动、agent 时间线、零轮询化、`web_open` 幂等工具 + 默认去 `--web`）已完成（2026-09-06），不再列。剩余远期项：
->
-> - **watch 表达式输入**（Web 面板手输表达式）——**暂不做决策（2026-09-06）**：Web 定位为人类监视器，agent 求值走 `debug_evaluate`；若未来 Web 要支持人类临时求值再评估。
+> **2026-10-23 Web 已整体移除**（见 `decisions.md` D28）：本节连同 `watch 表达式输入` 一起作废，不再评估。P4-2 全部待办（断点红点、刷新保持、树/编辑器双向联动、agent 时间线、零轮询化、`web_open` 幂等工具 + 默认去 `--web`）历史上于 2026-09-06 完成，作为记录保留。
 
 ## 其它远期
 - 全功能表达式求值 / 动态 EnC 排除项 / Mono 目标

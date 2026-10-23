@@ -39,4 +39,3 @@ ui_find(process, title, text, type, automationId, limit, scope, depth, timeoutSe
 ui_get(process, what, index, name, type, frameId, timeoutSeconds)
 ui_input(process, value, index, name, type, frameId, timeoutSeconds)
 ui_wait(process, text, type, textChangedFrom, textChangedTo, timeoutSeconds)
-web_open(port)

@@ -18,7 +18,7 @@ internal sealed class DebugDocumentCache
     /// <summary>当前缓存条目数（诊断用）。</summary>
     public int Count { get { lock (_gate) return _map.Count; } }
 
-    /// <summary>取文档：命中返回缓存；未命中反编译并缓存（失败文档不入缓存，下次重试——与 Web DocumentStore 同策略）。</summary>
+    /// <summary>取文档：命中返回缓存；未命中反编译并缓存（失败文档不入缓存，下次重试）。</summary>
     public SourceDocument GetOrLoad(string modulePath, string typeFullName)
     {
         var key = (modulePath, typeFullName);

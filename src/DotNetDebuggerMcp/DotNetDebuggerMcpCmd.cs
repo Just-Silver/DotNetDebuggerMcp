@@ -201,18 +201,6 @@ public class DotNetDebuggerMcpCmd
     public int DebugBreakpointOffset { get; } = 0;
 
     /// <summary>
-    /// 以 Web 模式启动：MCP 常驻同时起 Kestrel（浏览器看调试现场）；无 MCP 业务参数时页面可人工 launch/attach。
-    /// </summary>
-    [Option("--web", "以 Web 模式启动：MCP 常驻同时起 Kestrel（浏览器可看 agent 调试现场）；配合 --web-port 指定端口。", CommandOptionType.NoValue)]
-    public bool Web { get; }
-
-    /// <summary>
-    /// Web 监听端口（配合 --web）。缺省 0 = 自动选空闲端口（启动后提示实际 URL 并拉起浏览器）。
-    /// </summary>
-    [Option("--web-port <port>", "Web 监听端口（配合 --web）。缺省 0 = 自动选空闲端口（防占用冲突，启动后提示实际 URL）。", CommandOptionType.SingleValue)]
-    public int WebPort { get; } = 0;
-
-    /// <summary>
     /// 启用的能力族（逗号分隔：decompile/debug/ui/screenshot）。缺省不传 = 只启用 decompile（反编译/静态分析）；
     /// 显式传空串 = 零能力。只作用于 MCP 面（工具注册 + 握手注入），CLI 执行路径不受影响。
     /// </summary>
@@ -357,18 +345,6 @@ public class DotNetDebuggerMcpCmd
             return 1;
         }
 
-        Task? webTask = null;
-        if (Web)
-        {
-            // --web 模式：注入共享调试会话管理器并起 Kestrel（Blazor 展示面）。
-            // 双模式：MCP 常驻（agent 调试时浏览器看现场）与纯 Web（无 MCP 会话时页面人工 launch/attach）并存——
-            // Web host 与 MCP host 并联，进程生命周期由二者共同决定（WhenAll：任一侧结束进程等另一侧自然完成）。
-            DotNetDebugger.Web.WebHostBootstrap.Configure(DebugSessionService.Manager, AgentViewService.Context);
-            if (WebPort > 0) DotNetDebugger.Web.WebHostBootstrap.PreferredPort = WebPort;
-            // 幂等启动（与 web_open 工具同一入口，混用不双启）→ 拉浏览器 → stderr 提示实际 URL → 等停
-            webTask = RunWebAsync();
-        }
-
         var builder = Host.CreateApplicationBuilder(Array.Empty<string>());
         // stdout 只承载 MCP 协议消息：Host 默认注册的 Console 日志写 stdout，会与 JSON-RPC 响应
         // 在并发下交错撕坏协议帧，导致客户端永远等不到响应。这里清掉默认提供者后把全部日志显式路由到 stderr。
@@ -399,25 +375,7 @@ public class DotNetDebuggerMcpCmd
         // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新 NuGet 磁盘缓存供下一次会话使用，不 await 以免阻塞启动
         _ = AppServices.Updater.RefreshIfStaleAsync();
         var mcpTask = builder.Build().RunAsync();
-        if (webTask is not null)
-        {
-            // --web 双 host 并联：任一侧结束，进程等另一侧自然完成（MCP 会话结束或 Web 手动停）。
-            // 各自容错：一侧异常不拖垮另一侧（先完成的异常经 WhenAll 抛，由外层 catch 收口）。
-            await Task.WhenAll(mcpTask, webTask);
-        }
-        else
-        {
-            await mcpTask;
-        }
+        await mcpTask;
         return 0;
-
-        // --web：幂等启动 Web host → 拉浏览器 → stderr 提示实际 URL → 等停（供 webTask 并联）
-        async Task RunWebAsync()
-        {
-            var url = await DotNetDebugger.Web.WebHostBootstrap.EnsureStartedAsync();
-            Console.Error.WriteLine($"[web] DotNet Debugger Web 已启动：{url}");
-            var webApp = DotNetDebugger.Web.WebHostBootstrap.CurrentApp;
-            if (webApp is not null) await webApp.WaitForShutdownAsync();
-        }
     }
 }

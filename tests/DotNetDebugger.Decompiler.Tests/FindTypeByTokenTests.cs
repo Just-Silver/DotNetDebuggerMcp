@@ -3,7 +3,7 @@ using Xunit;
 
 namespace DotNetDebugger.Decompiler.Tests;
 
-/// <summary>P4：DocumentService.FindTypeByToken（方法 token → 类型全名，自 Web 提升为公共实现）。</summary>
+/// <summary>P4：DocumentService.FindTypeByToken（方法 token → 类型全名）。</summary>
 public sealed class FindTypeByTokenTests
 {
     [Fact]

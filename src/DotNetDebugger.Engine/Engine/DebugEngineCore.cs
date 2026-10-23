@@ -370,7 +370,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
         catch { /* 解析失败保持 pending */ }
     }
 
-    /// <summary>当前登记断点快照（经命令泵读，与增删互斥；Web 监视器红点渲染数据源）。</summary>
+    /// <summary>当前登记断点快照（经命令泵读，与增删互斥）。</summary>
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
         => PostAsyncResult(() => (IReadOnlyList<DebugBreakpoint>)_breakpoints.Breakpoints.ToList(), ct);
 

@@ -1,6 +1,6 @@
 # DotNetDebuggerMcp 宿主开发指南
 
-宿主 exe（`DotNetDebuggerMcp`，CLI 命令/NuGet 包 id 同名）：**唯一的 MCP 服务器 + CLI 入口 + Web 承载进程**。无业务参数启动 MCP 服务器（stdio）；传 `-a`/`-c` 等进入命令行模式（复用与 MCP 工具相同的校验与执行逻辑）；`--web` 时并联 Blazor Web host。全部 MCP 工具与执行管线在此层，反编译/元数据能力来自 Decompiler 库、调试能力来自 Engine/Session 库、Web 来自 Web 库。
+宿主 exe（`DotNetDebuggerMcp`，CLI 命令/NuGet 包 id 同名）：**唯一的 MCP 服务器 + CLI 入口**。无业务参数启动 MCP 服务器（stdio）；传 `-a`/`-c` 等进入命令行模式（复用与 MCP 工具相同的校验与执行逻辑）。全部 MCP 工具与执行管线在此层，反编译/元数据能力来自 Decompiler 库、调试能力来自 Engine/Session 库、截图与 UI 自动化来自 SharpSight 两个能力库。
 
 > 本文件 + 各子项目 AGENTS.md（`src/*/AGENTS.md`）按项目拆分；根 `AGENTS.md` 是仓库级总览与共享纪律（开发铁律/输出约定/版本发布）。
 
@@ -30,8 +30,7 @@
 
 ## 入口（DotNetDebuggerMcpCmd.cs）
 
-- 业务参数：`-a` 反编译系 / `-l -nc -ns` list_types / `-s -hc -d -cg -iu -gi -cc -ai` 元数据系 / `-ss` search_literals / `-fa -fn` field_access / `-mn -tt` decompile_member / `-tk` token 定位 / `-o [-p]` 写盘 / `-ln` 分页 / `--timeout`(默认 30) / `-c` 更新检查 / **`-dbg <exe>` + `-dbg-bp <token>` + `-dbg-offset`** 一次性调试 / **`--web` + `--web-port`** Web 模式 / `-v` `-h`。分发逻辑在 `DispatchCliAsync`（与 MCP 工具同一执行逻辑）。
-- `--web` 分支（L350-360）：`WebHostBootstrap.Configure(Manager, AgentView)` → `Build(port)` → 并联 `Task.WhenAll(mcpTask, webTask)`（任一侧结束等另一侧自然完成）。
+- 业务参数：`-a` 反编译系 / `-l -nc -ns` list_types / `-s -hc -d -cg -iu -gi -cc -ai` 元数据系 / `-ss` search_literals / `-fa -fn` field_access / `-mn -tt` decompile_member / `-tk` token 定位 / `-o [-p]` 写盘 / `-ln` 分页 / `--timeout`(默认 30) / `-c` 更新检查 / **`-dbg <exe>` + `-dbg-bp <token>` + `-dbg-offset`** 一次性调试 / `-v` `-h`。分发逻辑在 `DispatchCliAsync`（与 MCP 工具同一执行逻辑）。
 - MCP 启动分支：`builder.Logging.ClearProviders()` + `AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace)`——**严禁删除或改动**（stdout 只承载 MCP 协议帧；并发下 Console 日志与响应交错会撕坏帧，回归护栏 `McpSessionConcurrencyTests`）。启动期按 `FeatureFlags` 决定注册哪些能力族的工具（`ToolFeatureRegistry.EnabledToolTypes`，**未启用族不进工具目录**），并组装按族拼装的握手简介（`HandshakeText.Build`）+ 「更新状态」段（`EnvironmentChecker.BuildHandshakeText`）注入 `ServerInstructions`；未知/零能力族取值 → stderr 中文 + 非零退出。后台 fire-and-forget `RefreshIfStaleAsync`。
 
 ## 铁律速查（完整版见根 AGENTS.md）
@@ -45,11 +44,11 @@
 
 ```bash
 dotnet build -c Release src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj
-dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj    # 单测（含 debug 工具端到端 / MCP+Web 共存 / 会话级并发回归）
+dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj    # 单测（含 debug 工具端到端 / 会话级并发回归）
 dotnet run -c Release --project src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.Client.csproj   # 端到端（自启动 server，覆盖反编译/元数据工具面）
 ./src/DotNetDebuggerMcp/bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe -dbg tests/TestData/DebugTarget.exe -dbg-bp 0x06000003   # CLI 一次性调试（改引擎后手动验证）
 ```
 
 - 测试需先 `generate-testdata.ps1` 生成 `tests/TestData/*.dll`（git 忽略，CI 已自动跑脚本）。
-- 关键回归：`McpSessionConcurrencyTests`（stdout 零噪声护栏）、`DebugMcpToolsTests`（真实子进程 debug_launch→断点→continue→state→stack/variables→disconnect 闭环）、`McpWebCoexistTests`（MCP+Web 同进程）、`CacheStatsToolTests`/`ToolPipelineTests` 等 AppServices collection 串行。
-- 本地调试注意：根 `opencode.json` 把本仓库 MCP server 绑定到 `bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe`（带 `--web` 仅为联调）；改代码后按根 `AGENTS.md`「本地调试注意」的热重载步骤生效（改 `opencode.json` 再改回即触发动态重载，无需重启 opencode），会话内 `dotnetdebugger_*` 随之反映新二进制。
+- 关键回归：`McpSessionConcurrencyTests`（stdout 零噪声护栏）、`DebugMcpToolsTests`（真实子进程 debug_launch→断点→continue→state→stack/variables→disconnect 闭环）、`CacheStatsToolTests`/`ToolPipelineTests` 等 AppServices collection 串行。
+- 本地调试注意：根 `opencode.json` 把本仓库 MCP server 绑定到 `bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe`；改代码后按根 `AGENTS.md`「本地调试注意」的热重载步骤生效（改 `opencode.json` 再改回即触发动态重载，无需重启 opencode），会话内 `dotnetdebugger_*` 随之反映新二进制。

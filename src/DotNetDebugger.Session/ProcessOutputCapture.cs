@@ -16,7 +16,7 @@ public sealed record ProcessOutputLine(int Sequence, DateTimeOffset Timestamp, P
 /// </summary>
 public sealed class ProcessOutputCapture
 {
-    /// <summary>缓冲上限（行），超出丢最旧。2000 行约数百 KB——Web 应用启动轮询日志下仍能保留更久早期关键行（R8①）。</summary>
+    /// <summary>缓冲上限（行），超出丢最旧。2000 行约数百 KB——服务类目标启动轮询日志下仍能保留更久早期关键行（R8①）。</summary>
     public const int MaxLines = 2000;
 
     private readonly object _gate = new();

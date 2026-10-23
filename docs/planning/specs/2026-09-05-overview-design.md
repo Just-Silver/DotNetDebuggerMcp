@@ -34,7 +34,7 @@
 | 子项目 1 反编译库 | `src/DotNetDebugger.Decompiler/` → `DotNetDebugger.Decompiler` |
 | 子项目 2 调试引擎库 | `src/DotNetDebugger.Engine/` → `DotNetDebugger.Engine` |
 | 子项目 3 会话库 | `src/DotNetDebugger.Session/` → `DotNetDebugger.Session` |
-| 子项目 4 Web 库 | `src/DotNetDebugger.Web/` → `DotNetDebugger.Web` |
+| 子项目 4 Web 库 | `src/DotNetDebugger.Web/` → `DotNetDebugger.Web`（**2026-10-23 已移除**，见 `decisions.md` D28） |
 | 子项目 5 宿主 | `src/DotNetDebuggerMcp/` → `DotNetDebuggerMcp`（PackAsTool、net10.0） |
 | NuGet 包 / CLI | `DotNetDebuggerMcp` |
 | MCP server 注册名 | `dotnetdebugger`（工具前缀 `dotnetdebugger_*`）— 实施时定 |
@@ -87,7 +87,8 @@ McpHost(exe) ──> Web ──> Session ──> Engine ──> ClrDebug/DbgShim
 - 命令执行策略：调试命令在调试线程串行排队；**MCP 并发请求**经队列串行化（沿用历史 stdio 防撕帧纪律的同类教训）。
 - 轨迹：`AgentAction` 追加写只读日志（内存环形 v1），Web 时间线 = 日志只读播放器。
 
-### 4.4 Web 层（`DotNetDebugger.Web`）——**已定栈：Blazor Server + BootstrapBlazor + Monaco 互操作（decisions D4）**
+### 4.4 Web 层（`DotNetDebugger.Web`）——**已移除（2026-10-23，见 `decisions.md` D28）**
+> 以下原文保留作历史：Blazor Server 承载于宿主 exe 内嵌 Kestrel；调试事件经 Session 的 Channel 推给 Blazor 组件；代码视图 Monaco 互操作；面板含调用栈/局部变量/线程/事件日志/agent 轨迹时间线。**该层已随 Web 可视化零使用被整体删除**（库、测试、`web_open` 工具、`--web` 参数与工程承载能力全部移除）。
 - Blazor Server 承载于宿主 exe 内嵌 Kestrel；调试事件经 Session 的 Channel 推给 Blazor 组件（SignalR 电路内推送，具体机制 P4 细化）。
 - 代码视图：**Monaco 作 Blazor JS 互操作组件**（read-only + deltaDecorations 断点/当前行/滚动定位；JS 资产静态托管，无 React/Vite）。
 - 面板（P4 细化用 BB 组件分工）：调用栈 / 局部变量 / 线程 / 调试事件日志 / agent 决策轨迹时间线（可回放）。

@@ -91,11 +91,11 @@ public sealed class DebugSessionManager : IAsyncDisposable
     /// <summary>当前活动会话（无则 null）。</summary>
     public ActiveDebugSession? Active { get { lock (_gate) return _active; } }
 
-    /// <summary>agent 轨迹日志（跨会话累积，P4 Web 回放源）。</summary>
+    /// <summary>agent 轨迹日志（跨会话累积，debug_timeline 的数据源）。</summary>
     public AgentActionLog Actions { get; } = new();
 
     /// <summary>活动会话变更事件（新会话激活/关闭/替换后触发，参数为最新活动会话或 null）。
-    /// Web 页面据此重订阅会话事件推送；订阅方自行切线程。</summary>
+    /// 订阅方自行切线程。</summary>
     public event Action<ActiveDebugSession?>? ActiveSessionChanged;
 
     /// <summary>启动新进程并附加（async 返回，不等停点；超时秒由调用方传）。</summary>

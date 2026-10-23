@@ -2,6 +2,17 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D28 · Web 可视化从冻结改为完全移除（用户 2026-10-23）
+- 背景：Web 展示面自 2026-09-22 起处于冻结（`src/DotNetDebugger.Web/TODO.md`），此后所有新能力（截图、`ui_*`、`debug_verify` 等）都只做 MCP 工具面；项目内 Web 可视化零使用命中 → 冻结态维护成本（每改调试会话模型都要照顾 Web 消费方）已无对应收益。
+- 决策（**完全移除**，非继续冻结）：
+  1. 删除 `src/DotNetDebugger.Web/`（RCL：Blazor 组件、`WebHostBootstrap`、`AgentViewContext`、`DebugViewService`、`DocumentStore`、`TypeTreeData`、`MemoryLog`、vendored Monaco 资产）与 `tests/DotNetDebugger.Web.Tests/`。
+  2. 删除宿主 `Tools/Web/WebOpenTool.cs`（`web_open` 工具）、`Services/AgentViewService.cs`（仅服务 Web 的 agent 视图联动）、`Properties/launchSettings.json`、`scripts/fetch-monaco.ps1`，以及 CLI `--web` / `--web-port` 参数与双 host 并联分支。
+  3. 宿主工程由 `Microsoft.NET.Sdk.Web` 改回 `Microsoft.NET.Sdk`，显式引用 `Microsoft.Extensions.Hosting` + `Microsoft.Extensions.Logging.Console`（原由 Web SDK 的 AspNetCore.App 框架引用传递提供）。
+  4. **保留** `AgentActionLog` / `DebugTimeline`（`debug_timeline` 的数据源，与 Web 无关），仅清理其注释中的 Web 定位表述；`DocumentService` 同样保留（停点上下文与行断点共用）。
+- 后果：能力族只剩 decompile/debug/ui/screenshot 四族（无变化，`web_open` 原本挂在 debug 族）；握手「视觉/监视」简介改为只提截图；`ToolFeatureRegistry` 不再有 `Tools.Web` 分支。
+- 覆盖关系：**覆盖 D4**（WebUI 技术栈 Blazor Server + BootstrapBlazor + Monaco）与 D13 中「Web 是可选的监视器/观看席」的定位前提——Web 不再存在，agent 调试完全不需要展示面。
+- 日期：2026-10-23。来源：用户指令「WEB 功能从冻结变为完全移除。项目里 web 可视化零命中 完全移除」。
+
 ## D27 · 握手 ServerInstructions 恢复覆盖全部能力族（fix wave，2026-09-24）
 - 背景：`docs/planning/reviews/2026-09-24-handshake-coverage-review.md` 审查发现，自 D12 把握手改为「触发条件导向、去掉工具一览」后，工具面已从「两类」扩到四族（静态分析 / 动态调试 / UI 自动化 / 视觉监视）却未同步握手——UI 自动化 `ui_*` 与一键复验 `debug_verify` 在握手中无任何触发条件、agent 无从发现；简介句也仍写死「两类能力」。
 - 决策①（握手正文）：恢复覆盖全部能力族——简介句改为「四族能力」；「## 何时使用」补齐 UI 自动化（`ui_find`→`ui_action`/`ui_input`→`ui_wait`→`ui_get`）、`debug_verify` 一键复验、`debug_set` 现场改值、`debug_run_to` 运行到目标、`debug_evaluate`/`debug_object`/`debug_timeline` 等触发条件；兜底前缀句补齐 `ui`/`screenshot` 及未带前缀的静态工具。

@@ -51,7 +51,7 @@ public sealed class AssemblyFileHandleTests
     {
         RunWithCopiedSamples(temp =>
         {
-            // Web 文档服务（DocumentService）与反编译工具同源使用时也必须即时释放依赖句柄
+            // 文档服务（DocumentService）与反编译工具同源使用时也必须即时释放依赖句柄
             var doc = DocumentService.GetTypeDocument(temp.Ext, TestDataPaths.SamplesExtNamespace + ".ExtCaller");
 
             Assert.True(doc.IsSuccess, doc.Error);

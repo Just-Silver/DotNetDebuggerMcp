@@ -1,6 +1,6 @@
 # DotNet Debugger MCP（DotNetDebuggerMcp）
 
-内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量、现场改值、一键复验），以及**UI 自动化**（`ui_*` 全 UIA 语义操控桌面控件，不移动光标 / 不注入输入 / 不抢前台）与**窗口截图**（`screenshot`），开箱即用。另提供 **Web 网页调试展示面**（Blazor Server：反编译代码视图 + 调用栈/变量/线程面板，与 MCP agent 共享调试会话，可实时观看 agent 调试）——agent 按需调 `web_open` 工具开启（幂等），或启动时带 `--web` 手动开启。
+内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量、现场改值、一键复验），以及**UI 自动化**（`ui_*` 全 UIA 语义操控桌面控件，不移动光标 / 不注入输入 / 不抢前台）与**窗口截图**（`screenshot`），开箱即用。
 
 ## 目录
 
@@ -91,7 +91,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | 开关 | 覆盖能力 |
 | ---- | -------- |
 | `decompile` | 反编译 + 元数据/静态分析工具（默认开启） |
-| `debug` | `debug_*` 动态调试全族 + `debug_verify` + `web_open` |
+| `debug` | `debug_*` 动态调试全族 + `debug_verify` |
 | `ui` | `ui_find` / `ui_action` / `ui_input` / `ui_get` / `ui_wait` |
 | `screenshot` | `screenshot`（含 `mode=list-displays` / `mode=list-windows` 只读清单） |
 
@@ -154,7 +154,6 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `dotnetdebugger_debug_set` | **停点现场改写（W1）**：把局部变量/参数/对象字段/数组元素改成给定值，返回「原值 → 新值」回显（防误判改写是否触及原因）。`path` 同 `debug_evaluate`（根=局部/参数名 + 字段/下标）；`value` 支持 `null`（引用置空）/ `true`/`false` / 数字（**无符号 `0x` 十六进制**，或**带符号十进制**整数/小数/科学计数，可带 `m/f/d` 后缀；小数/后缀按目标类型转换——浮点目标接受，整型拒小数/后缀，**decimal 目标 v1 不支持**（如 `order.Total`，中文降级提示）；**枚举仅底层 GenericValue 形态可写整数值，enum 对象字段 v1 降级**（如 `h.Kind`，中文降级提示））/ 同帧另一条对象路径（引用重定向如 `cfg.Backup`）。不支持改 readonly/const/静态字段、构造新对象、字符串内容（双引号/单引号文本不在文法内，char 用整数码点写）。改写敏感路径（如 `b.Password`）时「原值 → 新值」回显同样过 DB1 脱敏（原/新值替换为占位符）。**风险：写目标进程内存可能使其崩溃——只改确认的变量；目标引用当前为 null 时的重定向不做类型校验（无 deref 对象可比），需自行保证同型；改完 `debug_continue` 观察行为** |
 | `dotnetdebugger_debug_exceptions` | 异常断点（`action=set`(默认)/`clear`）：按异常类型全名或短名过滤，不匹配的跳过并在 debug_wait 提示 |
 | `dotnetdebugger_debug_verify` | **一键复验（V1）**：读场景 JSON 文件（`target` 启动快照 + 可选 `build` 重编译 + `steps` 断言序列）自动执行到 **PASS/FAIL**——改完 bug 后自证修复的最后一跳。可选 `build` 先重编译工程（**产物自动拿取**：build 成功后按项目默认输出路径定位，不设置 OutputPath；`target.commandLine` 写工程入口 exe 文件名+参数，首段文件名须与编译产物同名），再启动并执行断点/continue/断言步骤（`breakpointHit`/`evaluate`/`output`/`state`/`noException`；另含 **`uiAction` 驱动 UI + `uiAssert` 断言 UI 状态** 的 U1A 闭环），断言失败即停（fail-fast）并返回失败步骤+目标输出尾部。无 `build` 时 `commandLine` 用完整路径/相对路径。场景格式与边界见 §使用示例「一键复验」 |
-| `dotnetdebugger_web_open` | 打开 Web 调试监视器（幂等：已启动返回现有地址不重复启动；首次自动拉起默认浏览器） |
 | `dotnetdebugger_debug_session` | 会话收尾（`action` 必填）：`disconnect`=断开调试、目标继续运行 / `terminate`=强制结束目标 / `reset`=强制释放会话但不杀目标（disconnect 失败或状态不一致时收口） |
 
 > 全部工具内置引擎，无需额外安装。除写盘外均支持 `lines` 分页；反编译类额外支持 `timeoutSeconds`（默认 30s）。
@@ -181,20 +180,6 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 ## 命令行调试
 
 MCP 模式外，`DotNetDebuggerMcp` 可直接以命令行执行同等功能，便于本地调试。参数与 MCP 工具一一对应。
-
-### Web 调试展示面（web_open / --web）
-
-宿主可按需启动一个网页调试展示面（Blazor Server，内嵌 Kestrel），把反编译与调试可视化。两条入口收敛到同一幂等启动（进程内只起一个 Kestrel，混用不重复启动）：
-
-```bash
-DotNetDebuggerMcp --web                                  # 手动模式：启动即开（自动选空闲端口并拉起默认浏览器）
-DotNetDebuggerMcp --web --web-port 8090                  # 指定端口（不自动拉起需手动开 http://127.0.0.1:8090）
-```
-
-- **agent 按需开启（推荐）**：MCP server 默认不带 `--web`；agent 调 `web_open` 工具按需打开（缺省 0 = 自动选空闲端口，可传 `port` 指定），首次启动自动拉起默认浏览器，重复调用幂等返回同一地址。
-- **页面功能**：反编译代码视图（Monaco 编辑器，断点/当前执行行装饰）+ 动态调试面板（调用栈/局部变量/线程）+ 最小控制（启动并附加/断点/继续/单步/断开）+ agent 操作时间线。
-- **双模式**：单独跑 `--web` 时页面可人工 launch/attach 目标调试；MCP server 起来后（`--web` 或 `web_open`）与 agent 共享同一调试会话——agent 经 `debug_*` 工具调试，浏览器实时观看（断点命中代码高亮、面板随停点刷新）。
-- 调试目标进程以静默窗口运行（不弹控制台框）。
 
 ### 反编译
 
@@ -261,8 +246,6 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | `-ln` | `--lines` | 行号分页 `start-end` |
 | | `--timeout` | 超时秒数（默认 30） |
 | `-c` | `--check` | 检查 DotNetDebuggerMcp 新版本（无需 `-a`） |
-| | `--web` | 启动时同时开启网页调试展示面（Blazor Server；与 `web_open` 工具同一幂等入口，无 MCP 会话时页面可人工调试） |
-| | `--web-port <port>` | Web 端口（配合 `--web` 与 `web_open` 的缺省端口；缺省 0 = 自动选空闲端口并拉起默认浏览器） |
 | `-v` | `--version` | 版本号 |
 | `-h` | `--help` | 帮助 |
 
@@ -512,8 +495,6 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 | ClrDebug | ICorDebug 调试封装 | [NuGet: ClrDebug](https://www.nuget.org/packages/ClrDebug) |
 | Microsoft.Diagnostics.DbgShim.win-x64 | 调试启动器（dbgshim） | [dotnet/diagnostics](https://github.com/dotnet/diagnostics)（MIT） |
 | ModelContextProtocol | MCP C# SDK | [csharp-sdk](https://github.com/modelcontextprotocol/csharp-sdk)（MIT → Apache-2.0 过渡） |
-| BootstrapBlazor（含主题/图标扩展） | Web 展示面组件库 | [BootstrapBlazor](https://github.com/dotnetcore/BootstrapBlazor)（Apache-2.0） |
-| Monaco Editor | Web 代码视图编辑器（vendored 静态资产随包分发，非 NuGet 依赖，许可证文本随目录分发：`src/DotNetDebugger.Web/wwwroot/lib/monaco-editor/LICENSE.txt`） | [microsoft/monaco-editor](https://github.com/microsoft/monaco-editor)（MIT，Copyright © 2016-present Microsoft Corporation） |
 | McMaster.Extensions.Hosting.CommandLine | CLI 参数解析 | [CommandLineUtils](https://github.com/natemcmaster/CommandLineUtils)（Apache-2.0） |
 
 ## License

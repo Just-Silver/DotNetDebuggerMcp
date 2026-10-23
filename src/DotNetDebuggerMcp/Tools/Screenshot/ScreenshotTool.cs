@@ -13,7 +13,7 @@ namespace DotNetDebuggerMcp.Tools.Screenshot;
 
 /// <summary>
 /// screenshot 独立截图工具（spec：docs/planning/specs/2026-09-27-screenshot-generalization-design.md §4）：
-/// 不要求调试会话、不入缓存不过 ToolPipeline、不写 Actions/AgentView（D9/Web 冻结）。
+/// 不要求调试会话、不入缓存不过 ToolPipeline、不写 Actions（D9）。
 /// 职责分层：宿主=参数校验、模式推断/兼容检查、等窗轮询、头部组装、落盘、CallToolResult 组装；
 /// 坐标换算/缩放/编码/裁剪/纯黑检测唯一在库（spec §3.4，宿主不碰）。
 /// 返回 Task&lt;CallToolResult&gt; 是「工具返回 Task&lt;string&gt;」铁律的图片类例外（spec §3.3），

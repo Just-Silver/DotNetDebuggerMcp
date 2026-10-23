@@ -129,6 +129,7 @@ public class DotNetDebuggerMcpCmdTests
         Assert.DoesNotContain("ui_action", minimal);
         Assert.DoesNotContain("screenshot", minimal);
         Assert.DoesNotContain("web_open", minimal);
+        Assert.DoesNotContain("Web 监视器", minimal);
     }
 
     [Fact]
@@ -189,7 +190,6 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("frameId", text);       // 代际护栏（ui_find ↔ ui_action/screenshot）
         Assert.Contains("screenshot(mode=list-displays)", text); // 视觉族发现：显示器清单（喂 display）
         Assert.Contains("screenshot(mode=list-windows)", text);  // 视觉族发现：窗口清单（喂 hwnd/windowTitle/processId）
-        Assert.Contains("web_open", text);
         // P1–P6（2026-10-15）：冻结态可读栈 / clickPoint 物理输入声明 / ui_* 观测扰动
         Assert.Contains("冻结", text);          // P1：attach/launch 冻结态即可读栈
         Assert.Contains("clickPoint", text);   // P3：显式真实点击开关

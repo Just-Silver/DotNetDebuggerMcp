@@ -1,6 +1,6 @@
 # AGENTS.md
 
-基于 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy) + [ClrDebug/ICorDebug](https://github.com/tylerjensen/ClrDebug) 的 **.NET MCP 服务器**（NuGet 包 id / CLI 命令 `DotNetDebuggerMcp`）：对 .NET 程序集（dll/exe）做反编译、类型/成员/调用关系静态分析，并对 .NET 进程做**动态调试**（launch/attach、断点、单步、读栈/变量）；`--web` 可并联 Blazor 展示面实时观看 agent 调试。反编译与调试引擎均内置，随 NuGet 包分发。
+基于 [ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy) + [ClrDebug/ICorDebug](https://github.com/tylerjensen/ClrDebug) 的 **.NET MCP 服务器**（NuGet 包 id / CLI 命令 `DotNetDebuggerMcp`）：对 .NET 程序集（dll/exe）做反编译、类型/成员/调用关系静态分析，并对 .NET 进程做**动态调试**（launch/attach、断点、单步、读栈/变量）。反编译与调试引擎均内置，随 NuGet 包分发。
 
 ## 项目地图（指令文件按项目拆分，先进对的门）
 
@@ -12,13 +12,12 @@
 | `src/DotNetDebugger.Engine/` | 动态调试引擎（ICorDebug） | `src/DotNetDebugger.Engine/AGENTS.md` |
 | `src/SharpSight.Capture/` | 截图/图像能力库（WGC+GDI 捕获、缩放/编码/裁剪） | 根 `AGENTS.md`（暂无独立指令文件） |
 | `src/SharpSight.UiAutomation/` | UI 自动化能力库（FlaUI/UIA 元素模型与定位） | 根 `AGENTS.md`（暂无独立指令文件） |
-| `src/DotNetDebugger.Session/` | 会话/状态层（宿主与 Web 共享中枢） | `src/DotNetDebugger.Session/AGENTS.md` |
-| `src/DotNetDebugger.Web/` | Blazor Web 展示面（RCL，被宿主承载） | `src/DotNetDebugger.Web/AGENTS.md` |
-| `src/DotNetDebuggerMcp/` | **宿主 exe**（MCP+CLI+Web 承载） | `src/DotNetDebuggerMcp/AGENTS.md` |
+| `src/DotNetDebugger.Session/` | 会话/状态层（宿主共享中枢） | `src/DotNetDebugger.Session/AGENTS.md` |
+| `src/DotNetDebuggerMcp/` | **宿主 exe**（MCP+CLI） | `src/DotNetDebuggerMcp/AGENTS.md` |
 | `src/DotNetDebuggerMcp.Client/` | 端到端验证客户端 | `src/DotNetDebuggerMcp.Client/AGENTS.md` |
-| `tests/` | 6 个测试项目 + TestData | `tests/AGENTS.md` |
+| `tests/` | 5 个测试项目 + TestData | `tests/AGENTS.md` |
 
-**依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）、`Engine`（只依赖 ClrDebug + DbgShim.win-x64）、`SharpSight.Capture`（只依赖 System.Drawing.Common，**无第三方图像库**）与 `SharpSight.UiAutomation`（只依赖 FlaUI）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`Web` 只引 Session+Decompiler（不反引宿主，经 `WebHostBootstrap.Configure` 静态注入）；`DotNetDebuggerMcp` 宿主引全部六库。各库**均不得反向引用宿主**。
+**依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）、`Engine`（只依赖 ClrDebug + DbgShim.win-x64）、`SharpSight.Capture`（只依赖 System.Drawing.Common，**无第三方图像库**）与 `SharpSight.UiAutomation`（只依赖 FlaUI）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`DotNetDebuggerMcp` 宿主引 Decompiler + Engine + Session + 两个 SharpSight 库。各库**均不得反向引用宿主**。
 
 **文档导航**：`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-2 已完成、P5 发布进行中、specs/research 导航）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `../../Externals/DebuggerExternals/`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
 
@@ -34,7 +33,7 @@
 - **所有 MCP 工具参数必须带默认值**（如 `string assembly = ""`，不声明可空）。SDK 依据是否有默认值判断必填：无默认值缺参在绑定阶段抛 Tool Error，agent 拿不到原因；带默认值后缺参进入方法体由校验返回中文提示。`[Description]` 用中文、面向 agent（MCP 调用方）、**注明默认值**、必填标「（必填）」、不写实现细节措辞。
 - **每个工具方法带 `CancellationToken cancellationToken = default`**（反编译类放 `timeoutSeconds` 后、元数据类放末尾；SDK 识别为取消令牌、不暴露为 MCP 参数、不写 `[Description]`）。超时/取消按「放弃等待」处理：返回提示、结果不入缓存可重试、后台任务协作式中断。
 - 工具方法返回 `Task<string>`，一切错误（参数校验/反编译/调试失败）返回中文提示文本，**不抛异常**。——**图片类工具例外**：`screenshot` 返回 `Task<CallToolResult>`（<2MB 附 image 块、≥2MB/指定 filePath 落盘返回路径），错误仍为纯文本 content、不设 IsError（spec `docs/planning/specs/2026-09-22-screenshot-tool-design.md` §3.3）。
-- **stdout 只承载 MCP 协议消息；日志必须走 stderr**——配置在 `DotNetDebuggerMcpCmd.OnExecuteAsync` MCP 启动分支（`ClearProviders` + `AddConsole(LogToStandardErrorThreshold = Trace)`），Web host 同款（`WebHostBootstrap.Build`），**严禁删除或改动**。历史教训：`Host.CreateApplicationBuilder` 默认 Console 日志写 stdout，并发请求下日志行与 JSON-RPC 响应字节交错会撕坏协议帧（agent 客户端 12 路并发 100% 挂死）。改启动逻辑/升级 Hosting 包后重验：裸 stdio 握手后 stdout 噪声行应为 0；回归护栏 `McpSessionConcurrencyTests`。另注意：日志走 stderr 后，凡自起子进程（Engine/Session/宿主测试、`-dbg`、`LaunchAndAttachAsync`）**必须持续排空子进程 stdout/stderr**，否则把子进程卡死在日志/输出写入上。
+- **stdout 只承载 MCP 协议消息；日志必须走 stderr**——配置在 `DotNetDebuggerMcpCmd.OnExecuteAsync` MCP 启动分支（`ClearProviders` + `AddConsole(LogToStandardErrorThreshold = Trace)`），**严禁删除或改动**。历史教训：`Host.CreateApplicationBuilder` 默认 Console 日志写 stdout，并发请求下日志行与 JSON-RPC 响应字节交错会撕坏协议帧（agent 客户端 12 路并发 100% 挂死）。改启动逻辑/升级 Hosting 包后重验：裸 stdio 握手后 stdout 噪声行应为 0；回归护栏 `McpSessionConcurrencyTests`。另注意：日志走 stderr 后，凡自起子进程（Engine/Session/宿主测试、`-dbg`、`LaunchAndAttachAsync`）**必须持续排空子进程 stdout/stderr**，否则把子进程卡死在日志/输出写入上。
 - **更新版本号同步三处**：`src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` `<Version>`、`src/DotNetDebuggerMcp/.mcp/server.json`（顶层 + `packages[0].version`）、`CHANGELOG.md`（发布前把 `[Unreleased]` 转 `## [<version>] - <date>`）。CI 从 CHANGELOG 提取版本段作 GitHub Release 正文，缺段发布失败。CHANGELOG 面向包使用者，只记使用者可见变更。
 - **发布 = 推 `v*` tag**（`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`）触发 `.github/workflows/build.yml` 的 `release` job：pack → OIDC 换 NuGet 临时密钥 → push NuGet → 建 GitHub Release（正文取 CHANGELOG 该版本段、资产附 nupkg）。发布前先在本地复刻 CHANGELOG 段落提取（缺段会直接失败），并确认三处版本号一致。
   - **push 步骤须幂等**：已加 `--skip-duplicate --timeout 600`。历史教训（v2.3.0）：nuget.org 慢/降级恢复期，单次 push 可能服务端**已收下**但客户端读响应超时 → 步骤报错；重跑时再 push 同版本撞 **409 already exists** 而失败，导致 `Create GitHub Release`（在其后）**不会执行**。查证方法：`flatcontainer/dotnetdebuggermcp/index.json` 有索引延迟，别据此判定失败，可直接探测 `.../dotnetdebuggermcp/<ver>/dotnetdebuggermcp.nuspec`（200=已收录）。
@@ -88,6 +87,6 @@ powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1   
 ```
 
 - **先跑 `generate-testdata.ps1` 再跑测试**：`tests/TestData/*.dll`/`*.exe`/`*.runtimeconfig.json` 全部 git 忽略（脚本产出 TestSamples.dll / TestSamplesExt.dll / DebugTarget.exe）。改脚本注意 `BigMethod` 用数组链而非常量链——Release 常量折叠会让方法只剩几行，无法触发截断。
-- CLI 调试（改完 server 用 Debug 构建 exe 快速验证，行为与 MCP 工具一致）：`-a <dll> -t <TypeName>` 反编译 / `-mn` 搜成员 / `-s` 签名 / `-hc [-i]` 层级 / `-d [-x]` 依赖 / `-cg [-x] -tk` 调用图 / `-iu -gi -ss -fa` / `-cc` 调用链 / `-l c -nc Box -ns NS` 列类型 / `-o [-p]` 写盘 / `-c` 更新检查 / **`-dbg <exe> -dbg-bp <token> [-dbg-offset]`** 一次性调试 / **`--web [--web-port]`** Web 模式；通用 `-ln start-end` 分页、`--timeout` 秒数。完整参数表见 `DotNetDebuggerMcpCmd.cs` 与 README。
-- 本地调试注意：根 `opencode.json` 把本仓库自身的 MCP server 绑定到 `src/DotNetDebuggerMcp/bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe`（带 `--web` 仅为联调）。**改完 server 代码后，改动 `opencode.json` 里任意有效字段（例如 `--features` 的取值顺序）再改回，就能触发 opencode 动态重载 MCP server——不需要重启 opencode**，重载后工具目录与握手即反映新二进制（这是自测验收新工具面的标准做法）。注意该 server 进程会锁定其绑定的输出目录（再构建报 MSB3021/文件被占用）：需要边改边验时，先 `dotnet build -c Release`，把 command 临时指向 Release 输出，验收完再改回 Debug 路径。验证新行为也可用 Client/CLI 输出。
+- CLI 调试（改完 server 用 Debug 构建 exe 快速验证，行为与 MCP 工具一致）：`-a <dll> -t <TypeName>` 反编译 / `-mn` 搜成员 / `-s` 签名 / `-hc [-i]` 层级 / `-d [-x]` 依赖 / `-cg [-x] -tk` 调用图 / `-iu -gi -ss -fa` / `-cc` 调用链 / `-l c -nc Box -ns NS` 列类型 / `-o [-p]` 写盘 / `-c` 更新检查 / **`-dbg <exe> -dbg-bp <token> [-dbg-offset]`** 一次性调试；通用 `-ln start-end` 分页、`--timeout` 秒数。完整参数表见 `DotNetDebuggerMcpCmd.cs` 与 README。
+- 本地调试注意：根 `opencode.json` 把本仓库自身的 MCP server 绑定到 `src/DotNetDebuggerMcp/bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe`。**改完 server 代码后，改动 `opencode.json` 里任意有效字段（例如 `--features` 的取值顺序）再改回，就能触发 opencode 动态重载 MCP server——不需要重启 opencode**，重载后工具目录与握手即反映新二进制（这是自测验收新工具面的标准做法）。注意该 server 进程会锁定其绑定的输出目录（再构建报 MSB3021/文件被占用）：需要边改边验时，先 `dotnet build -c Release`，把 command 临时指向 Release 输出，验收完再改回 Debug 路径。验证新行为也可用 Client/CLI 输出。
 - 单测里经 `ToolPipeline` 的 assembly 路径解析基准是测试进程 CWD（`bin/Debug/net10.0-windows10.0.22621.0`）；访问 `tests/TestData` 下 dll 用各测试项目 `TestDataPaths`/`TestPaths` 帮助类（上溯找 `DotNetDebuggerMcp.slnx`）。

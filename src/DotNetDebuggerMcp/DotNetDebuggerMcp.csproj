@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
@@ -7,13 +7,9 @@
     <Nullable>enable</Nullable>
 
     <!-- Set up the NuGet package to be an MCP server -->
-    <!-- Web SDK 默认 IsPackable=false：不加此行 dotnet pack 仅告警"packaging has been disabled"且退出码 0，静默产出空结果（CI Pack 步骤假绿） -->
     <IsPackable>true</IsPackable>
     <PackAsTool>true</PackAsTool>
     <PackageType>McpServer</PackageType>
-    <!-- 宿主承载 RCL 的 Blazor 组件：.NET 10 框架脚本(blazor.web.js)仅在含 .razor 的 app 引入，
-         此处显式要求引入框架静态资产（aspnetcore #58721/#64381：RCL-only host 需此属性） -->
-    <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
 
     <!-- Set recommended package metadata -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -44,7 +40,9 @@
 
   <ItemGroup>
     <PackageReference Include="McMaster.Extensions.Hosting.CommandLine" Version="5.1.0" />
-    <!-- Microsoft.Extensions.Hosting 不直引：Web SDK 已带 AspNetCore.App 框架引用（内含 Hosting，NU1510） -->
+    <!-- Microsoft.NET.Sdk 不带 Hosting/Console 日志实现：MCP host 由宿主自建（Web SDK 移除后需显式引用） -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.13" />
     <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
   </ItemGroup>
 
@@ -54,12 +52,10 @@
     <ProjectReference Include="..\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Engine\DotNetDebugger.Engine.csproj" />
     <ProjectReference Include="..\DotNetDebugger.Session\DotNetDebugger.Session.csproj" />
-    <ProjectReference Include="..\DotNetDebugger.Web\DotNetDebugger.Web.csproj" />
     <ProjectReference Include="..\SharpSight.Capture\SharpSight.Capture.csproj" />
     <ProjectReference Include="..\SharpSight.UiAutomation\SharpSight.UiAutomation.csproj" />
   </ItemGroup>
 
-  <!-- Web SDK 自带 AspNetCore.App 框架引用与 SWA Root 管线（合并 RCL 静态资产到 _content 路由） -->
   <ItemGroup>
     <InternalsVisibleTo Include="DotNetDebuggerMcp.Tests" />
   </ItemGroup>

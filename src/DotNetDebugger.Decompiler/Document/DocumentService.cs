@@ -13,7 +13,7 @@ namespace DotNetDebugger.Decompiler.Document;
 
 /// <summary>
 /// 反编译文档服务：对指定程序集类型产出干净反编译文本 + 「方法 token + IL offset → 反编译文本行号」的语句级映射。
-/// 供 Web 代码视图停点语句高亮 / 断点定位（spec §6）。
+/// 供停点语句上下文高亮 / 断点定位（spec §6）。
 ///
 /// 关键产出管线（探针实测确证，勿改）：反编译文本输出必须经 TextWriterTokenWriter 包
 /// TokenWriter.WrapInWriterThatSetsLocationsInAST —— writer 写文本时把真实行列回写 AST 节点，
@@ -63,7 +63,7 @@ public static class DocumentService
     /// <summary>
     /// 类型级反编译的统一文本渲染：位置回写 writer（tab 缩进）+ 默认格式化选项。P3 步骤0 探针结论：
     /// DecompileAsString 自带 using 头且空行策略不同、与行映射坐标不同系——类型级文本（decompile 工具与
-    /// 本服务）必须共用本渲染，保证 agent 所见行号 = 映射坐标 = Web 代码视图行号。
+    /// 本服务）必须共用本渲染，保证 agent 所见行号 = 映射坐标 = 断点行坐标。
     /// </summary>
     internal static string RenderTypeText(SyntaxTree tree)
     {
@@ -77,7 +77,6 @@ public static class DocumentService
     /// <summary>
     /// 光标行 → 所在方法 token（双向联动/行断点用）：按各方法映射行的 [min,max] 区间判定；
     /// 行不在任何方法区间（usings/类声明/大括号行）时取其后最近的方法；文档无映射返回 null。
-    /// （自 Web DocumentStore 提升为公共实现，P3 行断点与 Web 共用。）
     /// </summary>
     public static int? FindMethodTokenAtLine(SourceDocument doc, int line)
     {
@@ -100,7 +99,7 @@ public static class DocumentService
     }
 
     /// <summary>
-    /// 编辑器行 → 断点落点（行断点用，Web glyph 与 MCP debug_breakpoint(action=set) 共用）：Exact=true 该行有语句序列点
+    /// 编辑器行 → 断点落点（行断点用，DocumentService 与 MCP debug_breakpoint(action=set) 共用）：Exact=true 该行有语句序列点
     /// (token, ilStart)；false = 行无独立序列点（大括号/签名/空行），落到所在方法首条语句；null = 无法定位。
     /// </summary>
     public static (int MethodToken, int IlOffset, bool Exact)? GetBreakpointTargetAtLine(SourceDocument doc, int line)
@@ -141,7 +140,7 @@ public static class DocumentService
     }
 
     /// <summary>
-    /// 按方法 token 反查类型全名（P4 停点上下文用；自 Web Debugger 页提升为公共实现）。读模块元数据，无命中返回 null。
+    /// 按方法 token 反查类型全名（P4 停点上下文用）。读模块元数据，无命中返回 null。
     /// 嵌套类型以「+」连接，与 MetadataNaming 全名风格互通（FindType 归一化两者）。
     /// </summary>
     public static string? FindTypeByToken(string dllPath, int methodToken)

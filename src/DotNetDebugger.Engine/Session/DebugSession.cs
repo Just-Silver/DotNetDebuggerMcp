@@ -73,7 +73,7 @@ public sealed class DebugSession : IAsyncDisposable
     public Task<DebugBreakpoint> SetSourceLineBreakpointAsync(string sourcePath, int line, string moduleName = "", int hitCount = 1, DebugBreakpointMode mode = DebugBreakpointMode.Stop, string? condition = null, CancellationToken ct = default)
         => _core.SetSourceLineBreakpointAsync(sourcePath, line, moduleName, hitCount, mode, condition, ct);
 
-    /// <summary>当前登记断点快照（含未绑定模块的；Web 监视器红点渲染用）。</summary>
+    /// <summary>当前登记断点快照（含未绑定模块的）。</summary>
     public Task<IReadOnlyList<DebugBreakpoint>> GetBreakpointsAsync(CancellationToken ct = default)
         => _core.GetBreakpointsAsync(ct);
 

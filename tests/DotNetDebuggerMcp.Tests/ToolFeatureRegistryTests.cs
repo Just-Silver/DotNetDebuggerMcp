@@ -49,7 +49,6 @@ public sealed class ToolFeatureRegistryTests
 
         Assert.Contains("DebugSessionTool", debug);
         Assert.Contains("DebugVerifyTool", debug);
-        Assert.Contains("WebOpenTool", debug);        // web_open 随调试族
         Assert.Contains("UiTools", ui);
         Assert.Contains("ScreenshotTool", shot);
         Assert.Contains("ScreenshotWindowsTool", shot);
