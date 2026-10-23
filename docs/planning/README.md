@@ -33,6 +33,7 @@
 | `research/04-webui-realtime-stack.md` | Web 实时渲染技术调研（历史记录；Web 已于 2026-10-23 整体移除，见 `decisions.md` D28） |
 | `research/05-dependency-packages.md` | 依赖包清单（ClrDebug/DbgShim/Roslyn/ICorDebug/ClrMD 概念澄清；WebUI 侧包清单已 Superseded，见 D4） |
 | `research/06-clrdebug-api-reference.md` | ClrDebug 0.4.2 最小调试器 API 参考（源码核对版） |
+| `research/07-desktop-isolation-options.md` | **Windows「独立窗口/桌面」技术全景与选型**：9 类方案（不激活/offscreen/CreateDesktop/Child Session/虚拟显示器/Sandbox/VM/虚拟桌面/会话隔离）的隔离单位·截图·UIA·权限矩阵，含「UIA 与窗口消息不跨桌面」「WGC 依赖 DWM 合成、隐藏桌面只能 PrintWindow」两条硬约束、同类产品佐证（DCS / lowlevel-computer-use-mcp / VirtualDesktop / Power Automate PiP）与本项目选型建议 + 待验证点 |
 | `research/archive/` | 已归档调研：dnSpy 源码结构摸底 / ILSpy 源码结构摸底 |
 | `specs/README.md` | 设计文档目录（specs/ 导航） |
 | `specs/2026-09-05-overview-design.md` | **总览设计 spec**（已确认；其中 §4.4 Web 层已于 2026-10-23 整体移除，见 `decisions.md` D28） |
