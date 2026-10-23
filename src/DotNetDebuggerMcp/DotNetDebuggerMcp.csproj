@@ -14,7 +14,7 @@
     <!-- Set recommended package metadata -->
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageId>DotNetDebuggerMcp</PackageId>
-    <Version>2.4.0</Version>
+    <Version>2.4.1</Version>
     <ToolCommandName>DotNetDebuggerMcp</ToolCommandName>
     <Authors>Just-Silver</Authors>
     <RepositoryType>git</RepositoryType>

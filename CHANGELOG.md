@@ -6,11 +6,15 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
-## [Unreleased]
+## [2.4.1] - 2026-10-23
 
 ### Breaking
 
-- **Web 网页调试展示面完全移除**：`web_open` 工具、`--web` / `--web-port` 命令行参数不再存在，`DotNetDebugger.Web` 库与其测试项目一并删除。agent 调试能力（`debug_*`）不受影响。
+- **Web 网页调试展示面完全移除**：`web_open` 工具、`--web` / `--web-port` 命令行参数不再存在，`DotNetDebugger.Web` 库与其测试项目一并删除。agent 调试能力（`debug_*`）不受影响——调试全流程（launch/attach、断点、单步、栈/变量、改值、复验、时间线）与 CLI `-dbg` 一次性调试均照常可用。
+
+### Changed
+
+- **宿主工程承载方式收窄**：不再以 ASP.NET Core Web 项目形态打包，包内不再随附 Blazor 框架脚本、组件库静态资源与 Monaco 编辑器资产（安装体积与文件数大幅下降）。MCP stdio 协议行为、日志走 stderr 的纪律不变。
 
 ## [2.4.0] - 2026-10-20
 
