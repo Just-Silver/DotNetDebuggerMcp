@@ -28,7 +28,7 @@ public sealed class ClientRunner
         {
             Name = "DotNetDebuggerMcp test client",
             Command = "dotnet",
-            // 默认只启用反编译族；端到端覆盖全工具面，显式开启全部能力族。
+            // 显式列全四族（等价于默认值），端到端覆盖全工具面；不依赖默认值以免将来漂移。
             Arguments = ["run", "--project", serverProject, "-c", "Release", "--features=decompile,debug,ui,screenshot"],
         });
         var mcp = await McpClient.CreateAsync(transport);

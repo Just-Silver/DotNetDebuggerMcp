@@ -201,10 +201,10 @@ public class DotNetDebuggerMcpCmd
     public int DebugBreakpointOffset { get; } = 0;
 
     /// <summary>
-    /// 裁剪能力族（逗号分隔：decompile/debug/ui/screenshot）。缺省不传 = 启用全部；显式传空串 = 只启用反编译。
+    /// 只启用列出的能力族（白名单，逗号分隔：decompile/debug/ui/screenshot）。缺省不传 = 启用全部；显式传空串 = 只启用反编译。
     /// **反编译恒启用、不可关闭**。只作用于 MCP 面（工具注册 + 握手注入），CLI 执行路径不受影响。
     /// </summary>
-    [Option("--features <list>", "裁剪能力族（逗号分隔：decompile/debug/ui/screenshot）；缺省=全部启用，显式空串=仅反编译。反编译恒启用、无法关闭。仅作用于 MCP 面，CLI 参数不受影响。也可用环境变量 " + FeatureFlags.EnvVar + "。", CommandOptionType.SingleValue)]
+    [Option("--features <list>", "只启用列出的能力族（白名单，逗号分隔：decompile/debug/ui/screenshot）；未列出的族不注册。缺省=全部启用，显式空串=仅反编译。反编译恒启用、无法关闭。仅作用于 MCP 面，CLI 参数不受影响。也可用环境变量 " + FeatureFlags.EnvVar + "。", CommandOptionType.SingleValue)]
     public string Features { get; } = null!;
 
     /// <summary>

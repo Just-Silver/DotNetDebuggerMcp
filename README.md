@@ -78,10 +78,10 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 ## 能力开关
 
-默认**全部能力族启用**。可用命令行参数 `--features=<逗号分隔>`（或环境变量 `DOTNETDEBUGGERMCP_FEATURES`，命令行优先）**裁剪**不需要的族，取值 `decompile` / `debug` / `ui` / `screenshot`：
+默认**全部能力族启用**。命令行参数 `--features=<逗号分隔>`（或环境变量 `DOTNETDEBUGGERMCP_FEATURES`，命令行优先）是**白名单**——**只启用列出的族，未列出的族关闭**。取值 `decompile` / `debug` / `ui` / `screenshot`：
 
 ```jsonc
-// 只要反编译 + 调试，关掉 UI 自动化和截图
+// 只启用反编译 + 调试；UI 自动化和截图不注册（未列出 = 关闭）
 "command": ["DotNetDebuggerMcp", "--features=decompile,debug"]
 ```
 

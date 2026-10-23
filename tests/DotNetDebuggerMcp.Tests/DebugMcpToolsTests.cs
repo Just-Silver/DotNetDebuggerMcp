@@ -1729,7 +1729,7 @@ public sealed class DebugMcpToolsTests
         {
             Name = "DotNetDebuggerMcp debug tools test client",
             Command = "dotnet",
-            // 默认只启用反编译族；调试/UI/截图工具需显式开启（能力开关只作用于 MCP 面）。
+            // 显式列全四族（等价于默认值），调试/UI/截图测试不依赖默认值。
             Arguments = [serverDll, "--features=decompile,debug,ui,screenshot"],
         });
         return await McpClient.CreateAsync(transport).WaitAsync(TimeSpan.FromSeconds(30));

@@ -15,7 +15,7 @@
       "environmentVariables": [
         {
           "name": "DOTNETDEBUGGERMCP_FEATURES",
-          "description": "能力族裁剪（逗号分隔：decompile/debug/ui/screenshot）；默认全部启用，反编译恒启用、无法关闭（传空串=仅反编译）。仅作用于 MCP 面（工具注册与握手注入），CLI 参数不受影响。等价于命令行参数 --features。",
+          "description": "只启用列出的能力族（白名单，逗号分隔：decompile/debug/ui/screenshot）；未列出的族不注册。缺省=全部启用，反编译恒启用、无法关闭（传空串=仅反编译）。仅作用于 MCP 面（工具注册与握手注入），CLI 参数不受影响。等价于命令行参数 --features。",
           "isRequired": false,
           "isSecret": false
         }
