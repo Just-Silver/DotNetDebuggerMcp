@@ -245,7 +245,7 @@ public sealed class DebugSessionManager : IAsyncDisposable
 
     /// <summary>
     /// 终止活动会话的目标进程（强制结束，非正常退出）并关闭会话。返回是否存在被终止的活动会话。
-    /// 与 <see cref="CloseAsync"/> 的区别：Close 只断开调试（目标继续运行），本方法结束目标进程——调试/复验收口用。
+    /// 与 <see cref="CloseAsync"/> 的区别：Close 只断开调试（目标继续运行），本方法结束目标进程——调试/验证收口用。
     /// <para>引擎终止失败时：launch 会话用 OS 句柄兜底强杀；仍存活（或 attach 会话不可判定）则**抛出**，
     /// 由宿主如实报「终止失败」——不再静默吞后误报「已终止」。</para>
     /// </summary>

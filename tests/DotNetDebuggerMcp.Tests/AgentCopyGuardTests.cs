@@ -37,7 +37,7 @@ public sealed class AgentCopyGuardTests
         { nameof(UiTools.UiFind), "无视觉" },
         { nameof(UiTools.UiFind), "patterns" },                          // ui_find 输出能力清单
         { nameof(UiTools.UiAction), "verb" },                            // ui_action 语义动词
-        { nameof(UiTools.UiAction), "右键" },                            // 无右键/双击边界（物理输入已移除）
+        { nameof(UiTools.UiAction), "右键" },                            // 无右键/双击入口（真实点击走 clickPoint）
         { nameof(UiTools.UiAction), "clickPoint" },                      // 真实点击 = 显式 opt-in（会激活窗口）
         { nameof(UiTools.UiInput), "value" },                            // ui_input 写入值
         { nameof(UiTools.UiInput), "commit" },                           // 失焦提交开关（默认 true，WPF 绑定生效）

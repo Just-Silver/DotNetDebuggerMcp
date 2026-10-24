@@ -81,7 +81,7 @@ public static class UiTools
 
     /// <summary>对 UI 控件执行语义动作（真实操作，有产线副作用）。</summary>
     [McpServerTool]
-    [Description("对 UI 控件执行语义动作（真实操作，有产线副作用）。默认走 UIA pattern：不移动光标、不改前台。verb 按控件能力分派：invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate（复选框 toggle、列表/树/页签项 select、下拉/树节点 expand）。无右键/双击（会被明确拒绝）。定位用 index（仅紧邻的上次 ui_find 内有效）或 name/type（最稳）；windowstate 按 process 定位顶层窗口。legacy 控件结果标「可能不生效」，可显式 clickPoint=true（仅 invoke/select）走真实点击——**会先把目标窗口带到前台、再移动光标点击**，仅在语义动作确认无效时用。")]
+    [Description("对 UI 控件执行语义动作（真实操作，有产线副作用）。默认走 UIA pattern：不移动光标、不主动改前台（focus 对带 HWND 控件可能激活顶层窗口）。verb 按控件能力分派：invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate（复选框 toggle、列表/树/页签项 select、下拉/树节点 expand）。无右键/双击入口（会被明确拒绝）。定位用 index（仅紧邻的上次 ui_find 内有效）或 name/type（最稳）；windowstate 按 process 定位顶层窗口。legacy 控件结果标「可能不生效」，可显式 clickPoint=true（仅 invoke/select）走真实点击——**会先把目标窗口带到前台、再移动光标点击**，仅在语义动作确认无效时用。")]
     public static async Task<string> UiAction(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("语义动词（必填）：invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate。")] string verb = "",
@@ -107,7 +107,7 @@ public static class UiTools
                 return Fail("ui_action", argsText, $"verb 不能为空（可选 {UiVerbOptions}）。");
             if (verb.Trim().Equals("rightclick", StringComparison.OrdinalIgnoreCase)
                 || verb.Trim().Equals("doubleclick", StringComparison.OrdinalIgnoreCase))
-                return Fail("ui_action", argsText, "UIA 无该语义入口，物理输入已移除；请改用等价菜单/命令的 ui_action verb=invoke。");
+                return Fail("ui_action", argsText, "UIA 无右键/双击语义入口；请把操作改为等价菜单/命令的 verb=invoke（确需真实点击时用 verb=invoke/select + clickPoint=true）。");
             var result = await UiAutomationService.Instance.ActionAsync(process.Trim(), verb.Trim(), index, name.Trim(), type.Trim(), direction.Trim(), lines, windowstate.Trim(), timeoutSeconds, cancellationToken, clickPoint);
             return Done("ui_action", argsText, result.Message);
         }
@@ -123,14 +123,14 @@ public static class UiTools
 
     /// <summary>对 UI 控件写入值（Value/RangeValue/LegacyIAccessible；真实操作，有产线副作用）。</summary>
     [McpServerTool]
-    [Description("对 UI 控件写入值（真实操作，有产线副作用）。全 UIA 语义：按 ValuePattern → RangeValuePattern → LegacyIAccessiblePattern 分派（文本框写文本、滑块/数值框写数字），只读或无写值能力返回中文提示；空 value 返回提示。默认 commit=true：写完把焦点移出该控件（WPF 绑定默认失焦才提交，否则应用读到的仍是旧值），代价是**会激活目标窗口**；纯展示/不想动焦点时传 commit=false。定位用 index（上次 ui_find 序号，优先）或 name/type（歧义返回候选清单）。写入会打 AgentActionLog。")]
+    [Description("对 UI 控件写入值（真实操作，有产线副作用）。按写值能力分派：ValuePattern → RangeValuePattern → LegacyIAccessiblePattern（文本框写文本、滑块/数值框写数字），只读或无写值能力返回中文提示；空 value 返回提示。默认 commit=true：写完把焦点移出该控件（WPF 等失焦才提交的绑定否则读不到新值），会激活目标窗口；传 commit=false 不主动移焦（部分控件 SetValue 本身仍可能让窗口变前台）。定位用 index（上次 ui_find 序号，优先）或 name/type（歧义返回候选清单）。写入会打 AgentActionLog。")]
     public static async Task<string> UiInput(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("要写入的值（必填；空返回提示）。")] string value = "",
         [Description("上次 ui_find 返回序号（&gt;=0 优先于 name/type 定位；默认 -1 用 name/type）。")] int index = -1,
         [Description("控件名/文本（Name/AutomationId 子串忽略大小写）。")] string name = "",
         [Description("控件类型（UIA 类型名）。")] string type = "",
-        [Description("写完是否失焦提交，默认 true：写完把焦点移出该控件（必要时先激活目标窗口），让 WPF 等「失焦才提交」的绑定真正收到新值；False = 只改控件文本、不动焦点与前台（连续填多个字段、或不想触发字段校验时用）。")] bool commit = true,
+        [Description("写完是否失焦提交，默认 true：写完把焦点移出该控件（必要时先激活目标窗口），让 WPF 等「失焦才提交」的绑定真正收到新值；False = 只改控件文本、不主动移焦（连续填多个字段、或不想触发字段校验时用；部分控件 SetValue 本身仍可能让窗口变前台）。")] bool commit = true,
         [Description("可交互性护栏（可省略；填写后用 ui_find 返回的帧号校验目标是否来自旧画面：0=不校验，非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
         CancellationToken cancellationToken = default)

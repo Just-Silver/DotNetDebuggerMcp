@@ -171,11 +171,11 @@ internal sealed class UiAutomationService
     {
         var verbNorm = verb.Trim().ToLowerInvariant();
         if (verbNorm is "rightclick" or "doubleclick")
-            throw new UiException("UIA 无该语义入口，物理输入已移除；请改用等价菜单/命令的 ui_action verb=invoke。");
+            throw new UiException("UIA 无右键/双击语义入口；请把操作改为等价菜单/命令的 verb=invoke（确需真实点击时用 verb=invoke/select + clickPoint=true）。");
         if (verbNorm.Length == 0)
             throw new UiException($"verb 不能为空（可选 {string.Join("/", UiPatternDispatcher.Verbs)}）。");
         if (verbNorm != "windowstate" && !UiPatternDispatcher.Verbs.Contains(verbNorm))
-            throw new UiException($"verb 无效：{verb}（可选 {string.Join("/", UiPatternDispatcher.Verbs)}；无右键/双击——物理输入已移除）。");
+            throw new UiException($"verb 无效：{verb}（可选 {string.Join("/", UiPatternDispatcher.Verbs)}；无右键/双击入口）。");
         if (clickPoint && verbNorm is not ("invoke" or "select"))
             throw new UiException($"clickPoint=true 仅支持 verb=invoke/select（真实点击是「点一下」语义）；当前 verb={verbNorm}。");
 
@@ -397,7 +397,7 @@ internal sealed class UiAutomationService
         }
     }
 
-    /// <summary>超时秒数 → TimeSpan（&lt;=0 取默认 5s，clamp 到 1-300s）；纯函数，供工具层/verify 复用。</summary>
+    /// <summary>超时秒数 → TimeSpan（&lt;=0 取默认 5s，clamp 到 1-300s）；纯函数，供工具层复用。</summary>
     internal static TimeSpan ResolveTimeout(int timeoutSeconds)
         => TimeSpan.FromSeconds(Math.Clamp(
             timeoutSeconds <= 0 ? DefaultTimeoutSeconds : timeoutSeconds, MinTimeoutSeconds, MaxTimeoutSeconds));

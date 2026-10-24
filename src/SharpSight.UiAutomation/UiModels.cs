@@ -47,7 +47,7 @@ internal sealed record UiFindResult(IReadOnlyList<UiElementInfo> Elements, int F
 
 /// <summary>
 /// ui_get 结果：Value=展示值、Raw=原始值兜底、ControlName=目标控件 Name（空则 AutomationId，供输出层
-/// 经 DB1 <c>SensitiveValueRedactor.Redact</c> 脱敏）。三值均**未脱敏**——脱敏由工具/verify 输出层做。
+/// 经 DB1 <c>SensitiveValueRedactor.Redact</c> 脱敏）。三值均**未脱敏**——脱敏由工具输出层做。
 /// </summary>
 internal sealed record UiStateResult(string Value, string? Raw = null, string ControlName = "");
 
@@ -124,7 +124,7 @@ internal enum UiActionKind
     LegacyDefaultAction,
     LegacySelect,
     Focus,
-    /// <summary>真实点击（显式 opt-in：ui_action clickPoint=true）——全库唯一物理输入入口。</summary>
+    /// <summary>真实点击（显式 opt-in：ui_action clickPoint=true）——唯一的按控件点击入口（会移动光标并注入点击）。</summary>
     ClickPoint,
 }
 

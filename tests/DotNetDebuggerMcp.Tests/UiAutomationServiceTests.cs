@@ -250,7 +250,7 @@ public sealed class UiPatternDispatcherTests
     {
         var ex = Assert.Throws<UiException>(() => UiPatternDispatcher.Choose("hover", Caps(), "", 3, ""));
         Assert.Contains("verb 无效", ex.Message);
-        Assert.Contains("物理输入已移除", ex.Message);
+        Assert.Contains("无右键/双击", ex.Message);
     }
 
     [Fact]

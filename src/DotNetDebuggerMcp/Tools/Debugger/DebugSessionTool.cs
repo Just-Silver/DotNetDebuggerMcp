@@ -177,7 +177,7 @@ public static class DebugSessionTool
     /// <param name="exitCode">目标进程退出码（默认 0）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>中文结果提示。</returns>
-    [Description("终止当前调试会话的目标进程（强制结束，非正常退出）并关闭调试会话。用于调试/复验结束后收口——debug_session(action=disconnect) 只断开调试、目标进程继续独立运行；本工具直接结束目标。")]
+    [Description("终止当前调试会话的目标进程（强制结束，非正常退出）并关闭调试会话。用于调试/验证结束后收口——debug_session(action=disconnect) 只断开调试、目标进程继续独立运行；本工具直接结束目标。")]
     public static async Task<string> DebugTerminate(
         [Description("目标进程退出码（默认 0）。")] int exitCode = 0,
         CancellationToken cancellationToken = default)

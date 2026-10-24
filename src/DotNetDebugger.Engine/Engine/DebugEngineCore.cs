@@ -292,7 +292,7 @@ public sealed class DebugEngineCore : IAsyncDisposable
     }
 
     /// <summary>
-    /// 终止目标进程（强制结束，非正常退出）——调试/复验结束后收口（disconnect 只断开调试、进程继续运行）。
+    /// 终止目标进程（强制结束，非正常退出）——调试/验证结束后收口（disconnect 只断开调试、进程继续运行）。
     /// <para><b>运行态必须先停再终止</b>：<c>ICorDebugController::Terminate</c> 要求进程处于 synchronized（已停）态
     /// （coreclr <c>CordbProcess::Terminate</c> 的 <c>ATT_REQUIRE_SYNCED_OR_NONINIT_MAY_FAIL</c>），进程 Running 时
     /// 直接调用会因未同步失败（此前被 <c>catch {}</c> 静默吞掉、误报成功）。<c>Stop</c> 是唯一同步方法，故运行态

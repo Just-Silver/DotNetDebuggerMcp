@@ -14,7 +14,7 @@ namespace SharpSight.UiAutomation;
 [SupportedOSPlatform("windows7.0")]
 internal static class UiPatternDispatcher
 {
-    /// <summary>ui_action 合法 verb 集合（windowstate 单独处理；无右键/双击——物理输入已移除）。</summary>
+    /// <summary>ui_action 合法 verb 集合（windowstate 单独处理；无右键/双击入口）。</summary>
     internal static readonly string[] Verbs =
         ["invoke", "toggle", "select", "expand", "collapse", "focus", "scroll", "scrollintoview", "windowstate"];
 
@@ -99,7 +99,7 @@ internal static class UiPatternDispatcher
             }
 
             default:
-                throw new UiException($"verb 无效：{verb}（可选 {string.Join("/", Verbs)}；无右键/双击——物理输入已移除）。");
+                throw new UiException($"verb 无效：{verb}（可选 {string.Join("/", Verbs)}；无右键/双击入口）。");
         }
     }
 

@@ -545,19 +545,18 @@ public sealed class DebugUiToolsTests
         {
             await WaitFindAsync(mcp, "手动");
 
-            // 未知 verb → 可选清单 + 无物理输入边界
+            // 未知 verb → 可选清单 + 无右键/双击入口
             var badVerb = await UiActionAsync(mcp, new() { ["name"] = "手动", ["verb"] = "hover" });
             Assert.True(badVerb.IsError != true, badVerb.Text());
             Assert.Contains("verb 无效", badVerb.Text());
-            Assert.Contains("物理输入已移除", badVerb.Text());
+            Assert.Contains("无右键/双击", badVerb.Text());
 
             // 右键/双击 → 明确中文拒绝
             foreach (var verb in new[] { "rightclick", "doubleclick" })
             {
                 var noEntry = await UiActionAsync(mcp, new() { ["name"] = "手动", ["verb"] = verb });
                 Assert.True(noEntry.IsError != true, noEntry.Text());
-                Assert.Contains("UIA 无该语义入口", noEntry.Text());
-                Assert.Contains("物理输入已移除", noEntry.Text());
+                Assert.Contains("无右键/双击", noEntry.Text());
             }
 
             // 非法 direction / windowstate
@@ -850,7 +849,7 @@ public sealed class DebugUiToolsTests
         return RowIndex(row!);
     }
 
-    // ===== 不抢鼠标/前台强断言（护栏，防回退到物理输入；focus/windowstate 豁免，spec §9） =====
+    // ===== 默认路径不得移动鼠标/抢前台（护栏；focus/windowstate 豁免，commit/clickPoint 另有覆盖） =====
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point point);
@@ -943,7 +942,7 @@ public sealed class DebugUiToolsTests
         var cursorInsideTarget = hasRect && rect.Contains(after.Cursor.X, after.Cursor.Y);
         var targetTookForeground = targetHwnd != IntPtr.Zero && after.Foreground == targetHwnd;
 
-        Assert.Fail($"{action} 动作期间系统光标/前台发生变化（基线静默）：光标 ({before.Cursor.X},{before.Cursor.Y}) → ({after.Cursor.X},{after.Cursor.Y})（移动={cursorMoved}、落入目标窗口={cursorInsideTarget}）；前台 {before.Foreground} → {after.Foreground}（变化={fgChanged}、目标窗口被抢前台={targetTookForeground}）——U1A 禁止物理输入/抢前台。");
+        Assert.Fail($"{action} 动作期间系统光标/前台发生变化（基线静默）：光标 ({before.Cursor.X},{before.Cursor.Y}) → ({after.Cursor.X},{after.Cursor.Y})（移动={cursorMoved}、落入目标窗口={cursorInsideTarget}）；前台 {before.Foreground} → {after.Foreground}（变化={fgChanged}、目标窗口被抢前台={targetTookForeground}）——默认路径不得移动光标/抢前台（commit/clickPoint 请用专门用例）。");
         return Task.CompletedTask;
     }
 }
