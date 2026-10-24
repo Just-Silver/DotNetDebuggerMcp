@@ -1,0 +1,19 @@
+<Window x:Class="WpfBindingSample.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="WPF 失焦提交探针" Height="260" Width="560">
+    <StackPanel Margin="16">
+        <TextBlock Text="TextBox.Text 默认 UpdateSourceTrigger=LostFocus：不失焦，ViewModel 拿不到新值。"
+                   TextWrapping="Wrap"/>
+        <TextBox x:Name="NameBox" Margin="0,12,0,0" Height="28"
+                 AutomationProperties.AutomationId="nameBox"
+                 Text="{Binding Name, UpdateSourceTrigger=LostFocus}"/>
+        <Button x:Name="SubmitButton" Margin="0,12,0,0" Height="30" Width="160" HorizontalAlignment="Left"
+                AutomationProperties.AutomationId="submitButton"
+                Content="提交（读 ViewModel）" Click="OnSubmit"/>
+        <TextBlock x:Name="VmName" Margin="0,12,0,0" AutomationProperties.AutomationId="vmName"
+                   Text="{Binding Name, StringFormat=ViewModel: {0}}"/>
+        <TextBlock x:Name="SubmitRead" Margin="0,6,0,0" AutomationProperties.AutomationId="submitRead"
+                   Text="提交读到: "/>
+    </StackPanel>
+</Window>

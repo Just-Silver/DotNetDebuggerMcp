@@ -16,7 +16,7 @@ internal static class HandshakeText
     private const string IntroLead = "本服务器面向 .NET 程序集与进程，";
 
     private const string IntroDecompile = "**反编译/静态分析**（程序集还原为 C#、探查类型/成员/调用关系）";
-    private const string IntroDebug = "**动态调试**（启动/附加进程，断点、单步、栈/变量实时值，现场改值、一键复验）";
+    private const string IntroDebug = "**动态调试**（启动/附加进程，断点、单步、栈/变量实时值，现场改值）";
     private const string IntroUi = "**UI 自动化**（UIA 语义操控桌面控件）";
     private const string IntroScreenshot = "**视觉/监视**（截图）";
 
@@ -29,12 +29,11 @@ internal static class HandshakeText
         "- **当需要查看 .NET 程序集（.dll/.exe，含无源码或第三方）的 C# 源码、类型结构、成员签名、字符串、调用/引用关系时**，使用反编译与静态分析工具（可先列类型/查签名定位，再按需反编译）。\n";
     private const string UseDebug =
         "- **当需要弄清程序运行期行为（为何抛异常、某条件分支是否执行、变量当前值、调用路径）时**，使用动态调试：反编译定位目标方法取 token → 下断点 → 运行至命中 → 观察调用栈与变量 → 单步；想省去反复设断点可直接 debug_run_to 运行到目标位置。\n" +
-        "- **当需要验证某个运行期假设（强制走某分支 / 置空 / 换引用）时**，停点后用 debug_set 改写现场变量或字段再继续；取表达式值用 debug_evaluate、下钻对象结构用 debug_object、复盘整段经过用 debug_timeline。\n" +
-        "- **当改完 bug 需要自证修复、或回归一段运行期场景时**，用 debug_verify 按场景 JSON（可选重编译 + 断点/求值/输出断言序列）一键跑到 PASS/FAIL。含 uiAction/uiAssert 步骤需要 ui 能力族（默认启用；若 `--features` 未列出 ui 则不可用）。\n";
+        "- **当需要验证某个运行期假设（强制走某分支 / 置空 / 换引用）时**，停点后用 debug_set 改写现场变量或字段再继续；取表达式值用 debug_evaluate、下钻对象结构用 debug_object、复盘整段经过用 debug_timeline。\n";
     private const string UseUiLead =
-        "- **当需要操作桌面 GUI 到某状态（点按钮 / 勾选 / 切下拉 / 填输入框 / 滚动）时**，使用 UI 自动化工具 ui_find（列控件与能力）→ ui_action/ui_input（语义动作/写值）→ ui_wait（等状态变化）→ ui_get（读值）；全 UIA 语义，不移动光标、不注入输入、不抢前台";
+        "- **当需要操作桌面 GUI 到某状态（点按钮 / 勾选 / 切下拉 / 填输入框 / 滚动）时**，使用 UI 自动化工具 ui_find（列控件与能力）→ ui_action/ui_input（语义动作/写值）→ ui_wait（等状态变化）→ ui_get（读值）；语义动作走 UIA pattern，ui_input 默认会失焦提交（把焦点移出控件，让 WPF 等失焦绑定的应用真正收到值，会激活目标窗口；不想动焦点传 commit=false）";
     // 跨族引用（debug_attach / debug_* / 截图 / ui_find）只在对应族也启用时出现——否则会指向未注册的工具（spec §8.1/§8.6）。
-    private const string UseUiTailNoDebug = "。单次 UIA 调用默认 5s 护栏，目标响应慢时用 timeoutSeconds 调大（超时≠环境 UIA 不可用）。目标无 Invoke/SelectionItem（如部分 WPF-UI 导航项）时可显式 ui_action clickPoint=true 走真实点击——会移动光标/注入点击/可能抢前台，性能类排查勿用。\n";
+    private const string UseUiTailNoDebug = "。单次 UIA 调用默认 5s 护栏，目标响应慢时用 timeoutSeconds 调大（超时≠环境 UIA 不可用）。目标无 Invoke/SelectionItem（如部分 WPF-UI 导航项）时可显式 ui_action clickPoint=true 走真实点击——会先把目标窗口带到前台、移动光标点击，性能类排查勿用。\n";
     private const string UseUiObserveNoDebug = "- **注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请勿依赖 ui_*。\n";
     private const string UseUiObserveWithScreenshot = "- **注意观测扰动**：ui_* 会向目标进程注入 UI Automation 客户端、可能改变其性能特征；性能/卡顿类排查请优先用 debug_* + 截图。\n";
     private const string UseScreenshot =

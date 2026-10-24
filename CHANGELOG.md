@@ -6,6 +6,21 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Breaking
+
+- **`debug_verify` 工具与场景 JSON 整体移除**：不再提供「一份场景文件跑重编译 + 断点 + 断言 → PASS/FAIL」的一键复验。需要复验时按普通工具组合：`debug_breakpoint` → `debug_continue`/`debug_wait` → `debug_frame`/`debug_evaluate`，UI 部分用 `ui_action`/`ui_input`/`ui_get`/`ui_wait`；防回归断言建议直接写进项目自己的测试。握手与 `--features` 不再提及该能力。
+
+### Added
+
+- **`ui_input` 新增 `commit` 参数（默认 `true`）**：写完把焦点移出目标控件，让「失焦才提交」的绑定（WPF `TextBox.Text` 默认 `UpdateSourceTrigger=LostFocus`）真正拿到新值——此前写入后立刻点「搜索/保存」，应用读到的仍是旧值。代价是这一步会激活目标窗口；只想改控件文本、不动焦点时传 `commit=false`。
+- **`ui_action clickPoint=true` 点击前先激活目标窗口**：被遮挡或非前台时，第一次点击不再被系统「激活动作」吃掉（此前可能点在遮挡窗口上）。
+
+### Changed
+
+- **UI 自动化策略调整：功能优先，允许短暂接管焦点**。语义动作仍走 UIA pattern 且默认不改前台；写值提交与真实点击会接管焦点/前台。工具 `[Description]`、握手说明与 README 同步更新。
+
 ## [2.4.2] - 2026-10-24
 
 ### Changed

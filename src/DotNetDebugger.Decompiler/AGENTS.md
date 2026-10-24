@@ -36,4 +36,4 @@ dotnet test --project tests/DotNetDebugger.Decompiler.Tests/DotNetDebugger.Decom
 ```
 
 - `tests/DotNetDebugger.Decompiler.Tests/`：DocumentService 三套（正向映射语句级密度断言 >50 条、反向查询、降级/错误场景）覆盖 `Document/`；其余组件单测在宿主 `tests/DotNetDebuggerMcp.Tests`（经 InternalsVisibleTo）。
-- 测试数据 `tests/TestData/*.dll` git 忽略，由 `tests/TestData/generate-testdata.ps1` 生成；访问用 `TestDataPaths.TestSamplesDll`（上溯找 slnx）。改 TestSamples 源码后需重新生成且 token 会变——不 rename/remove 既有类型保 token 稳定。
+- 测试数据 `tests/TestData/*.dll` git 忽略，由 `tests/Fixtures/generate-testdata.ps1` 生成；访问用 `TestDataPaths.TestSamplesDll`（上溯找 slnx）。改 TestSamples 源码后需重新生成且 token 会变——不 rename/remove 既有类型保 token 稳定。

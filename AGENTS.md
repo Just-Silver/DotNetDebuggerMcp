@@ -15,7 +15,7 @@
 | `src/DotNetDebugger.Session/` | 会话/状态层（宿主共享中枢） | `src/DotNetDebugger.Session/AGENTS.md` |
 | `src/DotNetDebuggerMcp/` | **宿主 exe**（MCP+CLI） | `src/DotNetDebuggerMcp/AGENTS.md` |
 | `src/DotNetDebuggerMcp.Client/` | 端到端验证客户端 | `src/DotNetDebuggerMcp.Client/AGENTS.md` |
-| `tests/` | 5 个测试项目 + TestData | `tests/AGENTS.md` |
+| `tests/` | 5 个测试项目 + `Fixtures/`（夹具源码与生成脚本）+ `TestData/`（产物，整体忽略） | `tests/AGENTS.md` |
 
 **依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）、`Engine`（只依赖 ClrDebug + DbgShim.win-x64）、`SharpSight.Capture`（只依赖 System.Drawing.Common，**无第三方图像库**）与 `SharpSight.UiAutomation`（只依赖 FlaUI）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`DotNetDebuggerMcp` 宿主引 Decompiler + Engine + Session + 两个 SharpSight 库。各库**均不得反向引用宿主**。
 
@@ -25,7 +25,7 @@
 
 > **原则：遇事不猜，先查后改。**
 
-- 不熟悉 API/模块实现/报错原因时，**严禁凭经验臆测或盲目修改**。正确做法：① 本地克隆源码（`../../Externals/DebuggerExternals/`，比 websearch 快且准）② 官方文档/`--help` ③ `gh` 查 issue/PR ④ websearch ⑤ 再请教。
+- 不熟悉 API/模块实现/报错原因时，**严禁凭经验臆测或盲目修改**。正确做法：① **先查本地源码**：`Projects/Externals/`（仓库根向上两级，即 `../../Externals/`）下有 dnSpy / ILSpy / FlaUI / wpf / microsoft-ui-xaml / Avalonia 等克隆，**有源码就直接读源码**，比 websearch 快且准；**按仓库相对位置向上查找，禁止写死绝对路径**（多设备开发，各设备绝对目录不一定相同）② 本地确实没有源码时才反编译（本仓库 `decompile` 工具 / ILSpy）③ 官方文档/`--help` ④ `gh` 查 issue/PR ⑤ websearch ⑥ 再请教。
 - 禁止：凭感觉试错、复制粘贴未经验证的代码、忽略官方/社区最佳实践。
 
 ## 关键约束（跨项目共享）
@@ -40,7 +40,7 @@
   - **tag 一旦推送即代表该 commit 的 workflow 被冻结**：修 workflow 的重跑用的仍是旧版（`gh run rerun` 不解决）；若 release job 因非代码原因部分失败，其后续步骤（如建 Release）需**手动补建**（正文用同款 CHANGELOG 提取、资产附本地 pack 的 nupkg），**不要删已发布的 tag**。
 - **改 MCP 工具（新增/删除/改名/加参/改默认值/改行为）必须同步「agent 真正看到的两处说明」——工具 `[Description]` 与服务器握手——与代码改动同 commit**：
   - ① **工具 `[Description]`（硬要求）**：agent 在工具目录里读到的**唯一**说明。参数/默认值/行为一变就得跟着改——**改默认值、改行为最容易漏**，漏了 agent 会按旧说明调用（属静默失效）。
-  - ② **握手 `ServerInstructions` 的能力族触发条件（硬要求）**：客户端常只注入握手、工具目录会被截断，它是 agent 判断「何时该用本服务器」的**唯一通道**。握手文本由 `Configuration/HandshakeText.cs` **按启用的能力族拼装**（`FeatureFlags`：`--features`/`DOTNETDEBUGGERMCP_FEATURES`）——**未启用的族其工具名/触发词在握手里必须完全不出现**。**新增/删除整个能力族（如 UI 自动化 `ui_*`）或独立工作流（如 `debug_verify` 场景复验）时必须同步补/删对应触发条件**，不可只在工具目录层面加工具。历史教训：曾长期只改工具不改握手，导致 `ui_*` 与 `debug_verify` 在握手中无任何触发条件、agent 根本不知道它们存在。护栏：`DotNetDebuggerMcpCmdTests.握手_启用族触发条件齐备` + `握手_启用族出现_未启用族不出现` + `握手_未启用族的工具名不出现_各组合`（逐族断言，漏一族即失败）。
+  - ② **握手 `ServerInstructions` 的能力族触发条件（硬要求）**：客户端常只注入握手、工具目录会被截断，它是 agent 判断「何时该用本服务器」的**唯一通道**。握手文本由 `Configuration/HandshakeText.cs` **按启用的能力族拼装**（`FeatureFlags`：`--features`/`DOTNETDEBUGGERMCP_FEATURES`）——**未启用的族其工具名/触发词在握手里必须完全不出现**。**新增/删除整个能力族（如 UI 自动化 `ui_*`）或独立工作流（如 `screenshot(mode=list-windows)` 清单模式）时必须同步补/删对应触发条件**，不可只在工具目录层面加工具。历史教训：曾长期只改工具不改握手，导致 `ui_*` 在握手中无任何触发条件、agent 根本不知道它们存在。护栏：`DotNetDebuggerMcpCmdTests.握手_启用族触发条件齐备` + `握手_启用族出现_未启用族不出现` + `握手_未启用族的工具名不出现_各组合`（逐族断言，漏一族即失败）。
   - ③ 根 `README.md`（**面向包使用者**，非 agent 通道）：打包为 `PackageReadmeFile`，用户看到的是打包时快照——改工具面时**也应**同步，别落下，但它不承担 agent 可发现性。
 - **跨层/多处重复使用的字面量必须定义成常量**，改文案只在常量类改一处：`Configuration/AppText.cs`（转发 Decompiler 库 `DecompilerText` 单一来源）、`Configuration/CacheSignatures.cs`（缓存签名前缀 + `\u001F` 分隔符；**改动必须同步 `CacheStatsTool.ToolNames`**）、`MetadataNaming.FormatToken`、`OutputFormatter.MemberLine`（`#MEMBER` 行）、`SectionBuilder.EmptyPlaceholder`（`（无）`）。新增工具/提示先查这些常量类。
 - **新增错误提示必须扩展 `InProcessDecompiler.IsErrorResult`**（七类前缀判定），否则管道会把错误提示误当正常结果写入缓存。
@@ -48,7 +48,7 @@
 
 ## 代码可读性纪律（防"又臭又长"的函数）——历史教训
 
-**先例**：`ScreenshotTool.Screenshot`（~180 行：模式解析 / 兼容校验 / 6 路分派 / 头部 / 落盘全混在一起）与 `VerifyService.ExecuteStepsAsync`（~181 行：每个 step kind 全内联）。2026-09-28 以 **Extract Method + 每模式/每步骤小函数**（行为不变、逐项提交）拆短。**别再写出这种函数。**
+**先例**：`ScreenshotTool.Screenshot`（~180 行：模式解析 / 兼容校验 / 6 路分派 / 头部 / 落盘全混在一起）与 `VerifyService.ExecuteStepsAsync`（~181 行：每个 step kind 全内联；该模块已于 D33 整块移除，此处只留教训）。2026-09-28 以 **Extract Method + 每模式/每步骤小函数**（行为不变、逐项提交）拆短。**别再写出这种函数。**
 
 - **阈值（硬要求）**：单个方法（不含 XML 文档注释与空行）**≤ 60 行**为宜，**一旦超过 80 行必须拆**——或在方法首行注释写明"为何不可拆"的**具体**理由。本次改动把某方法推过 80 行时，**同一次改动里拆掉**。
 - **手法优先级**：① Extract Method（提取私有方法/纯函数）→ ② 提取辅助类型（如把散落的计数器/中间集合收进 `RunState` 这类小类）→ ③ 数据驱动（注册表/表）**仅当**「同一集合在 ≥3 处重复列举、且各分支同构」时才用。
@@ -83,10 +83,10 @@ dotnet build -c Release src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj
 dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj          # 宿主全量单测
 dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -- --filter-class "DotNetDebuggerMcp.Tests.DecompileCacheTests"   # 单套测试（xunit.v3 + MTP，--filter-class 写法验证可用）
 dotnet run -c Release --project src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.Client.csproj   # 端到端验证（自启动 Release server，自动清理 tests/.dotnetdebugger-client-out/）
-powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1               # 重新生成测试程序集（git 忽略，新克隆/CI 前置）
+powershell -ExecutionPolicy Bypass -File tests/Fixtures/generate-testdata.ps1               # 重新生成测试程序集（git 忽略，新克隆/CI 前置）
 ```
 
-- **先跑 `generate-testdata.ps1` 再跑测试**：`tests/TestData/*.dll`/`*.exe`/`*.runtimeconfig.json` 全部 git 忽略（脚本产出 TestSamples.dll / TestSamplesExt.dll / DebugTarget.exe）。改脚本注意 `BigMethod` 用数组链而非常量链——Release 常量折叠会让方法只剩几行，无法触发截断。
+- **先跑 `generate-testdata.ps1` 再跑测试**：`tests/Fixtures/` 放脚本与夹具源码（受版本控制），`tests/TestData/` 是产物目录、**整体 git 忽略**（脚本产出 TestSamples.dll / TestSamplesExt.dll / DebugTarget.exe 与 UiSampleApp/WpfBindingSample）。改脚本注意 `BigMethod` 用数组链而非常量链——Release 常量折叠会让方法只剩几行，无法触发截断。
 - CLI 调试（改完 server 用 Debug 构建 exe 快速验证，行为与 MCP 工具一致）：`-a <dll> -t <TypeName>` 反编译 / `-mn` 搜成员 / `-s` 签名 / `-hc [-i]` 层级 / `-d [-x]` 依赖 / `-cg [-x] -tk` 调用图 / `-iu -gi -ss -fa` / `-cc` 调用链 / `-l c -nc Box -ns NS` 列类型 / `-o [-p]` 写盘 / `-c` 更新检查 / **`-dbg <exe> -dbg-bp <token> [-dbg-offset]`** 一次性调试；通用 `-ln start-end` 分页、`--timeout` 秒数。完整参数表见 `DotNetDebuggerMcpCmd.cs` 与 README。
 - 本地调试注意：根 `opencode.json` 把本仓库自身的 MCP server 绑定到 `src/DotNetDebuggerMcp/bin/Debug/net10.0-windows10.0.22621.0/DotNetDebuggerMcp.exe`。**改完 server 代码后，改动 `opencode.json` 里任意有效字段（例如 `--features` 的取值顺序）再改回，就能触发 opencode 动态重载 MCP server——不需要重启 opencode**，重载后工具目录与握手即反映新二进制（这是自测验收新工具面的标准做法）。注意该 server 进程会锁定其绑定的输出目录（再构建报 MSB3021/文件被占用）：需要边改边验时，先 `dotnet build -c Release`，把 command 临时指向 Release 输出，验收完再改回 Debug 路径。验证新行为也可用 Client/CLI 输出。
 - 单测里经 `ToolPipeline` 的 assembly 路径解析基准是测试进程 CWD（`bin/Debug/net10.0-windows10.0.22621.0`）；访问 `tests/TestData` 下 dll 用各测试项目 `TestDataPaths`/`TestPaths` 帮助类（上溯找 `DotNetDebuggerMcp.slnx`）。

@@ -8,9 +8,10 @@ namespace SharpSight.UiAutomation;
 
 /// <summary>
 /// U1A UI 自动化 facade（spec §13）：gate + 按调用超时（默认 5s，agent 可经 timeoutSeconds 调大）双层护栏 +
-/// 编排 Find/Action/Input/Get/Wait。纯 UIA 语义 pattern
-/// （无光标移动 / 无输入注入 / 不抢前台；仅窗口最小化时经 WindowPattern 还原）。单 UIA3Automation 实例 +
-/// SemaphoreSlim(1,1) 串行；跨进程调用按调用超时兜底（Invoke 阻塞按「放弃等待」）。写操作由调用方打 AgentActionLog。
+/// 编排 Find/Action/Input/Get/Wait。默认走 UIA 语义 pattern；必要的焦点接管只发生在两处：
+/// <c>ui_input</c> 的失焦提交（<see cref="BindingCommit"/>）与 <c>clickPoint</c> 真实点击前的窗口激活。
+/// 单 UIA3Automation 实例 + SemaphoreSlim(1,1) 串行；跨进程调用按调用超时兜底（Invoke 阻塞按「放弃等待」）。
+/// 写操作由调用方打 AgentActionLog。
 /// </summary>
 [SupportedOSPlatform("windows7.0")]
 internal sealed class UiAutomationService
@@ -85,9 +86,10 @@ internal sealed class UiAutomationService
     public Task<UiActionResult> ActionAsync(string process, string verb, int index, string name, string type, string direction, int lines, string windowstate, int timeoutSeconds, CancellationToken ct, bool clickPoint = false)
         => RunGateAsync(() => ActionCore(process, verb, index, name, type, direction, lines, windowstate, clickPoint), timeoutSeconds, ct);
 
-    /// <summary>对目标控件写入值（Value → RangeValue → LegacyIAccessible）。</summary>
-    public Task<UiActionResult> InputAsync(string process, string value, int index, string name, string type, int timeoutSeconds, CancellationToken ct)
-        => RunGateAsync(() => InputCore(process, value, index, name, type), timeoutSeconds, ct);
+    /// <summary>对目标控件写入值（Value → RangeValue → LegacyIAccessible）；<paramref name="commit"/>=true 时
+    /// 写入后把焦点移出控件以触发应用的 LostFocus 提交（WPF 绑定默认在此时才更新 ViewModel）。</summary>
+    public Task<UiActionResult> InputAsync(string process, string value, int index, string name, string type, bool commit, int timeoutSeconds, CancellationToken ct)
+        => RunGateAsync(() => InputCore(process, value, index, name, type, commit), timeoutSeconds, ct);
 
     /// <summary>读取目标控件状态（what 映射；返回未脱敏原始值，脱敏由调用方输出层做）。</summary>
     public Task<UiStateResult> GetAsync(string process, string what, int index, string name, string type, int timeoutSeconds, CancellationToken ct)
@@ -209,7 +211,7 @@ internal sealed class UiAutomationService
 
         var caps = UiPatternCapabilities.Probe(element);
         var chosen = UiPatternDispatcher.Choose(verbNorm, caps, direction, lines, windowstate, clickPoint);
-        UiPatternDispatcher.Execute(element, chosen);
+        UiPatternDispatcher.Execute(element, chosen, window);
         var verbDisplay = chosen.Kind == UiActionKind.Window ? $"windowstate={chosen.WindowState}" : verbNorm;
         // P3：legacy 兜底命中时标注「可能不生效」——原为静默假成功（报「已 select」但页面未切换）
         var legacyHint = chosen.Kind is UiActionKind.LegacySelect or UiActionKind.LegacyDefaultAction
@@ -218,7 +220,7 @@ internal sealed class UiAutomationService
         return new UiActionResult(true, $"已 {verbDisplay}（{chosen.PatternName}）{legacyHint}");
     }
 
-    private UiActionResult InputCore(string process, string value, int index, string name, string type)
+    private UiActionResult InputCore(string process, string value, int index, string name, string type, bool commit)
     {
         if (string.IsNullOrEmpty(value))
             throw new UiException("value 不能为空：ui_input 需给出要写入的值。");
@@ -251,7 +253,7 @@ internal sealed class UiAutomationService
             UiPatternDispatcher.ExecuteInput(element, choice, value);
             var after = TryReadInputValue(element, choice);
             if (before is null || after is null || Reflected(before, after, value))
-                return new UiActionResult(true, $"已 input（{choice.PatternName}）");
+                return FinishInput(choice, value, element, window, before, commit);
         }
 
         // Legacy 兜底：仅当控件根本没有 Value/RangeValue 时使用（不可读回校验，若混用会在可校验却无效果的控件上假成功）。
@@ -259,11 +261,32 @@ internal sealed class UiAutomationService
         {
             var legacy = candidates.First(c => c.Kind == UiInputKind.LegacySetValue);
             UiPatternDispatcher.ExecuteInput(element, legacy, value);
-            return new UiActionResult(true, $"已 input（{legacy.PatternName}）");
+            var how = commit ? BindingCommit.TryCommit(element, window) : "";
+            var suffix = how.Length > 0 ? $"{BindingCommit.Hint}（{how}）" : "";
+            return new UiActionResult(true, $"已 input（{legacy.PatternName}）{suffix}");
         }
 
         if (sawReadOnly) throw new UiException("该控件为只读，无法写值。");
         throw new UiException("写入未生效：控件暴露的写值 pattern（Value/RangeValue）均未反映新值。");
+    }
+
+    /// <summary>
+    /// 写值后的收尾：按需失焦提交（WPF LostFocus 绑定），再读一次确认值没被应用改回。
+    /// 提交后值被应用拒绝/改写时如实报错——此时再退下一候选只会把用户的校验结果反复覆盖。
+    /// </summary>
+    private static UiActionResult FinishInput(
+        ChosenInput choice, string value, AutomationElement element, AutomationElement window, string? before, bool commit)
+    {
+        if (!commit) return new UiActionResult(true, $"已 input（{choice.PatternName}）");
+
+        var how = BindingCommit.TryCommit(element, window);
+        if (how.Length == 0) return new UiActionResult(true, $"已 input（{choice.PatternName}）（未能失焦提交：激活窗口或键盘换焦点失败，控件文本已写入）");
+
+        var settled = TryReadInputValue(element, choice);
+        if (before is not null && settled is not null && !Reflected(before, settled, value))
+            throw new UiException($"写入后应用把值改成了「{settled}」（期望「{value}」）——多半被输入校验/格式化拒绝，请检查取值规则。");
+
+        return new UiActionResult(true, $"已 input（{choice.PatternName}）{BindingCommit.Hint}（{how}）");
     }
 
     /// <summary>该候选 pattern 是否只读（Legacy 不判）。读取失败按「非只读」处理（交由 SetValue 暴露真实错误）。</summary>
@@ -319,7 +342,7 @@ internal sealed class UiAutomationService
         return UiStateReader.Execute(element, chosen);
     }
 
-    /// <summary>仅当目标窗口最小化时经 WindowPattern 还原（不抢前台；还原是否激活取决于目标应用，spec §9）。</summary>
+    /// <summary>仅当目标窗口最小化时经 WindowPattern 还原（不主动激活；语义动作不依赖前台）。</summary>
     private static void EnsureWindowRestored(AutomationElement window)
     {
         try

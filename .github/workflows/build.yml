@@ -32,9 +32,6 @@ jobs:
             filters: --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiInput_* --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiAction_ByIndex_* --filter-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiActionInvoke_Button_*
           - shard: ui-b
             filters: --filter-class DotNetDebuggerMcp.Tests.DebugUiToolsTests --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiInput_* --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiAction_ByIndex_* --filter-not-method DotNetDebuggerMcp.Tests.DebugUiToolsTests.UiActionInvoke_Button_*
-          # ui-verify：debug_verify 场景（重编译 + 启动 + UIA 断言，同样吃桌面）
-          - shard: ui-verify
-            filters: --filter-class DotNetDebuggerMcp.Tests.DebugVerifyToolTests
 
           # ---- 动态调试端到端（真实 launch/attach 目标进程；单活动调试会话）----
           # debug-a：断点系（运行到光标/行断点/成员断点/条件断点/源码行断点/异常过滤/异步状态机/trace）
@@ -46,7 +43,7 @@ jobs:
 
           # ---- 兜底分片：其余全部宿主测试（AppServices 集合 + 纯逻辑用例；新增测试类默认落此片）----
           - shard: core
-            filters: --filter-not-class DotNetDebuggerMcp.Tests.DebugUiToolsTests --filter-not-class DotNetDebuggerMcp.Tests.DebugVerifyToolTests --filter-not-class DotNetDebuggerMcp.Tests.DebugMcpToolsTests --filter-not-class DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests
+            filters: --filter-not-class DotNetDebuggerMcp.Tests.DebugUiToolsTests --filter-not-class DotNetDebuggerMcp.Tests.DebugMcpToolsTests --filter-not-class DotNetDebuggerMcp.Tests.DebugVariablesNamesWhitelistTests
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-dotnet@v5
@@ -54,7 +51,7 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Generate test data
         shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+        run: powershell -ExecutionPolicy Bypass -File tests/Fixtures/generate-testdata.ps1
       - name: Test (${{ matrix.shard }})
         run: dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- ${{ matrix.filters }}
 
@@ -69,7 +66,7 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Generate test data
         shell: pwsh
-        run: powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1
+        run: powershell -ExecutionPolicy Bypass -File tests/Fixtures/generate-testdata.ps1
       - name: Test (Decompiler)
         run: dotnet test --project tests/DotNetDebugger.Decompiler.Tests/DotNetDebugger.Decompiler.Tests.csproj -c Release
 

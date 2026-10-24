@@ -14,7 +14,7 @@
 
 ## 共享纪律
 
-- **`tests/TestData/*.dll`/`*.exe`/`*.runtimeconfig.json` 全部 git 忽略**（`.gitignore`），唯一受跟踪文件是 `generate-testdata.ps1`——脚本产出 `DotNetDebuggerMcp.TestSamples.dll`（反编译/元数据用例）+ `DotNetDebuggerMcp.TestSamplesExt.dll`（跨程序集用例）+ `DebugTarget.exe/dll/runtimeconfig`（调试用例）。**新克隆/CI 必须先生成**：`powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1`。
+- **目录职责分离**：`tests/Fixtures/` 放生成脚本与夹具源码（`generate-testdata.ps1` + `UiSampleApp/` + `WpfBindingSample/`，**受版本控制**）；`tests/TestData/` 是脚本产物目录，**整体 git 忽略**（`.gitignore` 一条 `tests/TestData/`）——新增夹具只需把源码放进 `Fixtures/`，产物自动落 `TestData/`，不用再改忽略规则。脚本产出 `DotNetDebuggerMcp.TestSamples.dll`（反编译/元数据用例）+ `DotNetDebuggerMcp.TestSamplesExt.dll`（跨程序集用例）+ `DebugTarget.exe/dll/runtimeconfig`（调试用例）+ `UiSampleApp/`（WinForms UI 用例）+ `WpfBindingSample/`（WPF 失焦提交用例）。**新克隆/CI 必须先生成**：`powershell -ExecutionPolicy Bypass -File tests/Fixtures/generate-testdata.ps1`。
 - 改 TestSamples/DebugTarget 源码后需重跑脚本；**token 随源码变化，断点/成员定位类断言会漂移**——不 rename/remove 既有类型保 token 稳定。
 - 各测试项目的 `TestDataPaths.cs`/`TestPaths.cs` 都从测试进程 CWD 上溯找 `DotNetDebuggerMcp.slnx` 再拼 dll 路径——路径解析基准是测试进程 CWD（`bin/Debug/net10.0-windows10.0.22621.0`）。
 - 宿主测试里串行化使用 `AppServices` 静态状态的测试类（`CheckToolTests`/`ToolPipelineTests`/`CacheStatsToolTests`/各 ToolTests 等）标注 `[Collection("AppServices")]`——新增改静态单例注入的测试时加入同集合，避免并行竞态。

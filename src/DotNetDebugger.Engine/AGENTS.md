@@ -53,7 +53,7 @@ Models/    DebugEvent / DebugSessionState / DebugStackFrame / DebugThreadInfo /
 ## 验证（tests/DotNetDebugger.Engine.Tests）
 
 ```bash
-powershell -ExecutionPolicy Bypass -File tests/TestData/generate-testdata.ps1   # 先决：生成 DebugTarget.exe/dll（git 忽略）
+powershell -ExecutionPolicy Bypass -File tests/Fixtures/generate-testdata.ps1   # 先决：生成 DebugTarget.exe/dll（git 忽略）
 dotnet test --project tests/DotNetDebugger.Engine.Tests/DotNetDebugger.Engine.Tests.csproj
 ```
 

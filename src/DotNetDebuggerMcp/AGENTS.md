@@ -14,7 +14,7 @@
   - `DebugInspectTool`：`debug_frame`（一次给调用栈 + 当前帧变量）/`debug_threads`
   - `DebugExceptionTool`：`debug_exceptions`（action=set/clear；typeName 空=全部，精确过滤 v2）
   - 全部是 `Services.DebugSessionService.Manager` 的薄包装；**控制工具异步返回（带默认超时），不等停点**（`debug_wait` 例外：其职责就是等停点，同样带超时上限与「超时=放弃等待」约定）；栈/变量读取前置校验 `Buffer.CurrentState == Stopped`（否则提示先 debug_continue 到停点）；缺省 threadId=0 用 `Buffer.StoppedThreadId`。每个工具调用后写 `Manager.Actions.Log(...)` 供 Web 回放。
-  - `UiTools`：`ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait`——**全 UIA 语义 pattern，无物理输入**（不移动光标/不注入输入/不抢前台）。元素定位/语义 pattern 分派/状态读取/事件等待/帧登记（`FrameRegistry`）已迁出至 **`SharpSight.UiAutomation`** 能力库，本类为薄包装。`ui_find` 头部返回 `帧: frameId=N`；`ui_action`/`ui_input`/`ui_get` 有可选 `frameId`（= `ui_find` 帧号）**旧帧护栏**——非当前帧即拒绝并提示重新 `ui_find`/`screenshot`（0=不校验）。不要求活动 debug 会话。
+  - `UiTools`：`ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait`——默认走 UIA 语义 pattern，只在必要处接管焦点：`ui_input` 默认失焦提交（`commit=false` 可关）、`clickPoint=true` 先激活窗口再真实点击。元素定位/语义 pattern 分派/状态读取/事件等待/帧登记（`FrameRegistry`）已迁出至 **`SharpSight.UiAutomation`** 能力库，本类为薄包装。`ui_find` 头部返回 `帧: frameId=N`；`ui_action`/`ui_input`/`ui_get` 有可选 `frameId`（= `ui_find` 帧号）**旧帧护栏**——非当前帧即拒绝并提示重新 `ui_find`/`screenshot`（0=不校验）。不要求活动 debug 会话。
 - `Tools/Screenshot/` — **独立截图工具面**（`DotNetDebuggerMcp.Tools.Screenshot`；独立于调试会话，不属 `debug_*`）：
   - `ScreenshotTool`：`screenshot`（**独立截图**，**不要求调试会话**；返回 `CallToolResult` 图片块双轨（内联 image 块 / 落盘只回路径、**无 image 块**）——铁律「Task<string>」的图片类例外；不走 Manager/缓存/ToolPipeline、不写 Actions）。`mode=list-displays` / `mode=list-windows` 为只读清单模式（返回文本、不返回图片），取代原独立发现工具。
   - `ScreenshotDisplaysTool` / `ScreenshotWindowsTool`：上述两种清单模式的具体实现（保留为 C# 方法，**不再是独立 MCP 工具**）：显示器清单（1 基编号/主屏/物理边界/缩放）与可见顶层窗口（hwnd/pid/标题/前台/最小化，`filter`=标题子串；不限 .NET 进程）。

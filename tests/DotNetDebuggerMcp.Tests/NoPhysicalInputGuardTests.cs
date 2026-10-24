@@ -7,41 +7,48 @@ using Xunit;
 namespace DotNetDebuggerMcp.Tests;
 
 /// <summary>
-/// R1 确定性防物理输入回归护栏（与桌面是否交互无关，CI 必过/必败）：
+/// 物理输入面收敛护栏（确定性，CI 必过/必败）：
 /// ① 扫描宿主与 UI 自动化库源码树 <c>src/DotNetDebuggerMcp/**/*.cs</c> + <c>src/SharpSight.UiAutomation/**/*.cs</c>，
-///    禁止出现物理输入 API token；
+///    禁止出现原生光标/输入注入 API token；
 /// ② 扫描构建出的宿主与 <c>SharpSight.UiAutomation.dll</c> 程序集的 IL 元数据（TypeRef/MemberRef/PInvoke import），
-///    禁止对物理输入 API 的引用。两层均为确定性兜底——即使 e2e 因 CI 非交互/共享桌面跳过，也不会静默放过物理回归。
+///    只放行失焦提交用的键盘按键与真实点击前的窗口激活。
+/// <para><b>策略</b>：UI 自动化按「共享桌面、功能优先」运行，允许为完成业务动作短暂接管焦点；但仍禁止手写
+/// <c>SendInput</c>/<c>SetCursorPos</c>/直接 <c>Mouse</c> 调用——真正需要真实点击时必须经 <c>ui_action clickPoint=true</c>
+/// 显式开关，且调用点唯一（<see cref="RealClickCallSite_IsUniqueAndGuarded"/>）。</para>
 /// （测试文件自身含负向 token 字符串，故只扫 src/ 与宿主产物，不扫测试源码。）
 /// </summary>
 public sealed class NoPhysicalInputGuardTests
 {
-    /// <summary>
-    /// 物理输入 API/token 黑名单（源码与 IL 共用语义）。
-    /// <para><b>P3 例外</b>：<c>ui_action clickPoint=true</c> 的真实点击走 <c>AutomationElement.Click</c>（内部即
-    /// <c>FlaUI.Core.Input.Mouse</c>）——故 <c>Click</c> 不再入此黑名单（那会让合法调用恒违规）；改由
-    /// <see cref="RealClickCallSite_IsUniqueAndGuarded"/> 断言「真实点击调用点唯一且只在
-    /// <c>PerformClickPoint</c> 内」。<c>FlaUI.Core.Input</c> 命名空间黑名单保留：本库不得**直接**引 Mouse。</para>
-    /// </summary>
+    /// <summary>仍然禁止的 API/token（源码与 IL 共用语义）：原生光标移动、输入注入、以及绕过 clickPoint 的鼠标调用。</summary>
     internal static readonly string[] ForbiddenTokens =
     [
-        "FlaUI.Core.Input",
-        "Mouse.",
         "SetCursorPos",
         "SendInput",
-        "SetForegroundWindow",
         "ActivateWindow",
         "PerformPhysicalMouse",
     ];
+
+    /// <summary>需按文件放行的受控 token（默认禁止，只在其白名单文件内合法）。</summary>
+    private static readonly string[] GuardedTokens = ["FlaUI.Core.Input", "SetForegroundWindow", "Mouse."];
+
+    /// <summary>
+    /// 受控物理输入白名单：只允许出现在指定文件的指定 token。
+    /// <para><c>BindingCommit</c> 用一次 Tab 触发 LostFocus，<c>UiPatternDispatcher</c> 用 <c>SetForegroundWindow</c>
+    /// 把目标窗口激活（否则真实点击打在遮挡窗口/被激活动作吃掉）。</para>
+    /// </summary>
+    private static readonly Dictionary<string, string[]> AllowedTokensByFile = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [Path.Combine("SharpSight.UiAutomation", "UiPatternDispatcher.cs")] = ["SetForegroundWindow"],
+        [Path.Combine("SharpSight.UiAutomation", "BindingCommit.cs")] = ["FlaUI.Core.Input", "Mouse."],
+    };
 
     /// <summary>真实点击入口 token（P3）：只允许出现在 <c>UiPatternDispatcher.PerformClickPoint</c> 内。</summary>
     private static readonly string[] RealClickTokens = [".Click(", ".DoubleClick(", ".RightClick(", ".RightDoubleClick("];
 
     [Fact]
-    public void HostSource_ContainsNoPhysicalInputTokens()
+    public void HostSource_ContainsNoUnsactionedPhysicalInputTokens()
     {
-        // 物理输入敏感面（UIA 定位/动作）在 Task 2 迁入 SharpSight.UiAutomation——源码扫描同步覆盖两个源码树，
-        // 否则护栏在迁出后静默失去覆盖对象（原 UiElementLocator 等文件的 @物理输入 检查会落空）。
+        // 物理输入敏感面（UIA 定位/动作）在 SharpSight.UiAutomation——源码扫描覆盖两个源码树。
         var roots = new[]
         {
             Path.Combine(TestDataPaths.RepositoryRoot, "src", "DotNetDebuggerMcp"),
@@ -50,7 +57,6 @@ public sealed class NoPhysicalInputGuardTests
         foreach (var root in roots)
             Assert.True(Directory.Exists(root), $"源码目录不存在：{root}");
 
-        // 排除 bin/obj 生成物，只扫受跟踪源码。
         var files = roots
             .SelectMany(root => Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
             .Where(f => !IsBuildOutput(f))
@@ -60,25 +66,35 @@ public sealed class NoPhysicalInputGuardTests
         var violations = new List<string>();
         foreach (var file in files)
         {
+            var relative = Path.GetRelativePath(TestDataPaths.RepositoryRoot, file);
+            var allowed = AllowedTokensByFile
+                .FirstOrDefault(kv => relative.EndsWith(kv.Key, StringComparison.OrdinalIgnoreCase)).Value ?? [];
             var lines = File.ReadAllLines(file);
             for (var i = 0; i < lines.Length; i++)
             {
+                var trimmed = lines[i].TrimStart();
+                if (trimmed.StartsWith("//", StringComparison.Ordinal)) continue;   // 注释里的 API 名不算调用点
                 foreach (var token in ForbiddenTokens)
                 {
                     if (lines[i].Contains(token, StringComparison.Ordinal))
-                        violations.Add($"{Path.GetRelativePath(TestDataPaths.RepositoryRoot, file)}:{i + 1}: [{token}] {lines[i].Trim()}");
+                        violations.Add($"{relative}:{i + 1}: [{token}] {lines[i].Trim()}");
+                }
+                foreach (var token in GuardedTokens)
+                {
+                    if (!lines[i].Contains(token, StringComparison.Ordinal)) continue;
+                    if (allowed.Contains(token, StringComparer.Ordinal)) continue;
+                    violations.Add($"{relative}:{i + 1}: [{token}] {lines[i].Trim()}");
                 }
             }
         }
 
         Assert.True(violations.Count == 0,
-            "宿主与 SharpSight.UiAutomation 源码不得含物理输入 API（U1A 全 UIA 化）；发现：\n" + string.Join("\n", violations));
+            "宿主与 SharpSight.UiAutomation 源码不得含原生光标/输入注入 API；发现：\n" + string.Join("\n", violations));
     }
 
     [Fact]
-    public void HostAssemblyMetadata_ReferencesNoPhysicalInputApis()
+    public void HostAssemblyMetadata_ReferencesNoUnsactionedPhysicalInputApis()
     {
-        // 宿主程序集 + UI 自动化库程序集：迁出后 FlaUI 引用落在库程序集，只扫宿主会漏掉真正的物理输入引用面。
         var assemblies = new[]
         {
             typeof(Tools.Debugger.UiTools).Assembly,
@@ -94,7 +110,8 @@ public sealed class NoPhysicalInputGuardTests
         }
 
         Assert.True(violations.Count == 0,
-            "宿主与 SharpSight.UiAutomation 程序集 IL 不得引用物理输入 API（U1A 全 UIA 化）；发现：\n" + string.Join("\n", violations));
+            "程序集 IL 不得引用原生光标/输入注入 API（失焦提交的键盘与窗口激活已放行）；发现：\n"
+            + string.Join("\n", violations));
     }
 
     private static bool IsBuildOutput(string file)
@@ -107,8 +124,6 @@ public sealed class NoPhysicalInputGuardTests
     /// <summary>
     /// P3 护栏：真实点击调用点（<c>.Click(</c>/<c>.DoubleClick(</c>/<c>.RightClick(</c>/<c>.RightDoubleClick(</c>）必须**只**
     /// 出现在 <c>UiPatternDispatcher.PerformClickPoint</c> 方法体内——否则任何人可绕过 <c>clickPoint</c> 开关直接真实点击。
-    /// <para>扫**全部 <c>src/</c> 源码**（不只 UiPatternDispatcher.cs）：否则在别处新增一行 <c>element.Click(...)</c> 不会被发现
-    /// （IL 层也兜不住——<c>AutomationElement::Click</c> 不在禁用命名空间内）。</para>
     /// </summary>
     [Fact]
     public void RealClickCallSite_IsUniqueAndGuarded()
@@ -120,7 +135,6 @@ public sealed class NoPhysicalInputGuardTests
         Assert.True(File.Exists(locatorFile), $"未找到 {locatorFile}");
         Assert.Contains(File.ReadAllLines(locatorFile), l => l.Contains("void PerformClickPoint(", StringComparison.Ordinal));
 
-        // 允许调用点：仅 UiPatternDispatcher.cs 的 PerformClickPoint 方法体内
         var allowed = AllowedClickPointLines(File.ReadAllLines(locatorFile));
 
         var violations = new List<string>();
@@ -128,6 +142,9 @@ public sealed class NoPhysicalInputGuardTests
         {
             var lines = File.ReadAllLines(file);
             var rel = Path.GetRelativePath(TestDataPaths.RepositoryRoot, file);
+            // 失焦提交用到的 Mouse.Click 是「点窗口空白处」的一个点，不涉及按控件定位的真实点击；仅此文件放行。
+            if (rel.EndsWith(Path.Combine("SharpSight.UiAutomation", "BindingCommit.cs"), StringComparison.OrdinalIgnoreCase))
+                continue;
             for (var i = 0; i < lines.Length; i++)
             {
                 var trimmed = lines[i].TrimStart();
@@ -167,7 +184,9 @@ public sealed class NoPhysicalInputGuardTests
         return allowed;
     }
 
-    /// <summary>扫描 TypeRef（禁止 FlaUI.Core.Input 命名空间）+ MemberRef/PInvoke import（禁止物理输入 API 名）。</summary>
+    /// <summary>
+    /// 扫描 TypeRef（<c>FlaUI.Core.Input</c> 只放行键盘类型）+ MemberRef/PInvoke import（禁止原生物理输入 API 名）。
+    /// </summary>
     private static List<string> ScanMetadata(string assemblyPath)
     {
         var violations = new List<string>();
@@ -179,9 +198,12 @@ public sealed class NoPhysicalInputGuardTests
         {
             var tr = reader.GetTypeReference(handle);
             var ns = reader.GetString(tr.Namespace);
-            if (ns.Equals("FlaUI.Core.Input", StringComparison.Ordinal)
-                || ns.StartsWith("FlaUI.Core.Input.", StringComparison.Ordinal))
-                violations.Add($"TypeRef {ns}.{reader.GetString(tr.Name)}");
+            if (!ns.Equals("FlaUI.Core.Input", StringComparison.Ordinal)
+                && !ns.StartsWith("FlaUI.Core.Input.", StringComparison.Ordinal))
+                continue;
+            var name = reader.GetString(tr.Name);
+            if (name is "Keyboard" or "Mouse" or "MouseButton") continue;   // 失焦提交用：键盘换焦点 + 点击窗口空白处（BindingCommit）
+            violations.Add($"TypeRef {ns}.{name}");
         }
 
         foreach (var handle in reader.MemberReferences)
@@ -204,10 +226,7 @@ public sealed class NoPhysicalInputGuardTests
         return violations;
     }
 
-    /// <summary>
-    /// 物理输入 API 名判定：只匹配明确属于光标/输入注入/抢前台的 API（保留 <c>Mouse.</c> 源码 token 的语义在 IL 层
-    /// 对应到 <c>FlaUI.Core.Input.Mouse</c> 的 TypeRef，已由命名空间规则覆盖，故此处不按裸名 "Mouse" 误伤无关成员）。
-    /// </summary>
+    /// <summary>禁止的原生物理输入 API 名（窗口激活 <c>SetForegroundWindow</c> 已放行给真实点击前置步骤）。</summary>
     private static bool IsForbiddenApiName(string name)
-        => name is "SetCursorPos" or "SendInput" or "SetForegroundWindow" or "ActivateWindow" or "PerformPhysicalMouse";
+        => name is "SetCursorPos" or "SendInput" or "ActivateWindow" or "PerformPhysicalMouse";
 }

@@ -48,7 +48,6 @@ public sealed class ToolFeatureRegistryTests
         var shot = ToolFeatureRegistry.EnabledToolTypes(FeatureFamily.Screenshot).Select(t => t.Name).ToHashSet();
 
         Assert.Contains("DebugSessionTool", debug);
-        Assert.Contains("DebugVerifyTool", debug);
         Assert.Contains("UiTools", ui);
         Assert.Contains("ScreenshotTool", shot);
         Assert.Contains("ScreenshotWindowsTool", shot);

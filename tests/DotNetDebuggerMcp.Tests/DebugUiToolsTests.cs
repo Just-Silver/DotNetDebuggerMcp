@@ -8,15 +8,20 @@ namespace DotNetDebuggerMcp.Tests;
 
 /// <summary>
 /// U1A ui_find/ui_action/ui_input/ui_get/ui_wait 端到端：真实起 UiSampleApp（WinForms，tests/TestData/UiSampleApp），
-/// 经 MCP server 文本契约验证——全 UIA 语义 pattern，**不移动光标、不注入输入、不抢前台**。
+/// 经 MCP server 文本契约验证。
+/// <para>「不抢光标/前台」强断言只覆盖 <c>commit=false</c> 的纯 UIA 写值路径与语义动作；<c>ui_input</c> 默认
+/// <c>commit=true</c> 会失焦提交（激活目标窗口），由 <c>UiInput_DefaultCommit_ReportsCommitStep</c> 单独覆盖。</para>
 /// 每个动作前取「静默基线」（连续采样一致）、动作后断言 GetCursorPos()/GetForegroundWindow() 任一变化即失败
-/// （基线本就不稳则 Skip；focus/windowstate 豁免——spec §9）。确定性源码/IL 兜底见 NoPhysicalInputGuardTests。
+/// （基线本就不稳则 Skip；focus/windowstate 豁免）。确定性源码/IL 兜底见 NoPhysicalInputGuardTests。
 /// </summary>
 [Collection("UiTools")]
 public sealed class DebugUiToolsTests
 {
     internal static string UiSampleAppExe => Path.Combine(
         Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, "UiSampleApp", "UiSampleApp.exe");
+
+    internal static string WpfBindingSampleExe => Path.Combine(
+        Path.GetDirectoryName(TestDataPaths.TestSamplesDll)!, "WpfBindingSample", "WpfBindingSample.exe");
 
     [Fact]
     public async Task UiFind_ReportsPatternCapabilities_AndSemanticCandidates()
@@ -247,7 +252,7 @@ public sealed class DebugUiToolsTests
             var before = await CaptureQuietInputStateAsync();
 
             var setText = await WriteWithEffectAsync(mcp, "ui_input",
-                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "hello-u1a", ["name"] = "inputBox" },
+                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "hello-u1a", ["name"] = "inputBox", ["commit"] = false },
                 "已 input（ValuePattern）",
                 async () => (await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" })).Text().Contains("hello-u1a", StringComparison.Ordinal),
                 retryOnTimeout: true);
@@ -276,7 +281,7 @@ public sealed class DebugUiToolsTests
             for (var i = 0; i < 3 && !vscrollApplied; i++)
             {
                 var r = await DebugMcpToolsTests.CallAsync(mcp, "ui_input",
-                    new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "77", ["name"] = "vscrollBar" });
+                    new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "77", ["name"] = "vscrollBar", ["commit"] = false });
                 vscrollText = r.Text();
                 if (vscrollText.Contains("已 input（ValuePattern）", StringComparison.Ordinal)
                     || vscrollText.Contains("已 input（RangeValuePattern）", StringComparison.Ordinal))
@@ -302,6 +307,71 @@ public sealed class DebugUiToolsTests
         finally
         {
             KillUiSampleApp(app);
+        }
+    }
+
+    [Fact]
+    public async Task UiInput_DefaultCommit_ReportsCommitStep()
+    {
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchUiSampleApp();
+        try
+        {
+            await WaitFindAsync(mcp, "手动");
+
+            // 默认 commit=true：写完把焦点移出控件（让 WPF 之类失焦才提交的绑定生效），结果里如实回显这一步。
+            var write = await WriteWithEffectAsync(mcp, "ui_input",
+                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "commit-default", ["name"] = "inputBox" },
+                "已失焦提交",
+                async () => (await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" })).Text().Contains("commit-default", StringComparison.Ordinal),
+                retryOnTimeout: true);
+            AssertActionOutcome(write, "已失焦提交");
+
+            var read = await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" });
+            Assert.Contains("commit-default", read.Text());
+        }
+        finally
+        {
+            KillUiSampleApp(app);
+        }
+    }
+
+    [Fact]
+    public async Task UiInput_Commit_CommitsLostFocusBinding()
+    {
+        Assert.True(File.Exists(WpfBindingSampleExe), "WpfBindingSample.exe 不存在，请先运行 generate-testdata.ps1");
+        await using var mcp = await DebugMcpToolsTests.ConnectAsync();
+        using var app = LaunchWpfBindingSample();
+        try
+        {
+            var found = await WaitUiFindAsync(mcp,
+                new Dictionary<string, object?> { ["process"] = "WpfBindingSample", ["type"] = "Edit" }, "nameBox");
+            Assert.Contains("nameBox", found);
+
+            // commit=false：只改控件文本，不触发失焦 —— WPF 默认 LostFocus 绑定不应让 ViewModel 收到新值。
+            var noCommit = await DebugMcpToolsTests.CallAsync(mcp, "ui_input", new Dictionary<string, object?>
+            {
+                ["process"] = "WpfBindingSample", ["value"] = "未提交-1", ["name"] = "nameBox", ["commit"] = false,
+            });
+            Assert.True(noCommit.IsError != true, noCommit.Text());
+            var vmAfterNoCommit = await UiGetAsync(mcp, new() { ["process"] = "WpfBindingSample", ["what"] = "name", ["name"] = "vmName" });
+            Assert.DoesNotContain("未提交-1", vmAfterNoCommit.Text());
+
+            // 默认 commit=true：失焦提交后 ViewModel 应拿到新值（这正是「写完立刻点按钮」能生效的前提）。
+            var committed = await DebugMcpToolsTests.CallAsync(mcp, "ui_input", new Dictionary<string, object?>
+            {
+                ["process"] = "WpfBindingSample", ["value"] = "已提交-2", ["name"] = "nameBox",
+            });
+            Assert.True(committed.IsError != true, committed.Text());
+            Assert.Contains("已失焦提交", committed.Text());
+            var vmAfterCommit = await UiGetAsync(mcp, new() { ["process"] = "WpfBindingSample", ["what"] = "name", ["name"] = "vmName" });
+            var boxAfterCommit = await UiGetAsync(mcp, new() { ["process"] = "WpfBindingSample", ["what"] = "value", ["name"] = "nameBox" });
+            Assert.True(vmAfterCommit.Text().Contains("已提交-2", StringComparison.Ordinal),
+                $"VM=「{vmAfterCommit.Text()}」 写入={committed.Text()} 输入框=「{boxAfterCommit.Text()}」 前一次VM=「{vmAfterNoCommit.Text()}」");
+        }
+        finally
+        {
+            KillUiProcess(app, "WpfBindingSample");
         }
     }
 
@@ -396,7 +466,7 @@ public sealed class DebugUiToolsTests
             var before = await CaptureQuietInputStateAsync();
 
             var write = await WriteWithEffectAsync(mcp, "ui_input",
-                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "by-index", ["index"] = idx },
+                new Dictionary<string, object?> { ["process"] = "UiSampleApp", ["value"] = "by-index", ["index"] = idx, ["commit"] = false },
                 "已 input（ValuePattern）",
                 async () => (await UiGetAsync(mcp, new() { ["what"] = "value", ["name"] = "inputBox" })).Text().Contains("by-index", StringComparison.Ordinal),
                 retryOnTimeout: true);
@@ -648,7 +718,7 @@ public sealed class DebugUiToolsTests
 
     /// <summary>
     /// 写动作执行：命中预期 pattern 或**效果经只读探测独立确认**才算成功；若 5s 超时且效果未确认，仅对幂等动作重试
-    /// （invoke/toggle 不重试，防双触发——与产品 <c>VerifyService.IsIdempotentVerb</c> 对齐）。超时且效果始终未确认时
+    /// （invoke/toggle 不重试，防双触发——超时且效果未确认时不重试幂等以外的动作）。超时且效果始终未确认时
     /// Success=false（超时不得当 PASS）。
     /// </summary>
     private static async Task<(string Text, bool Success)> WriteWithEffectAsync(
@@ -696,6 +766,28 @@ public sealed class DebugUiToolsTests
         var exe = UiSampleAppExe;
         var dir = Path.GetDirectoryName(exe)!;
         return Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = dir })!;
+    }
+
+    private static Process LaunchWpfBindingSample()
+    {
+        foreach (var p in Process.GetProcessesByName("WpfBindingSample"))
+        {
+            try { if (!p.HasExited) p.Kill(entireProcessTree: true); }
+            catch { /* 权限/已退出忽略 */ }
+        }
+        var exe = WpfBindingSampleExe;
+        return Process.Start(new ProcessStartInfo(exe) { WorkingDirectory = Path.GetDirectoryName(exe)! })!;
+    }
+
+    private static void KillUiProcess(Process app, string processName)
+    {
+        try { if (!app.HasExited) app.Kill(entireProcessTree: true); }
+        catch { /* 已退出忽略 */ }
+        foreach (var p in Process.GetProcessesByName(processName))
+        {
+            try { if (!p.HasExited) p.Kill(entireProcessTree: true); }
+            catch { /* 权限/已退出忽略 */ }
+        }
     }
 
     private static void KillUiSampleApp(Process app)

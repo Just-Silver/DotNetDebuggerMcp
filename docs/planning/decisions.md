@@ -2,6 +2,35 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D33 · 移除 debug_verify 场景复验（用户 2026-10-24）
+- 背景：agent 实际使用中从未用到 `debug_verify`（用户原话「agent 场景我从来没见过用过」）；该模块生产代码 4 个文件 1322 行（占宿主 9606 行的 13.8%）、测试 1116 行，另占一个 CI 分片，且每次改 `ui_*`/断点/求值语义都要同步它的场景 schema。
+- 决策：整块移除 `debug_verify`——`DebugVerifyTool` + `VerifyService` + `VerifyScenario` + `VerifyBuildRunner`，连同 4 个测试文件、CI `ui-verify` 分片、握手触发条件、README 章节与 COPY 契约。
+- 理由：防回归断言应落在 `tests/` 的 xunit 里（CI 直跑、无需学独立 schema），而不是在 MCP 工具面再搭一套断言 DSL；该模块对内部开发零收益、对使用者成本高。
+- 代价：破坏性变更（移除已发布能力）；使用者失去「一条调用完成 build + 断点 + 断言 → PASS/FAIL」，需自行组合 `debug_*` / `ui_*`。历史 spec/plan（`specs|plans/2026-09-0x-v1-verify-loop.md`）按纪律冻结不改，本条为现状的唯一说明。
+- 同步面：CHANGELOG Breaking、README（简介/族表/工具表/示例删节）、`HandshakeText`（简介与触发条件）、`ToolFeatureRegistryTests`/`AgentCopyGuardTests`/`DotNetDebuggerMcpCmdTests`、`.github/workflows/build.yml`。
+- 日期：2026-10-24。来源：用户「全部移除掉，还能简化优化我们项目」「agent 场景我从来没见过用过」。
+
+## D32 · 功能优先：回到共享桌面，允许短暂接管焦点（用户 2026-10-24）
+- 背景：RDP Child Session 隔离链路已实测可行（见 `research/08-rdp-child-session-spike.md`），但用户决定**先不做隔离**，按「共享桌面」推进；明确「不打扰用户」降级为次要目标，**功能第一**。
+- 决策：
+  1. `ui_input` 增加 `commit`（默认 true）：写入后把焦点移出目标控件，触发应用的 LostFocus 提交（WPF `TextBox.Text` 默认 `UpdateSourceTrigger=LostFocus`，只调 ValuePattern 时 ViewModel 拿不到新值）；该步会激活目标窗口。纯写不打扰传 `commit=false`。
+  2. `ui_action clickPoint=true` 点击前先 `SetForegroundWindow` 激活目标窗口——否则第一次点击被系统「激活动作」吃掉、或打在遮挡窗口上。
+  3. 物理输入面由「一律禁止」改为「白名单收敛」：`FlaUI.Core.Input`（含 `Mouse.`，用于点窗口空白处兜底）只允许 `BindingCommit.cs`、`SetForegroundWindow` 只允许 `UiPatternDispatcher.cs`；`SendInput`/`SetCursorPos` 仍禁止，真实点击仍只允许在 `PerformClickPoint` 内。护栏：`NoPhysicalInputGuardTests`（源码 + IL 双层）。
+  4. 同步面：工具 `[Description]`、握手 `HandshakeText`、`README`、`src/DotNetDebuggerMcp/AGENTS.md`、CHANGELOG `[Unreleased]`。
+- 覆盖关系：**覆盖 D29④ 的「默认零物理输入」承诺**——语义动作仍默认不碰光标，但写值提交与真实点击会接管焦点/前台。
+- 日期：2026-10-24。来源：用户「先按照抢桌面做，优先完成功能，不打扰用户降级，功能是第一优先级别」。
+
+## D31 · 桌面隔离重启：改用 RDP Child Session 做独立验证（用户 2026-10-24）
+- 背景：D29 把桌面隔离列为「本轮不做」后，用户重新要求「agent 全权操作 UI 自动化、不抢用户操作」，并明确**投影画面必须流畅、填满必须等比例不变形**（排除 PrintWindow 与拉伸）。
+- 决策：
+  1. 隔离载体定为 **RDP Child Session**（官方 loopback 子会话，ActiveX 自带画面传输/编码/显示），不再走 `CreateDesktop`、离屏窗口 + WGC 等路径（已实测不可行：WPF 离屏不重绘、WGC 抓不到隐藏桌面）。
+  2. 先在**仓库外独立 spike** `..\..\Demo\ChildSessionSpike` 把环境条件与能力边界钉死，再谈主仓接入形态；本轮主仓只收尾。
+  3. 画面自适应用 `IMsRdpClient9::UpdateSessionDisplaySettings`（RDP 8.1 动态分辨率），**不用** `Disconnect/Connect`（会白屏），也不依赖 `SmartSizing`（官方未承诺保持纵横比）。
+  4. 目标接入形态（待 spike 全部通过后实施）：外层 MCP host 持 RDP ActiveX 保活 + `debug_*`，会话内 actuator 跑 `ui_*`/`screenshot`，两者命名管道通信——**UIA 按会话隔离**，host 无法直接操作子会话窗口，这是形态的硬约束而非选择。
+- 实测结论与硬限制：见 `research/08-rdp-child-session-spike.md`（开关权限、投送方式、UIA/截图在 Active/Disconnected 下的差异）。
+- 阶段性验收（2026-10-24）：Active 子会话内 UIA（Value/Invoke）与全屏 BitBlt、整窗 WGC 全部通过；断开的子会话只剩 PrintWindow；父子会话命名管道命令通道（find/input/click/get/capture）打通。免密仍未解决（凭据委派策略/Hello-only/登录时序），暂由人工输一次。
+- 日期：2026-10-24。来源：用户「继续先完善demo」+ 本轮实测。
+
 ## D30 · 能力族开关改为「默认全开 + 可选裁剪」，反编译恒启用（用户 2026-10-23）
 - 背景：D3（`--features` 门控，2026-10-15 spec §8）原本默认只开 `decompile`，理由之一是「AI 调试会抢用户操作」。但门控只是不注册工具，用户照 README 开启后行为不变——它并不构成安全边界；反过来，默认只开反编译会让 agent 看不到动态调试/UI/截图三族，产品在工具目录里退化成反编译器。
 - 决策：

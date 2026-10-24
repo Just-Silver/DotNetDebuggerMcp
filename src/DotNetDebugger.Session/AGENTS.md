@@ -25,6 +25,6 @@
 dotnet test --project tests/DotNetDebugger.Session.Tests/DotNetDebugger.Session.Tests.csproj
 ```
 
-- 同样真实 attach DebugTarget 子进程（TestTarget 包装，排空 stdout/stderr），**必须串行**（`AssemblyInfo.cs` 已 `Parallelization(ParallelMode.None)`，ICorDebug 会话相互干扰）。DebugTarget 由 `tests/TestData/generate-testdata.ps1` 生成且 git 忽略——先跑脚本再测。
+- 同样真实 attach DebugTarget 子进程（TestTarget 包装，排空 stdout/stderr），**必须串行**（`AssemblyInfo.cs` 已 `Parallelization(ParallelMode.None)`，ICorDebug 会话相互干扰）。DebugTarget 由 `tests/Fixtures/generate-testdata.ps1` 生成且 git 忽略——先跑脚本再测。
 - `AgentActionLogTests` 纯内存无进程，可快速跑；其余含真实会话。
 - 改 `LaunchAndAttachAsync` 的固定 1s 等待/attach 逻辑会影响宿主 `debug_launch` 端到端（`DebugMcpToolsTests`）——同步验证。

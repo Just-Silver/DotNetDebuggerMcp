@@ -27,13 +27,14 @@
 | `decisions.md` | 决策记录 D1-D28（最新在上） |
 | `open-questions.md` | 开放问题清单（#0-#7 全部已解决折叠） |
 | `plans/2026-09-06-p4-closeout-web-open.md` | **P4-2 收尾计划**（web_open 幂等工具 + 默认去 --web，已完成；**Web 已于 2026-10-23 整体移除**，见 `decisions.md` D28） |
-| `plans/2026-09-09-w1-set-value.md` / `-v3-timeline.md` / `-db1-sensitive-redaction.md` / `-d1-object-drill.md` / `-d2-child-process.md` / `-db2-named-whitelist.md` / `-v4-copy-guard.md` / `-u1-ui-automation.md` / `-v1-verify-loop.md` / `-w3-data-breakpoint.md` | **实施计划 ×10（2026-09-09 批次）**：W1 debug_set / V3 debug_timeline / DB1 脱敏 / D1 debug_object / D2 子进程标注 / DB2 白名单 / V4 语料护栏 / U1 ui_* / V1 debug_verify / W3 数据断点(spike)；**前 9 份已实施完成（2026-09-09/10）；W3 spike Task0 实测定案 A/B 不可行 → 计划内 TaskD 降级收尾（spec §2 结论 + ROADMAP 转远期，零代码）** |
+| `plans/2026-09-09-w1-set-value.md` / `-v3-timeline.md` / `-db1-sensitive-redaction.md` / `-d1-object-drill.md` / `-d2-child-process.md` / `-db2-named-whitelist.md` / `-v4-copy-guard.md` / `-u1-ui-automation.md` / `-v1-verify-loop.md` / `-w3-data-breakpoint.md` | **实施计划 ×10（2026-09-09 批次）**：W1 debug_set / V3 debug_timeline / DB1 脱敏 / D1 debug_object / D2 子进程标注 / DB2 白名单 / V4 语料护栏 / U1 ui_* / V1 debug_verify（**已于 D33 移除**）/ W3 数据断点(spike)；**前 9 份已实施完成（2026-09-09/10）；W3 spike Task0 实测定案 A/B 不可行 → 计划内 TaskD 降级收尾（spec §2 结论 + ROADMAP 转远期，零代码）** |
 | `archive/plans/` | 已完成计划归档：P1 改名拆分 / P2 引擎 v1 / P3 MCP 工具面 / P4-1 DocumentService / P4-2 WebUI（实际工作在 master 分支，规划所写 feature/p4-monitor 系笔误） |
 | `research/01-debugger-tech-landscape.md` | 动态调试依赖库调研：四路线能力/许可/工作量对比 + 推荐组合 |
 | `research/04-webui-realtime-stack.md` | Web 实时渲染技术调研（历史记录；Web 已于 2026-10-23 整体移除，见 `decisions.md` D28） |
 | `research/05-dependency-packages.md` | 依赖包清单（ClrDebug/DbgShim/Roslyn/ICorDebug/ClrMD 概念澄清；WebUI 侧包清单已 Superseded，见 D4） |
 | `research/06-clrdebug-api-reference.md` | ClrDebug 0.4.2 最小调试器 API 参考（源码核对版） |
 | `research/07-desktop-isolation-options.md` | **Windows「独立窗口/桌面」技术全景与选型**：9 类方案（不激活/offscreen/CreateDesktop/Child Session/虚拟显示器/Sandbox/VM/虚拟桌面/会话隔离）的隔离单位·截图·UIA·权限矩阵，含「UIA 与窗口消息不跨桌面」「WGC 依赖 DWM 合成、隐藏桌面只能 PrintWindow」两条硬约束、同类产品佐证（DCS / lowlevel-computer-use-mcp / VirtualDesktop / Power Automate PiP）与本项目选型建议 + 待验证点 |
+| `research/08-rdp-child-session-spike.md` | **RDP Child Session 实测记录**：开关权限/建会话前置、密码限制、子会话 ID 时序、动态分辨率、计划任务 `RunEx` 投送、子会话内 UIA·BitBlt·WGC·PrintWindow 的实测结果与两条硬限制（UIA 按会话隔离 ⇒ 必须会话内 actuator；断开态只剩 PrintWindow） |
 | `research/archive/` | 已归档调研：dnSpy 源码结构摸底 / ILSpy 源码结构摸底 |
 | `specs/README.md` | 设计文档目录（specs/ 导航） |
 | `specs/2026-09-05-overview-design.md` | **总览设计 spec**（已确认；其中 §4.4 Web 层已于 2026-10-23 整体移除，见 `decisions.md` D28） |

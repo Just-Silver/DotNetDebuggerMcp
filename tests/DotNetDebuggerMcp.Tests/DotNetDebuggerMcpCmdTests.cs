@@ -120,7 +120,6 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("动态调试", all);
         Assert.Contains("ui_find", all);
         Assert.Contains("screenshot", all);
-        Assert.Contains("debug_verify", all);
 
         var minimal = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Decompile, null);
         Assert.Contains("反编译", minimal);
@@ -175,7 +174,6 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("debug_run_to", text); // 调试扩展：运行到目标
         Assert.Contains("debug_set", text);    // 调试扩展：现场改值
         Assert.Contains("debug_evaluate", text);
-        Assert.Contains("debug_verify", text); // 独立工作流：一键复验
         Assert.Contains("ui_find", text);      // UI 自动化族
         Assert.Contains("ui_action", text);
         Assert.Contains("screenshot", text);   // 视觉/监视

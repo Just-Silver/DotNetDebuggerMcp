@@ -173,7 +173,7 @@ internal sealed class MainForm : Form
         });
     }
 
-    // ===== 仅测试目标：debug_verify 的 LaunchAndAttachAsync 以 WindowStyle.Hidden 起进程，UIA 读不到顶层窗口；
+    // ===== 仅测试目标：被以 WindowStyle.Hidden 启动时（LaunchAndAttach 场景），UIA 读不到顶层窗口；
     // 首窗显示时强制 ShowWindow(SW_SHOW) 绕过隐藏启动（不改 Engine/Session）。
     private const int SW_SHOW = 5;
 

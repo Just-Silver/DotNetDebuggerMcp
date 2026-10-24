@@ -118,8 +118,9 @@ internal static class UiPatternDispatcher
     /// <summary>首选写值方式（候选首项）；执行侧会读回确认，未生效则依次退候。</summary>
     public static ChosenInput ChooseInput(UiPatternCapabilities caps) => ChooseInputCandidates(caps)[0];
 
-    /// <summary>真实执行已决策动作（跨进程 UIA 调用；异常转中文 <see cref="UiException"/>）。</summary>
-    public static void Execute(AutomationElement element, ChosenAction action)
+    /// <summary>真实执行已决策动作（跨进程 UIA 调用；异常转中文 <see cref="UiException"/>）。
+    /// <paramref name="window"/> 为目标顶层窗口，真实点击前用它把窗口带到前台。</summary>
+    public static void Execute(AutomationElement element, ChosenAction action, AutomationElement? window = null)
     {
         switch (action.Kind)
         {
@@ -190,7 +191,7 @@ internal static class UiPatternDispatcher
                 return;
             }
             case UiActionKind.ClickPoint:
-                PerformClickPoint(element);
+                PerformClickPoint(element, window);
                 return;
             case UiActionKind.Focus:
                 // 非窗口控件；Focus() 对带 HWND 控件可能激活顶层窗口（spec §9 已述，非物理输入）。
@@ -240,14 +241,17 @@ internal static class UiPatternDispatcher
     }
 
     /// <summary>
-    /// 真实点击（P3，显式 opt-in）：按 <c>ClickablePoint</c> 移动真实光标并注入左键点击。
+    /// 真实点击（P3，显式 opt-in）：先把目标窗口带到前台，再按 <c>ClickablePoint</c> 移动真实光标并注入左键点击
+    /// （不加激活步骤时，第一次点击会被系统用来激活窗口、打不到控件）。
     /// **这是全库唯一允许的真实点击调用点**——<c>NoPhysicalInputGuardTests</c> 断言 <c>.Click(</c>/<c>.DoubleClick(</c> 等
-    /// 仅出现在本方法体内，且只有 <c>ui_action clickPoint=true</c> 会走到这里（默认路径零物理输入）。
+    /// 仅出现在本方法体内，且只有 <c>ui_action clickPoint=true</c> 会走到这里（其余动作路径不动光标）。
     /// </summary>
-    internal static void PerformClickPoint(AutomationElement element)
+    internal static void PerformClickPoint(AutomationElement element, AutomationElement? window = null)
     {
         try
         {
+            // 被遮挡时点到的会是覆盖窗口；点击本身又会先吃掉一次用于激活。先把目标窗口带到前台再点。
+            BringToForeground(window);
             element.Click(moveMouse: false);
         }
         catch (Exception ex)
@@ -255,6 +259,56 @@ internal static class UiPatternDispatcher
             throw new UiException($"真实点击失败：{ex.Message}（控件可能被遮挡/不可见；可先 ui_action verb=windowstate windowstate=normal 还原窗口）。");
         }
     }
+
+    /// <summary>
+    /// 把顶层窗口激活到前台。前台锁（Windows 禁止后台进程直接抢前台）会让 <c>SetForegroundWindow</c> 返回 false，
+    /// 此时用 <c>AttachThreadInput</c> 借用当前前台线程的输入队列再设一次——否则后续键盘按键会打到别的窗口。
+    /// </summary>
+    internal static void BringToForeground(AutomationElement? window)
+    {
+        if (window is null) return;
+        try
+        {
+            var hwnd = window.Properties.NativeWindowHandle.ValueOrDefault;
+            if (hwnd == 0) return;
+
+            if (!SetForegroundWindow(new IntPtr(hwnd)))
+            {
+                var foreground = GetForegroundWindow();
+                var foregroundThread = foreground == IntPtr.Zero ? 0u : GetWindowThreadProcessId(foreground, out _);
+                var currentThread = GetCurrentThreadId();
+                if (foregroundThread != 0 && foregroundThread != currentThread)
+                {
+                    AttachThreadInput(currentThread, foregroundThread, true);
+                    try { SetForegroundWindow(new IntPtr(hwnd)); }
+                    finally { AttachThreadInput(currentThread, foregroundThread, false); }
+                }
+            }
+
+            Thread.Sleep(80);
+            window.Focus();
+            Thread.Sleep(40);
+        }
+        catch (Exception)
+        {
+            // 前台切换失败继续：语义动作不依赖前台，真实点击/键盘提交由调用方处理。
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
 
     /// <summary>滚动：主路径按方向调 Scroll（>5 行用 Large）；provider 拒绝时回退 SetScrollPercent 步进。</summary>
     private static void ExecuteScroll(AutomationElement element, ChosenAction action)

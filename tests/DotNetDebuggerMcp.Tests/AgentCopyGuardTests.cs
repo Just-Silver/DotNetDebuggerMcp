@@ -32,18 +32,15 @@ public sealed class AgentCopyGuardTests
         { nameof(DebugSetTool.DebugSet), "风险" },                      // 改值副作用风险提示（写内存可能崩溃）
         { nameof(DebugTimelineTool.DebugTimeline), "时间线" },          // 统一时间线语义
         { nameof(DebugObjectTool.DebugObject), "depth" },               // 受控递归下钻参数
-        // V1 debug_verify 一键复验（场景文件 + PASS/FAIL 结果语义）
-        { nameof(DebugVerifyTool.DebugVerify), "场景" },                // 场景 JSON 文件输入
-        { nameof(DebugVerifyTool.DebugVerify), "PASS" },                // 执行到 PASS/FAIL 结果
-        { nameof(DebugVerifyTool.DebugVerify), "fail-fast" },           // 断言失败即停语义
         // U1A ui_* 工具补录（语义动词契约：无视觉清单 / 能力清单 / 语义动词与无右键·双击 / 读值 what / 写值 value / 等待超时）
         { nameof(UiTools.UiFind), "控件清单" },                         // ui_find 返回文本控件清单（无视觉）
         { nameof(UiTools.UiFind), "无视觉" },
         { nameof(UiTools.UiFind), "patterns" },                          // ui_find 输出能力清单
         { nameof(UiTools.UiAction), "verb" },                            // ui_action 语义动词
         { nameof(UiTools.UiAction), "右键" },                            // 无右键/双击边界（物理输入已移除）
-        { nameof(UiTools.UiAction), "不抢前台" },                        // UIA-only 前台策略
+        { nameof(UiTools.UiAction), "clickPoint" },                      // 真实点击 = 显式 opt-in（会激活窗口）
         { nameof(UiTools.UiInput), "value" },                            // ui_input 写入值
+        { nameof(UiTools.UiInput), "commit" },                           // 失焦提交开关（默认 true，WPF 绑定生效）
         { nameof(UiTools.UiGet), "what" },                               // ui_get 读取状态
         { nameof(UiTools.UiWait), "超时返回当前状态" },                 // ui_wait 超时不报错
         // 阶段一 screenshot 通用化补录（agent 唯一直接可见的契约面：固定 PNG / 模式推断 / 坐标元数据）
