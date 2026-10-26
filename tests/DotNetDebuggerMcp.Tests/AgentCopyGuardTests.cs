@@ -36,6 +36,7 @@ public sealed class AgentCopyGuardTests
         { nameof(UiTools.UiFind), "控件清单" },                         // ui_find 返回文本控件清单（无视觉）
         { nameof(UiTools.UiFind), "无视觉" },
         { nameof(UiTools.UiFind), "patterns" },                          // ui_find 输出能力清单
+        { nameof(UiTools.UiFind), "[禁用]" },                            // 禁用控件在清单行尾标出（2026-10-26 误诊修复）
         { nameof(UiTools.UiAction), "verb" },                            // ui_action 语义动词
         { nameof(UiTools.UiAction), "右键" },                            // 无右键/双击入口（真实点击走 clickPoint）
         { nameof(UiTools.UiAction), "clickPoint" },                      // 真实点击 = 显式 opt-in（会激活窗口）

@@ -23,7 +23,7 @@ public static class UiTools
 
     /// <summary>按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单与各控件支持的 pattern）。</summary>
     [McpServerTool]
-    [Description("按进程/窗口条件查找 UI 控件清单（无视觉，返回文本）：process 传 pid 或进程名，可用 text/type/automationId 过滤；返回 index、Name、AutoId、patterns 与 Rect。大 UI 树用 scope（以上次 index 为根）与 depth 限层，避免超时。命中控件附同名成员反查候选（可 decompile_member 看实现）。执行动作走 ui_action，读值走 ui_get。注意观测扰动：UIA 注入会改变目标性能特征，性能排查优先 debug_* + 截图。")]
+    [Description("按进程/窗口条件查找 UI 控件清单（无视觉，返回文本）：process 传 pid 或进程名，可用 text/type/automationId 过滤；返回 index、Name、AutoId、patterns 与 Rect。**被禁用的控件（IsEnabled=false）在行尾标 [禁用]**——这类控件 UIA 会拒绝语义动作与写值，先让它变为可用再操作。大 UI 树用 scope（以上次 index 为根）与 depth 限层，避免超时。命中控件附同名成员反查候选（可 decompile_member 看实现）。执行动作走 ui_action，读值走 ui_get。注意观测扰动：UIA 注入会改变目标性能特征，性能排查优先 debug_* + 截图。")]
     public static async Task<string> UiFind(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示），如 UiSampleApp、1234。")] string process = "",
         [Description("窗口标题精确匹配；空 = 该进程首个顶层窗口。")] string title = "",
@@ -61,7 +61,7 @@ public static class UiTools
                 var name = string.IsNullOrEmpty(el.Name) ? "" : el.Name;
                 var autoId = string.IsNullOrEmpty(el.AutoId) ? "（无）" : el.AutoId;
                 var patterns = string.IsNullOrEmpty(el.Patterns) ? "（无）" : el.Patterns;
-                sb.Append($"[{el.Index}] {el.Type} Name={name} AutoId={autoId} patterns={patterns} Rect=({el.Rect})");
+                sb.Append($"[{el.Index}] {el.Type} Name={name} AutoId={autoId} patterns={patterns}{(el.Enabled ? "" : " [禁用]")} Rect=({el.Rect})");
                 if (!string.IsNullOrEmpty(el.Semantic))
                     sb.Append($" 语义候选: {el.Semantic}（可 decompile_member 看实现）");
             }

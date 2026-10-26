@@ -24,6 +24,7 @@ namespace SharpSight.UiAutomation;
 /// <param name="Semantic">同名成员语义候选（可为 null）。</param>
 /// <param name="RectPx">结构化物理像素矩形（<c>FindForCapture</c> 填；其余为 <see cref="Rectangle.Empty"/>）。</param>
 /// <param name="TopLevelHwnd">元素自身 <c>GetAncestor(GA_ROOT)</c> 顶层窗口句柄（<c>FindForCapture</c> 填；其余为 0）。</param>
+/// <param name="Enabled">是否可用（UIA <c>IsEnabled</c>，读取失败按 true 处理——未确认禁用不误标）。</param>
 internal sealed record UiElementInfo(
     int Index,
     string Name,
@@ -33,7 +34,8 @@ internal sealed record UiElementInfo(
     string Patterns,
     string? Semantic,
     Rectangle RectPx = default,
-    IntPtr TopLevelHwnd = default);
+    IntPtr TopLevelHwnd = default,
+    bool Enabled = true);
 
 /// <summary>ui_action/ui_input 结果：Message 注明实际动作与命中的 pattern（「已 {verb}（{pattern}）」）。</summary>
 internal sealed record UiActionResult(bool Ok, string Message);

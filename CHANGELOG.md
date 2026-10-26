@@ -6,6 +6,14 @@
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
 
+## [Unreleased]
+
+### Fixed
+
+- **`ui_*` 失败不再丢失错误码（误诊根因）**：FlaUI 的 UIA 异常（`ElementNotEnabledException` 等）`Message` 恒为空串，真正的成因只在 `InnerException.HResult`。旧实现只取 `ex.Message`，于是禁用控件上的写值/聚焦失败表现为「`SetValue 调用失败：`」——冒号后面什么都没有，无法归因。现在按 HRESULT 译成可操作中文（禁用 / 元素已失效 / 无点击点 / provider 不支持 / 未实现 / 权限不足 等），并附异常类型与错误码。
+- **失败引导按成因分流**：此前所有 pattern 调用失败都被追加同一句「若为目标后台/不可见…用 ui_get what=offscreen 确认」，对禁用控件属误导（实测 offscreen 恒为 false）。现在禁用控件引导去确认 `enabled` 并说明常见前置，元素失效引导重新 `ui_find`，provider 未实现引导换驱动路径；仅成因无法识别时才退回原「后台/不可见」提示。
+- **`ui_find` 清单标出禁用控件**：`IsEnabled=false` 的控件在行尾追加 `[禁用]`，选 index 时即可看出哪些点不动（此前只能逐个 `ui_get what=enabled` 才能发现）。
+
 ## [2.5.0] - 2026-10-25
 
 ### Breaking

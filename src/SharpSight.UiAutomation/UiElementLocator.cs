@@ -148,6 +148,9 @@ internal sealed class UiElementLocator
             var caps = UiPatternCapabilities.Probe(el);
             var rect = SafeRead(() => el.BoundingRectangle, Rectangle.Empty);
             var rectText = rect.IsEmpty ? "不可见/无几何" : $"{rect.X:0},{rect.Y:0} {rect.Width:0}x{rect.Height:0}";
+            // 禁用标记只在清单里体现（不做动作前拒绝）：IsEnabled 与 IsReadOnly 同源存在 MSAA/代理桥误报风险，
+            // 误报会把本来能用的控件挡在门外；列出状态让 agent 选目标时看得见，真失败时再由错误码定性。
+            var enabled = SafeRead(() => el.IsEnabled, true);
 
             string? semantic = null;
             if (semanticModule is not null)
@@ -178,7 +181,7 @@ internal sealed class UiElementLocator
                 var elementRoot = hwnd != IntPtr.Zero ? SafeRead(() => GetAncestor(hwnd, GaRoot), hwnd) : IntPtr.Zero;
                 topLevel = PreferTopLevel(elementRoot, windowHwnd);
             }
-            infos.Add(new UiElementInfo(index, name, elType, autoId, rectText, caps.Describe(), semantic, rectPx, topLevel));
+            infos.Add(new UiElementInfo(index, name, elType, autoId, rectText, caps.Describe(), semantic, rectPx, topLevel, enabled));
             entries.Add(new CachedEntry(pid, SafeRead(() => window.Name ?? "", ""), new TargetDescriptor(autoId, name, elType, ordinal)));
         }
 

@@ -23,11 +23,12 @@ internal static class UiPatternDispatcher
         "（该控件仅暴露 legacy，语义动作**可能不生效**；无效时可试 clickPoint=true 走真实点击）";
 
     /// <summary>
-    /// pattern 调用被 provider 拒绝时的补充引导（spec §9）：后台/不可见控件常导致语义动作失败，
-    /// 提示 agent 用 ui_get what=offscreen 确认，并可用 windowstate=normal 还原最小化窗口（绝不静默提前台）。
+    /// pattern 调用被 provider 拒绝时的兜底引导（spec §9）：仅当成因无法从错误码识别时使用——
+    /// 后台/不可见控件常导致语义动作失败，提示 agent 用 ui_get what=offscreen 确认，并可用 windowstate=normal
+    /// 还原最小化窗口（绝不静默提前台）。已知成因（禁用/失效/未实现等）改由 <see cref="UiErrorDescriber"/> 分流，
+    /// 不再一律指向「后台/不可见」（2026-10-26：禁用控件被该提示引向错误方向）。
     /// </summary>
-    internal const string OffscreenHint =
-        "；若为目标后台/不可见导致 provider 拒绝，可用 ui_get what=offscreen 确认，必要时先 ui_action verb=windowstate windowstate=normal 还原最小化窗口。";
+    internal const string OffscreenHint = UiErrorDescriber.FallbackHint;
 
     /// <summary>纯决策：按 verb 与能力快照选 pattern，全部不支持时抛 <see cref="UiException"/>（中文）。
     /// <paramref name="clickPoint"/> = true 时走真实点击（仅 invoke/select；其余 verb 报错）——真实点击会移动光标/注入输入。</summary>
@@ -342,15 +343,15 @@ internal static class UiPatternDispatcher
         }
         catch (Exception ex)
         {
-            throw new UiException($"滚动调用失败：{ex.Message}{OffscreenHint}");
+            throw new UiException($"滚动调用失败：{UiErrorDescriber.Describe(ex)}{UiErrorDescriber.Hint(ex)}");
         }
     }
 
-    /// <summary>执行并包装 pattern 调用异常为中文 <see cref="UiException"/>（附 provider 后台/不可见排查引导）。</summary>
+    /// <summary>执行并包装 pattern 调用异常为中文 <see cref="UiException"/>（成因与引导按错误码分流）。</summary>
     private static void Invoke(Action action, string op)
     {
         try { action(); }
-        catch (Exception ex) { throw new UiException($"{op} 调用失败：{ex.Message}{OffscreenHint}"); }
+        catch (Exception ex) { throw new UiException($"{op} 调用失败：{UiErrorDescriber.Describe(ex)}{UiErrorDescriber.Hint(ex)}"); }
     }
 
     private static T SafeRead<T>(Func<T> f, T fallback)
