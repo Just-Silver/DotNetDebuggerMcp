@@ -28,6 +28,29 @@ public sealed class ChildInstanceStore(string root)
         return path;
     }
 
+    public async Task<FileStream> AcquireLifecycleAsync(int parentSessionId, CancellationToken ct)
+    {
+        var path = Path.Combine(Create("control"), $"parent-{parentSessionId}.lock");
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            try { return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+            catch (IOException) { await Task.Delay(50, ct); }
+        }
+    }
+
+    public async Task<IReadOnlyList<ChildBootstrap>> ListAsync(CancellationToken ct = default)
+    {
+        if (!Directory.Exists(Root)) return [];
+        var results = new List<ChildBootstrap>();
+        foreach (var path in Directory.EnumerateDirectories(Root))
+        {
+            var file = Path.Combine(path, "instance.json");
+            if (File.Exists(file)) results.Add(await ReadAsync(Path.GetFileName(path), ct));
+        }
+        return results;
+    }
+
     public async Task WriteAsync(ChildBootstrap bootstrap, CancellationToken ct = default)
     {
         var path = Path.Combine(Create(bootstrap.Identity.Instance), "instance.json");

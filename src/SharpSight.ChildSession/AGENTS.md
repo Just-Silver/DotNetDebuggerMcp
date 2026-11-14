@@ -8,6 +8,7 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 - 真实输入必须核对实例、连接、实际会话、input desktop 和目标身份；停止只注销核实属于本实例的 child。
 - 新代码单方法尽量不超过 60 行，超过 80 行必须拆分。
 - 行为测试位于 `tests/DotNetDebuggerMcp.Tests/Child*Tests.cs`；真实 child 集成验收仅显式授权运行，不自动修改系统开关。
+- 定向 MTP 验证优先传完整测试类名，并核对发现数；本机 `--filter-class "*Child*Tests"` 曾运行零个测试并退出 5，不能当作通过。已验证完整类名 `DotNetDebuggerMcp.Tests.ChildRequestTests` / `ChildIpcTests` 可用。
 - 正式设计与任务见根规划地图中的子会话 MCP/CLI 设计及实施计划。
 
 ## IPC 与产物边界
