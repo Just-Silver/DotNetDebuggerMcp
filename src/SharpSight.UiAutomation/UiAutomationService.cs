@@ -24,6 +24,8 @@ internal sealed class UiAutomationService
     private const int MaxTimeoutSeconds = 300;
 
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly IUiExecutionBoundary? _childBoundary;
+    private readonly Func<Func<CancellationToken, Task>, CancellationToken, Task>? _runExclusive;
     private readonly UiElementLocator _locator = new();
     private readonly UiEventWaiter _waiter = new();
     private UIA3Automation? _automation;
@@ -51,6 +53,13 @@ internal sealed class UiAutomationService
 
     private UiAutomationService()
     {
+    }
+
+    internal UiAutomationService(IUiExecutionBoundary boundary,
+        Func<Func<CancellationToken, Task>, CancellationToken, Task> runExclusive)
+    {
+        _childBoundary = boundary;
+        _runExclusive = runExclusive;
     }
 
     /// <summary>最近一次 ui_find 的目标 pid（供工具头部展示）。</summary>
@@ -386,6 +395,8 @@ internal sealed class UiAutomationService
     private async Task<T> RunGateAsync<T>(Func<T> core, int timeoutSeconds, CancellationToken ct)
     {
         var timeout = ResolveTimeout(timeoutSeconds);
+        if (_childBoundary is not null)
+            return await RunChildAsync(core, timeout, ct);
         await _gate.WaitAsync(ct);
         try
         {
@@ -395,6 +406,27 @@ internal sealed class UiAutomationService
         {
             _gate.Release();
         }
+    }
+
+    private async Task<T> RunChildAsync<T>(Func<T> core, TimeSpan timeout, CancellationToken ct)
+    {
+        T result = default!;
+        await _runExclusive!(async token =>
+        {
+            await _gate.WaitAsync(token);
+            try
+            {
+                result = await _childBoundary!.ExecuteAsync(() =>
+                {
+                    var automation = GetAutomation();
+                    automation.ConnectionTimeout = timeout;
+                    automation.TransactionTimeout = timeout;
+                    return core();
+                }, timeout, token);
+            }
+            finally { _gate.Release(); }
+        }, ct);
+        return result;
     }
 
     /// <summary>超时秒数 → TimeSpan（&lt;=0 取默认 5s，clamp 到 1-300s）；纯函数，供工具层复用。</summary>

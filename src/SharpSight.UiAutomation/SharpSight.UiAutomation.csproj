@@ -16,8 +16,7 @@
     <PackageReference Include="FlaUI.Core" Version="$(FlaUIVersion)" />
     <PackageReference Include="FlaUI.UIA3" Version="$(FlaUIVersion)" />
   </ItemGroup>
-  <!-- 现有 UI 类型全部为 internal（迁出前即如此，本任务保持「公开面原样」不改可见性）：
-       宿主与其测试项目经 IVT 继续使用；是否公开（库对外 API 面）留待 Task 6 新增公开 API 时一并定。 -->
+   <!-- UIA执行边界与元素模型仅供宿主使用，避免把FlaUI实现类型固定成公开契约。 -->
   <ItemGroup>
     <InternalsVisibleTo Include="DotNetDebuggerMcp" />
     <InternalsVisibleTo Include="DotNetDebuggerMcp.Tests" />

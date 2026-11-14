@@ -11,10 +11,12 @@ internal static class UiOperationService
     internal const string VerbOptions =
         "invoke（默认动作）/ toggle（可勾选控件）/ select（列表·树·页签项）/ expand / collapse / focus（仅控件，窗口会抢前台请用 windowstate）/ scroll（需给 direction=up/down，lines 行数）/ scrollintoview / windowstate（还原/最大化/最小化顶层窗口，需给 windowstate=normal/maximized/minimized）";
 
-    internal static async Task<ChildReply> ExecuteAsync(string operation, JsonElement arguments, CancellationToken ct)
+    internal static async Task<ChildReply> ExecuteAsync(string operation, JsonElement arguments, CancellationToken ct,
+        UiAutomationService? service = null)
     {
+        service ??= UiAutomationService.Instance;
         var request = new ChildRequest("", "", operation, arguments, DateTimeOffset.MaxValue);
-        UiAutomationService.Instance.BeginUiCall();
+        service.BeginUiCall();
         try
         {
             var r = arguments.Deserialize<UiOperationRequest>(Json) ?? throw new UiException("UIA参数不能为空。");
@@ -22,26 +24,28 @@ internal static class UiOperationService
                 r = r with { TimeoutSeconds = 30 };
             var text = operation switch
             {
-                "ui_find" => await FindAsync(r, ct),
-                "ui_action" => await ActionAsync(r, ct),
-                "ui_input" => await InputAsync(r, ct),
-                "ui_get" => await GetAsync(r, ct),
-                "ui_wait" => await WaitAsync(r, ct),
+                "ui_find" => await FindAsync(r, ct, service),
+                "ui_action" => await ActionAsync(r, ct, service),
+                "ui_input" => await InputAsync(r, ct, service),
+                "ui_get" => await GetAsync(r, ct, service),
+                "ui_wait" => await WaitAsync(r, ct, service),
                 _ => throw new UiException("未知UIA操作。")
             };
-            return ChildReply.Create(request, "completed", text, new { frameId = UiAutomationService.Instance.Frames.Current });
+            return ChildReply.Create(request, "completed", text, new { frameId = service.Frames.Current });
         }
+        catch (OperationCanceledException) when (operation == "ui_wait" && !ReferenceEquals(service, UiAutomationService.Instance))
+        { return ChildReply.Create(request, "completed", "超时：等待条件未命中。"); }
         catch (OperationCanceledException) { return ChildReply.Create(request, "cancelled", "已取消。"); }
         catch (Exception ex) { return ChildReply.Create(request, "not-executed", ex.Message); }
-        finally { await UiAutomationService.Instance.EndUiCallAsync(CancellationToken.None); }
+        finally { await service.EndUiCallAsync(CancellationToken.None); }
     }
 
-    internal static async Task<string> FindAsync(UiOperationRequest r, CancellationToken ct)
+    internal static async Task<string> FindAsync(UiOperationRequest r, CancellationToken ct, UiAutomationService? service = null)
     {
+        service ??= UiAutomationService.Instance;
         RequireProcess(r);
-        var find = await UiAutomationService.Instance.FindAsync(r.Process.Trim(), r.Title.Trim(), r.Text.Trim(),
+        var find = await service.FindAsync(r.Process.Trim(), r.Title.Trim(), r.Text.Trim(),
             r.Type.Trim(), r.AutomationId.Trim(), r.Limit, r.TimeoutSeconds, ct, r.Scope, r.Depth);
-        var service = UiAutomationService.Instance;
         var elements = find.Elements;
         var sb = new StringBuilder();
         sb.Append($"UI 控件清单 进程 {r.Process.Trim()}(pid={service.LastFindPid}) 窗口「{service.LastFindWindowTitle}」共 {elements.Count} 个控件{(service.LastFindTruncated ? "（已达上限，可能还有更多）" : "")}（帧: frameId={find.FrameId}）:");
@@ -66,49 +70,53 @@ internal static class UiOperationService
         return sb.ToString();
     }
 
-    internal static async Task<string> ActionAsync(UiOperationRequest r, CancellationToken ct)
+    internal static async Task<string> ActionAsync(UiOperationRequest r, CancellationToken ct, UiAutomationService? service = null)
     {
-        UiAutomationService.Instance.Frames.Validate(r.FrameId);
+        service ??= UiAutomationService.Instance;
+        service.Frames.Validate(r.FrameId);
         RequireProcess(r);
         if (string.IsNullOrWhiteSpace(r.Verb)) throw new UiException($"verb 不能为空（可选 {VerbOptions}）。");
         if (r.Verb.Trim().Equals("rightclick", StringComparison.OrdinalIgnoreCase) ||
             r.Verb.Trim().Equals("doubleclick", StringComparison.OrdinalIgnoreCase))
             throw new UiException("UIA 无右键/双击语义入口；请把操作改为等价菜单/命令的 verb=invoke（确需真实点击时用 verb=invoke/select + clickPoint=true）。");
-        var result = await UiAutomationService.Instance.ActionAsync(r.Process.Trim(), r.Verb.Trim(), r.Index,
+        var result = await service.ActionAsync(r.Process.Trim(), r.Verb.Trim(), r.Index,
             r.Name.Trim(), r.Type.Trim(), r.Direction.Trim(), r.Lines, r.WindowState.Trim(),
             r.TimeoutSeconds, ct, r.ClickPoint);
         return result.Message;
     }
 
-    internal static async Task<string> InputAsync(UiOperationRequest r, CancellationToken ct)
+    internal static async Task<string> InputAsync(UiOperationRequest r, CancellationToken ct, UiAutomationService? service = null)
     {
-        UiAutomationService.Instance.Frames.Validate(r.FrameId);
+        service ??= UiAutomationService.Instance;
+        service.Frames.Validate(r.FrameId);
         RequireProcess(r);
         if (string.IsNullOrEmpty(r.Value)) throw new UiException("value 不能为空：ui_input 需给出要写入的值。");
-        var result = await UiAutomationService.Instance.InputAsync(r.Process.Trim(), r.Value, r.Index,
+        var result = await service.InputAsync(r.Process.Trim(), r.Value, r.Index,
             r.Name.Trim(), r.Type.Trim(), r.Commit, r.TimeoutSeconds, ct);
         return result.Message;
     }
 
-    internal static async Task<string> GetAsync(UiOperationRequest r, CancellationToken ct)
+    internal static async Task<string> GetAsync(UiOperationRequest r, CancellationToken ct, UiAutomationService? service = null)
     {
-        UiAutomationService.Instance.Frames.Validate(r.FrameId);
+        service ??= UiAutomationService.Instance;
+        service.Frames.Validate(r.FrameId);
         RequireProcess(r);
         if (string.IsNullOrWhiteSpace(r.What))
             throw new UiException("what 不能为空：value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext。");
-        var state = await UiAutomationService.Instance.GetAsync(r.Process.Trim(), r.What.Trim(), r.Index,
+        var state = await service.GetAsync(r.Process.Trim(), r.What.Trim(), r.Index,
             r.Name.Trim(), r.Type.Trim(), r.TimeoutSeconds, ct);
         var (safe, redacted) = SensitiveValueRedactor.Redact(state.ControlName, state.Value);
         return $"what={r.What.Trim()} → {safe}" + (redacted ? $"（{SensitiveValueRedactor.Notice}）" : "");
     }
 
-    internal static async Task<string> WaitAsync(UiOperationRequest r, CancellationToken ct)
+    internal static async Task<string> WaitAsync(UiOperationRequest r, CancellationToken ct, UiAutomationService? service = null)
     {
+        service ??= UiAutomationService.Instance;
         RequireProcess(r);
         if (string.IsNullOrWhiteSpace(r.Text) &&
             (string.IsNullOrWhiteSpace(r.TextChangedFrom) || string.IsNullOrWhiteSpace(r.TextChangedTo)))
             throw new UiException("ui_wait 需给出 text（等控件出现）或 textChangedFrom + textChangedTo 成对（等文本从 X 变 Y）。");
-        var result = await UiAutomationService.Instance.WaitAsync(r.Process.Trim(), r.Text.Trim(), r.Type.Trim(),
+        var result = await service.WaitAsync(r.Process.Trim(), r.Text.Trim(), r.Type.Trim(),
             r.TextChangedFrom.Trim(), r.TextChangedTo.Trim(), r.TimeoutSeconds, ct);
         return $"{result.Outcome}：{result.Message}";
     }

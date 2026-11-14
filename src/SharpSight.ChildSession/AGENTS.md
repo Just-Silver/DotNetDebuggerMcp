@@ -24,3 +24,9 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 先挂起创建、归入自有 Job、再恢复；不能先让应用运行再追认所有权。每任务 Job 使用关闭即结束标志，仅取消本任务进程树，不按进程名结束应用。任务日志达到限额后继续排空管道；stdin 的父写端不可被 child 继承，否则 child 会因自己的写端而永远收不到 EOF。
 
 原生契约：[AssignProcessToJobObject](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject)（Job 内进程必须同 Session）、[扩展限额结构](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_extended_limit_information)。
+
+## GUI 执行边界
+
+实例共享 `ChildGuiExecutionGate`。已开始的 UIA COM 调用必须等待真实后台 Task 结束，期间保留客户端和门；截止只让调用方取回 running，不将其登记为终态。超预算仍未返回时拒绝新 GUI 操作，控制查询与进程任务不经过此门。
+
+`ui_wait` 仅在订阅、探测和退订时取门，等待信号或轮询睡眠时放门；不推进帧、不替换清单。门内顺序调用允许同一执行上下文重入，不能把重入上下文用于并发派生 GUI 工作。
