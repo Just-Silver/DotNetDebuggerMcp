@@ -25,6 +25,9 @@ switch (args.FirstOrDefault())
         await Console.In.ReadToEndAsync();
         Console.WriteLine("输入结束");
         break;
+    case "marker":
+        await ChildSessionTarget.MarkerWindow.RunAsync(args.ElementAtOrDefault(1) ?? "lime");
+        break;
     case "spawn":
         var info = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
         info.ArgumentList.Add("sleep");

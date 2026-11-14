@@ -13,6 +13,7 @@ internal sealed class ChildOperationDispatcher(string instance, string root, int
         {
             "child_process" => _processes.ExecuteAsync(request, ct),
             "ui_find" or "ui_action" or "ui_input" or "ui_get" or "ui_wait" => _ui.ExecuteAsync(request, ct),
+            "screenshot" => new ChildScreenshotService(_ui, new(root), instance, session).ExecuteAsync(request, ct),
             _ => Task.FromResult(ChildReply.Create(request, "not-executed", "该worker操作尚未接线。"))
         };
 

@@ -25,6 +25,7 @@ internal sealed class UiAutomationService
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly IUiExecutionBoundary? _childBoundary;
+    private readonly Action<nint>? _validateWindow;
     private readonly Func<Func<CancellationToken, Task>, CancellationToken, Task>? _runExclusive;
     private readonly UiElementLocator _locator = new();
     private readonly UiEventWaiter _waiter = new();
@@ -56,10 +57,12 @@ internal sealed class UiAutomationService
     }
 
     internal UiAutomationService(IUiExecutionBoundary boundary,
-        Func<Func<CancellationToken, Task>, CancellationToken, Task> runExclusive)
+        Func<Func<CancellationToken, Task>, CancellationToken, Task> runExclusive,
+        Action<nint>? validateWindow = null)
     {
         _childBoundary = boundary;
         _runExclusive = runExclusive;
+        _validateWindow = validateWindow;
     }
 
     /// <summary>最近一次 ui_find 的目标 pid（供工具头部展示）。</summary>
@@ -74,9 +77,13 @@ internal sealed class UiAutomationService
     /// <summary>按进程/窗口条件查找控件清单（返回前 limit 条并更新 index 条件缓存 + 产出新帧）。
     /// <paramref name="scopeIndex"/>≥0 限定子树、<paramref name="maxDepth"/>＞0 限定层数（大 UI 树提速）。</summary>
     public Task<UiFindResult> FindAsync(string process, string title, string text, string type, string automationId, int limit, int timeoutSeconds, CancellationToken ct, int scopeIndex = -1, int maxDepth = 0)
-        => RunGateAsync(() => new UiFindResult(
-            _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, scopeIndex, maxDepth),
-            Frames.Next()), timeoutSeconds, ct);
+        => RunGateAsync(() =>
+        {
+            var elements = _locator.Find(GetAutomation(), process.Trim(), title.Trim(), text.Trim(), type.Trim(),
+                automationId.Trim(), limit, scopeIndex, maxDepth);
+            _validateWindow?.Invoke(_locator.LastFindWindowHwnd);
+            return new UiFindResult(elements, Frames.Next());
+        }, timeoutSeconds, ct);
 
     /// <summary>
     /// 元素级截图定位（spec §7.1）：与 <see cref="UiElementLocator.Find"/> 同一套身份/过滤/ordinal 与同一
@@ -118,6 +125,7 @@ internal sealed class UiAutomationService
         var (window, typeFilter, immediate) = await RunGateAsync(() =>
         {
             var w = UiElementLocator.ResolveTopWindow(GetAutomation(), process);
+            ValidateWindow(w);
             var tf = UiElementLocator.ResolveControlType(type);
             return (w, tf, FindFirstName(w, probeText, tf));
         }, timeout, ct);
@@ -215,8 +223,10 @@ internal sealed class UiAutomationService
         else
         {
             (element, window, _) = _locator.ResolveForAction(automation, pid, index, name.Trim(), type.Trim());
+            ValidateWindow(window);
             EnsureWindowRestored(window);
         }
+        if (verbNorm == "windowstate") ValidateWindow(window);
 
         var caps = UiPatternCapabilities.Probe(element);
         var chosen = UiPatternDispatcher.Choose(verbNorm, caps, direction, lines, windowstate, clickPoint);
@@ -236,6 +246,7 @@ internal sealed class UiAutomationService
         var automation = GetAutomation();
         var (pid, _) = UiElementLocator.ResolveProcess(process);
         var (element, window, _) = _locator.ResolveForAction(automation, pid, index, name.Trim(), type.Trim());
+        ValidateWindow(window);
         EnsureWindowRestored(window);
 
         var caps = UiPatternCapabilities.Probe(element);
@@ -344,7 +355,8 @@ internal sealed class UiAutomationService
             throw new UiException($"what 不能为空（可选 {string.Join("/", UiStateReader.Whats)}）。");
         var automation = GetAutomation();
         var (pid, _) = UiElementLocator.ResolveProcess(process);
-        var (element, _, _) = _locator.ResolveForAction(automation, pid, index, name.Trim(), type.Trim());
+        var (element, window, _) = _locator.ResolveForAction(automation, pid, index, name.Trim(), type.Trim());
+        ValidateWindow(window);
 
         var caps = UiPatternCapabilities.Probe(element);
         var chosen = UiStateReader.Choose(whatNorm, caps);
@@ -388,6 +400,12 @@ internal sealed class UiAutomationService
     }
 
     private static string TypeSuffix(string? typeFilter) => typeFilter is null ? "" : $"（类型 {typeFilter}）";
+
+    private void ValidateWindow(AutomationElement window)
+    {
+        if (_validateWindow is not null)
+            _validateWindow(window.Properties.NativeWindowHandle.ValueOrDefault);
+    }
 
     // ===== 共享底座 =====
 

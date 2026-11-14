@@ -77,6 +77,8 @@ internal sealed class UiElementLocator
     public IReadOnlyList<UiElementInfo> Find(UIA3Automation automation, string process, string title, string text, string type, string automationId, int limit, int scopeIndex = -1, int maxDepth = 0)
         => FindCore(automation, process, title, text, type, automationId, limit, forCapture: false, scopeIndex: scopeIndex, maxDepth: maxDepth);
 
+    internal nint LastFindWindowHwnd { get; private set; }
+
     /// <summary>
     /// 元素级截图定位（spec §7.1）：与 <see cref="Find"/> <b>完全同一套</b>进程/窗口身份、过滤与 ordinal 计数，
     /// 并<b>共用</b> <c>_lastFind</c> index 条件缓存（同一 <c>ui_find</c> 清单）；唯一区别是返回值额外填充结构化
@@ -190,6 +192,7 @@ internal sealed class UiElementLocator
         _lastFindPid = pid;
         _lastFindWindowTitle = entries.Count > 0 ? entries[0].WindowTitle : SafeRead(() => window.Name ?? "", "");
         _lastFindTruncated = truncated;
+        LastFindWindowHwnd = windowHwnd;
 
         return infos;
     }

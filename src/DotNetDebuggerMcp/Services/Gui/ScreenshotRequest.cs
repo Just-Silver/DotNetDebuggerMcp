@@ -8,4 +8,5 @@ internal sealed record ScreenshotRequest(
     bool IncludeCursor = false, int TimeoutSeconds = 5, string FilePath = "", string Contains = "");
 
 internal sealed record ScreenshotExecution(CaptureResult? Image, string TargetLine, string Mode,
-    IReadOnlyList<string> Notes, int ProcessId, string? Text = null, bool IsError = false);
+    IReadOnlyList<string> Notes, int ProcessId, string? Text = null, bool IsError = false,
+    string TargetHwnd = "");

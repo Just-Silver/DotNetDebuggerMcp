@@ -30,3 +30,11 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 实例共享 `ChildGuiExecutionGate`。已开始的 UIA COM 调用必须等待真实后台 Task 结束，期间保留客户端和门；截止只让调用方取回 running，不将其登记为终态。超预算仍未返回时拒绝新 GUI 操作，控制查询与进程任务不经过此门。
 
 `ui_wait` 仅在订阅、探测和退订时取门，等待信号或轮询睡眠时放门；不推进帧、不替换清单。门内顺序调用允许同一执行上下文重入，不能把重入上下文用于并发派生 GUI 工作。
+
+## 观察与截图
+
+`ObservationRegistry` 保留最近 256 条来源；普通视觉采集不使 UIA 清单失效，新 UIA 帧使旧清单/元素引用失效。引用同时核对实例、worker、进程创建时间、窗口几何和显示布局；纯视觉引用不能充当 index 清单。
+
+`ChildTargetResolver` 用线程 DPI 上下文读取物理窗口矩形并恢复原上下文，不改变用户窗口的 DPI 策略。Win32 约定已对照本地 `../../Externals/wpf/src/Microsoft.DotNet.Wpf/src/Shared/MS/Win32/UnsafeNativeMethodsCLR.cs` 的 `SetThreadDpiAwarenessContext` 返回旧句柄语义。
+
+真实 child 图像测试须显式设置 `DOTNETDEBUGGER_CHILD_TEST_INSTANCE` 指向本产品已授权的活动实例；不设置时只运行产物/引用边界测试，真实项明确跳过，不能把跳过算作真实截图成功。此测试临时启动两个不同纯色标记窗口，结束后取消自有任务并清理父侧夹具，不启用开关或接管其他会话。
