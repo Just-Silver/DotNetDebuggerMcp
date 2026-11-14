@@ -155,6 +155,48 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("debug_attach", all);
         Assert.Contains("ui_find", all);
         Assert.Contains("截图", all);
+        Assert.Contains("child_session", all);
+
+        // 子会话族单独启用：只出现 child 工具，ui_*/screenshot/调试词不泄漏
+        var childOnly = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Child, null);
+        Assert.Contains("child_session", childOnly);
+        Assert.Contains("child_process", childOnly);
+        Assert.Contains("child_pointer", childOnly);
+        Assert.Contains("child_keyboard", childOnly);
+        Assert.DoesNotContain("ui_", childOnly);
+        Assert.DoesNotContain("screenshot", childOnly);
+        Assert.DoesNotContain("截图", childOnly);
+        Assert.DoesNotContain("debug_", childOnly);
+
+        // 未启用 child 族时不提子会话工具/工作流
+        var withoutChild = DotNetDebuggerMcpCmd.BuildServerInstructions(
+            FeatureFamily.Decompile | FeatureFamily.Debug | FeatureFamily.Ui | FeatureFamily.Screenshot, null);
+        Assert.DoesNotContain("child_", withoutChild);
+        Assert.DoesNotContain("子会话", withoutChild);
+    }
+
+    [Fact]
+    public void 握手_子会话路由_只在child与对应族同时启用时出现()
+    {
+        // UIA 的 instance 工作流属于 child+ui；不满足时 child 段不提 ui_*，ui 段也不提实例
+        var uiOnly = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Ui, null);
+        Assert.Contains("ui_find", uiOnly);
+        Assert.DoesNotContain("instance=<实例>", uiOnly);
+
+        var childUi = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Child | FeatureFamily.Ui, null);
+        Assert.Contains("ui_find", childUi);
+        Assert.Contains("instance=<实例>", childUi);
+        Assert.DoesNotContain("screenshot", childUi);
+
+        // 截图同样要求 child+screenshot；只有 screenshot 族时不得出现子会话措辞
+        var screenshotOnly = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Screenshot, null);
+        Assert.DoesNotContain("child_", screenshotOnly);
+        Assert.DoesNotContain("instance=<实例>", screenshotOnly);
+
+        var childScreenshot = DotNetDebuggerMcpCmd.BuildServerInstructions(FeatureFamily.Child | FeatureFamily.Screenshot, null);
+        Assert.Contains("screenshot", childScreenshot);
+        Assert.Contains("instance=<实例>", childScreenshot);
+        Assert.DoesNotContain("ui_", childScreenshot);
     }
 
     [Fact]
@@ -192,6 +234,16 @@ public class DotNetDebuggerMcpCmdTests
         Assert.Contains("冻结", text);          // P1：attach/launch 冻结态即可读栈
         Assert.Contains("clickPoint", text);   // P3：显式真实点击开关
         Assert.Contains("观测扰动", text);     // P6：ui_* 注入 UIA 客户端声明
+        // 子会话族（2026-11-14）：创建/原路径启动/真实键鼠/不重放/stop 整体注销，逐项触发条件
+        Assert.Contains("child_session", text);
+        Assert.Contains("child_process", text);
+        Assert.Contains("child_pointer", text);
+        Assert.Contains("child_keyboard", text);
+        Assert.Contains("子会话", text);
+        Assert.Contains("原路径", text);        // 程序/脚本按原路径启动
+        Assert.Contains("requests", text);      // 超时/失联 → 找回 requestId
+        Assert.Contains("不重执行", text);      // 结果查询不重放变更
+        Assert.Contains("stop", text);          // 整体注销触发条件
         Assert.Contains("## 何时使用", text);
         Assert.DoesNotContain("## 工具一览", text);
     }

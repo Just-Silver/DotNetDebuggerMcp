@@ -30,7 +30,8 @@ internal sealed class ChildScreenshotService(ChildUiExecutionService ui, ChildIn
     {
         try
         {
-            return await ui.RunGuiAsync(token => CaptureAsync(request, token), request.Deadline, ct);
+            var immediate = request.Arguments.TryGetProperty("timeoutSeconds", out var timeout) && timeout.GetInt32() == 0;
+            return await ui.RunGuiAsync(token => CaptureAsync(request, token), request.Deadline, ct, waitForGate: !immediate);
         }
         catch (OperationCanceledException) { return ChildReply.Create(request, "not-executed", "截图排队截止或取消，未执行。"); }
         catch (Exception ex) { return ChildReply.Create(request, "not-executed", $"子会话截图失败：{ex.Message}"); }

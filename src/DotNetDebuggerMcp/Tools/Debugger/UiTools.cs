@@ -1,11 +1,13 @@
 using DotNetDebuggerMcp.Services;
 using SharpSight.UiAutomation;
+using DotNetDebuggerMcp.Services.Child;
 using DotNetDebuggerMcp.Services.Gui;
 using ModelContextProtocol.Server;
 
 using System.ComponentModel;
 using System.Runtime.Versioning;
 using System.Text;
+using System.Text.Json;
 
 namespace DotNetDebuggerMcp.Tools.Debugger;
 
@@ -19,9 +21,12 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 [McpServerToolType]
 public static class UiTools
 {
+    private const string ObservationNeedsInstance =
+        "observationId 仅在子会话模式（instance 非空）下有效：本机主会话不接受观察引用，请留空或指定 instance。";
+
     /// <summary>按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单与各控件支持的 pattern）。</summary>
     [McpServerTool]
-    [Description("按进程/窗口条件查找 UI 控件清单（无视觉，返回文本）：process 传 pid 或进程名，可用 text/type/automationId 过滤；返回 index、Name、AutoId、patterns 与 Rect。**被禁用的控件（IsEnabled=false）在行尾标 [禁用]**——这类控件 UIA 会拒绝语义动作与写值，先让它变为可用再操作。大 UI 树用 scope（以上次 index 为根）与 depth 限层，避免超时。命中控件附同名成员反查候选（可 decompile_member 看实现）。执行动作走 ui_action，读值走 ui_get。注意观测扰动：UIA 注入会改变目标性能特征，性能排查优先 debug_* + 截图。")]
+    [Description("按进程/窗口条件查找 UI 控件清单（无视觉，返回文本）：process 传 pid 或进程名，可用 text/type/automationId 过滤；返回 index、Name、AutoId、patterns 与 Rect。**被禁用的控件（IsEnabled=false）在行尾标 [禁用]**——这类控件 UIA 会拒绝语义动作与写值，先让它变为可用再操作。大 UI 树用 scope（以上次 index 为根）与 depth 限层，避免超时。命中控件附同名成员反查候选（可 decompile_member 看实现）。执行动作走 ui_action，读值走 ui_get。指定 instance 时在子会话内执行（需 child+ui 能力族），失败不回退主会话。注意观测扰动：UIA 注入会改变目标性能特征，性能排查优先 debug_* + 截图。")]
     public static async Task<string> UiFind(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示），如 UiSampleApp、1234。")] string process = "",
         [Description("窗口标题精确匹配；空 = 该进程首个顶层窗口。")] string title = "",
@@ -32,8 +37,14 @@ public static class UiTools
         [Description("限定子树根：以上一次 ui_find 的该 index 元素为根，只枚举其子控件（默认 -1=不限）。大表/长列表（如 999 行 DataGrid）建议先 scope 到容器再查，否则单次枚举可能超时。")] int scope = -1,
         [Description("最大层数（相对窗口/scope 根；默认 0=不限）。大 UI 树用 depth 限层可显著提速（如 depth=3 只看前几层容器）。")] int depth = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
         CancellationToken cancellationToken = default)
     {
+        if (instance.Length != 0)
+            return await ChildServices.CallTextAsync("ui_find", JsonSerializer.SerializeToElement(new
+            {
+                process, title, text, type, automationId, limit, scope, depth, timeoutSeconds, instance
+            }), cancellationToken);
         var argsText = $"process={process} title={title} text={text} type={type} autoId={automationId} limit={limit} scope={scope} depth={depth} timeout={timeoutSeconds}";
         UiAutomationService.Instance.BeginUiCall();
         try
@@ -52,7 +63,7 @@ public static class UiTools
 
     /// <summary>对 UI 控件执行语义动作（真实操作，有产线副作用）。</summary>
     [McpServerTool]
-    [Description("对 UI 控件执行语义动作（真实操作，有产线副作用）。默认走 UIA pattern：不移动光标、不主动改前台（focus 对带 HWND 控件可能激活顶层窗口）。verb 按控件能力分派：invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate（复选框 toggle、列表/树/页签项 select、下拉/树节点 expand）。无右键/双击入口（会被明确拒绝）。定位用 index（仅紧邻的上次 ui_find 内有效）或 name/type（最稳）；windowstate 按 process 定位顶层窗口。legacy 控件结果标「可能不生效」，可显式 clickPoint=true（仅 invoke/select）走真实点击——**会先把目标窗口带到前台、再移动光标点击**，仅在语义动作确认无效时用。")]
+    [Description("对 UI 控件执行语义动作（真实操作，有产线副作用）。默认走 UIA pattern：不移动光标、不主动改前台（focus 对带 HWND 控件可能激活顶层窗口）。verb 按控件能力分派：invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate（复选框 toggle、列表/树/页签项 select、下拉/树节点 expand）。无右键/双击入口（会被明确拒绝）。定位用 index（仅紧邻的上次 ui_find 内有效）或 name/type（最稳）；windowstate 按 process 定位顶层窗口。legacy 控件结果标「可能不生效」，可显式 clickPoint=true（仅 invoke/select）走真实点击——**会先把目标窗口带到前台、再移动光标点击**，仅在语义动作确认无效时用。指定 instance 时在子会话内执行（需 child+ui 能力族），失败不回退主会话；此时可用 observationId 绑定先前观察。")]
     public static async Task<string> UiAction(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("语义动词（必填）：invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate。")] string verb = "",
@@ -65,8 +76,17 @@ public static class UiTools
         [Description("窗口状态（verb=windowstate 时必填）：normal / maximized / minimized。")] string windowstate = "",
         [Description("**真实点击**（默认 false；仅 verb=invoke/select）。true 时按控件 ClickablePoint 移动真实光标并注入左键点击——**会移动光标、注入输入、可能抢前台**；仅在目标无 Invoke/SelectionItem（如部分 WPF-UI 导航项只暴露 legacy）且语义动作被证实无效时开启。其它 verb 配 clickPoint=true 会报错。")] bool clickPoint = false,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话观察引用（默认空=不绑定）：仅 instance 非空时有效，绑定此前子会话 ui_find/截图返回的 observationId；与 frameId 同时非空时两者都必须有效且同源。父侧（instance 空）传非空会被拒绝。")] string observationId = "",
         CancellationToken cancellationToken = default)
     {
+        if (instance.Length != 0)
+            return await ChildServices.CallTextAsync("ui_action", JsonSerializer.SerializeToElement(new
+            {
+                process, verb, index, name, type, frameId, direction, lines, windowstate, clickPoint,
+                timeoutSeconds, instance, observationId
+            }), cancellationToken);
+        if (observationId.Length != 0) return ObservationNeedsInstance;
         var argsText = $"process={process} verb={verb} index={index} name={name} type={type} frameId={frameId} direction={direction} lines={lines} windowstate={windowstate} timeout={timeoutSeconds}";
         UiAutomationService.Instance.BeginUiCall();
         try
@@ -88,7 +108,7 @@ public static class UiTools
 
     /// <summary>对 UI 控件写入值（Value/RangeValue/LegacyIAccessible；真实操作，有产线副作用）。</summary>
     [McpServerTool]
-    [Description("对 UI 控件写入值（真实操作，有产线副作用）。按写值能力分派：ValuePattern → RangeValuePattern → LegacyIAccessiblePattern（文本框写文本、滑块/数值框写数字），只读或无写值能力返回中文提示；空 value 返回提示。默认 commit=true：写完把焦点移出该控件（WPF 等失焦才提交的绑定否则读不到新值），会激活目标窗口；传 commit=false 不主动移焦（部分控件 SetValue 本身仍可能让窗口变前台）。定位用 index（上次 ui_find 序号，优先）或 name/type（歧义返回候选清单）。写入会打 AgentActionLog。")]
+    [Description("对 UI 控件写入值（真实操作，有产线副作用）。按写值能力分派：ValuePattern → RangeValuePattern → LegacyIAccessiblePattern（文本框写文本、滑块/数值框写数字），只读或无写值能力返回中文提示；空 value 返回提示。默认 commit=true：写完把焦点移出该控件（WPF 等失焦才提交的绑定否则读不到新值），会激活目标窗口；传 commit=false 不主动移焦（部分控件 SetValue 本身仍可能让窗口变前台）。定位用 index（上次 ui_find 序号，优先）或 name/type（歧义返回候选清单）。写入会打 AgentActionLog。指定 instance 时在子会话内执行（需 child+ui 能力族），失败不回退主会话；此时可用 observationId 绑定先前观察。")]
     public static async Task<string> UiInput(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("要写入的值（必填；空返回提示）。")] string value = "",
@@ -98,8 +118,16 @@ public static class UiTools
         [Description("写完是否失焦提交，默认 true：写完把焦点移出该控件（必要时先激活目标窗口），让 WPF 等「失焦才提交」的绑定真正收到新值；False = 只改控件文本、不主动移焦（连续填多个字段、或不想触发字段校验时用；部分控件 SetValue 本身仍可能让窗口变前台）。")] bool commit = true,
         [Description("可交互性护栏（可省略；填写后用 ui_find 返回的帧号校验目标是否来自旧画面：0=不校验，非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话观察引用（默认空=不绑定）：仅 instance 非空时有效，绑定此前子会话 ui_find/截图返回的 observationId；与 frameId 同时非空时两者都必须有效且同源。父侧（instance 空）传非空会被拒绝。")] string observationId = "",
         CancellationToken cancellationToken = default)
     {
+        if (instance.Length != 0)
+            return await ChildServices.CallTextAsync("ui_input", JsonSerializer.SerializeToElement(new
+            {
+                process, value, index, name, type, commit, frameId, timeoutSeconds, instance, observationId
+            }), cancellationToken);
+        if (observationId.Length != 0) return ObservationNeedsInstance;
         var argsText = $"process={process} value={value} index={index} name={name} type={type} commit={commit} frameId={frameId} timeout={timeoutSeconds}";
         UiAutomationService.Instance.BeginUiCall();
         try
@@ -120,7 +148,7 @@ public static class UiTools
 
     /// <summary>读取 UI 控件状态（只读，无副作用；展示值经 DB1 敏感脱敏）。</summary>
     [McpServerTool]
-    [Description("读取 UI 控件状态（只读）。what 必填：value（优先 ValuePattern，退 LegacyIAccessible）/ name / toggle / selected / expandstate / rangevalue / enabled / offscreen / rect / helptext；无对应 pattern 返回中文提示。定位用 index（上次 ui_find 序号）或 name/type。值展示前按控件 Name/AutoId 脱敏。")]
+    [Description("读取 UI 控件状态（只读）。what 必填：value（优先 ValuePattern，退 LegacyIAccessible）/ name / toggle / selected / expandstate / rangevalue / enabled / offscreen / rect / helptext；无对应 pattern 返回中文提示。定位用 index（上次 ui_find 序号）或 name/type。值展示前按控件 Name/AutoId 脱敏。指定 instance 时在子会话内执行（需 child+ui 能力族），失败不回退主会话；此时可用 observationId 绑定先前观察。")]
     public static async Task<string> UiGet(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("要读取的状态（必填）：value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext。")] string what = "",
@@ -129,8 +157,16 @@ public static class UiTools
         [Description("控件类型（UIA 类型名）。")] string type = "",
         [Description("可交互性护栏（可省略；填写后用 ui_find 返回的帧号校验目标是否来自旧画面：0=不校验，非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话观察引用（默认空=不绑定）：仅 instance 非空时有效，绑定此前子会话 ui_find/截图返回的 observationId；与 frameId 同时非空时两者都必须有效且同源。父侧（instance 空）传非空会被拒绝。")] string observationId = "",
         CancellationToken cancellationToken = default)
     {
+        if (instance.Length != 0)
+            return await ChildServices.CallTextAsync("ui_get", JsonSerializer.SerializeToElement(new
+            {
+                process, what, index, name, type, frameId, timeoutSeconds, instance, observationId
+            }), cancellationToken);
+        if (observationId.Length != 0) return ObservationNeedsInstance;
         var argsText = $"process={process} what={what} index={index} name={name} type={type} frameId={frameId} timeout={timeoutSeconds}";
         UiAutomationService.Instance.BeginUiCall();
         try
@@ -151,7 +187,7 @@ public static class UiTools
 
     /// <summary>等待 UI 状态变化/控件出现（事件化 + 轮询兜底，只读；超时返回当前状态不报错）。</summary>
     [McpServerTool]
-    [Description("等待 UI 状态变化/控件出现（只读：对目标窗口订阅结构/属性变化事件，命中即返回；无事件时每 200ms 轮询兜底，到 timeoutSeconds 止；超时返回当前状态提示不报错）。用法：text=期望出现的控件文本（等出现）；或 textChangedFrom + textChangedTo 成对（控件文本从 X 变 Y——动作后的状态确认，如 手动→自动）。type 可限定控件类型。timeoutSeconds 既是最长等待，也作单次 UIA 调用护栏。不移动光标、不注入输入。")]
+    [Description("等待 UI 状态变化/控件出现（只读：对目标窗口订阅结构/属性变化事件，命中即返回；无事件时每 200ms 轮询兜底，到 timeoutSeconds 止；超时返回当前状态提示不报错）。用法：text=期望出现的控件文本（等出现）；或 textChangedFrom + textChangedTo 成对（控件文本从 X 变 Y——动作后的状态确认，如 手动→自动）。type 可限定控件类型。timeoutSeconds 既是最长等待，也作单次 UIA 调用护栏。不移动光标、不注入输入。指定 instance 时在子会话内执行（需 child+ui 能力族），失败不回退主会话。")]
     public static async Task<string> UiWait(
         [Description("目标进程：pid 或进程名子串（必填；空返回提示）。")] string process = "",
         [Description("期望出现的控件文本（Name 子串忽略大小写；与 textChangedFrom/To 二选一）。")] string text = "",
@@ -159,8 +195,14 @@ public static class UiTools
         [Description("状态切换起点文本（text 模式之外用成对 From/To 等文本变化）。")] string textChangedFrom = "",
         [Description("状态切换目标文本（成对使用）。")] string textChangedTo = "",
         [Description("最长等待秒数，默认 30，范围 1-300；同时作为单次 UIA 调用的超时护栏（目标响应慢时可调大）。")] int timeoutSeconds = 30,
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
         CancellationToken cancellationToken = default)
     {
+        if (instance.Length != 0)
+            return await ChildServices.CallTextAsync("ui_wait", JsonSerializer.SerializeToElement(new
+            {
+                process, text, type, textChangedFrom, textChangedTo, timeoutSeconds, instance
+            }), cancellationToken);
         var argsText = $"process={process} text={text} type={type} from={textChangedFrom} to={textChangedTo} timeout={timeoutSeconds}";
         UiAutomationService.Instance.BeginUiCall();
         try

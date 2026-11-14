@@ -53,8 +53,7 @@ public sealed class ChildWorkerRuntime(ChildInstanceStore store)
             {
                 "requests" => _journal.List(request.Arguments.TryGetProperty("cursor", out var cursor) ? cursor.GetInt64() : 0,
                     request.Arguments.TryGetProperty("limit", out var limit) ? limit.GetInt32() : 20),
-                "result" => System.Text.Json.JsonSerializer.SerializeToElement(_journal.Find(
-                    request.Arguments.GetProperty("requestId").GetString() ?? ""), ChildWire.Json),
+                "result" => _journal.ReadResult(request.Arguments.GetProperty("requestId").GetString() ?? ""),
                 _ => System.Text.Json.JsonSerializer.SerializeToElement(new { state = "Ready", process = ChildPeer.Current })
             };
             return Task.FromResult(ChildReply.Create(request, "completed", "子会话请求查询。", data));

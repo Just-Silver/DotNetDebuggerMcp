@@ -28,8 +28,9 @@ internal sealed class ChildUiExecutionService : IAsyncDisposable
             ValidateWindow);
     }
 
-    internal Task<T> RunGuiAsync<T>(Func<CancellationToken, Task<T>> body, DateTimeOffset deadline, CancellationToken ct)
-        => _gate.RunAsync(body, deadline, ct);
+    internal Task<T> RunGuiAsync<T>(Func<CancellationToken, Task<T>> body, DateTimeOffset deadline, CancellationToken ct,
+        bool waitForGate = true)
+        => _gate.RunAsync(body, deadline, ct, waitForGate);
 
     internal async Task<ChildReply> ExecuteAsync(ChildRequest request, CancellationToken ct)
     {

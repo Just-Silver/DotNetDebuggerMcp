@@ -33,17 +33,19 @@ public sealed class FeatureFlagsTests
     }
 
     [Theory]
-    [InlineData("decompile,debug,ui,screenshot", 15)]  // All
+    [InlineData("decompile,debug,ui,screenshot", 15)]  // 各旧族组合（不含 child）
+    [InlineData("decompile,debug,ui,screenshot,child", 31)]  // All
     [InlineData(" DEBUG , Ui ", 7)]                    // Decompile | Debug | Ui
     [InlineData("decompile,decompile", 1)]             // 重复去重
     [InlineData("ui", 5)]                              // 反编译恒在：Ui | Decompile
+    [InlineData("child", 17)]                          // 反编译恒在：Child | Decompile
     public void Parse_组合(string value, int expected)
         => Assert.Equal((FeatureFamily)expected, FeatureFlags.Parse(value, null));
 
     [Fact]
     public void Parse_任何取值都含反编译族()
     {
-        foreach (var value in new[] { "", "debug", "ui", "screenshot", "debug,ui,screenshot" })
+        foreach (var value in new[] { "", "debug", "ui", "screenshot", "child", "debug,ui,screenshot,child" })
             Assert.True(FeatureFlags.Parse(value, null).HasFlag(FeatureFamily.Decompile), $"取值「{value}」缺少反编译族");
     }
 
@@ -56,6 +58,7 @@ public sealed class FeatureFlagsTests
         Assert.Equal(FeatureFamily.None, family);
         Assert.Contains("decompile", error);
         Assert.Contains("screenshot", error);
+        Assert.Contains("child", error);
     }
 
     [Fact]

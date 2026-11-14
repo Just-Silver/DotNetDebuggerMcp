@@ -3,6 +3,8 @@ namespace DotNetDebuggerMcp.Configuration;
 /// <summary>
 /// MCP 能力族开关（位标志）。**只作用于 MCP 面**——控制哪些工具注册进工具目录、握手简介注入哪些族的触发条件；
 /// CLI 执行路径（-a/-l/-dbg/-c）不受影响。
+/// <para><see cref="Child"/> 是子会话执行族：注册只让 <c>child_*</c> 工具可见，**不代表启动子会话或初始化系统组件**；
+/// 实例仍需显式 <c>child_session(action=start)</c> 建立，既有 <c>ui_*</c>/<c>screenshot</c> 的 <c>instance</c> 路由还要求对应族同时启用。</para>
 /// </summary>
 [Flags]
 internal enum FeatureFamily
@@ -12,7 +14,8 @@ internal enum FeatureFamily
     Debug = 2,
     Ui = 4,
     Screenshot = 8,
-    All = Decompile | Debug | Ui | Screenshot,
+    Child = 16,
+    All = Decompile | Debug | Ui | Screenshot | Child,
 }
 
 /// <summary>
@@ -28,7 +31,7 @@ internal static class FeatureFlags
     internal const string EnvVar = "DOTNETDEBUGGERMCP_FEATURES";
 
     /// <summary>合法取值（错误文案与调用方共用）。</summary>
-    internal static readonly string[] FeatureNames = ["decompile", "debug", "ui", "screenshot"];
+    internal static readonly string[] FeatureNames = ["decompile", "debug", "ui", "screenshot", "child"];
 
     /// <summary>
     /// 解析取值串：空/空白 → <see cref="FeatureFamily.None"/>（由 <see cref="Resolve"/> 补上恒启用的反编译族）；
@@ -47,6 +50,7 @@ internal static class FeatureFlags
                 case "debug": family |= FeatureFamily.Debug; break;
                 case "ui": family |= FeatureFamily.Ui; break;
                 case "screenshot": family |= FeatureFamily.Screenshot; break;
+                case "child": family |= FeatureFamily.Child; break;
                 default: unknown.Add(raw); break;
             }
         }

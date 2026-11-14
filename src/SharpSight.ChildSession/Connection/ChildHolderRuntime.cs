@@ -74,16 +74,9 @@ public sealed class ChildHolderRuntime(ChildInstanceStore store, ChildHostComman
         }
     }
 
-    private async Task<ChildReply> ForwardAsync(ChildConnectionWindow form, ChildRequest request, CancellationToken ct)
-    {
-        var state = await store.ReadAsync(request.Instance, ct);
-        var control = request.Operation == "child_session";
-        if (state.Worker is null) return ChildReply.Create(request, "not-executed", "worker尚未就绪。");
-        if (!control && (state.State != "Ready" || !await form.IsConnectedAsync() ||
-            WtsNative.ChildId() != state.Identity.ChildSessionId || !WtsNative.Active(state.Identity.ChildSessionId)))
-            return ChildReply.Create(request, "not-executed", "子会话未连接或尚不可交互，不回退主会话。");
-        return await new ChildPipeClient(state.WorkerPipe, state.Secret, state.Worker).SendAsync(request, ct);
-    }
+    private Task<ChildReply> ForwardAsync(ChildConnectionWindow form, ChildRequest request, CancellationToken ct)
+        => new ChildForwarder(store, _ => form.IsConnectedAsync(), WtsNative.ChildId, WtsNative.Active)
+            .ForwardAsync(request, ct);
 
     private async Task<ChildBootstrap> WaitForRegistrationAsync(string instance, CancellationToken ct)
     {

@@ -57,6 +57,36 @@ public sealed class ChildCaptureTests
     }
 
     [Fact]
+    public async Task 零秒截图在GUI忙时立即拒绝而不是排队迟到采集()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "child-capture-" + Guid.NewGuid().ToString("N"));
+        await using var ui = new ChildUiExecutionService(new(), Process.GetCurrentProcess().SessionId);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var blocked = ui.RunGuiAsync(async _ => { await release.Task; return true; },
+            DateTimeOffset.MaxValue, TestContext.Current.CancellationToken);
+        var service = new ChildScreenshotService(ui, new(root), "capture-tests",
+            Process.GetCurrentProcess().SessionId, new ColoredCapture());
+        var request = Request("screen") with
+        {
+            Arguments = JsonSerializer.SerializeToElement(new { mode = "screen", timeoutSeconds = 0 })
+        };
+        var pending = service.ExecuteAsync(request, TestContext.Current.CancellationToken);
+        try
+        {
+            var reply = await pending.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+            Assert.Equal("not-executed", reply.Status);
+            Assert.False(Directory.Exists(Path.Combine(root, "capture-tests", "artifacts")));
+        }
+        finally
+        {
+            release.TrySetResult();
+            await blocked;
+            await pending;
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
     public async Task 授权真实子会话的PNG包含child标记而非父侧画面()
     {
         var instance = Environment.GetEnvironmentVariable("DOTNETDEBUGGER_CHILD_TEST_INSTANCE");

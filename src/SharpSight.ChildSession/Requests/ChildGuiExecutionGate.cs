@@ -9,7 +9,7 @@ public sealed class ChildGuiExecutionGate(TimeProvider? timeProvider = null) : I
     private volatile bool _stopping;
 
     public async Task<T> RunAsync<T>(Func<CancellationToken, Task<T>> body,
-        DateTimeOffset deadline, CancellationToken ct)
+        DateTimeOffset deadline, CancellationToken ct, bool waitForGate = true)
     {
         if (_stopping) throw new InvalidOperationException("GUI执行器正在停止。");
         var remaining = deadline - _time.GetUtcNow();
@@ -24,7 +24,8 @@ public sealed class ChildGuiExecutionGate(TimeProvider? timeProvider = null) : I
             return await body(token);
         if (Volatile.Read(ref _current) is { Active: true, Token.IsCancellationRequested: true })
             throw new InvalidOperationException("GUI仍在完成先前操作，请使用child_session requests/result查询，不要重试变更。");
-        await _gate.WaitAsync(token);
+        if (waitForGate) await _gate.WaitAsync(token);
+        else if (!_gate.Wait(0)) throw new InvalidOperationException("GUI正忙，0秒截图未排队、未执行。");
         var lease = new Lease(token);
         try
         {

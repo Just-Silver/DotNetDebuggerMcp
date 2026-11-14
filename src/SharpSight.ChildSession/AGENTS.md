@@ -15,6 +15,8 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 
 管道使用 CurrentUserOnly，并在收发两端以原生对端 PID 核对创建时间、SID、Session 和映像；客户端自报字段不算证据。实例密钥仅放受 ACL 限制的实例目录，不进参数或正常日志。长度前缀在分配正文前校验，单帧至多 1 MiB；截断帧只结束当前连接。
 
+每条连接只承载一份请求信封；核验后监视对端EOF并传播连接级取消，不能只取消调用端等待。停止监视的令牌与执行令牌分开，避免正常响应完成时误取消已受理工作；进程任务仍须显式cancel才结束。
+
 核验 API：[GetNamedPipeClientProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)、[GetNamedPipeServerProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid)。这不是同账户恶意程序的安全沙箱。
 
 产物不能越过实例目录或经过重解析点；父侧读取核对长度，单个落盘产物读取上限 64 MiB，避免伪造长度造成无界内存分配。PNG 真正内容及其新鲜性仍由截图业务验证。
@@ -30,6 +32,8 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 实例共享 `ChildGuiExecutionGate`。已开始的 UIA COM 调用必须等待真实后台 Task 结束，期间保留客户端和门；截止只让调用方取回 running，不将其登记为终态。超预算仍未返回时拒绝新 GUI 操作，控制查询与进程任务不经过此门。
 
 `ui_wait` 仅在订阅、探测和退订时取门，等待信号或轮询睡眠时放门；不推进帧、不替换清单。门内顺序调用允许同一执行上下文重入，不能把重入上下文用于并发派生 GUI 工作。
+
+断连时进程list/status/output/cancel仍可经控制通道到达存活worker，不能依赖GUI Ready/Active才能取消任务。截图0秒表示立即取门尝试，门忙就拒绝、不排队，实际采集仍受内部护栏。
 
 ## 观察与截图
 

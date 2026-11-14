@@ -1,6 +1,8 @@
+<!-- 职责：说明包使用者的安装、配置、工具与CLI用法及安全边界；不写：实现细节、实验过程或实施计划。 -->
+
 # DotNet Debugger MCP（DotNetDebuggerMcp）
 
-内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量、现场改值），以及**UI 自动化**（`ui_*` 操控桌面控件：语义 pattern 为主，写入默认失焦提交、真实点击前先激活窗口）与**窗口截图**（`screenshot`），开箱即用。
+内置反编译引擎（[ICSharpCode.Decompiler](https://github.com/icsharpcode/ilspy)）与动态调试引擎（ClrDebug/ICorDebug）的 .NET MCP 服务器。在 [opencode](https://opencode.ai) 等 MCP 客户端中直接对 .NET 程序集（dll / exe）做反编译、类型探测、源码写盘与**动态调试**（启动/附加进程、断点、单步、读调用栈与变量、现场改值），以及**UI 自动化**（`ui_*` 操控桌面控件：语义 pattern 为主，写入默认失焦提交、真实点击前先激活窗口）与**窗口截图**（`screenshot`），开箱即用。需要不干扰父会话的键鼠/前台操作时，可显式启用**子会话执行**（`child_*`，Windows RDP Child Session）。
 
 ## 目录
 
@@ -18,7 +20,7 @@
 ## 环境要求
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
-- Windows（反编译/静态分析跨平台可用；`debug_*` 动态调试与 `ui_*` UI 自动化需 Windows——ui_* 以 UIA 语义 pattern 为主，`ui_input` 默认失焦提交、`ui_action clickPoint=true` 会先激活窗口再真实点击；只要求目标窗口在 UIA 树里可见；远程/服务会话可能读不到目标窗口）
+- Windows（反编译/静态分析跨平台可用；`debug_*` 动态调试与 `ui_*` UI 自动化需 Windows——ui_* 以 UIA 语义 pattern 为主，`ui_input` 默认失焦提交、`ui_action clickPoint=true` 会先激活窗口再真实点击；只要求目标窗口在 UIA 树里可见；远程/服务会话可能读不到目标窗口。`child_*` 子会话执行另需 Windows RDP Child Session 环境并在系统层显式启用，见下文「子会话执行」）
 
 ## 安装
 ### 安装
@@ -78,7 +80,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 ## 能力开关
 
-默认**全部能力族启用**。命令行参数 `--features=<逗号分隔>`（或环境变量 `DOTNETDEBUGGERMCP_FEATURES`，命令行优先）是**白名单**——**只启用列出的族，未列出的族关闭**。取值 `decompile` / `debug` / `ui` / `screenshot`：
+默认**全部能力族启用**。命令行参数 `--features=<逗号分隔>`（或环境变量 `DOTNETDEBUGGERMCP_FEATURES`，命令行优先）是**白名单**——**只启用列出的族，未列出的族关闭**。取值 `decompile` / `debug` / `ui` / `screenshot` / `child`：
 
 ```jsonc
 // 只启用反编译 + 调试；UI 自动化和截图不注册（未列出 = 关闭）
@@ -87,7 +89,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 - **反编译恒启用、无法关闭**：它是本服务器的基础能力，且必须有工具可暴露。传 `--features=`（空串）等于只启用反编译。
 - **未列出的族**：其工具**不进 MCP 工具目录**（`tools/list` 里看不到），握手简介里也**完全不提**。
-- **只作用于 MCP 面**：CLI 执行路径（`-a` 反编译、`-l` 列类型、`-dbg` 一次性调试、`-c` 检查更新）**不受开关影响**。
+- **只作用于 MCP 面**：CLI 执行路径（`-a` 反编译、`-l` 列类型、`-dbg` 一次性调试、`child` 子命令、`-c` 检查更新）**不受开关影响**。
 - 未知取值会给出中文错误并以非零码退出。
 
 | 开关 | 覆盖能力 |
@@ -96,6 +98,7 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 | `debug` | `debug_*` 动态调试全族 |
 | `ui` | `ui_find` / `ui_action` / `ui_input` / `ui_get` / `ui_wait` |
 | `screenshot` | `screenshot`（含 `mode=list-displays` / `mode=list-windows` 只读清单） |
+| `child` | `child_session` / `child_process` / `child_pointer` / `child_keyboard`；**注册≠启动子会话**，实例仍需显式 `child_session(action=start)`。既有 `ui_*`/`screenshot` 的 `instance` 路由要求 `child` 与对应族**同时启用** |
 
 ## 核心约定
 
@@ -178,6 +181,23 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 > UI 自动化用法（**不需活动 debug 会话**，可先操作 UI 到某状态再 attach；需目标进程已运行且是 .NET UI 应用）：`ui_find`（按进程/类型/文本定位控件，拿 index/patterns 能力清单/语义候选）→ 预埋断点：`debug_breakpoint`（想断的成员如切换处理函数 `typeName`+`memberName`，语义候选可直接用）→ `ui_action index=N verb=invoke`（按语义触发，业务代码自然执行）→ `debug_wait`（断点命中看现场：`debug_frame`/`debug_evaluate`）→ `ui_wait textChangedFrom=X textChangedTo=Y`（状态变更二次确认）。**语义标注**：ui_find 命中控件时对 Name/AutomationId 做**同名成员反查**（类型全名.成员候选，如按钮 AutoId=toggleState → `MainForm.OnToggleState`——反查的是反编译元数据同名成员，非 XAML 绑定还原）；无候选请手动 `decompile_member` 查。**默认不动前台，必要的焦点接管只有两处**：`ui_input` 默认 `commit=true` 会把焦点移出控件（WPF 等失焦才提交绑定的应用靠这一步真正收到值，会激活目标窗口；纯写不打扰可传 `commit=false`），`ui_action clickPoint=true` 会先把目标窗口带到前台再真实点击。`ui_action`/`ui_input` 是**真实产线操作**（改状态/点按钮/写值），全部写入 AgentActionLog 供复盘；个别自绘控件无任何 pattern 时明确「不支持」（UIA-only 的硬边界）。
 
+### 子会话执行（`child_*` — Windows RDP Child Session，需在系统层显式启用）
+
+把程序启动、UIA 与真实键鼠放进独立的 Windows 子会话，**不影响父会话的鼠标、键盘与前台窗口**。默认随全族注册但**注册不代表启动**：`child` 族既不建连也不初始化 ActiveX，也不创建实例；系统开关与授权都是显式的（见下方 CLI），MCP 不收集凭据、**不会自动触发 UAC 或改任何系统策略**。
+
+| 工具 | 用途 |
+| ---- | ---- |
+| `dotnetdebugger_child_session` | `action=probe/start/status/stop/requests/result`。`probe` 只读返回开关/父会话/现有实例；`start` 建立实例（同一父会话已有本产品健康实例则复用，外部 child 不接管），默认等 30 秒，待认证时直接返回当前状态；`status` 查询（空实例列本产品实例）；`stop` 注销**整个实例**；`requests` 列出已受理 GUI/进程请求摘要（`cursor`/`limit`）；`result` 按 `requestId` 查同一请求的最终结果，**不执行新动作** |
+| `dotnetdebugger_child_process` | `action=start/list/status/output/cancel`。`start` 从**原路径**启动 exe/解释器/脚本（`arguments` 为 JSON 字符串数组，`workingDirectory` 缺省为 executable 所在目录，`environment` 只覆盖显式项），只等注册结果、不等程序退出；`output` 取增量输出（`cursor` 是聚合输出字节位置，完整 UTF-8 边界切分）；`cancel` 只结束该任务自有进程树 |
+| `dotnetdebugger_child_pointer` | `action=move/click/doubleclick/drag/scroll`。目标必须给 `processId`（`hwnd` 空时要求该 PID 唯一顶层窗口）。`x/y/endX/endY` 是**子会话虚拟屏物理像素**（允许负原点；截图像素换算为 `原点+图内像素`）；`durationMs` 范围 50–5000；`scroll` 的 `delta` 为滚轮单位、可正可负。动作是完整有界序列，不暴露跨请求的按下状态 |
+| `dotnetdebugger_child_keyboard` | `action=text/key/chord`。`text` 走 Unicode 输入（不自动追加 Enter、不替你提交 IME）；`key`/`chord` 用明确键名文法（`Ctrl/Alt/Shift/Win` 修饰 + A–Z/0–9/F1–F24/Enter/Tab/Escape/Space/Backspace/Delete/Insert/Home/End/PageUp/PageDown/方向键），`chord` 形如 `Ctrl+K` 且恰有一个非修饰键 |
+
+- **既有工具的 `instance` 路由**：`ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait` 与 `screenshot`（含 `mode=list-windows`/`list-displays` 等清单模式）传 `instance=<实例>` 即在子会话执行，空值仍走父会话原路径。**必须 `child` 与对应族同时启用**，否则非空 `instance` 明确返回「子会话能力未启用」，绝不当空值处理。子会话模式的 UIA/截图不走父侧活动调试进程作缺省目标，必须显式给进程；结果头部标注实例、child SessionId 与目标 PID。
+- **输入坐标与观察引用**：真实输入的坐标固定为子会话虚拟屏物理像素；UIA/截图返回不透明 `observationId`（绑定实例、目标 PID+创建时间、HWND 与采集几何），需要与先前观察绑定时传给 `ui_action`/`ui_input`/`ui_get`/`screenshot`（`observationId` 仅子会话模式可用）。省略 `observationId` 时只保证「操作受理时该 PID 的进程」，不证明仍是调用方早先看到的进程；实例/会话/目标/前台检查始终执行。
+- **超时、Busy 与结果找回**：`timeoutSeconds` 是含排队的执行预算，超时只表示**放弃等待**。UIA COM 调用没有可靠中断——超时后仍运行则保持 **GUI Busy**，拒绝新的 GUI 调用（含截图与探测），但控制查询与 `stop` 仍可用；旧调用真正结束后才解除 Busy。若原响应丢失（MCP 取消/客户端失联），用 `child_session(action=requests)` 找回 `requestId`，再 `action=result` 对账；记录已淘汰或实例失效时报 `unknown`，**不重放变更**（unknown 不等于未执行）。
+- **任务取消 vs 整体停止**：`child_process(action=cancel)` 只结束该任务自己的进程树，不按进程名杀进程、也不注销子会话；`child_session(action=stop)` 注销整个子会话并**结束其中全部应用（包括用户手动在该 child 打开的应用）**，需先断开本服务器附加在该实例目标上的调试会话。
+- **边界与清理**：子会话共享宿主文件、注册表和用户权限，**不是安全沙箱**；客户端需保持连接、非最小化，不承诺锁屏/断开后继续工作；失败不回退到父会话输入。实例产物（任务输出、截图 PNG、日志）在 `%LOCALAPPDATA%\DotNetDebuggerMcp\child\<实例>`，`stop` 后**保留不自动清理**，确认不再需要后手工删除目录；任务日志每任务上限 16 MiB（超出标注截断）、每实例总配额 256 MiB。
+
 ## 命令行调试
 
 MCP 模式外，`DotNetDebuggerMcp` 可直接以命令行执行同等功能，便于本地调试。参数与 MCP 工具一一对应。
@@ -215,6 +235,22 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -fa -tk 0x04000005                     
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -t MyApp.Program -mn Parse -cc [-x]        # dotnetdebugger_call_sequence
 DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                         # 按方法 token 定位起始方法
 ```
+
+### 子会话（`child`）
+
+```bash
+DotNetDebuggerMcp child enable                                                       # 显式授权并打开系统开关（取消即失败，不改其他策略）
+DotNetDebuggerMcp child disable                                                      # 关闭开关；有活动 child（含外部）或实例未停止时拒绝，需先 stop
+DotNetDebuggerMcp child call child_session --json '{"action":"start"}'               # 建立实例（返回 instance；待认证时给当前状态）
+DotNetDebuggerMcp child call child_process --json '{"action":"start","instance":"<实例>","executable":"C:\\Path\\App.exe","arguments":["--flag","含 空格"]}'
+DotNetDebuggerMcp child call child_pointer --json-file request.json                  # 长参数用文件（与 --json 互斥）
+DotNetDebuggerMcp child call screenshot --json '{"instance":"<实例>","processId":1234}'
+```
+
+- `operation` 是明确白名单：`child_session`/`child_process`/`child_pointer`/`child_keyboard`/`ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait`/`screenshot`；`--json` 与 `--json-file` 互斥，非法 JSON/未知操作直接失败且不产生副作用（不做反射调用）。
+- stdout 只输出**单个 JSON**（成功/当前状态、实例、taskId、PID、消息与产物路径），stderr 是诊断。已确认失败或 `unknown` 退出码 1；接受任务/`queued`/`running` 与正常查询退出码 0。截图在 CLI 落 PNG 并输出路径/元数据，不在终端打印图片或 base64。
+- CLI **不连接也不启动 MCP 服务**，直接调共享用例：同一实例可由一条 CLI 创建、另一条操作、MCP 查询。子会话内的 UIA/截图同样必须给 `instance`；操作父会话仍用原 MCP 入口。
+- 脚本通过 `child_process` 启动指定解释器并传数组参数（如现有 `pwsh`），不自动拼 shell、不安装解释器，也不承诺解释器变量跨任务持久化。
 
 ### 通用参数
 

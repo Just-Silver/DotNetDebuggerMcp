@@ -1,6 +1,8 @@
+<!-- 职责：维护宿主项目的入口、能力族、分层边界与验证指引；不写：能力库实现细节或历史实验结果。 -->
+
 # DotNetDebuggerMcp 宿主开发指南
 
-宿主 exe（`DotNetDebuggerMcp`，CLI 命令/NuGet 包 id 同名）：**唯一的 MCP 服务器 + CLI 入口**。无业务参数启动 MCP 服务器（stdio）；传 `-a`/`-c` 等进入命令行模式（复用与 MCP 工具相同的校验与执行逻辑）。全部 MCP 工具与执行管线在此层，反编译/元数据能力来自 Decompiler 库、调试能力来自 Engine/Session 库、截图与 UI 自动化来自 SharpSight 两个能力库。
+宿主 exe（`DotNetDebuggerMcp`，CLI 命令/NuGet 包 id 同名）：**唯一的 MCP 服务器 + CLI 入口**。无业务参数启动 MCP 服务器（stdio）；传 `-a`/`-c` 等进入命令行模式（复用与 MCP 工具相同的校验与执行逻辑）。全部 MCP 工具与执行管线在此层，反编译/元数据能力来自 Decompiler 库、调试能力来自 Engine/Session 库、截图与 UI 自动化来自 SharpSight 能力库、子会话生命周期/IPC/真实输入来自 `SharpSight.ChildSession`。
 
 > 本文件 + 各子项目 AGENTS.md（`src/*/AGENTS.md`）按项目拆分；根 `AGENTS.md` 是仓库级总览与共享纪律（开发铁律/输出约定/版本发布）。
 
@@ -18,6 +20,9 @@
 - `Tools/Screenshot/` — **独立截图工具面**（`DotNetDebuggerMcp.Tools.Screenshot`；独立于调试会话，不属 `debug_*`）：
   - `ScreenshotTool`：`screenshot`（**独立截图**，**不要求调试会话**；返回 `CallToolResult` 图片块双轨（内联 image 块 / 落盘只回路径、**无 image 块**）——铁律「Task<string>」的图片类例外；不走 Manager/缓存/ToolPipeline、不写 Actions）。`mode=list-displays` / `mode=list-windows` 为只读清单模式（返回文本、不返回图片），取代原独立发现工具。
   - `ScreenshotDisplaysTool` / `ScreenshotWindowsTool`：上述两种清单模式的具体实现（保留为 C# 方法，**不再是独立 MCP 工具**）：显示器清单（1 基编号/主屏/物理边界/缩放）与可见顶层窗口（hwnd/pid/标题/前台/最小化，`filter`=标题子串；不限 .NET 进程）。
+- `Tools/Child/` — **子会话执行工具面**（`child` 能力族）：`ChildSessionTool`（`child_session`：probe/start/status/stop/requests/result）、`ChildProcessTool`（`child_process`：start/list/status/output/cancel）、`ChildInputTools`（`child_pointer`/`child_keyboard` 真实键鼠）。**注册族 ≠ 启动子会话**，实例须显式 start；实例白名单与请求/结果门控见 `Services/Child/ChildCallPolicy`。
+- `ChildCli/` — `ChildCliCommand`：`child enable|disable|call <operation> --json|--json-file`，与 MCP 走同一业务用例；早分发、不启动 MCP。
+- `Services/Child/` — 子会话共享执行层：`ChildServices`（实例根目录/宿主命令/客户端工厂 + **`EnabledFeatures`** 记录本 MCP 入口启用的能力族）、`ChildCallPolicy`（入口门控 + 请求登记/结果对账）、`ChildOperationDispatcher`/UIA/截图/输入执行服务与观察引用上下文。**本层不得反向引用 Tools**。
 
 - `DebugCli/` — `DebugCliRunner`：`-dbg` 一次性调试（**与 MCP debug 工具完全独立**：绕过 Manager，直连 `DebugSession.AttachAsync` + 轮询事件流），供手动验证引擎。
 - `Services/` — `DebugSessionService`（静态单例包装 Session `DebugSessionManager`）、`AgentViewService`（静态包装 Web `AgentViewContext`，Revision 机制）、`CheckTool`（非 MCP 工具，CLI `-c`）、`AppServices`（Cache/Pipeline/NuGet/Updater/StatusReport 单例）、`ToolExecutor`（`ResolveAssembly`/`RunPipelineAsync`/`RunMergedAsync`/`RunToDisk`/`RunMetadata`/`RunMetadataPe`）。**本层不得反向引用 Tools**。反编译管线执行时经 `AgentViewService.Context.Update` 写「agent 正在看什么」（当前仅 hook 反编译类，调试工具尚未写）。
@@ -30,8 +35,9 @@
 
 ## 入口（DotNetDebuggerMcpCmd.cs）
 
-- 业务参数：`-a` 反编译系 / `-l -nc -ns` list_types / `-s -hc -d -cg -iu -gi -cc -ai` 元数据系 / `-ss` search_literals / `-fa -fn` field_access / `-mn -tt` decompile_member / `-tk` token 定位 / `-o [-p]` 写盘 / `-ln` 分页 / `--timeout`(默认 30) / `-c` 更新检查 / **`-dbg <exe>` + `-dbg-bp <token>` + `-dbg-offset`** 一次性调试 / `-v` `-h`。分发逻辑在 `DispatchCliAsync`（与 MCP 工具同一执行逻辑）。
-- MCP 启动分支：`builder.Logging.ClearProviders()` + `AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace)`——**严禁删除或改动**（stdout 只承载 MCP 协议帧；并发下 Console 日志与响应交错会撕坏帧，回归护栏 `McpSessionConcurrencyTests`）。启动期按 `FeatureFlags` 决定注册哪些能力族的工具（`ToolFeatureRegistry.EnabledToolTypes`，**未列出族不进工具目录**；**未传 `--features` 时全族启用**），并组装按族拼装的握手简介（`HandshakeText.Build`）+ 「更新状态」段（`EnvironmentChecker.BuildHandshakeText`）注入 `ServerInstructions`；未知取值 → stderr 中文 + 非零退出。后台 fire-and-forget `RefreshIfStaleAsync`。
+- 业务参数：`-a` 反编译系 / `-l -nc -ns` list_types / `-s -hc -d -cg -iu -gi -cc -ai` 元数据系 / `-ss` search_literals / `-fa -fn` field_access / `-mn -tt` decompile_member / `-tk` token 定位 / `-o [-p]` 写盘 / `-ln` 分页 / `--timeout`(默认 30) / `-c` 更新检查 / **`-dbg <exe>` + `-dbg-bp <token>` + `-dbg-offset`** 一次性调试 / **`child enable|disable|call <operation> --json|--json-file`** 子会话 / `-v` `-h`。分发逻辑在 `DispatchCliAsync`（与 MCP 工具同一执行逻辑），`child` 子命令在 `ChildCliCommand` 早分发。
+- MCP 启动分支：`builder.Logging.ClearProviders()` + `AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace)`——**严禁删除或改动**（stdout 只承载 MCP 协议帧；并发下 Console 日志与响应交错会撕坏帧，回归护栏 `McpSessionConcurrencyTests`）。启动期按 `FeatureFlags` 决定注册哪些能力族的工具（`ToolFeatureRegistry.EnabledToolTypes`，**未列出族不进工具目录**；**未传 `--features` 时全族启用**），并把解析结果写入 `Services.Child.ChildServices.EnabledFeatures`（本入口的可见性/调用门控；**注册 child 族不等于建立子会话或初始化 ActiveX**），再组装按族拼装的握手简介（`HandshakeText.Build`）+「更新状态」段（`EnvironmentChecker.BuildHandshakeText`）注入 `ServerInstructions`；未知取值 → stderr 中文 + 非零退出。后台 fire-and-forget `RefreshIfStaleAsync`。
+- **子会话边界**（`child` 族）：设计契约见 `docs/planning/specs/2026-11-14-child-session-mcp-cli-design.md` §5–§10——既有 `ui_*`/`screenshot` 的 `instance` 路由要求 child 与对应族同时启用（否则非空 instance 明确报未启用，绝不当空值走父会话）；UIA/截图超时后仍运行则保持 GUI Busy 且不自动重放，结果按请求登记找回；`stop` 注销整个子会话并结束其中全部应用。不把子会话当安全沙箱。
 
 ## 铁律速查（完整版见根 AGENTS.md）
 

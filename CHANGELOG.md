@@ -1,10 +1,23 @@
+<!-- 职责：记录包使用者可见的版本变更；不写：内部重构、测试过程或实施计划。 -->
+
 # Changelog
 
-本文件记录 ILSpyMcp 各版本的变更，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循[语义化版本](https://semver.org/lang/zh-CN/)。
+本文件记录 DotNetDebuggerMcp 各版本的变更，格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
 版本号与 `src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj` 的 `<Version>` 保持一致；发布时 CI 从本文件提取当前版本对应段落作为 GitHub Release 正文（NuGet 包的 `PackageReleaseNotes` 只放指向该 Release 页的链接）。未发布的变更统一记录在 `[Unreleased]`，发布时再转为带日期的版本段落。
 
 本文件面向包使用者（agent 与 CLI 用户），只记录使用者可见的变更（新功能、行为变化、破坏性变更、可感知的修复、默认值/参数描述变化）；内部重构、实现细节、测试改动等一律不记录，请查阅 git 提交历史。
+
+## [Unreleased]
+
+### Added
+
+- **子会话执行（`child` 能力族，Windows RDP Child Session）**：新增 `child_session`（probe/start/status/stop/requests/result）、`child_process`（从原路径启动 exe/解释器/脚本、增量输出、单任务取消）、`child_pointer` 与 `child_keyboard`（子会话内真实鼠标/键盘），把 GUI 操作放进独立 Windows 子会话，不干扰父会话的鼠标、键盘与前台窗口。默认全族注册但**注册不等于启动**：实例需显式 `child_session(action=start)` 建立，MCP 不会自动触发 UAC 或修改系统策略，认证只在系统连接窗口由用户手动完成。
+- **`ui_*` 与 `screenshot` 新增 `instance` 路由**：传实例即在子会话执行（空值保持原父会话路径），另增 `observationId` 观察引用；需 `child` 与对应族同时启用，否则非空 `instance` 明确返回未启用，绝不静默回退父会话。
+- **CLI `child` 子命令**：`child enable` / `child disable` / `child call <operation> --json <参数对象>`（长参数用 `--json-file <路径>`，二者互斥）；输出单个 JSON 结果，已确认失败或 `unknown` 退出码 1。CLI 不启动 MCP 服务，同一实例可在 CLI 与 MCP 之间复用。
+- **超时/失联不重放**：请求超时只表示放弃等待，可用 `child_session(action=requests)` 找回 `requestId` 再 `action=result` 对账；记录淘汰或实例失效明确返回 `unknown`。UIA/截图超时后仍运行则保持 GUI Busy 并拒绝新 GUI 调用，控制查询与 `stop` 不受影响。
+- **`--features` 新增 `child` 取值**；握手按实际启用族说明子会话的创建/原路径启动/真实键鼠/结果找回/整体停止触发条件，未启用的族不出现其工具名或工作流。
+- **说明书与边界**：README 增补子会话能力、配置与 CLI 用法；明确子会话共享宿主文件与用户权限、**不是安全沙箱**，`stop` 会注销整个子会话并结束其中全部应用（含用户手动打开的），实例产物保留在 `%LOCALAPPDATA%\DotNetDebuggerMcp\child\<实例>` 需人工清理。
 
 ## [2.5.1] - 2026-10-26
 

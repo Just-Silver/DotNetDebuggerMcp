@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "description": "内置反编译与调试能力的 .NET MCP 服务器（DotNetDebuggerMcp）。",
+  "description": "内置 .NET 反编译/调试、UIA、截图与 Windows 子会话执行能力的 MCP 服务器（DotNetDebuggerMcp）。",
   "name": "io.github.just-silver/DotNetDebuggerMcp",
   "version": "2.5.1",
   "packages": [
@@ -15,7 +15,7 @@
       "environmentVariables": [
         {
           "name": "DOTNETDEBUGGERMCP_FEATURES",
-          "description": "只启用列出的能力族（白名单，逗号分隔：decompile/debug/ui/screenshot）；未列出的族不注册。缺省=全部启用，反编译恒启用、无法关闭（传空串=仅反编译）。仅作用于 MCP 面（工具注册与握手注入），CLI 参数不受影响。等价于命令行参数 --features。",
+          "description": "只启用列出的能力族（白名单，逗号分隔：decompile/debug/ui/screenshot/child）；未列出的族不注册。缺省=全部启用，反编译恒启用、无法关闭（传空串=仅反编译）。注册 child 不会自动建立子会话或更改系统开关。仅作用于 MCP 面（工具注册与握手注入），CLI 参数不受影响。等价于命令行参数 --features。",
           "isRequired": false,
           "isSecret": false
         }

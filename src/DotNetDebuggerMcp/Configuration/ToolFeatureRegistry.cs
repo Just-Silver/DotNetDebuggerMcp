@@ -21,6 +21,7 @@ internal static class ToolFeatureRegistry
     {
         var ns = toolType.Namespace ?? "";
         if (ns.EndsWith(".Tools.Screenshot", StringComparison.Ordinal)) return FeatureFamily.Screenshot;
+        if (ns.EndsWith(".Tools.Child", StringComparison.Ordinal)) return FeatureFamily.Child;
         if (ns.EndsWith(".Tools.Debugger", StringComparison.Ordinal))
             return toolType.Name == "UiTools" ? FeatureFamily.Ui : FeatureFamily.Debug;
         if (ns.EndsWith(".Tools.Decompile", StringComparison.Ordinal)

@@ -46,6 +46,7 @@ public sealed class ToolFeatureRegistryTests
         var debug = ToolFeatureRegistry.EnabledToolTypes(FeatureFamily.Debug).Select(t => t.Name).ToHashSet();
         var ui = ToolFeatureRegistry.EnabledToolTypes(FeatureFamily.Ui).Select(t => t.Name).ToHashSet();
         var shot = ToolFeatureRegistry.EnabledToolTypes(FeatureFamily.Screenshot).Select(t => t.Name).ToHashSet();
+        var child = ToolFeatureRegistry.EnabledToolTypes(FeatureFamily.Child).Select(t => t.Name).ToHashSet();
 
         Assert.Contains("DebugSessionTool", debug);
         Assert.Contains("UiTools", ui);
@@ -53,9 +54,16 @@ public sealed class ToolFeatureRegistryTests
         Assert.Contains("ScreenshotWindowsTool", shot);
         Assert.Contains("ScreenshotDisplaysTool", shot);
 
+        // child 族只收子会话工具，且不渗进其他族（反之亦然）
+        Assert.NotEmpty(child);
+        Assert.All(ToolFeatureRegistry.EnabledToolTypes(FeatureFamily.Child),
+            t => Assert.EndsWith(".Tools.Child", t.Namespace ?? ""));
+        foreach (var other in new[] { debug, ui, shot })
+            Assert.Empty(other.Intersect(child));
+
         // 各族并集 == 全部（无未归属、无重复归属到多族之外）
         var all = ToolFeatureRegistry.AllToolTypes().Select(t => t.Name).ToHashSet();
-        var union = new HashSet<string>(debug.Concat(ui).Concat(shot).Concat(
+        var union = new HashSet<string>(debug.Concat(ui).Concat(shot).Concat(child).Concat(
             ToolFeatureRegistry.EnabledToolTypes(FeatureFamily.Decompile).Select(t => t.Name)));
         Assert.Equal(all, union);
     }

@@ -19,6 +19,7 @@ internal static class HandshakeText
     private const string IntroDebug = "**动态调试**（启动/附加进程，断点、单步、栈/变量实时值，现场改值）";
     private const string IntroUi = "**UI 自动化**（UIA 语义操控桌面控件）";
     private const string IntroScreenshot = "**视觉/监视**（截图）";
+    private const string IntroChild = "**子会话执行**（RDP 子会话内从原路径启动程序/脚本、真实键鼠，不抢父会话焦点）";
 
     private const string IntroTail = "；反编译与调试引擎均内置，无需外部工具。";
 
@@ -40,11 +41,25 @@ internal static class HandshakeText
         "- **当需要观察 GUI 窗口/屏幕画面（看控件状态、布局冒烟）时**，调用 screenshot 截图：可按全屏/指定显示器（副屏）/窗口（pid、标题、前台、句柄）/窗口客户区/屏幕区域/UIA 单个元素寻址，返回图片；头部给出 原点/帧 坐标元数据（图像为原生 1:1，本服务器不做缩放），可选叠加光标（includeCursor），图片过大会改为落盘返回路径。寻址参数不确定时先列清单：显示器用 `screenshot(mode=list-displays)`、可见窗口用 `screenshot(mode=list-windows)`（hwnd/标题/pid，不限 .NET 进程）。\n";
     private const string UseScreenshotElementUi = "- 按控件截图先 `ui_find` 取 index/名与帧号；`ui_find` 输出的 `帧: frameId=N` 可回传给 `ui_action`/`ui_input`/`ui_get` 与 screenshot，用于拦截引用旧画面的操作。\n";
 
+    // child 段核心：注册≠建连、原路径启动、真实键鼠、超时不重放、stop 整体注销。族内不引用 ui_*/screenshot，
+    // 其子会话路由只在对应族也启用时追加（见 BuildUseChild），否则会指向未注册的工具。
+    private const string UseChildCore =
+        "- **当 GUI 操作不能被父会话鼠标键盘/前台干扰，或需要把程序跑在独立 Windows 子会话（RDP Child Session）时**，用 child 族：`child_session`(action=probe/start/status/stop) 建立/查询/停止实例；`start` 缺省等 30 秒，待认证时返回当前状态（用户只在系统连接窗口手动认证，不自动改系统设置），**注册 child 族不等于启动子会话**。\n" +
+        "- **当需要在子会话内从原路径启动 exe/解释器/脚本（后台运行）时**，用 `child_process`(action=start/list/status/output/cancel)：参数为 JSON 数组（不自动拼 shell），start 只等注册结果、不等程序退出；增量输出用 output，只结束该任务用 cancel。\n" +
+        "- **当需要在子会话内真实点按/拖拽/滚轮或键盘输入时**，用 `child_pointer`/`child_keyboard`（无父会话模式，必须给 `instance`）：坐标是子会话虚拟屏物理像素，动作是完整有界序列、不跨调用保留按下状态；事件提交不等于业务已消费，需再看界面状态。\n" +
+        "- **超时/失联不要重放**：超时只代表放弃等待；用 `child_session(action=requests)` 找回 requestId，再 `action=result` 查同一请求的最终结果；记录淘汰或实例失效报 unknown，不重执行。\n" +
+        "- **`child_session(action=stop)` 注销整个子会话并结束其中全部应用（含用户手动打开的）**，需要整体清理时用；只停单个任务用 `child_process(action=cancel)`。\n";
+    private const string UseChildUi =
+        "- **子会话内 UI 自动化**：给 `ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait` 传 `instance=<实例>` 即在该子会话执行，空值仍走父会话原路径；需 child 与 ui 两族都启用，子会话模式必须显式给 process。\n";
+    private const string UseChildScreenshot =
+        "- **子会话内截图**：给 `screenshot` 传 `instance=<实例>`（含 `mode=list-windows`/`list-displays` 等清单模式）即在子会话采集，绝不把父会话清单当子会话结果；需 child 与 screenshot 两族都启用。\n";
+
     private const string ToolListPrefix = "具体工具清单见 MCP 工具目录（";
     private const string ToolListDecompile = "`decompile` 等语义前缀，静态工具另有 `signature`/`list_types`/`call_*`/`hierarchy`/`dependencies`/`interface_usage`/`field_access`/`search_literals`";
     private const string ToolListDebug = "调试 `debug_*`";
     private const string ToolListUi = "UI `ui_*`";
     private const string ToolListScreenshot = "视觉 `screenshot`（含 `mode=list-displays` / `list-windows` 只读清单）";
+    private const string ToolListChild = "子会话 `child_*`（`child_session`/`child_process`/`child_pointer`/`child_keyboard`）";
     private const string ToolListSuffix = "）。\n";
 
     private const string ConventionStatic =
@@ -69,6 +84,7 @@ internal static class HandshakeText
             if (enabled.HasFlag(FeatureFamily.Debug)) sb.Append(UseDebug);
             if (enabled.HasFlag(FeatureFamily.Ui)) sb.Append(BuildUseUi(enabled));
             if (enabled.HasFlag(FeatureFamily.Screenshot)) sb.Append(BuildUseScreenshot(enabled));
+            if (enabled.HasFlag(FeatureFamily.Child)) sb.Append(BuildUseChild(enabled));
             sb.Append('\n').Append(BuildToolList(enabled));
             sb.Append(ConventionHeader).Append(BuildConvention(enabled));
         }
@@ -83,11 +99,12 @@ internal static class HandshakeText
     /// <summary>按族列出工具前缀（只列已启用族，避免未启用族的工具名泄漏进握手）。</summary>
     private static string BuildToolList(FeatureFamily enabled)
     {
-        var parts = new List<string>(4);
+        var parts = new List<string>(5);
         if (enabled.HasFlag(FeatureFamily.Decompile)) parts.Add(ToolListDecompile);
         if (enabled.HasFlag(FeatureFamily.Debug)) parts.Add(ToolListDebug);
         if (enabled.HasFlag(FeatureFamily.Ui)) parts.Add(ToolListUi);
         if (enabled.HasFlag(FeatureFamily.Screenshot)) parts.Add(ToolListScreenshot);
+        if (enabled.HasFlag(FeatureFamily.Child)) parts.Add(ToolListChild);
         return ToolListPrefix + string.Join("，", parts) + ToolListSuffix;
     }
 
@@ -112,14 +129,27 @@ internal static class HandshakeText
     private static string BuildUseScreenshot(FeatureFamily enabled)
         => enabled.HasFlag(FeatureFamily.Ui) ? UseScreenshot + UseScreenshotElementUi : UseScreenshot;
 
+    /// <summary>
+    /// child 段：核心触发条件恒在；子会话内的 UI/截图路由只在对应族也启用时追加——否则会指向未注册的工具，
+    /// 且「instance 工作流」本就是 child + 对应族的组合能力。
+    /// </summary>
+    private static string BuildUseChild(FeatureFamily enabled)
+    {
+        var sb = new StringBuilder(UseChildCore);
+        if (enabled.HasFlag(FeatureFamily.Ui)) sb.Append(UseChildUi);
+        if (enabled.HasFlag(FeatureFamily.Screenshot)) sb.Append(UseChildScreenshot);
+        return sb.ToString();
+    }
+
     /// <summary>按固定顺序列出启用族的中文能力短语（顿号分隔）。</summary>
     private static string JoinFamilies(FeatureFamily enabled)
     {
-        var parts = new List<string>(4);
+        var parts = new List<string>(5);
         if (enabled.HasFlag(FeatureFamily.Decompile)) parts.Add(IntroDecompile);
         if (enabled.HasFlag(FeatureFamily.Debug)) parts.Add(IntroDebug);
         if (enabled.HasFlag(FeatureFamily.Ui)) parts.Add(IntroUi);
         if (enabled.HasFlag(FeatureFamily.Screenshot)) parts.Add(IntroScreenshot);
+        if (enabled.HasFlag(FeatureFamily.Child)) parts.Add(IntroChild);
         return string.Join("、", parts);
     }
 }
