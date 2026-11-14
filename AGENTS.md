@@ -12,12 +12,15 @@
 | `src/DotNetDebugger.Engine/` | 动态调试引擎（ICorDebug） | `src/DotNetDebugger.Engine/AGENTS.md` |
 | `src/SharpSight.Capture/` | 截图/图像能力库（WGC+GDI 捕获、缩放/编码/裁剪） | 根 `AGENTS.md`（暂无独立指令文件） |
 | `src/SharpSight.UiAutomation/` | UI 自动化能力库（FlaUI/UIA 元素模型与定位） | 根 `AGENTS.md`（暂无独立指令文件） |
+| `src/SharpSight.ChildSession/` | 子会话执行能力库（生命周期/IPC/任务/真实输入） | `src/SharpSight.ChildSession/AGENTS.md` |
 | `src/DotNetDebugger.Session/` | 会话/状态层（宿主共享中枢） | `src/DotNetDebugger.Session/AGENTS.md` |
 | `src/DotNetDebuggerMcp/` | **宿主 exe**（MCP+CLI） | `src/DotNetDebuggerMcp/AGENTS.md` |
 | `src/DotNetDebuggerMcp.Client/` | 端到端验证客户端 | `src/DotNetDebuggerMcp.Client/AGENTS.md` |
 | `tests/` | 5 个测试项目 + `Fixtures/`（夹具源码与生成脚本）+ `TestData/`（产物，整体忽略） | `tests/AGENTS.md` |
 
 **依赖方向**：`Decompiler`（只依赖 ICSharpCode.Decompiler）、`Engine`（只依赖 ClrDebug + DbgShim.win-x64）、`SharpSight.Capture`（只依赖 System.Drawing.Common，**无第三方图像库**）与 `SharpSight.UiAutomation`（只依赖 FlaUI）是零宿主依赖的能力库；`Session` 依赖 Engine+Decompiler；`DotNetDebuggerMcp` 宿主引 Decompiler + Engine + Session + 两个 SharpSight 库。各库**均不得反向引用宿主**。
+
+`SharpSight.ChildSession` 同样零宿主依赖，提供 WTS/ActiveX、私有 IPC、任务与输入，由 MCP/CLI 宿主引用；不引用调试 `DotNetDebugger.Session`。
 
 **文档导航**：`docs/README.md` 是 docs 树顶层「文档 → 负责 / 不写」地图（唯一索引，新增文档必须登记）；`docs/planning/README.md` 是 docs 规划目录的权威入口（P1-P4-2 已完成、P5 发布进行中、specs/research 导航），`docs/reports/` 收真实使用现场记录与复核（不写修复方案）；近期待办在**各项目目录 `TODO.md`**（与该目录 AGENTS.md 同放，按项目独立维护）；`docs/ROADMAP.md` 是远期待办；`CHANGELOG.md` 是包使用者可见的发布记录（`[Unreleased]` 段即当前迭代）。实现细节查证优先读本地克隆 `../../Externals/DebuggerExternals/`（dnSpy / ILSpy / sharpdbg / ClrDebug / clrmd / diagnostics / BootstrapBlazor）。
 

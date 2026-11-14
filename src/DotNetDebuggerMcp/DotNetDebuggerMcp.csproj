@@ -54,6 +54,7 @@
     <ProjectReference Include="..\DotNetDebugger.Session\DotNetDebugger.Session.csproj" />
     <ProjectReference Include="..\SharpSight.Capture\SharpSight.Capture.csproj" />
     <ProjectReference Include="..\SharpSight.UiAutomation\SharpSight.UiAutomation.csproj" />
+    <ProjectReference Include="..\SharpSight.ChildSession\SharpSight.ChildSession.csproj" />
   </ItemGroup>
 
   <ItemGroup>
