@@ -11,6 +11,7 @@ namespace DotNetDebuggerMcp.Services.Child;
 internal sealed class ChildUiExecutionService : IAsyncDisposable
 {
     private readonly ChildGuiExecutionGate _gate;
+    internal ChildGuiExecutionGate Gate => _gate;
     private readonly int _sessionId;
     private readonly AsyncLocal<BoundTarget?> _binding = new();
     internal UiAutomationService Automation { get; }

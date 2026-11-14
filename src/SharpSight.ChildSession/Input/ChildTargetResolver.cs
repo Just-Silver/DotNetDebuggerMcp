@@ -21,6 +21,11 @@ public sealed class ChildTargetResolver(int sessionId)
     public Task<ResolvedChildTarget> ResolveAsync(int processId, string hwnd, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        return Task.FromResult(Resolve(processId, hwnd));
+    }
+
+    public ResolvedChildTarget Resolve(int processId, string hwnd)
+    {
         var identity = ReadProcess(processId);
         var previous = SetThreadDpiAwarenessContext(new(-4));
         try
@@ -48,11 +53,11 @@ public sealed class ChildTargetResolver(int sessionId)
                 throw new InvalidOperationException("窗口已失效、不可见或不属于目标进程。");
             if (ReadProcess(processId).StartedTicks != identity.StartedTicks)
                 throw new InvalidOperationException("目标进程创建时间已变化。");
-            return Task.FromResult(identity with
+            return identity with
             {
                 Hwnd = handle.ToInt64().ToString(CultureInfo.InvariantCulture),
                 Bounds = Rectangle.FromLTRB(rect.Left, rect.Top, rect.Right, rect.Bottom)
-            });
+            };
         }
         finally { if (previous != 0) SetThreadDpiAwarenessContext(previous); }
     }

@@ -38,3 +38,11 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 `ChildTargetResolver` 用线程 DPI 上下文读取物理窗口矩形并恢复原上下文，不改变用户窗口的 DPI 策略。Win32 约定已对照本地 `../../Externals/wpf/src/Microsoft.DotNet.Wpf/src/Shared/MS/Win32/UnsafeNativeMethodsCLR.cs` 的 `SetThreadDpiAwarenessContext` 返回旧句柄语义。
 
 真实 child 图像测试须显式设置 `DOTNETDEBUGGER_CHILD_TEST_INSTANCE` 指向本产品已授权的活动实例；不设置时只运行产物/引用边界测试，真实项明确跳过，不能把跳过算作真实截图成功。此测试临时启动两个不同纯色标记窗口，结束后取消自有任务并清理父侧夹具，不启用开关或接管其他会话。
+
+## 输入所有权
+
+`ChildInputController` 与 UIA/截图共用同一个实例门；系统窗口、键态和 SendInput 仅由 `IChildInputPlatform` 承载。每个事件前重新检查会话、input desktop、目标身份/前台及指针命中区域。键盘语义受到非本轮修饰键影响时拒绝，不为凑成期望组合而释放别人的键。
+
+`PressedInputScope` 只登记系统确已接受的本轮 down，结束或异常时逆序释放。失焦允许释放自己的状态，但原会话/input desktop 不可确认时连清理事件也不向新环境提交，结果为 unknown；成功只表示事件已提交，不代表应用已消费。
+
+原生布局与事件标志以官方 [INPUT](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-input)、[MOUSEINPUT](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-mouseinput)、[KEYBDINPUT](https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-keybdinput) 为准；生产代码不得依赖前期 `NativeInputSpike` 试验工程。

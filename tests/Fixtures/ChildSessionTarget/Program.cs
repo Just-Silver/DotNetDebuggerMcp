@@ -28,6 +28,14 @@ switch (args.FirstOrDefault())
     case "marker":
         await ChildSessionTarget.MarkerWindow.RunAsync(args.ElementAtOrDefault(1) ?? "lime");
         break;
+    case "gui":
+        if (args.ElementAtOrDefault(1) is not { Length: > 0 } outputDirectory)
+        {
+            Console.Error.WriteLine("用法：gui <outputDirectory>");
+            return 1;
+        }
+        await ChildSessionTarget.ProbeForm.RunAsync(outputDirectory);
+        break;
     case "spawn":
         var info = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true };
         info.ArgumentList.Add("sleep");
