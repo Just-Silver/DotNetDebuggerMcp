@@ -1,5 +1,6 @@
 using DotNetDebuggerMcp.Services;
 using SharpSight.UiAutomation;
+using DotNetDebuggerMcp.Services.Gui;
 using ModelContextProtocol.Server;
 
 using System.ComponentModel;
@@ -18,9 +19,6 @@ namespace DotNetDebuggerMcp.Tools.Debugger;
 [McpServerToolType]
 public static class UiTools
 {
-    private const string UiVerbOptions =
-        "invoke（默认动作）/ toggle（可勾选控件）/ select（列表·树·页签项）/ expand / collapse / focus（仅控件，窗口会抢前台请用 windowstate）/ scroll（需给 direction=up/down，lines 行数）/ scrollintoview / windowstate（还原/最大化/最小化顶层窗口，需给 windowstate=normal/maximized/minimized）";
-
     /// <summary>按进程/窗口条件查找 UI 控件清单（无视觉——返回文本清单与各控件支持的 pattern）。</summary>
     [McpServerTool]
     [Description("按进程/窗口条件查找 UI 控件清单（无视觉，返回文本）：process 传 pid 或进程名，可用 text/type/automationId 过滤；返回 index、Name、AutoId、patterns 与 Rect。**被禁用的控件（IsEnabled=false）在行尾标 [禁用]**——这类控件 UIA 会拒绝语义动作与写值，先让它变为可用再操作。大 UI 树用 scope（以上次 index 为根）与 depth 限层，避免超时。命中控件附同名成员反查候选（可 decompile_member 看实现）。执行动作走 ui_action，读值走 ui_get。注意观测扰动：UIA 注入会改变目标性能特征，性能排查优先 debug_* + 截图。")]
@@ -40,35 +38,8 @@ public static class UiTools
         UiAutomationService.Instance.BeginUiCall();
         try
         {
-            if (string.IsNullOrWhiteSpace(process))
-                return Fail("ui_find", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
-            var find = await UiAutomationService.Instance.FindAsync(process.Trim(), title.Trim(), text.Trim(), type.Trim(), automationId.Trim(), limit, timeoutSeconds, cancellationToken, scope, depth);
-            var elements = find.Elements;
-
-            var pid = UiAutomationService.Instance.LastFindPid;
-            var winTitle = UiAutomationService.Instance.LastFindWindowTitle;
-            var truncated = UiAutomationService.Instance.LastFindTruncated;
-            var sb = new StringBuilder();
-            sb.Append($"UI 控件清单 进程 {process.Trim()}(pid={pid}) 窗口「{winTitle}」共 {elements.Count} 个控件{(truncated ? "（已达上限，可能还有更多）" : "")}（帧: frameId={find.FrameId}）:");
-            if (elements.Count == 0)
-            {
-                sb.Append("未找到符合条件的控件。可放宽条件（去掉 type/text）或用 ui_find process 只带进程名看全量。");
-                return Done("ui_find", argsText, sb.ToString());
-            }
-            foreach (var el in elements)
-            {
-                sb.AppendLine();
-                var name = string.IsNullOrEmpty(el.Name) ? "" : el.Name;
-                var autoId = string.IsNullOrEmpty(el.AutoId) ? "（无）" : el.AutoId;
-                var patterns = string.IsNullOrEmpty(el.Patterns) ? "（无）" : el.Patterns;
-                sb.Append($"[{el.Index}] {el.Type} Name={name} AutoId={autoId} patterns={patterns}{(el.Enabled ? "" : " [禁用]")} Rect=({el.Rect})");
-                if (!string.IsNullOrEmpty(el.Semantic))
-                    sb.Append($" 语义候选: {el.Semantic}（可 decompile_member 看实现）");
-            }
-            if (truncated)
-                sb.AppendLine().Append($"已达上限 {elements.Count} 条——可加 text/type 条件缩小范围，或用 limit 放大。");
-            sb.AppendLine().Append("操作：ui_action（语义动词 invoke/toggle/select/expand/collapse/focus/scroll/scrollintoview/windowstate）/ ui_input（写值）/ ui_get（读值）；动作后用 ui_wait 确认状态变化。");
-            return Done("ui_find", argsText, sb.ToString());
+            return Done("ui_find", argsText, await UiOperationService.FindAsync(
+                new(process, title, text, type, automationId, limit, scope, depth, timeoutSeconds), cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -100,16 +71,10 @@ public static class UiTools
         UiAutomationService.Instance.BeginUiCall();
         try
         {
-            UiAutomationService.Instance.Frames.Validate(frameId);
-            if (string.IsNullOrWhiteSpace(process))
-                return Fail("ui_action", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
-            if (string.IsNullOrWhiteSpace(verb))
-                return Fail("ui_action", argsText, $"verb 不能为空（可选 {UiVerbOptions}）。");
-            if (verb.Trim().Equals("rightclick", StringComparison.OrdinalIgnoreCase)
-                || verb.Trim().Equals("doubleclick", StringComparison.OrdinalIgnoreCase))
-                return Fail("ui_action", argsText, "UIA 无右键/双击语义入口；请把操作改为等价菜单/命令的 verb=invoke（确需真实点击时用 verb=invoke/select + clickPoint=true）。");
-            var result = await UiAutomationService.Instance.ActionAsync(process.Trim(), verb.Trim(), index, name.Trim(), type.Trim(), direction.Trim(), lines, windowstate.Trim(), timeoutSeconds, cancellationToken, clickPoint);
-            return Done("ui_action", argsText, result.Message);
+            return Done("ui_action", argsText, await UiOperationService.ActionAsync(
+                new(Process: process, Verb: verb, Index: index, Name: name, Type: type, FrameId: frameId,
+                    Direction: direction, Lines: lines, WindowState: windowstate, ClickPoint: clickPoint,
+                    TimeoutSeconds: timeoutSeconds), cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -139,13 +104,9 @@ public static class UiTools
         UiAutomationService.Instance.BeginUiCall();
         try
         {
-            UiAutomationService.Instance.Frames.Validate(frameId);
-            if (string.IsNullOrWhiteSpace(process))
-                return Fail("ui_input", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
-            if (string.IsNullOrEmpty(value))
-                return Fail("ui_input", argsText, "value 不能为空：ui_input 需给出要写入的值。");
-            var result = await UiAutomationService.Instance.InputAsync(process.Trim(), value, index, name.Trim(), type.Trim(), commit, timeoutSeconds, cancellationToken);
-            return Done("ui_input", argsText, result.Message);
+            return Done("ui_input", argsText, await UiOperationService.InputAsync(
+                new(Process: process, Value: value, Index: index, Name: name, Type: type, Commit: commit,
+                    FrameId: frameId, TimeoutSeconds: timeoutSeconds), cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -174,16 +135,9 @@ public static class UiTools
         UiAutomationService.Instance.BeginUiCall();
         try
         {
-            UiAutomationService.Instance.Frames.Validate(frameId);
-            if (string.IsNullOrWhiteSpace(process))
-                return Fail("ui_get", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
-            if (string.IsNullOrWhiteSpace(what))
-                return Fail("ui_get", argsText, "what 不能为空：value/name/toggle/selected/expandstate/rangevalue/enabled/offscreen/rect/helptext。");
-            var state = await UiAutomationService.Instance.GetAsync(process.Trim(), what.Trim(), index, name.Trim(), type.Trim(), timeoutSeconds, cancellationToken);
-            var (safe, redacted) = SensitiveValueRedactor.Redact(state.ControlName, state.Value);
-            var text = $"what={what.Trim()} → {safe}";
-            if (redacted) text += $"（{SensitiveValueRedactor.Notice}）";
-            return Done("ui_get", argsText, text);
+            return Done("ui_get", argsText, await UiOperationService.GetAsync(
+                new(Process: process, What: what, Index: index, Name: name, Type: type,
+                    FrameId: frameId, TimeoutSeconds: timeoutSeconds), cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -211,12 +165,9 @@ public static class UiTools
         UiAutomationService.Instance.BeginUiCall();
         try
         {
-            if (string.IsNullOrWhiteSpace(process))
-                return Fail("ui_wait", argsText, "目标进程不能为空：给 pid 或进程名（如 UiSampleApp）。");
-            if (string.IsNullOrWhiteSpace(text) && (string.IsNullOrWhiteSpace(textChangedFrom) || string.IsNullOrWhiteSpace(textChangedTo)))
-                return Fail("ui_wait", argsText, "ui_wait 需给出 text（等控件出现）或 textChangedFrom + textChangedTo 成对（等文本从 X 变 Y）。");
-            var result = await UiAutomationService.Instance.WaitAsync(process.Trim(), text.Trim(), type.Trim(), textChangedFrom.Trim(), textChangedTo.Trim(), timeoutSeconds, cancellationToken);
-            return Done("ui_wait", argsText, $"{result.Outcome}：{result.Message}");
+            return Done("ui_wait", argsText, await UiOperationService.WaitAsync(
+                new(Process: process, Text: text, Type: type, TextChangedFrom: textChangedFrom,
+                    TextChangedTo: textChangedTo, TimeoutSeconds: timeoutSeconds), cancellationToken));
         }
         catch (OperationCanceledException)
         {
