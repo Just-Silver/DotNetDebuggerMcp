@@ -9,3 +9,11 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 - 新代码单方法尽量不超过 60 行，超过 80 行必须拆分。
 - 行为测试位于 `tests/DotNetDebuggerMcp.Tests/Child*Tests.cs`；真实 child 集成验收仅显式授权运行，不自动修改系统开关。
 - 正式设计与任务见根规划地图中的子会话 MCP/CLI 设计及实施计划。
+
+## IPC 与产物边界
+
+管道使用 CurrentUserOnly，并在收发两端以原生对端 PID 核对创建时间、SID、Session 和映像；客户端自报字段不算证据。实例密钥仅放受 ACL 限制的实例目录，不进参数或正常日志。长度前缀在分配正文前校验，单帧至多 1 MiB；截断帧只结束当前连接。
+
+核验 API：[GetNamedPipeClientProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)、[GetNamedPipeServerProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid)。这不是同账户恶意程序的安全沙箱。
+
+产物不能越过实例目录或经过重解析点；父侧读取核对长度，单个落盘产物读取上限 64 MiB，避免伪造长度造成无界内存分配。PNG 真正内容及其新鲜性仍由截图业务验证。
