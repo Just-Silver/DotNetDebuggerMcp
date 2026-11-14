@@ -18,3 +18,9 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 核验 API：[GetNamedPipeClientProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)、[GetNamedPipeServerProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid)。这不是同账户恶意程序的安全沙箱。
 
 产物不能越过实例目录或经过重解析点；父侧读取核对长度，单个落盘产物读取上限 64 MiB，避免伪造长度造成无界内存分配。PNG 真正内容及其新鲜性仍由截图业务验证。
+
+## 任务进程
+
+先挂起创建、归入自有 Job、再恢复；不能先让应用运行再追认所有权。每任务 Job 使用关闭即结束标志，仅取消本任务进程树，不按进程名结束应用。任务日志达到限额后继续排空管道；stdin 的父写端不可被 child 继承，否则 child 会因自己的写端而永远收不到 EOF。
+
+原生契约：[AssignProcessToJobObject](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject)（Job 内进程必须同 Session）、[扩展限额结构](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_extended_limit_information)。

@@ -19,8 +19,10 @@ internal static class ChildProcessRoles
                     await new ChildHolderRuntime(store, ChildServices.Command).RunAsync(args[3], ct);
                     break;
                 case "worker":
-                    await new ChildWorkerRuntime(store).RunAsync(args[3], (_, request, _) =>
-                        Task.FromResult(ChildReply.Create(request, "not-executed", "该worker操作尚未接线。")), ct);
+                    await using (var dispatcher = new ChildOperationDispatcher(args[3], store.Root,
+                        System.Diagnostics.Process.GetCurrentProcess().SessionId))
+                        await new ChildWorkerRuntime(store).RunAsync(args[3],
+                            (_, request, token) => dispatcher.ExecuteAsync(request, token), ct);
                     break;
                 case "setting":
                     if (args[3] is not ("enable" or "disable")) throw new ArgumentException("设置仅允许enable/disable。");

@@ -2,7 +2,7 @@ using SharpSight.ChildSession.Contracts;
 
 namespace SharpSight.ChildSession.Requests;
 
-public sealed class ChildRequestExecutor(RequestJournal journal, TimeProvider? timeProvider = null)
+public sealed class ChildRequestExecutor(RequestJournal journal, TimeProvider? timeProvider = null, bool serialize = true)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
@@ -44,19 +44,24 @@ public sealed class ChildRequestExecutor(RequestJournal journal, TimeProvider? t
         using var deadline = new CancellationTokenSource(remaining, _time);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token, callerToken);
         var entered = false;
+        var started = false;
         try
         {
-            await _gate.WaitAsync(linked.Token);
-            entered = true;
+            if (serialize)
+            {
+                await _gate.WaitAsync(linked.Token);
+                entered = true;
+            }
             linked.Token.ThrowIfCancellationRequested();
+            started = true;
             journal.Set(entry, ChildReply.Create(request, "running", "已开始，最终结果尚未确认。"), false);
             var reply = await body(linked.Token);
             journal.Set(entry, reply, true);
         }
         catch (OperationCanceledException)
         {
-            journal.Set(entry, ChildReply.Create(request, entered ? "cancelled" : "not-executed",
-                entered ? "已中止后续操作，已有副作用不回滚。" : "排队已取消，未执行。"), true);
+            journal.Set(entry, ChildReply.Create(request, started ? "cancelled" : "not-executed",
+                started ? "已中止后续操作，已有副作用不回滚。" : "排队已取消，未执行。"), true);
         }
         catch (Exception ex) { journal.Set(entry, ChildReply.Create(request, "failed", ex.Message), true); }
         finally { if (entered) _gate.Release(); }

@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\src\DotNetDebuggerMcp\DotNetDebuggerMcp.csproj" />
     <ProjectReference Include="..\..\src\DotNetDebugger.Decompiler\DotNetDebugger.Decompiler.csproj" />
     <ProjectReference Include="..\..\src\SharpSight.UiAutomation\SharpSight.UiAutomation.csproj" />
+    <ProjectReference Include="..\Fixtures\ChildSessionTarget\ChildSessionTarget.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

@@ -11,6 +11,8 @@ public sealed class ChildSessionClient(ChildInstanceStore store, ChildHostComman
     {
         try
         {
+            if (request.Operation == "child_process")
+                request = request with { Arguments = Processes.ChildProcessNormalizer.Normalize(request.Arguments) };
             var action = request.Arguments.TryGetProperty("action", out var value) ? value.GetString() : "status";
             if (request.Operation == "child_session" && action is not ("requests" or "result"))
             {

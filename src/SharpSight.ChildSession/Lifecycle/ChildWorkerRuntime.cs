@@ -18,7 +18,7 @@ public sealed class ChildWorkerRuntime(ChildInstanceStore store)
             !state.Holder.Matches(ChildPeer.Capture(state.Holder.ProcessId)))
             throw new InvalidOperationException("worker实际身份与已投送子会话不符。");
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var executor = new ChildRequestExecutor(_journal);
+        var executor = new ChildRequestExecutor(_journal, serialize: false);
         var server = new ChildPipeServer(state.WorkerPipe, instance, state.Secret, peer, state.Holder);
         var serving = server.RunAsync((request, token) => HandleAsync(state, request, dispatcher, executor, token), stop.Token);
         try
@@ -59,6 +59,9 @@ public sealed class ChildWorkerRuntime(ChildInstanceStore store)
             };
             return Task.FromResult(ChildReply.Create(request, "completed", "子会话请求查询。", data));
         }
+        if (request.Operation == "child_process" && request.Arguments.TryGetProperty("action", out var processAction) &&
+            processAction.GetString() is "list" or "status" or "output")
+            return dispatcher(state, request, ct);
         return executor.ExecuteAsync(request, token => dispatcher(state, request, token), ct);
     }
 }
