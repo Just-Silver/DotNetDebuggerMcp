@@ -34,7 +34,13 @@ public sealed class ChildHolderRuntime(ChildInstanceStore store, ChildHostComman
             await MonitorAsync(form, instance, stop.Token);
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
-        catch (Exception ex) { await UpdateAsync(instance, s => s with { State = "Faulted", Reason = ex.Message }, ct); }
+        catch (Exception ex)
+        {
+            var reason = ex is System.ComponentModel.Win32Exception native
+                ? $"{ex.Message}（Win32={native.NativeErrorCode}，HRESULT=0x{native.HResult:X8}）"
+                : ex.ToString();
+            await UpdateAsync(instance, s => s with { State = "Faulted", Reason = reason }, ct);
+        }
         finally
         {
             form.RequestClose();
@@ -59,9 +65,8 @@ public sealed class ChildHolderRuntime(ChildInstanceStore store, ChildHostComman
                     await UpdateAsync(instance, s => s with { State = state, Reason =
                         state == "Disconnected" ? "连接已断开，拒绝GUI操作；请显式停止实例。" : "等待系统认证或连接完成。" }, ct);
             }
-            else if (!launched && WtsNative.ChildId() is int id && WtsNative.Active(id))
+            else if (!launched && await ObserveConnectedChildAsync(store, instance, WtsNative.ChildId, WtsNative.Active, ct) is int id)
             {
-                await UpdateAsync(instance, s => s with { Identity = s.Identity with { ChildSessionId = id } }, ct);
                 current = await store.ReadAsync(instance, ct);
                 launched = true;
                 await ChildWorkerLauncher.LaunchAsync(store, current, command, ct);
@@ -72,6 +77,23 @@ public sealed class ChildHolderRuntime(ChildInstanceStore store, ChildHostComman
             }
             await Task.Delay(200, ct);
         }
+    }
+
+    internal static async Task<int?> ObserveConnectedChildAsync(ChildInstanceStore store, string instance,
+        Func<int?> getChild, Func<int, bool> active, CancellationToken ct)
+    {
+        if (getChild() is not int id) return null;
+        await using var lease = await store.AcquireLifecycleAsync(ChildPeer.Current.SessionId, ct);
+        var current = await store.ReadAsync(instance, ct);
+        if (current.State is "Stopping" or "Stopped") return null;
+        if (id <= 0 || id == current.Identity.ParentSessionId ||
+            current.Identity.ChildSessionId != 0 && current.Identity.ChildSessionId != id)
+            throw new InvalidOperationException("连接的子会话身份已变化，拒绝接管其他会话。");
+        if (current.Identity.ChildSessionId == 0)
+            await store.WriteAsync(current with { Identity = current.Identity with { ChildSessionId = id } }, ct);
+        // ActiveX已连接与WTS会话注册并非同一时刻；尚不存在的连接态不能触发销毁认证窗口。
+        try { return active(id) ? id : null; }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 2) { return null; }
     }
 
     private Task<ChildReply> ForwardAsync(ChildConnectionWindow form, ChildRequest request, CancellationToken ct)

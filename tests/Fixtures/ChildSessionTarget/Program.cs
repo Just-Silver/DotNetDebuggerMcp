@@ -5,6 +5,12 @@ using System.Text.Json;
 Console.OutputEncoding = Encoding.UTF8;
 switch (args.FirstOrDefault())
 {
+    case "holder-parent":
+        var platform = new SharpSight.ChildSession.Lifecycle.ChildSessionPlatform(
+            new SharpSight.ChildSession.Lifecycle.ChildHostCommand(Environment.ProcessPath!, ["sleep"]));
+        var holder = platform.StartHolder(args[1], "output-probe");
+        Console.WriteLine(JsonSerializer.Serialize(new { holder.ProcessId, holder.StartedTicks }));
+        break;
     case "report":
         Console.WriteLine(JsonSerializer.Serialize(new
         {

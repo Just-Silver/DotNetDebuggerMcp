@@ -1,3 +1,5 @@
+<!-- 职责：维护规划目录的调研、设计、计划导航与阶段状态；不写：具体技术方案正文和实施步骤。 -->
+
 # 大重构规划目录（ILSpyMcp → DotNetDebuggerMcp 静态/动态分析 MCP 套件）
 
 > **本目录用途**：持久化「ILSpyMcp → DotNetDebuggerMcp 大重构」的调研资料、愿景、决策与计划，防止会话上下文丢失。
@@ -33,10 +35,18 @@
 | `research/04-webui-realtime-stack.md` | Web 实时渲染技术调研（历史记录；Web 已于 2026-10-23 整体移除，见 `decisions.md` D28） |
 | `research/05-dependency-packages.md` | 依赖包清单（ClrDebug/DbgShim/Roslyn/ICorDebug/ClrMD 概念澄清；WebUI 侧包清单已 Superseded，见 D4） |
 | `research/06-clrdebug-api-reference.md` | ClrDebug 0.4.2 最小调试器 API 参考（源码核对版） |
-| `research/07-desktop-isolation-options.md` | **Windows「独立窗口/桌面」技术全景与选型**：9 类方案（不激活/offscreen/CreateDesktop/Child Session/虚拟显示器/Sandbox/VM/虚拟桌面/会话隔离）的隔离单位·截图·UIA·权限矩阵，含「UIA 与窗口消息不跨桌面」「WGC 依赖 DWM 合成、隐藏桌面只能 PrintWindow」两条硬约束、同类产品佐证（DCS / lowlevel-computer-use-mcp / VirtualDesktop / Power Automate PiP）与本项目选型建议 + 待验证点 |
+| `research/07-desktop-isolation-options.md` | **宿主原生 GUI 输入隔离研究**：历史桌面选型 + 2026-11-14 的 Session/Desktop/HID/Multiseat 机制、来源与可行性矩阵；不把隐藏窗口、虚拟显示器或 UIA 成功当作真实输入隔离 |
 | `research/08-rdp-child-session-spike.md` | **RDP Child Session 实测记录**：开关权限/建会话前置、密码限制、子会话 ID 时序、动态分辨率、计划任务 `RunEx` 投送、子会话内 UIA·BitBlt·WGC·PrintWindow 的实测结果与两条硬限制（UIA 按会话隔离 ⇒ 必须会话内 actuator；断开态只剩 PrintWindow） |
+| `research/09-windows-sandbox-runtime-feasibility.md` | **Windows Sandbox Runtime 前置核查**：官方 `.wsb`/`wsb` 能力、启用前只读探测和现有库复用边界；启用后实测见下一条 |
+| `research/10-windows-sandbox-spike-results.md` | **Windows Sandbox P0 实测**：启用后实机证据、映射文件发布限制、退出码故障定位、性能样本与待验证项；不代表正式 Runtime/MCP 验收 |
+| `../../tests/Fixtures/SandboxSpike/README.md` | **独立 P0 夹具运行说明**：构建、控制脚本、协议和验证边界；不写最终验收结论或性能结果 |
 | `research/archive/` | 已归档调研：dnSpy 源码结构摸底 / ILSpy 源码结构摸底 |
 | `specs/README.md` | 设计文档目录（specs/ 导航） |
+| `specs/2026-11-14-native-gui-input-isolation-poc-design.md` | **不干扰用户的 GUI 交互 PoC**：分级交互、后台消息与 Child Session 实验设计、能力边界及条件式集成；独立 PoC 已启动，非产品设计签收 |
+| `specs/2026-11-14-child-session-mcp-cli-design.md` | **子会话 MCP/CLI 正式接入设计**：父侧入口与 child worker、实例生命周期、程序/脚本、UIA/真实输入/截图及失败契约；正文已批准，产品工具面已接通、真实验收进行中 |
+| `plans/2026-11-14-child-session-mcp-cli.md` | **子会话接入实施计划**：请求/IPC、生命周期、任务、GUI/输入、MCP/CLI、安装与真实交叉验收；第1–9项已提交，第10项安装与真实验收进行中 |
+| `research/11-child-session-integration-results.md` | **子会话正式接入验证记录**：原始全套基线失败、基础能力定向验证和未完成项；实施中，非产品验收 |
+| `../../tests/Fixtures/NativeInputSpike/README.md` | **原生 GUI 交互 PoC 运行说明**：Debug 构建、脚本/CLI、输入护栏与清理；机制与结果分别归 research/07、08 |
 | `specs/2026-09-05-overview-design.md` | **总览设计 spec**（已确认；其中 §4.4 Web 层已于 2026-10-23 整体移除，见 `decisions.md` D28） |
 | `specs/2026-09-05-p4-webui.md` | **P4 WebUI 细化 spec**（历史记录；Web 已于 2026-10-23 整体移除，见 `decisions.md` D28） |
 | `specs/2026-09-08-w1-set-value.md` 等 10 份 | **全部待办批次 spec**（已冻结）：W1/V3/DB1/D1/D2/DB2/V4/U1/V1/W3（导航与状态见 specs/README；W2/V2 已转 ROADMAP） |

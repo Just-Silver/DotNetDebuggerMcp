@@ -8,4 +8,7 @@
     <OutputPath>..\..\TestData\ChildSessionTarget\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\SharpSight.ChildSession\SharpSight.ChildSession.csproj" />
+  </ItemGroup>
 </Project>

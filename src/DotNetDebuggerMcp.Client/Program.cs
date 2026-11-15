@@ -1,11 +1,19 @@
 using DotNetDebuggerMcp.Client;
 
+if (args.Length > 0)
+{
+    Environment.ExitCode = OperatingSystem.IsWindows() && args[0] == "--child"
+        ? await ChildSessionCases.RunAsync(args[1..])
+        : 1;
+    return;
+}
+
 var root = TestDataHelper.RepoRoot;
 var serverProject = Path.Combine(root, "src", "DotNetDebuggerMcp", "DotNetDebuggerMcp.csproj");
 var dll = TestDataHelper.Dll;
 var outDir = Path.Combine(root, "tests", ".dotnetdebugger-client-out");
 
-var runner = await ClientRunner.ConnectAsync(serverProject);
+await using var runner = await ClientRunner.ConnectAsync(serverProject);
 // decompile_to_dir 产物断言的失败单独统计（不属于工具调用断言）
 var artifactFailures = 0;
 

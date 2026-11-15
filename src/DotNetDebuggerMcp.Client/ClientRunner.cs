@@ -6,11 +6,26 @@ namespace DotNetDebuggerMcp.Client;
 /// <summary>
 /// 端到端验证执行器：连接 MCP server、列出工具、逐个执行场景，按断言字段判定 PASS/FAIL 并统计失败数。
 /// </summary>
-public sealed class ClientRunner
+public sealed class ClientRunner : IAsyncDisposable
 {
     private readonly McpClient _mcp;
 
     private ClientRunner(McpClient mcp) => _mcp = mcp;
+
+    public static async Task<ClientRunner> ConnectInstalledAsync(string command, string[] prefix, CancellationToken ct)
+    {
+        var transport = new StdioClientTransport(new()
+        {
+            Name = "installed child acceptance", Command = command,
+            Arguments = [.. prefix, "--features=decompile,debug,ui,screenshot,child"]
+        });
+        return new(await McpClient.CreateAsync(transport, cancellationToken: ct));
+    }
+
+    public Task<CallToolResult> CallRawAsync(string tool, IReadOnlyDictionary<string, object?> arguments, CancellationToken ct)
+        => _mcp.CallToolAsync(tool, arguments, cancellationToken: ct).AsTask();
+
+    public ValueTask DisposeAsync() => _mcp.DisposeAsync();
 
     /// <summary>
     /// 累计未通过场景数（含 ListToolsAsync 断言失败）；成功场景不计。

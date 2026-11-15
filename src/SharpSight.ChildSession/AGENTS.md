@@ -6,6 +6,7 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 
 - 请求结果未知时保留 requestId，禁止自动重放变更；执行中的请求不得因结果记录限额被淘汰。
 - 真实输入必须核对实例、连接、实际会话、input desktop 和目标身份；停止只注销核实属于本实例的 child。
+- ActiveX Connected 不代表 WTS 会话已可查询；首次观察到的自有 child 编号先登记，连接态 error=2 时继续等待，不在认证/注册间隙主动销毁 ActiveX。已登记编号变化必须拒绝接管。
 - 新代码单方法尽量不超过 60 行，超过 80 行必须拆分。
 - 行为测试位于 `tests/DotNetDebuggerMcp.Tests/Child*Tests.cs`；真实 child 集成验收仅显式授权运行，不自动修改系统开关。
 - 定向 MTP 验证优先传完整测试类名，并核对发现数；本机 `--filter-class "*Child*Tests"` 曾运行零个测试并退出 5，不能当作通过。已验证完整类名 `DotNetDebuggerMcp.Tests.ChildRequestTests` / `ChildIpcTests` 可用。
@@ -16,6 +17,8 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 管道使用 CurrentUserOnly，并在收发两端以原生对端 PID 核对创建时间、SID、Session 和映像；客户端自报字段不算证据。实例密钥仅放受 ACL 限制的实例目录，不进参数或正常日志。长度前缀在分配正文前校验，单帧至多 1 MiB；截断帧只结束当前连接。
 
 每条连接只承载一份请求信封；核验后监视对端EOF并传播连接级取消，不能只取消调用端等待。停止监视的令牌与执行令牌分开，避免正常响应完成时误取消已受理工作；进程任务仍须显式cancel才结束。
+
+长期 holder 启动前将当前宿主的有效标准句柄标为不可继承（不关闭或替换），holder 使用独立 stdio；否则短命 CLI 即使退出，读者也可能等不到输出 EOF。`.NET Process.Start` 的重定向不等于句柄继承白名单；机制与回归证据归规划地图的正式接入验证记录。
 
 核验 API：[GetNamedPipeClientProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)、[GetNamedPipeServerProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid)。这不是同账户恶意程序的安全沙箱。
 

@@ -12,9 +12,12 @@ public sealed class ChildSessionPlatform(ChildHostCommand command) : IChildSessi
 
     public ChildPeer StartHolder(string root, string instance)
     {
+        ChildStandardHandles.PreventInheritance();
         var info = command.StartInfo("--child-internal", "holder", root, instance);
         info.RedirectStandardOutput = info.RedirectStandardError = true;
+        info.RedirectStandardInput = true;
         var process = Process.Start(info) ?? throw new InvalidOperationException("连接持有器未启动。");
+        process.StandardInput.Close();
         var peer = ChildPeer.Capture(process.Id);
         _ = DrainAndDisposeAsync(process, Path.Combine(root, instance, "holder.log"));
         return peer;
