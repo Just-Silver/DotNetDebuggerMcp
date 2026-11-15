@@ -162,3 +162,75 @@ dotnet run -c Release --no-build --project src/DotNetDebuggerMcp.Client/DotNetDe
 ```
 
 四次构建均0警告/0错误；定向测试122项，119通过、3跳过；默认Client全部场景通过、679个反编译文件校验后清理。真实安装/图像项因未启用集成条件明确跳过，先前真实失败证据仍成立；本次没有重新登录、修改系统开关或执行真实输入。完整宿主既有失败与最终独立审阅仍待后续，不能把此检查点当可发布签收。
+
+## 6. 新设备本机直连接续（2026-11-15）
+
+### 环境与授权边界
+
+- Git 检查点 `5f3283f`，分支 `feature/child-session-mcp-cli-integration` 与 origin 一致，接续时工作树干净；从任务10继续，未重做任务1–9。
+- 当前设备 `YIN`，CIM 返回 Windows 11 专业版 `10.0.26300`、x64；.NET SDK `10.0.301`，执行进程未提权，父 Session1 为 console Active。维护者明确确认**当前不是远程，是本机执行**。
+- 开始仅获准只读探测，随后维护者明确授权开启子会话。本轮仅做一次安装产物真实启动诊断，没有真实输入、业务目标或调试附加。
+- 初始生产 probe：`Enabled=true`、`ParentSessionId=1`、`ChildSessionId=null`、`ActiveXAvailable=true`；status 无本产品活动实例，没有匹配的临时计划任务。本轮没有修改开关，不能套用旧设备恢复 false 的约定。
+
+### 安装与单次启动结果
+
+本轮目录 `tests/TestData/ChildSessionAcceptance/20261115-091534/`。先执行 Release 宿主构建，0警告、0错误，再运行正式 `install-acceptance-tool.ps1` 隔离打包/本地安装版本2.5.1。安装宿主 SHA256=`60C9D3B38E9B8B071D87DAAF0F938E0658454794EEE522ADFB7E0F843720C927`，两种准确宿主路径保存在本轮 `installed.json`；未改正式安装或发布。
+
+安装 shim 再次核对 probe/status 后执行 `child call child_session --json '{"action":"start","timeoutSeconds":5}'`。09:16:26 返回实例 `8c7443b370044904bac95a0ca2d3dd32`，AwaitingAuthentication，holder PID=26044、创建 ticks=639303021812738908、worker=0。随后 status 已为 Faulted，登记 child ID=2，reason：
+
+```text
+无法读取会话连接状态。（Win32=5，HRESULT=0x80004005）
+```
+
+本机直连也复现首个 Win32=5，因此**远程操作不是复现该故障的必要条件**；这并不直接证明认证时序或任何权限设置是根因。没有进入 Ready，也没有完成三轮中的任何一轮。
+
+TerminalServices-LocalSessionManager/Operational 本轮事件包含09:16:42的 Session2 断连，以及从 Terminated 响应 EvDisconnected 时的错误 `0x800708CA`。这只是关闭过程的补充现场，不把这些后续事件当作首个异常。启动、status、probe、事件及清理输出分别保存在本轮目录；这些忽略产物不承诺长期保留。
+
+### 当前清理状态与待查边界
+
+- 首先经安装 shim 正式 stop 本轮实例，返回 `not-executed`、“请求注销子会话失败”，退出1。stop 已写入 Stopping 后注销失败，不能把接口返回的 not-executed 理解为完全没有状态变更。
+- 按本轮清单路径、父 Session、PID与创建 ticks 交叉核对后，仅结束自有 holder26044，确认该进程退出；未按名称批量结束其他进程，未注销父会话。
+- 09:17:52只读 WTS 查询：父 Session1 的 WTSConnectState=0，child2 查询失败 Win32=2；probe 仍为 `Enabled=true`、`ChildSessionId=2`，CIM 未列出 Session2 进程。**编号2仍残留，尚未确认注销成功**；没有伪造 Stopped、重启机器或自动重连掩盖现场。
+- 当前不修改生产代码，不把扩大 error=5 忽略范围当作修复。维护者要求使用网络搜索/GitHub CLI补充查证，并允许子代理并行研究；后续外部依据与实验结论仍归本文，任务10保持未完成。
+
+### 外部资料补证与本轮回归边界
+
+- 通过 `gh api` 直接核对 [BetterGI 固定 commit 的登录完成处理](https://github.com/babalae/better-genshin-impact/blob/cc3099a1a8e6470bdbd649dd232aa06011cd60a0/BetterGenshinImpact/Service/ChildSession/ChildSessionService.cs#L664-L723)：`OnRdpLoginCompleted` 才完成连接等待并投送应用；[同文件822–824行](https://github.com/babalae/better-genshin-impact/blob/cc3099a1a8e6470bdbd649dd232aa06011cd60a0/BetterGenshinImpact/Service/ChildSession/ChildSessionService.cs#L822-L824)明确记录登录错误后 ActiveX 仍可能处于连接状态。官方 [OnLoginComplete](https://learn.microsoft.com/en-us/windows/win32/termserv/imstscaxevents-onlogincomplete) 定义的是成功登录通知。因此 `Connected==1` 本身不足以证明用户登录已完成；这项契约差异成立，但还不能单独证明 Win32=5 的具体成因。
+- 子代理对照 [LibreAutomate 的固定 commit](https://github.com/qgindi/LibreAutomate/blob/3d245d85c3c9e070e9fd1e532ee312e43b9e04a7/Au.Editor/xMisc/Pip.cs#L185-L210)：它以 OnConnected 发布连接标志，不同于 BetterGI；[worker 另探测 input desktop](https://github.com/qgindi/LibreAutomate/blob/3d245d85c3c9e070e9fd1e532ee312e43b9e04a7/Au.Editor/xMisc/PipIPC.cs#L114)。不能把两项目都归纳成“等 OnLoginComplete”。LA 窗口代码没有显式 Dispose 也不意味着 WinForms 基类不会释放 AxHost，不能据此推出其关闭不会阻塞。
+- `gh issue view` 核对 [BetterGI #3867](https://github.com/babalae/better-genshin-impact/issues/3867)：报告 RDP 失败后 WTSGetChildSessionId 仍有编号、WTSLogoffSession 报2且窗口未关闭。它是相似现场，issue仍Open，评论含明确标记的AI建议，**不将其归因或“错误2即已注销”建议当作已验证结论**。
+- 官方 [WTSLogoffSession](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtslogoffsession)说明返回成功才表示请求接受，`bWait=false`仍需后续核实；本轮stop返回失败，不能用故障后的查询失败代替“注销成功”证据。
+- 本机 RemoteConnectionManager Event1149 于09:16:41记录身份验证成功；当前Faulted快照于09:16:43落盘，LSM于09:16:42断连，未取得本轮Session2登录或Shell启动事件。该时间线区分“身份验证成功”与“用户桌面就绪”，尚缺 ActiveX OnLoginComplete 与首个 WTS 查询的同进程时间线，不能靠秒级事件顺序宣布根因。
+- 重新生成夹具后，定向运行 `ChildInstalledToolTests`：2项，1通过、1明确跳过（本次未设置integration，不重启三轮）。通过项仅支持安装shim及`dotnet <dll>`两种形式的只读probe和非法内部角色拒绝，不代表holder/worker成功。`ChildConnectionReadinessTests`、`ChildLifecycleTests`、`ChildForwardingTests`合计11/11、0跳过；这些既有回归并未修复真实Win32=5，也不覆盖本轮新产品修正（本轮尚无生产代码变更）。
+- 上游补丁追踪经主会话再次核对：[BetterGI PR #3861](https://github.com/babalae/better-genshin-impact/pull/3861)当前Open、head=`e85c65547d1e9eaec022d3308c672b9cf450b533`，正文明确实际远程切换场景待复测；其新增[只读探针](https://github.com/babalae/better-genshin-impact/blob/e85c65547d1e9eaec022d3308c672b9cf450b533/BetterGenshinImpact/Service/ChildSession/ChildSessionNativeMethods.cs#L157-L193)要求WTS Active且用户名非空，查询失败仅表示未确认，不抛失败。但该兜底**仅用于已有会话重连**，新建仍等原登录事件；不能将它宣传为本例新建时首次Win32=5的已验证修复，也不引入其自动重连行为。
+- 子代理核查已合并的[PR #3896](https://github.com/babalae/better-genshin-impact/pull/3896)与[DesktopTwin诊断文档](https://github.com/batvbs/DesktopTwin/blob/acf8071f6353f62f841ffb75e6dd9e1b9950a04b/docs/auto-repair-feasibility.md)：未提供针对本例WTSConnectState首次Win32=5的已验证修复。文档中的服务控制Access Denied不是本例会话查询错误；诊断工具还含Hello/策略写入功能，本轮只读源码，没有安装或运行修复器。
+- 两路检索汇合后，主会话直接复核官方[Connected属性](https://learn.microsoft.com/en-us/windows/win32/termserv/imstscax-connected)、[OnConnected事件](https://learn.microsoft.com/en-us/windows/win32/termserv/imstscaxevents-onconnected)及[会话权限](https://learn.microsoft.com/en-us/windows/win32/termserv/terminal-services-permissions)：Connected只描述控件连接，OnLoginComplete才通知成功登录；文档明确用户登录后获得对自身会话的其余权限。公开检索未找到“Child Session登录前查询WTSConnectState必返回5”的直接证据，因此“登录前权限时序”仍是假设，不能写成根因。
+- 研究报告中的推断已收紧：缺失Event21/22不能单独证明首个Win32=5的精确阶段，也不能据此证明如果不关窗就一定会成功登录；RDP事件、WTS状态与系统事件不具有本轮已验证的全序关系。OnLoginComplete/WTSActive也不等于Shell或业务worker就绪，最终仍需worker身份握手。未采用同时改变登录门控、error=5重试、失败后关窗三项行为的“单变量”方案；当前缺口仍是同一持有进程中事件与查询的关联取证。
+
+### 单次受控重连：捕获暂态5并确认注销
+
+维护者随后明确授权**仅重连本轮自有残留，记录登录事件和WTS查询，最后注销**；不修改认证/权限策略，不执行真实键鼠。本次是独立、丢弃式恢复/观测夹具，**不是安装产物验收或生产修复**。
+
+探针源码位于本计划忽略工作区的 `connection-probe/`，未改 `src/` 或既有研究夹具；构建0警告、0错误。它沿用相同RDP CLSID和连接参数，用 `ComEventsHelper` 订阅事件、每250ms在同一STA采样父/child的WTS状态。读取失败只记录、不主动销毁连接；这是本次明确选择的观测边界，不能称作“仅加日志、完全保持生产失败路径”。未调用worker投送、任务调度、UIA、截图或输入API。
+
+启动前再次核对原实例SID/父会话、当前child仍为2、原holder与Session2均无进程且child查询为error=2，才允许恢复。观测目录 `tests/TestData/ChildSessionAcceptance/20261115-091534/recovery-observation-093656/`；观测进程PID=47856、创建ticks=639303034259974310、父Session1。RDP事件接收器实测连接成功，9个事件订阅、经典RCW，退出无解绑错误；本轮只用OnLoginComplete确认登录，不以OnConnected或任意OnLogonError事件冒充终态。
+
+同一进程、同一child编号2的关键时间线：
+
+| 本机时间 | 直接观测 |
+|---|---|
+| 09:37:06.199 | 连接前残留编号2，WTS查询error=2；父Session1查询Active |
+| 09:37:20.057 | 收到OnConnected |
+| 09:37:20.058–09:37:21.105 | Connected=1、尚未收到OnLoginComplete；6份采样的child查询均为Win32=5，父查询持续Active |
+| 09:37:21.104 | 收到OnLogonError(-2) |
+| 09:37:21.221 | child查询首次成功返回WTSActive=0；尚未收到OnLoginComplete |
+| 09:37:21.310 | 收到OnLoginComplete；之后未采到Win32=5 |
+| 09:37:23.463 | 登录完成、同一编号且Active再次核对后，WTSLogoffSession(2,false)返回成功、error=0 |
+| 09:37:25.701–25.793 | OnDisconnected(3)，WTS返回无child（false/1168），观察器记录cleaned=true并退出 |
+
+86份采样的父会话查询全部成功且Active。整个过程中未提权、未改权限或认证策略、未改变观察进程身份；这**确证本次Win32=5是同一连接登录过程中的暂态读取失败**，并直接证明Connected=1时尚不能用一次WTS查询失败认定连接不可恢复。它未证明所有设备/阶段的5都可忽略，也未定位Windows内部具体哪项会话权限何时授予。首次WTSActive比OnLoginComplete回调早约89ms，进一步说明二者不存在本轮可假定的严格全序。
+
+官方 [OnLogonError](https://learn.microsoft.com/en-us/windows/win32/termserv/imstscaxevents-onlogonerror)将 `-2` 定义为 `ARBITRATION_CODE_CONTINUE_LOGON`（Winlogon继续登录），并非终止性错误；不能只凭事件名把所有OnLogonError都升级为失败。本轮系统事件同时补齐Session2的登录成功（21）、Shell启动（22）及注销成功（23）。
+
+09:39:30再次通过**安装产物**独立probe确认 `Enabled=true`、`ChildSessionId=null`；CIM确认原holder26044、观察器47856及Session2均无进程。开关保持本机初始true，未注销父会话。原产品登记仍为Stopping并保留用于取证，未伪造Stopped或归档/删除它；因此这里只声称系统child已注销，不声称产品状态收尾完成。
+
+原始证据为本轮目录中的 `timeline.jsonl`、`state-transitions.json`、`query-summary.json`、`terminal-services-events.json`、`verified-product-probe.json`、`verified-summary.json`；timeline SHA256=`87E8F199CE2AF586F76801227C5189CE552803A2B1AA000B28DA77505D337972`。本机 `mstscax.dll` 文件版本 `10.0.26100.9949`，`wtsapi32.dll` 为 `10.0.26100.9549`。未取得可使用的观察器进程退出码，不将其记为exit0；清理结论依据原生注销返回、事件23、独立probe与进程核对。以上仍不代表正式产品三轮、worker业务闭环或任务10完成。
