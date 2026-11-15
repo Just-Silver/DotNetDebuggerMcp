@@ -32,19 +32,30 @@ internal sealed class ChildCliCommand(ChildCallPolicy caller, TextWriter output,
     internal async Task<int> ExecuteAsync(string[] args, CancellationToken ct)
     {
         if (args.Length == 0)
-            return Fail("缺少子命令。用法：child enable | child disable | child call <operation> [--json <对象>|--json-file <路径>]。");
+            return Fail("缺少子命令。用法：child enable | child disable | child login | child logout | child call <operation> [--json <对象>|--json-file <路径>]。");
         try
         {
             return args[0] switch
             {
                 "enable" => await ChangeAsync(true, args, ct),
                 "disable" => await ChangeAsync(false, args, ct),
+                "login" => await CredentialAsync("login", args, ct),
+                "logout" => await CredentialAsync("logout", args, ct),
                 "call" => await CallAsync(args, ct),
-                _ => Fail($"未知子命令：{args[0]}。合法取值为 enable/disable/call。"),
+                _ => Fail($"未知子命令：{args[0]}。合法取值为 enable/disable/login/logout/call。"),
             };
         }
         catch (OperationCanceledException) { return Fail("已取消等待，结果未确认。", "unknown"); }
         catch (Exception ex) { return Fail($"子命令执行失败：{ex.Message}"); }
+    }
+
+    private async Task<int> CredentialAsync(string action, string[] args, CancellationToken ct)
+    {
+        if (args.Length != 1) return Fail($"{action} 不接受额外参数。");
+        // CLI 退出会结束同一进程里的凭据窗口；给足够时间让用户完成一次输入。
+        var reply = await caller.CallAsync("child_session",
+            JsonSerializer.SerializeToElement(new { action, timeoutSeconds = 300 }), ct);
+        return WriteReply(reply);
     }
 
     private async Task<int> ChangeAsync(bool enabled, string[] args, CancellationToken ct)
@@ -145,7 +156,7 @@ internal sealed class ChildCliCommand(ChildCallPolicy caller, TextWriter output,
         var action = arguments.TryGetProperty("action", out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : "status";
-        return action is "probe" or "start" or "status";
+        return action is "probe" or "start" or "status" or "login" or "logout";
     }
 
     private static bool IsKnownOperation(string operation) => operation switch

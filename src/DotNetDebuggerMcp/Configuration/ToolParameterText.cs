@@ -44,6 +44,12 @@ internal static class ToolParameterText
         "是否包含间接后代（如接口的所有实现者、基类的所有子孙，默认 false）";
 
     /// <summary>
+    /// UI/截图/真实输入工具的 instance 参数共用连接窗还原提示（子会话 GUI 请求前按需不激活还原）。
+    /// </summary>
+    public const string ChildInstanceRestoreHint =
+        "本实例连接窗被最小化时，先尝试不激活还原（不抢父会话前台）；未能还原则返回未执行、不向子会话转发。";
+
+    /// <summary>
     /// contextLines 参数描述（debug_wait 共用）：行数预算语义与默认值引用 AppConfig.DefaultStopContextBudgetLines（改预算一处同步）。
     /// </summary>
     /// <summary>

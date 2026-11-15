@@ -19,6 +19,9 @@ internal static class ChildProcessRoles
                     await new ChildHolderRuntime(store, ChildServices.Command).RunAsync(args[3], ct);
                     break;
                 case "worker":
+                    // 计划任务投送的是控制台程序；先接管诊断输出再脱离控制台，否则子会话桌面会留下一个空终端窗口。
+                    ChildDiagnosticLog.Attach(args[3], "worker");
+                    ChildDiagnosticLog.DetachConsole();
                     await using (var dispatcher = new ChildOperationDispatcher(args[3], store.Root,
                         System.Diagnostics.Process.GetCurrentProcess().SessionId))
                         await new ChildWorkerRuntime(store).RunAsync(args[3],

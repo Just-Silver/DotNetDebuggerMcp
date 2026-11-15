@@ -183,18 +183,22 @@ v1 中服务器名称直接放在 `mcp` 下（v2 仍兼容此写法）：
 
 ### 子会话执行（`child_*` — Windows RDP Child Session，需在系统层显式启用）
 
-把程序启动、UIA 与真实键鼠放进独立的 Windows 子会话，**不影响父会话的鼠标、键盘与前台窗口**。默认随全族注册但**注册不代表启动**：`child` 族既不建连也不初始化 ActiveX，也不创建实例；系统开关与授权都是显式的（见下方 CLI），MCP 不收集凭据、**不会自动触发 UAC 或改任何系统策略**。
+把程序启动、UIA 与真实键鼠放进独立的 Windows 子会话，**不影响父会话的鼠标、键盘与前台窗口**。默认随全族注册但**注册不代表启动**：`child` 族既不建连也不初始化 ActiveX，也不创建实例；系统开关与授权都是显式的（见下方 CLI）。**无可用凭据且系统自动登录停住时，输入一次账户密码**并保存到当前用户的 Windows 凭据管理器（DPAPI 保护，不写配置/源码/日志），后续 `start` 自动登录；MCP **不会自动触发 UAC 或改任何系统策略**，也不关闭 Windows Hello。
 
 | 工具 | 用途 |
 | ---- | ---- |
-| `dotnetdebugger_child_session` | `action=probe/start/status/stop/requests/result`。`probe` 只读返回开关/父会话/现有实例；`start` 建立实例（同一父会话已有本产品健康实例则复用，外部 child 不接管），默认等 30 秒，待认证时直接返回当前状态；`status` 查询（空实例列本产品实例）；`stop` 注销**整个实例**；`requests` 列出已受理 GUI/进程请求摘要（`cursor`/`limit`）；`result` 按 `requestId` 查同一请求的最终结果，**不执行新动作** |
+| `dotnetdebugger_child_session` | `action=probe/start/status/stop/login/logout/requests/result`。`probe` 只读返回开关/父会话/现有实例/是否已保存凭据；`start` 建立实例（同一父会话已有本产品健康实例则复用，外部 child 不接管），默认等 30 秒，**有已保存凭据时自动注入登录**；**Ready 需完成系统登录并收到 worker 握手，控件连接不等于 Ready**，认证待完成时返回当前状态并可继续用 `status` 查询；`status` 查询（空实例列本产品实例，`health` 分列持有器/worker/child 会话/GUI 可交互）；`login` 打开一次 Windows 安全凭据窗口保存或更新凭据，`logout` 删除本产品凭据（不动 `TERMSRV`）；`stop` 注销**整个实例**；`requests` 列出已受理 GUI/进程请求摘要（`cursor`/`limit`）；`result` 按 `requestId` 查同一请求的最终结果，**不执行新动作** |
 | `dotnetdebugger_child_process` | `action=start/list/status/output/cancel`。`start` 从**原路径**启动 exe/解释器/脚本（`arguments` 为 JSON 字符串数组，`workingDirectory` 缺省为 executable 所在目录，`environment` 只覆盖显式项），只等注册结果、不等程序退出；`output` 取增量输出（`cursor` 是聚合输出字节位置，完整 UTF-8 边界切分）；`cancel` 只结束该任务自有进程树 |
 | `dotnetdebugger_child_pointer` | `action=move/click/doubleclick/drag/scroll`。目标必须给 `processId`（`hwnd` 空时要求该 PID 唯一顶层窗口）。`x/y/endX/endY` 是**子会话虚拟屏物理像素**（允许负原点；截图像素换算为 `原点+图内像素`）；`durationMs` 范围 50–5000；`scroll` 的 `delta` 为滚轮单位、可正可负。动作是完整有界序列，不暴露跨请求的按下状态 |
 | `dotnetdebugger_child_keyboard` | `action=text/key/chord`。`text` 走 Unicode 输入（不自动追加 Enter、不替你提交 IME）；`key`/`chord` 用明确键名文法（`Ctrl/Alt/Shift/Win` 修饰 + A–Z/0–9/F1–F24/Enter/Tab/Escape/Space/Backspace/Delete/Insert/Home/End/PageUp/PageDown/方向键），`chord` 形如 `Ctrl+K` 且恰有一个非修饰键 |
 
 - **既有工具的 `instance` 路由**：`ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait` 与 `screenshot`（含 `mode=list-windows`/`list-displays` 等清单模式）传 `instance=<实例>` 即在子会话执行，空值仍走父会话原路径。**必须 `child` 与对应族同时启用**，否则非空 `instance` 明确返回「子会话能力未启用」，绝不当空值处理。子会话模式的 UIA/截图不走父侧活动调试进程作缺省目标，必须显式给进程；结果头部标注实例、child SessionId 与目标 PID。
+- **登录与凭据**：`start` 先用已保存凭据自动登录；没有凭据时先让系统尝试自动登录，认证停住时在桌面弹出一次 Windows 安全凭据窗口，输入结果保存到当前用户凭据管理器（`DotNetDebuggerMcp/child-session`）。已有 `TERMSRV/localhost` / `TERMSRV/127.0.0.1` 时直接复用，**不读取其他主机的 `TERMSRV` 凭据**。`action=login`（CLI `child login`）更新、`logout`（`child logout`）只删本产品凭据。用户名按实际登录名填写：本地账户 `计算机名\用户` 或 `域名\用户`，Microsoft 账户 `MicrosoftAccount\邮箱`。密码失效时 `status.reason` 提示更新；账户只有 PIN/Hello、没有可用密码时仍退回连接窗人工认证，**不关闭 Hello 或修改认证/委派策略**。凭据库对当前用户的其他进程可读，与 mstsc 保存凭据同级，**不是安全沙箱**。
+- **持久化与恢复**：持有器是独立进程，诊断日志写到系统临时目录 `%TEMP%\DotNetDebuggerMcp\child\<实例>\`（`holder.log`/`worker.log`），MCP/CLI 退出不关闭它，后续进程复用同一实例；`start` 遇到持有器失效时：无 child → 结束旧实例并重建，child 编号与登记一致 → 重连同一实例，编号不明 → 拒绝接管；`status.health` 分列持有器/worker/child 会话是否存活与 GUI 是否可交互，`probe`/`status` 的 `credentialSaved` 不返回密码。持有器失效后旧 worker 退出会结束其 Job 内任务；不承诺跨 Windows 重启恢复运行中进程。
+- **窗口自适应与桌面干净**：拖动/缩放子会话连接窗后，用 RDP 8.1 动态分辨率把子会话桌面同步为客户区大小（1:1、不变形、缩小同样生效；连接稳定后才下发）。worker 启动即把诊断输出转到临时目录日志并脱离控制台，子会话桌面不再残留空白终端窗口。worker 投送用的临时计划任务会在 MCP 启动时后台清理（只删 `SharpSight-child-*` 中实例已不存在/已停止/持有器已退出的残留，活动实例与其它任务不动）。
 - **输入坐标与观察引用**：真实输入的坐标固定为子会话虚拟屏物理像素；UIA/截图返回不透明 `observationId`（绑定实例、目标 PID+创建时间、HWND 与采集几何），需要与先前观察绑定时传给 `ui_action`/`ui_input`/`ui_get`/`screenshot`（`observationId` 仅子会话模式可用）。省略 `observationId` 时只保证「操作受理时该 PID 的进程」，不证明仍是调用方早先看到的进程；实例/会话/目标/前台检查始终执行。
 - **超时、Busy 与结果找回**：`timeoutSeconds` 是含排队的执行预算，超时只表示**放弃等待**。UIA COM 调用没有可靠中断——超时后仍运行则保持 **GUI Busy**，拒绝新的 GUI 调用（含截图与探测），但控制查询与 `stop` 仍可用；旧调用真正结束后才解除 Busy。若原响应丢失（MCP 取消/客户端失联），用 `child_session(action=requests)` 找回 `requestId`，再 `action=result` 对账；记录已淘汰或实例失效时报 `unknown`，**不重放变更**（unknown 不等于未执行）。
+- **连接窗被最小化时**：`ui_*`、`screenshot`、`child_pointer`、`child_keyboard` 在转发前会先尝试**不激活**还原本实例连接窗（`ShowWindow(SW_SHOWNOACTIVATE)` 后 `IsIconic` 复核，不抢父会话前台、不置顶、不发父侧输入）；已关窗、取消或未能确认还原时返回中文「未执行」且不向 child 投送，`child_session` 与 `child_process`（含 `start`）不会因此弹窗。child 内业务目标窗原有的「还原并激活」语义不变。
 - **任务取消 vs 整体停止**：`child_process(action=cancel)` 只结束该任务自己的进程树，不按进程名杀进程、也不注销子会话；`child_session(action=stop)` 注销整个子会话并**结束其中全部应用（包括用户手动在该 child 打开的应用）**，需先断开本服务器附加在该实例目标上的调试会话。
 - **边界与清理**：子会话共享宿主文件、注册表和用户权限，**不是安全沙箱**；客户端需保持连接、非最小化，不承诺锁屏/断开后继续工作；失败不回退到父会话输入。实例产物（任务输出、截图 PNG、日志）在 `%LOCALAPPDATA%\DotNetDebuggerMcp\child\<实例>`，`stop` 后**保留不自动清理**，确认不再需要后手工删除目录；任务日志每任务上限 16 MiB（超出标注截断）、每实例总配额 256 MiB。
 
@@ -241,7 +245,9 @@ DotNetDebuggerMcp -a bin/Debug/MyApp.dll -cc -tk 0x06000010                     
 ```bash
 DotNetDebuggerMcp child enable                                                       # 显式授权并打开系统开关（取消即失败，不改其他策略）
 DotNetDebuggerMcp child disable                                                      # 关闭开关；有活动 child（含外部）或实例未停止时拒绝，需先 stop
-DotNetDebuggerMcp child call child_session --json '{"action":"start"}'               # 建立实例（返回 instance；待认证时给当前状态）
+DotNetDebuggerMcp child login                                                        # 首次配置/更新：弹出一次 Windows 安全凭据窗口并保存到当前用户凭据管理器
+DotNetDebuggerMcp child logout                                                       # 删除本产品保存的子会话凭据（不动 TERMSRV / 正在连接的实例）
+DotNetDebuggerMcp child call child_session --json '{"action":"start"}'               # 建立实例（已保存凭据时自动登录；返回 instance 与当前状态）
 DotNetDebuggerMcp child call child_process --json '{"action":"start","instance":"<实例>","executable":"C:\\Path\\App.exe","arguments":["--flag","含 空格"]}'
 DotNetDebuggerMcp child call child_pointer --json-file request.json                  # 长参数用文件（与 --json 互斥）
 DotNetDebuggerMcp child call screenshot --json '{"instance":"<实例>","processId":1234}'

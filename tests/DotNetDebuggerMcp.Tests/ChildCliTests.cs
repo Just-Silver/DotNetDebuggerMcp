@@ -67,6 +67,8 @@ public sealed class ChildCliTests
     [InlineData("probe")]
     [InlineData("start")]
     [InlineData("status")]
+    [InlineData("login")]
+    [InlineData("logout")]
     public async Task 生命周期查询允许空实例并原样转发(string action)
     {
         ChildRequest? received = null;
@@ -85,6 +87,26 @@ public sealed class ChildCliTests
         Assert.Equal("completed", json.RootElement.GetProperty("status").GetString());
         Assert.NotNull(received);
         Assert.Equal("", received!.Instance);
+    }
+
+    [Fact]
+    public async Task CLI登录子命令路由到child_session登录动作()
+    {
+        ChildRequest? received = null;
+        var caller = new ChildCallPolicy(FeatureFamily.All, (request, _) =>
+        {
+            received = request;
+            return Task.FromResult(ChildReply.Create(request, "completed", "凭据已保存"));
+        });
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var cli = new ChildCliCommand(caller, output, error);
+        var exit = await cli.ExecuteAsync(["login"], TestContext.Current.CancellationToken);
+        Assert.Equal(0, exit);
+        Assert.NotNull(received);
+        Assert.Equal("", received!.Instance);
+        Assert.Equal("login", received.Arguments.GetProperty("action").GetString());
+        Assert.Equal(300, received.Arguments.GetProperty("timeoutSeconds").GetInt32());
     }
 
     [Fact]

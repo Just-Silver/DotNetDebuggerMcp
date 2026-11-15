@@ -44,7 +44,7 @@ internal static class HandshakeText
     // child 段核心：注册≠建连、原路径启动、真实键鼠、超时不重放、stop 整体注销。族内不引用 ui_*/screenshot，
     // 其子会话路由只在对应族也启用时追加（见 BuildUseChild），否则会指向未注册的工具。
     private const string UseChildCore =
-        "- **当 GUI 操作不能被父会话鼠标键盘/前台干扰，或需要把程序跑在独立 Windows 子会话（RDP Child Session）时**，用 child 族：`child_session`(action=probe/start/status/stop) 建立/查询/停止实例；`start` 缺省等 30 秒，待认证时返回当前状态（用户只在系统连接窗口手动认证，不自动改系统设置），**注册 child 族不等于启动子会话**。\n" +
+        "- **当 GUI 操作不能被父会话鼠标键盘/前台干扰，或需要把程序跑在独立 Windows 子会话（RDP Child Session）时**，用 child 族：`child_session`(action=probe/start/status/stop/login/logout) 建立/查询/停止实例；`start` 缺省等 30 秒，**已保存凭据会自动注入登录；无凭据时先尝试系统自动登录，认证持续等待时弹一次 Windows 安全凭据窗口并保存到当前用户凭据管理器，之后不再询问**（每个实例最多主动询问一次；也可显式 `login` 更新/`logout` 清除；不要求改 Windows 登录方式或新增用户），**Ready 需完成系统登录并收到 worker 握手，控件连接不等于 Ready**，认证待完成时返回当前状态，继续用 `status` 查；原持有器失效时 `start` 按 child 归属重建或重连，`status` 的 health 区分持有器/worker/会话是否存活与 GUI 是否可交互，**注册 child 族不等于启动子会话**。\n" +
         "- **当需要在子会话内从原路径启动 exe/解释器/脚本（后台运行）时**，用 `child_process`(action=start/list/status/output/cancel)：参数为 JSON 数组（不自动拼 shell），start 只等注册结果、不等程序退出；增量输出用 output，只结束该任务用 cancel。\n" +
         "- **当需要在子会话内真实点按/拖拽/滚轮或键盘输入时**，用 `child_pointer`/`child_keyboard`（无父会话模式，必须给 `instance`）：坐标是子会话虚拟屏物理像素，动作是完整有界序列、不跨调用保留按下状态；事件提交不等于业务已消费，需再看界面状态。\n" +
         "- **超时/失联不要重放**：超时只代表放弃等待；用 `child_session(action=requests)` 找回 requestId，再 `action=result` 查同一请求的最终结果；记录淘汰或实例失效报 unknown，不重执行。\n" +
@@ -53,6 +53,12 @@ internal static class HandshakeText
         "- **子会话内 UI 自动化**：给 `ui_find`/`ui_action`/`ui_input`/`ui_get`/`ui_wait` 传 `instance=<实例>` 即在该子会话执行，空值仍走父会话原路径；需 child 与 ui 两族都启用，子会话模式必须显式给 process。\n";
     private const string UseChildScreenshot =
         "- **子会话内截图**：给 `screenshot` 传 `instance=<实例>`（含 `mode=list-windows`/`list-displays` 等清单模式）即在子会话采集，绝不把父会话清单当子会话结果；需 child 与 screenshot 两族都启用。\n";
+    private const string UseChildWindowRestoreLead = "- **连接窗被最小化时**：";
+    private const string UseChildWindowRestoreInputs = "`child_pointer`/`child_keyboard`";
+    private const string UseChildWindowRestoreUi = "、`ui_*`";
+    private const string UseChildWindowRestoreScreenshot = "、`screenshot`";
+    private const string UseChildWindowRestoreTail =
+        " 在转发前先尝试**不激活**还原本实例连接窗（不抢父会话前台、不置顶、不发父侧输入）；未能还原则返回中文未执行且不向 child 投送。`child_session` 与 `child_process`（含 start）不会因此弹窗。\n";
 
     private const string ToolListPrefix = "具体工具清单见 MCP 工具目录（";
     private const string ToolListDecompile = "`decompile` 等语义前缀，静态工具另有 `signature`/`list_types`/`call_*`/`hierarchy`/`dependencies`/`interface_usage`/`field_access`/`search_literals`";
@@ -138,6 +144,10 @@ internal static class HandshakeText
         var sb = new StringBuilder(UseChildCore);
         if (enabled.HasFlag(FeatureFamily.Ui)) sb.Append(UseChildUi);
         if (enabled.HasFlag(FeatureFamily.Screenshot)) sb.Append(UseChildScreenshot);
+        sb.Append(UseChildWindowRestoreLead).Append(UseChildWindowRestoreInputs);
+        if (enabled.HasFlag(FeatureFamily.Ui)) sb.Append(UseChildWindowRestoreUi);
+        if (enabled.HasFlag(FeatureFamily.Screenshot)) sb.Append(UseChildWindowRestoreScreenshot);
+        sb.Append(UseChildWindowRestoreTail);
         return sb.ToString();
     }
 

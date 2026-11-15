@@ -128,9 +128,10 @@ public sealed class ChildPipeServer(string pipeName, string instance, string sec
 
     private string? Validate(ChildEnvelope envelope, ChildPeer actual)
     {
+        // owner 只约束实例所属用户/父会话；客户端可经 apphost 或 dotnet 宿主、不同目录启动，
+        // 真实映像已由 actual.Matches 与信封自报值交叉核对，不能再要求与创建者映像相同。
         if (!actual.Matches(envelope.Peer) || actual.Sid != owner.Sid || actual.SessionId !=
-            (expectedClient?.SessionId ?? owner.SessionId) ||
-            !string.Equals(actual.Image, owner.Image, StringComparison.OrdinalIgnoreCase))
+            (expectedClient?.SessionId ?? owner.SessionId))
             return "管道客户端身份不符。";
         if (expectedClient is not null && !expectedClient.Matches(actual)) return "非本实例连接持有器。";
         if (envelope.Version != ChildWire.Version || envelope.Request.Instance != instance)

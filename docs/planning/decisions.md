@@ -2,6 +2,41 @@
 
 > 最新在上。每项记录「决策 / 理由 / 日期 / 来源(会话)」。回答开放问题后把结论移入此处。
 
+## D36 · Worker 投送保持计划任务 `RunEx`：原生投送在普通权限下不可行（用户 2026-11-16）
+- 背景：`RunEx` 会在系统里临时注册计划任务，且计划任务接口没有 `CREATE_NO_WINDOW`，worker 会带出一次终端窗口。要求参考 LocalRDP `session_launch.cpp` 评估「不依赖计划任务的原生投送」，并给出普通用户权限下的可行性。
+- 调研与实测（`research/13-native-worker-launch-feasibility.md`）：本机账户 **属于 Administrators 组**，但当前宿主进程是 **UAC 过滤的 Medium 令牌**（`BUILTIN\Administrators` 为 deny-only），令牌内无 `SeAssignPrimaryToken`/`SeIncreaseQuota`/`SeTcb`/`SeImpersonate`/`SeDebug`。PoC（`tests/Fixtures/ChildSessionTarget` 的 `native-launch`）结果：`WTSQueryUserToken` → 1314；复制 child 会话内同用户进程令牌 + `CreateProcessAsUser` → 1314；`PARENT_PROCESS` 创建成功但**落在调用方会话**（`ProcessIdToSessionId` 实测为 1，不是目标 16）。
+- 决策：
+  1. **保留 `RunEx` 作为唯一投送方式**，不替换。worker 控制台窗口继续用「接管日志 + `FreeConsole`」处理（D35），不再尝试原生替代。
+  2. **「提权快路径」不成立，已撤销**：本机账户虽在 Administrators 组，但提权（High）后实测管理员令牌**不含 `SeAssignPrimaryToken`**（只有 `SeIncreaseQuota`/`SeImpersonate`），`CreateProcessAsUser` 仍返回 1314；`CreateProcessWithTokenW` 官方明确「调用方进程始终运行在调用方会话」，跨不了会话；`PARENT_PROCESS` 只伪造父子关系、不迁移 session。要打通只能改安全策略授权 `SeAssignPrimaryToken` 或以 LocalSystem 服务运行，两者都超出授权范围。
+  3. 任何将来实现都必须做落地校验：`ProcessIdToSessionId(pid)==目标会话`、SID 与当前用户一致、映像为本产品；不符立即终止并回退。
+  4. **启动清理**：worker 投送用的临时计划任务在崩溃路径会残留（无触发器、惰性）。MCP 启动时后台清理 `SharpSight-child-*`，判定只用「实例记录不存在 / 实例已停止 / 持有器已退出」；活动实例与其它计划任务不动，读不到实例记录时跳过。任务名前缀与投送共用同一来源。
+- 明确边界：本结论**不涉及** Steam/Clash 等登录启动项在 child 会话里被重复触发的问题（那是 `research/12` 的范围），更换投送方式不会改变它们。
+- 保留产物：PoC 留在夹具（可复现），并在 `SharpSight.ChildSession/AGENTS.md` 记录该权限边界，避免后人重复试错。
+- 日期：2026-11-16。来源：用户「研究能否改为不依赖计划任务的原生进程启动方式（参考 LocalRDP session_launch.cpp）」。
+
+## D35 · 子会话连接窗自适应 + worker 不留终端窗口（用户 2026-11-15）
+- 背景：spike 早前实测过动态分辨率（`research/08` §3 行 5、§4.4），D31 也定了「自适应用 `UpdateSessionDisplaySettings`」，但产品接入时只固定 1024×768，拖动连接窗只露灰边；同时子会话桌面每建一次就会出现一个空白 Windows Terminal 窗口（计划任务投送的 worker 是控制台程序）。
+- 决策：
+  1. **自适应**：`ChildConnectionWindow` 在连接稳定 ≥1.5 s 后，按客户区调用 `IMsRdpClient9::UpdateSessionDisplaySettings(宽, 高, 毫米宽, 毫米高, 0, 100, 100)`；物理尺寸按 96 DPI 换算毫米（越界会被 RDP 忽略）。不 `Disconnect/Connect`（白屏）、不依赖 `SmartSizing`（不保证纵横比）。经 IDispatch 调用即可，无需手写整条 `IMsRdpClient9` 继承 vtable。
+  2. **终端窗口**：该窗口平时全空（worker 只在启动失败/任务输出读取失败等罕见路径写一行），按「无功能即隐藏」处理：worker 先把 `Console.Out/Error` 接到临时目录 `worker.log`，再 `FreeConsole()` 脱离控制台，窗口随即关闭；日志能力保留在磁盘上，比盯着子会话里的终端更好查。
+  3. **日志位置**：holder/worker 诊断日志统一放系统临时目录 `%TEMP%\DotNetDebuggerMcp\child\<实例>\`，实例状态目录不再放日志。
+- 实测（2026-11-15，本机 child 14）：客户区 1484×911 → 子会话 1484×911，缩到 884×661 同样跟随；子会话内已无 `WindowsTerminal`/`conhost`/`cmd`；`holder.log`/`worker.log` 均无错误。
+- 明确不做：不把宿主改成 GUI 子系统（会影响 CLI 输出与 Ctrl+C 语义），不引入无窗口启动器，也不改用户默认终端设置。
+- 同步面：`RdpActiveXHost`、`ChildConnectionWindow`、`ChildDiagnosticLog`（替代 `ChildHolderLog`）、`ChildProcessRoles`、`SharpSight.ChildSession/AGENTS.md`、README、CHANGELOG、spec `2026-11-15-child-session-credential-and-persistence-design.md` §5.5。
+- 日期：2026-11-15。来源：用户「之前验证过的自适应怎么没做」+「每次子会话都有个 cmd，是 runner 吗」。
+
+## D34 · 子会话自动登录：凭据管理器 + 显式注入，持有器失效有界恢复（用户 2026-11-15）
+- 背景：子会话已进入实测，每次 `start` 都要用户在 RDP 连接窗手工输入密码，不适合 agent 自动化；同时需要区分「MCP 退出」「持有器崩溃」「child 被注销」几种存活层次。
+- 决策：
+  1. **登录**：不关闭 Hello、不改凭据委派/证书/系统认证策略；先让系统尝试自动登录，认证停住时由用户输入一次账户密码，写入当前用户的 Windows 凭据管理器（DPAPI 保护），`start` 时读出并经 `UserName`/`Domain` + `AdvancedSettings.ClearTextPassword` 注入 ActiveX。优先复用 Windows 已保存的 `TERMSRV/localhost`、`TERMSRV/127.0.0.1`；不读取其他主机的 TERMSRV 凭据。新增 `child_session(action=login/logout)` 与 CLI `child login/logout`。
+  2. **持久化**：持有器与 worker 的诊断日志写到系统临时目录 `%TEMP%\DotNetDebuggerMcp\child\<实例>\`，不再由宿主重定向 stdio，实例状态目录只保留生命周期数据；宿主/CLI 退出不关闭持有器，靠实例记录复用。
+  3. **恢复**：`start` 遇到持有器失效时，只有「当前无 child」才重建新实例；「child 编号与登记一致」重连同一实例；「编号不一致/未登记」拒绝接管。`stop` 可清理已失效且无 child 的残留记录。
+  4. **可观测**：`status.health` 分开报告持有器、worker、child 编号匹配、WTS Active 与 GUI 可交互，`probe`/`status` 报告 `credentialSaved`（不含密码）。
+- 理由：不自建 DPAPI 文件存储（与凭据管理器重复、维护面更大）；不在代码/配置/日志保存明文；不把自动登录建立在「系统恰好免密」的不可控前提上；恢复必须保留「不接管归属不明会话」的既有安全约束。
+- 代价与限制：首次仍需用户输入一次密码；Hello-only 且无密码的账户无法自动登录，只能继续人工认证；持有器失效后旧 Job 内任务随 worker 退出而结束；不承诺跨 Windows 重启恢复进程。
+- 同步面：`SharpSight.ChildSession`（Security、RdpActiveXHost、ChildConnectionWindow、ChildCoordinator、ChildHolderRuntime、ChildSessionPlatform）、工具 `[Description]`、握手 `HandshakeText`、CLI、README、CHANGELOG、AGENTS、spec `2026-11-15-child-session-credential-and-persistence-design.md`。
+- 日期：2026-11-15。来源：用户「子会话可以由 Agent 自动启动、连接和复用，正常使用过程中不需要用户反复输入账号密码」。
+
 ## D33 · 移除 debug_verify 场景复验（用户 2026-10-24）
 - 背景：agent 实际使用中从未用到 `debug_verify`（用户原话「agent 场景我从来没见过用过」）；该模块生产代码 4 个文件 1322 行（占宿主 9606 行的 13.8%）、测试 1116 行，另占一个 CI 分片，且每次改 `ui_*`/断点/求值语义都要同步它的场景 schema。
 - 决策：整块移除 `debug_verify`——`DebugVerifyTool` + `VerifyService` + `VerifyScenario` + `VerifyBuildRunner`，连同 4 个测试文件、CI `ui-verify` 分片、握手触发条件、README 章节与 COPY 契约。

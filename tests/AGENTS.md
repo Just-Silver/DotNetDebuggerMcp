@@ -18,7 +18,7 @@
 
 - **独立隔离试验**：`Fixtures/SandboxSpike/` 是不进入 slnx/CI 的 P0 夹具，构建与运行入口见 [README](Fixtures/SandboxSpike/README.md)。
 - **原生 GUI 交互试验**：`Fixtures/NativeInputSpike/` 比较后台窗口消息与 Child Session 内真实输入，不进入 slnx/CI；操作与清理见 [README](Fixtures/NativeInputSpike/README.md)，不把消息/UIA 通过当成真实输入通过。
-- **正式子会话夹具**：`Fixtures/ChildSessionTarget/` 由宿主测试项目以 `ReferenceOutputAssembly=false` 构建，产物直接进入 `TestData/ChildSessionTarget/`；也可运行目录内 `generate-child-testdata.ps1`。进程模式不抢前台；真实 GUI/输入验收仅在显式授权的 child 内运行。
+- **正式子会话夹具**：`Fixtures/ChildSessionTarget/` 由宿主测试项目以 `ReferenceOutputAssembly=false` 构建，产物直接进入 `TestData/ChildSessionTarget/`；也可运行目录内 `generate-child-testdata.ps1`。进程模式不抢前台；真实 GUI/输入验收仅在显式授权的 child 内运行。`native-launch <会话> <exe> [参数]` 是「不经计划任务投送进程」的可行性 PoC（结论见 `docs/planning/research/13-native-worker-launch-feasibility.md`），只在已有活动 child 会话时手工运行。
 - **目录职责分离**：`tests/Fixtures/` 放生成脚本与夹具源码（`generate-testdata.ps1` + `UiSampleApp/` + `WpfBindingSample/`，**受版本控制**）；`tests/TestData/` 是脚本产物目录，**整体 git 忽略**（`.gitignore` 一条 `tests/TestData/`）——新增夹具只需把源码放进 `Fixtures/`，产物自动落 `TestData/`，不用再改忽略规则。脚本产出 `DotNetDebuggerMcp.TestSamples.dll`（反编译/元数据用例）+ `DotNetDebuggerMcp.TestSamplesExt.dll`（跨程序集用例）+ `DebugTarget.exe/dll/runtimeconfig`（调试用例）+ `UiSampleApp/`（WinForms UI 用例）+ `WpfBindingSample/`（WPF 失焦提交用例）。**新克隆/CI 必须先生成**：`powershell -ExecutionPolicy Bypass -File tests/Fixtures/generate-testdata.ps1`。
 - 改 TestSamples/DebugTarget 源码后需重跑脚本；**token 随源码变化，断点/成员定位类断言会漂移**——不 rename/remove 既有类型保 token 稳定。
 - 各测试项目的 `TestDataPaths.cs`/`TestPaths.cs` 都从测试进程 CWD 上溯找 `DotNetDebuggerMcp.slnx` 再拼 dll 路径——路径解析基准是测试进程 CWD（`bin/Debug/net10.0-windows10.0.22621.0`）。

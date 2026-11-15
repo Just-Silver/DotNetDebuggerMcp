@@ -6,7 +6,9 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 
 - 请求结果未知时保留 requestId，禁止自动重放变更；执行中的请求不得因结果记录限额被淘汰。
 - 真实输入必须核对实例、连接、实际会话、input desktop 和目标身份；停止只注销核实属于本实例的 child。
-- ActiveX Connected 不代表 WTS 会话已可查询；首次观察到的自有 child 编号先登记，连接态 error=2 时继续等待，不在认证/注册间隙主动销毁 ActiveX。已登记编号变化必须拒绝接管。
+- ActiveX Connected 不代表 WTS 会话已可查询；首次观察到的自有 child 编号先登记，连接态 error=2 时继续等待，不在认证/注册间隙主动销毁 ActiveX。已登记编号变化必须拒绝接管。**Ready 需完成系统登录并收到 worker 握手**（worker 在自有 child 内落地并连上执行通道）；控件连接/ActiveX Connected 均不等于 Ready，认证待完成时保持当前状态并继续按 `status` 查询，不自动催认证。
+- **自动登录凭据只从 Windows 凭据管理器取**（本产品目标优先，其次 `TERMSRV/localhost`/`127.0.0.1`），经 `UserName`/`Domain` + `AdvancedSettings.ClearTextPassword` 注入；密码不进实例记录、命令行、日志或返回。无凭据/读库失败/注入失败/用户取消一律退回系统连接窗口认证，不能把实例直接判 Faulted。凭据失效仍停在认证时，状态提示重新 `login`，不无限重试。
+- 持有器失效时 `start` 仅按 child 归属做有界恢复：无 child 才重建新实例；登记编号与当前 child 一致才重连同一实例；编号不明拒绝接管。不得把「关闭连接窗」或「宿主退出」当成注销。
 - 新代码单方法尽量不超过 60 行，超过 80 行必须拆分。
 - 行为测试位于 `tests/DotNetDebuggerMcp.Tests/Child*Tests.cs`；真实 child 集成验收仅显式授权运行，不自动修改系统开关。
 - 定向 MTP 验证优先传完整测试类名，并核对发现数；本机 `--filter-class "*Child*Tests"` 曾运行零个测试并退出 5，不能当作通过。已验证完整类名 `DotNetDebuggerMcp.Tests.ChildRequestTests` / `ChildIpcTests` 可用。
@@ -18,7 +20,15 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 
 每条连接只承载一份请求信封；核验后监视对端EOF并传播连接级取消，不能只取消调用端等待。停止监视的令牌与执行令牌分开，避免正常响应完成时误取消已受理工作；进程任务仍须显式cancel才结束。
 
-长期 holder 启动前将当前宿主的有效标准句柄标为不可继承（不关闭或替换），holder 使用独立 stdio；否则短命 CLI 即使退出，读者也可能等不到输出 EOF。`.NET Process.Start` 的重定向不等于句柄继承白名单；机制与回归证据归规划地图的正式接入验证记录。
+长期 holder 启动前将当前宿主的有效标准句柄标为不可继承（不关闭或替换），holder/worker 自写系统临时目录 `%TEMP%\DotNetDebuggerMcp\child\<实例>\{holder,worker}.log`（256 KiB 轮转）、宿主不再重定向其 stdio；否则短命 CLI 即使退出，读者也可能等不到输出 EOF，宿主退出后无人排空的管道还会卡住长期 holder。`.NET Process.Start` 的重定向不等于句柄继承白名单；机制与回归证据归规划地图的正式接入验证记录。
+
+计划任务投送 worker 时拿不到 `CREATE_NO_WINDOW`，控制台子系统程序会带出可见终端窗口（Windows 11 默认宿主是 Windows Terminal）；worker 必须先接管诊断输出（转临时目录日志）再 `FreeConsole` 脱离，否则子会话桌面会长期占用一个空终端窗。真实按钮/截图类操作前要确认子会话桌面没有本产品遗留窗口。
+
+投送用的临时计划任务会在异常路径残留（无触发器，不会自行运行）。清理只允许删「实例记录不存在 / 实例已停止 / 持有器已退出」的 `SharpSight-child-*` 任务；活动实例的任务与任何其它计划任务都不得触碰，读不到实例记录时宁可不清。任务名前缀以 `ChildScheduledTaskCleanup.TaskNameFor` 为单一来源，投送与清理共用。
+
+**不要再用「原生进程创建」替换 `RunEx`**：实测**未提权**令牌（UAC 过滤的 Medium）与 **UAC 提权后的 High 令牌**下，「复制会话内令牌 + `CreateProcessAsUser`」都是 1314（本机管理员令牌不含 `SeAssignPrimaryToken`），`WTSQueryUserToken` 也是 1314（要 LocalSystem + `SeTcb`）；`CreateProcessWithTokenW` 官方明确只在调用方会话创建，`PROC_THREAD_ATTRIBUTE_PARENT_PROCESS` 只伪造父子关系、**不迁移 session**（新进程仍落在调用方会话）。证据与 PoC 见规划地图的 `research/13-native-worker-launch-feasibility.md`；要打通只剩「改安全策略授权 `SeAssignPrimaryToken`」或「LocalSystem 服务」，均不在允许范围。另注意：`PARENT_PROCESS` 的属性值以指针存入属性列表，必须存活到属性列表销毁，否则 `CreateProcessW` 报 `ERROR_INVALID_HANDLE(6)`。
+
+连接窗自适应只走 `IMsRdpClient9::UpdateSessionDisplaySettings`（经 IDispatch 调用）：物理宽高单位为**毫米**（按 96 DPI 换算，`<10`/`>10000` 会被忽略），方向 0、桌面/设备缩放 100；连接后至少 1.5 s 才下发（过早返回 `E_UNEXPECTED`），尺寸未变或最小化时不发。不用 `Disconnect/Connect`（会白屏），也不依赖 `SmartSizing`（不保证纵横比）。
 
 核验 API：[GetNamedPipeClientProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)、[GetNamedPipeServerProcessId](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid)。这不是同账户恶意程序的安全沙箱。
 
@@ -37,6 +47,8 @@ Windows 子会话执行能力库，不依赖 MCP、宿主或调试 Session 库�
 `ui_wait` 仅在订阅、探测和退订时取门，等待信号或轮询睡眠时放门；不推进帧、不替换清单。门内顺序调用允许同一执行上下文重入，不能把重入上下文用于并发派生 GUI 工作。
 
 断连时进程list/status/output/cancel仍可经控制通道到达存活worker，不能依赖GUI Ready/Active才能取消任务。截图0秒表示立即取门尝试，门忙就拒绝、不排队，实际采集仍受内部护栏。
+
+连接窗（父侧 holder 窗口）被最小化时，只有 `ui_*`/`screenshot`/`child_pointer`/`child_keyboard` 在 holder 转发前由原 STA 用 `ShowWindow(SW_SHOWNOACTIVATE=4)` 按需还原并以 `IsIconic` 复核；不激活、不置顶、不发父侧输入，未确认则不向 worker 投送（返回未执行，不重放）。放弃等待会撤销已排队的 STA 回调，迟到回调在变更前检查取消/截止。`child_session` 与 `child_process`（含 start）不触发该还原；child 内业务目标窗原有的 `SW_RESTORE`+前台语义不变（`ChildInputNative.ShowRestore` 不得用于连接窗）。
 
 ## 观察与截图
 

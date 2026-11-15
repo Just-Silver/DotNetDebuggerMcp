@@ -48,7 +48,7 @@ public sealed class ChildInstalledToolTests
         };
         foreach (var arg in new[] { "run", "--no-build", "-c", "Release", "--project",
             Path.Combine(TestDataPaths.RepositoryRoot, "src", "DotNetDebuggerMcp.Client", "DotNetDebuggerMcp.Client.csproj"),
-            "--", "--child", file.RootElement.GetProperty("tool").GetString()!, file.RootElement.GetProperty("dll").GetString()!,
+            "--", "--child", file.RootElement.GetProperty("tool").GetString()!,
             Path.Combine(run, "cross-" + Guid.NewGuid().ToString("N")) })
             info.ArgumentList.Add(arg);
         using var process = Process.Start(info)!;

@@ -1,3 +1,4 @@
+using DotNetDebuggerMcp.Configuration;
 using DotNetDebuggerMcp.Services;
 using SharpSight.UiAutomation;
 using DotNetDebuggerMcp.Services.Child;
@@ -37,7 +38,7 @@ public static class UiTools
         [Description("限定子树根：以上一次 ui_find 的该 index 元素为根，只枚举其子控件（默认 -1=不限）。大表/长列表（如 999 行 DataGrid）建议先 scope 到容器再查，否则单次枚举可能超时。")] int scope = -1,
         [Description("最大层数（相对窗口/scope 根；默认 0=不限）。大 UI 树用 depth 限层可显著提速（如 depth=3 只看前几层容器）。")] int depth = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
-        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。" + ToolParameterText.ChildInstanceRestoreHint)] string instance = "",
         CancellationToken cancellationToken = default)
     {
         if (instance.Length != 0)
@@ -76,7 +77,7 @@ public static class UiTools
         [Description("窗口状态（verb=windowstate 时必填）：normal / maximized / minimized。")] string windowstate = "",
         [Description("**真实点击**（默认 false；仅 verb=invoke/select）。true 时按控件 ClickablePoint 移动真实光标并注入左键点击——**会移动光标、注入输入、可能抢前台**；仅在目标无 Invoke/SelectionItem（如部分 WPF-UI 导航项只暴露 legacy）且语义动作被证实无效时开启。其它 verb 配 clickPoint=true 会报错。")] bool clickPoint = false,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
-        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。" + ToolParameterText.ChildInstanceRestoreHint)] string instance = "",
         [Description("子会话观察引用（默认空=不绑定）：仅 instance 非空时有效，绑定此前子会话 ui_find/截图返回的 observationId；与 frameId 同时非空时两者都必须有效且同源。父侧（instance 空）传非空会被拒绝。")] string observationId = "",
         CancellationToken cancellationToken = default)
     {
@@ -118,7 +119,7 @@ public static class UiTools
         [Description("写完是否失焦提交，默认 true：写完把焦点移出该控件（必要时先激活目标窗口），让 WPF 等「失焦才提交」的绑定真正收到新值；False = 只改控件文本、不主动移焦（连续填多个字段、或不想触发字段校验时用；部分控件 SetValue 本身仍可能让窗口变前台）。")] bool commit = true,
         [Description("可交互性护栏（可省略；填写后用 ui_find 返回的帧号校验目标是否来自旧画面：0=不校验，非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
-        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。" + ToolParameterText.ChildInstanceRestoreHint)] string instance = "",
         [Description("子会话观察引用（默认空=不绑定）：仅 instance 非空时有效，绑定此前子会话 ui_find/截图返回的 observationId；与 frameId 同时非空时两者都必须有效且同源。父侧（instance 空）传非空会被拒绝。")] string observationId = "",
         CancellationToken cancellationToken = default)
     {
@@ -157,7 +158,7 @@ public static class UiTools
         [Description("控件类型（UIA 类型名）。")] string type = "",
         [Description("可交互性护栏（可省略；填写后用 ui_find 返回的帧号校验目标是否来自旧画面：0=不校验，非 0 且非当前帧会拒绝并提示重新 ui_find/screenshot）。")] int frameId = 0,
         [Description("单次 UIA 调用的超时秒数，默认 5，范围 1-300；目标响应慢时可调大（这是护栏，不代表环境 UIA 不可用）。")] int timeoutSeconds = 5,
-        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。" + ToolParameterText.ChildInstanceRestoreHint)] string instance = "",
         [Description("子会话观察引用（默认空=不绑定）：仅 instance 非空时有效，绑定此前子会话 ui_find/截图返回的 observationId；与 frameId 同时非空时两者都必须有效且同源。父侧（instance 空）传非空会被拒绝。")] string observationId = "",
         CancellationToken cancellationToken = default)
     {
@@ -195,7 +196,7 @@ public static class UiTools
         [Description("状态切换起点文本（text 模式之外用成对 From/To 等文本变化）。")] string textChangedFrom = "",
         [Description("状态切换目标文本（成对使用）。")] string textChangedTo = "",
         [Description("最长等待秒数，默认 30，范围 1-300；同时作为单次 UIA 调用的超时护栏（目标响应慢时可调大）。")] int timeoutSeconds = 30,
-        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时转发到该子会话执行，需本入口同时启用 child 与 ui 能力族；失败或不支持时直接报错，**不回退到本机**。" + ToolParameterText.ChildInstanceRestoreHint)] string instance = "",
         CancellationToken cancellationToken = default)
     {
         if (instance.Length != 0)

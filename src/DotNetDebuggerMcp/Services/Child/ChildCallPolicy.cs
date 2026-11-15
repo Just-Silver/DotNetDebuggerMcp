@@ -21,7 +21,7 @@ internal sealed class ChildCallPolicy(FeatureFamily enabled,
             if (arguments.ValueKind != JsonValueKind.Object) throw new ArgumentException("参数必须是JSON对象。");
             var instance = Text(arguments, "instance");
             var action = Text(arguments, "action", operation == "child_session" ? "status" : "");
-            if (instance.Length == 0 && (operation != "child_session" || action is not ("probe" or "start" or "status")))
+            if (instance.Length == 0 && (operation != "child_session" || action is not ("probe" or "start" or "status" or "login" or "logout")))
                 throw new ArgumentException("必须显式给出instance，不会回退主会话。");
             var timeout = Timeout(operation, action, arguments);
             request = request with

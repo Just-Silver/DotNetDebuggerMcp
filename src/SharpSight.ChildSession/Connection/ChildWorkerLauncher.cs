@@ -9,7 +9,7 @@ internal static class ChildWorkerLauncher
     internal static async Task LaunchAsync(ChildInstanceStore store, ChildBootstrap state,
         ChildHostCommand command, CancellationToken ct)
     {
-        var taskName = "SharpSight-child-" + state.Identity.Instance;
+        var taskName = ChildScheduledTaskCleanup.TaskNameFor(state.Identity.Instance);
         var objects = new List<object>();
         dynamic service = Track(Activator.CreateInstance(Type.GetTypeFromProgID("Schedule.Service")!)!, objects);
         try

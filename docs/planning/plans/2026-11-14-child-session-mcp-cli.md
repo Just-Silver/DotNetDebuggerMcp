@@ -246,12 +246,16 @@ public sealed record ChildArtifact(
 
 ### Task 10：安装产物、正式交叉验收与收尾文档
 
+**2026-11-15范围裁决：** 本任务按[正式设计§13](../specs/2026-11-14-child-session-mcp-cli-design.md#13-2026-11-15-范围收敛只验收已确认的-exe-入口)收敛；以下保留原计划历史，涉及DLL直启的专项要求不再执行，其余产品/清理/验收门槛不变。
+
+**执行状态：** 安装产物三轮及Task10A恢复专项已实测通过，最终全分支审阅/提交收尾中。完整宿主历史基线非全绿，不以本任务复选框表示全部测试成功；准确发现数、失败/跳过与证据统一归[验证记录§8](../research/11-child-session-integration-results.md#8-最终安装产物三轮业务验收通过2026-11-15)。
+
 **Files:** 创建 `src/DotNetDebuggerMcp.Client/ChildSessionCases.cs`，修改 ClientRunner/Program 增显式 child 验收入口；创建 `tests/DotNetDebuggerMcp.Tests/ChildInstalledToolTests.cs`；创建 `docs/planning/research/11-child-session-integration-results.md`，更新规划地图、新库/宿主/tests/Client AGENTS、README/CHANGELOG 和本计划状态。
 
 **Interfaces:** 消费已接通 MCP/CLI；Client 的 child 验收仅在明确启用且通过只读前置检查后运行，不并入默认反编译回归，也不由 CI 自动触发系统开关。
 
-- [ ] **建立验收场景：** 写 `安装后的工具可建立并复用内部执行角色` 安装路径验收与 `跨CLI和MCP的目标输入截图及停止闭环`；遇活动外部 child 要拒绝并记录，缺系统前置则明确 Skip/未验收而非成功。补 Client/安装脚本调用和所需打包配置；不得仅对开发 bin 验证。前序能力已完整实现时场景可直接通过，不为形式制造 RED；若发现安装/集成缺陷，先保留能复现的失败用例，再修复对应代码。
-- [ ] **自动回归：** 执行：
+- [x] **建立验收场景：** 写 `安装后的工具可建立并复用内部执行角色` 安装路径验收与 `跨CLI和MCP的目标输入截图及停止闭环`；遇活动外部 child 要拒绝并记录，缺系统前置则明确 Skip/未验收而非成功。补 Client/安装脚本调用和所需打包配置；不得仅对开发 bin 验证。前序能力已完整实现时场景可直接通过，不为形式制造 RED；若发现安装/集成缺陷，先保留能复现的失败用例，再修复对应代码。
+- [x] **自动回归：** 执行：
   ```powershell
   powershell -ExecutionPolicy Bypass -File tests/Fixtures/generate-testdata.ps1
   dotnet build -c Release src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj
@@ -259,17 +263,35 @@ public sealed record ChildArtifact(
   dotnet run -c Release --project src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.Client.csproj
   ```
   预期构建零错误、受影响用例零失败、默认 Client 全绿；测试 skip 要写明原因，不能计为实测成功。
-- [ ] **安装回归：** 在 `tests/TestData/ChildSessionAcceptance/<run>/` 下 pack 和本地 tool install：
+- [x] **安装回归：** 在 `tests/TestData/ChildSessionAcceptance/<run>/` 下 pack 和本地 tool install：
   ```powershell
   dotnet pack src/DotNetDebuggerMcp/DotNetDebuggerMcp.csproj -c Release -o <run>/packages
   dotnet tool install DotNetDebuggerMcp --tool-path <run>/tool --add-source <run>/packages --version <当前项目版本> --no-cache
   ```
   将占位路径替为本轮绝对路径，版本读取 csproj 而非硬编码；独立可执行文件与 `dotnet <宿主dll>` 两种启动方式均检查内部角色解析，不把 dotnet.exe 误当产品宿主。不改正式安装、不发版、不推 tag。
-- [ ] **真实交叉验收：** 经授权确保开关与会话前置后，设置 `DOTNETDEBUGGERMCP_CHILD_INTEGRATION=1`。安装路径 CLI 创建，MCP 启动原路径 WinForms/WPF Debug 目标，另一 CLI 列任务/输出/UIA、严格点击/拖拽、键码/IME显式提交/Unicode/chord、截图实际读图，再父侧现有 debug_attach→断点→读栈→disconnect，cancel 和 stop。至少三轮，覆盖断连与 worker 退出；只在自有 child 注入。
-- [ ] **清理与证据：** 核对无本轮 holder/worker/fixture/临时任务遗留，probe 确认自有 child 已注销；本轮若获授权改开关按约定恢复。报告记录构建/工具版本、run目录、准确命令、机器检查、画面/业务结果及未测限制；不重复要求已认可的人工循环，不把未测设备/COM/锁屏算通过。新报告以职责注释开头并同次登记地图。
+- [x] **真实交叉验收：** 经授权确保开关与会话前置后，设置 `DOTNETDEBUGGERMCP_CHILD_INTEGRATION=1`。安装路径 CLI 创建，MCP 启动原路径 WinForms/WPF Debug 目标，另一 CLI 列任务/输出/UIA、严格点击/拖拽、键码/IME显式提交/Unicode/chord、截图实际读图，再父侧现有 debug_attach→断点→读栈→disconnect，cancel 和 stop。至少三轮，覆盖断连与 worker 退出；只在自有 child 注入。
+- [x] **清理与证据：** 核对无本轮 holder/worker/fixture/临时任务遗留，probe 确认自有 child 已注销；本轮若获授权改开关按约定恢复。报告记录构建/工具版本、run目录、准确命令、机器检查、画面/业务结果及未测限制；不重复要求已认可的人工循环，不把未测设备/COM/锁屏算通过。新报告以职责注释开头并同次登记地图。
 - [ ] **审阅与提交：** 按 verification-before-completion 和 requesting-code-review 做全改动验证/独立审阅，修重要问题后复跑。文档与代码只提交本功能范围，中文消息 `完成子会话接入交叉验收与使用说明`。不自动合并、推送或发布。
 
 ---
+
+### Task 10A：GUI请求前自动不激活还原连接窗
+
+**Goal / Spec：** 实施[设计§14](../specs/2026-11-14-child-session-mcp-cli-design.md#14-连接窗最小化时自动不激活还原2026-11-15-已确认)；不改变原任务10三轮、所有权与输入隔离门槛。
+
+**Files：** `src/SharpSight.ChildSession/Connection/ChildConnectionWindow.cs`（原STA内检查/还原）、`ChildHolderRuntime.cs`（接线）、`ChildForwarder.cs`（GUI请求门）；`tests/DotNetDebuggerMcp.Tests/ChildForwardingTests.cs`（真实Store/IPC行为回归）；宿主`ChildSessionTool.cs`/`ChildInputTools.cs`/`UiTools.cs`/`ScreenshotTool.cs`工具说明、`HandshakeText.cs`及必要共用文案常量、README/子会话AGENTS；显式Client新增连接恢复验收小文件及GUI场景接线。
+
+**Interfaces：** `ChildConnectionWindow.EnsureVisibleWithoutActivationAsync(CancellationToken)` 返回 `Task<bool>`；`ChildForwarder` 构造接收必填 `Func<CancellationToken, Task<bool>> ensureVisibleWithoutActivation`，所有既有调用点显式接线，不加fail-open默认。原生互操作归能力库，宿主只更新说明。
+
+**Global Constraints：** 仅本实例父侧连接窗；`ShowWindow(SW_SHOWNOACTIVATE=4)` 后以 `IsIconic` 复核；不使用WindowState=Normal/SW_RESTORE/SetForegroundWindow，不置顶/父侧输入/自动重连；child内业务目标最小化语义不变；`child_session`/`child_process`不触发恢复；未确认不投送GUI、不重放。
+
+**Review Focus：** 已关窗拒绝；STA超时/取消后迟到回调不得变更；还原失败无worker副作用；控制请求不依赖还原且不弹窗；显式验收不得放宽50ms隔离判据。
+
+- [ ] **RED：** 在现有真实IPC回归中更新/增加“GUI请求恢复连接窗后才执行”“无法还原连接窗时不执行GUI”“控制查询及进程启动不触发连接窗恢复”，边界委托替代原生窗口，其他Store/IPC/业务副作用真实；已关窗/取消从该边界返回未确认，断返回与副作用、不查调用次数。运行`dotnet test --project tests/DotNetDebuggerMcp.Tests/DotNetDebuggerMcp.Tests.csproj -c Release -- --filter-class 'DotNetDebuggerMcp.Tests.ChildForwardingTests'`，确认RED来自缺少恢复门而非绑定错误。
+- [ ] **实现原生恢复与转发门：** 原STA有界检查→必要时调用4→IsIconic复核；已关窗/释放返回false，已取消的排队回调在变更前退出。保持Ready/身份/WTS门；只有明确GUI操作使用新增门，false返回中文not-executed。
+- [ ] **GREEN：** 运行上述类并加ChildConnectionReadinessTests/ChildLifecycleTests/ChildMcpToolsTests/握手与工具面完整类名，所有本项业务规则通过且发现数非0。宿主/测试一律Release，最后单独Debug构建业务目标，避免输出锁与覆盖。
+- [ ] **说明与显式验收：** 对受影响工具Description和按child族握手同步“不激活还原；失败未执行”；跨工具重复文案用既有AppText等常量。Client第一轮在正常隔离采样前，核实holder身份与父侧失焦，故意最小化该连接窗、发一次ui_find，单列恢复证据（前后IsIconic/父前台/光标与业务输出）；随后原严格采样和完整三轮不变。不使用测试快捷键或父侧输入；不把恢复阶段初始最小化偷偷计为正常隔离通过。
+- [ ] **交付审阅：** 不自动启动真实child；报告精确RED/GREEN/文件/顾虑、交独立审阅。主会话重新隔离安装，刷新定向回归/默认Client及Debug哈希，实机三轮与恢复证据归research/11；中文按文件提交与整体收尾沿用原门槛，不自动发布。
 
 ## 自检与覆盖索引
 
@@ -284,5 +306,6 @@ public sealed record ChildArtifact(
 | 请求发现、去重、截止、unknown与取消 | 1、2、6、9 |
 | MCP参数/门控/握手、CLI/脚本入口 | 9 |
 | 安装路径、真实业务闭环、调试attach、清理与证据 | 10 |
+| 连接窗最小化自动不激活还原、失败拒绝与控制旁路 | 10A |
 
 执行者不得用“已编译”替代真实 child 验收；每任务先确认自己的测试行为和既有基线，变更若超出批准范围，停止并说明。计划不假定前述接口已存在，不以历史实验二进制替代正式安装产物。

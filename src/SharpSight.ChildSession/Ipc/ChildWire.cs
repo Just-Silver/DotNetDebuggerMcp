@@ -16,6 +16,14 @@ internal static class ChildWire
         "child_session" or "child_process" or "child_pointer" or "child_keyboard" or
         "ui_find" or "ui_action" or "ui_input" or "ui_get" or "ui_wait" or "screenshot";
 
+    /// <summary>
+    /// 需要 child 可交互（连接窗非最小化）的操作：只有这些在转发前做不激活还原。
+    /// child_session 全部动作与 child_process（含 start）都不还原，避免控制查询/启动程序弹出连接窗。
+    /// </summary>
+    internal static bool NeedsInteractiveWindow(string operation) => operation is
+        "child_pointer" or "child_keyboard" or "ui_find" or "ui_action" or "ui_input" or "ui_get" or
+        "ui_wait" or "screenshot";
+
     internal static async Task WriteAsync<T>(Stream stream, T value, CancellationToken ct)
     {
         var data = JsonSerializer.SerializeToUtf8Bytes(value, Json);

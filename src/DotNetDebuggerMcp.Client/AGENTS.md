@@ -27,7 +27,11 @@ dotnet run -c Release --project src/DotNetDebuggerMcp.Client/DotNetDebuggerMcp.C
 
 ## 显式子会话验收
 
-`ChildSessionCases*.cs` 仅在 `DOTNETDEBUGGERMCP_CHILD_INTEGRATION=1` 且传 `--child <本轮安装shim.exe> <本轮安装宿主.dll> <输出目录>` 时运行，默认 Client 不触碰系统开关、不启动 child、不注入真实输入。缺开关、存在其他 child 或本产品活动实例时拒绝，不接管外部会话；认证只能由用户在系统窗口完成。
+`ChildSessionCases*.cs` 仅在 `DOTNETDEBUGGERMCP_CHILD_INTEGRATION=1` 且传 `--child <本轮安装shim.exe> <输出目录>` 时运行，三轮均用同一个安装 exe 承载父侧 MCP 与 CLI（清单仍记 DLL 哈希供只读探测，不执行 dotnet DLL 专项实机验收）；默认 Client 不触碰系统开关、不启动 child、不注入真实输入。缺开关、存在其他 child 或本产品活动实例时拒绝，不接管外部会话；首次配置凭据需维护者在安全窗口输入一次（`child login`），已保存凭据时由程序自动登录，否则仍由用户在系统窗口完成。
+
+真实 UIA/键鼠与调试点击前先核对 identity 的 `HolderPid`/`HolderStartedTicks`/`ParentSessionId`（进程创建时间、会话须与状态一致），再等连接窗口可见且非最小化、父侧前台不属于持有器；不满足时只打印提示并有界等待，**不替用户抢前台**。此后用只读 Win32（`GetCursorPos`/`GetForegroundWindow`/`GetWindowThreadProcessId`/`IsIconic`）在 `ui_find`→真实输入→截图→调试断点点击的同一有界区间采样父会话光标与前台，采样结束才写 `parent-isolation` evidence。任一变化、采样读取失败/无前台，或初始化时持有器窗口已是前台/最小化都记 `confirmed=false`，**本轮按失败处理**：不打印该轮与三轮 PASS，仍先走 finally 的正式 stop；业务原始异常不被替换，隔离证据保留。50ms 采样点只证明这些采样点未观察到变化，不能排除采样间隔内的瞬态；不采集键盘文本、不向父侧发送任何测试输入。
+
+第一轮在隔离采样**开始之前**单列 `connection-restore` 检查（`ConnectionWindowRestore.cs`）：只把已核对身份的本实例连接窗最小化，记录父侧光标/前台基线后发一次 `ui_find`，复核窗口已非最小化、父侧前台与光标与基线一致、业务实际命中控件。该证据只对照还原前后，不冒称采样间隔内无瞬态；严格 50ms 采样从还原确认之后才开始，判据不放宽。
 
 先经授权准备系统，再运行 `tests/Fixtures/ChildSessionTarget/install-acceptance-tool.ps1` 生成独立本地源、隔离 NuGet 缓存与 `installed.json`。以该清单设置 `DOTNETDEBUGGERMCP_CHILD_INSTALLED_MANIFEST` 后，`ChildInstalledToolTests` 可运行只读安装验证；另显式设置上述 integration 变量才会启动三轮真实验收。夹具须另按 Debug 构建后用 `--no-build` 运行测试，避免测试构建把目标覆盖为 Release。
 

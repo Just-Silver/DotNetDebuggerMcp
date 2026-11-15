@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using DotNetDebuggerMcp.Configuration;
 using DotNetDebuggerMcp.Services.Child;
 using ModelContextProtocol.Server;
 
@@ -13,7 +14,7 @@ public static class ChildInputTools
     [McpServerTool]
     [Description("在子会话内执行真实鼠标动作。**坐标固定为 child 虚拟屏物理像素坐标**（允许负原点；原生 1:1，截图像素点 = 截图返回原点 + 图内像素），不是父侧连接窗坐标或客户区坐标。没有主会话模式：缺 instance 或 processId 直接拒绝，失败不回退父侧输入。action（必填）：move / click / doubleclick / drag / scroll；目标 PID 必填，hwnd 空时要求该进程唯一可选顶层窗口；参数不适用时拒绝，不静默忽略。每个动作是完整有界序列（drag=按下→分段移动→抬起），实例内 GUI 操作串行。observationId 可省略，但**省略后不保证坐标来自新画面**（实例/会话/目标/前台检查始终执行）。")]
     public static Task<string> ChildPointer(
-        [Description("实例标识（默认空）；本工具没有主会话模式，空值直接拒绝、不回退父侧输入。")] string instance = "",
+        [Description("实例标识（默认空）；本工具没有主会话模式，空值直接拒绝、不回退父侧输入。" + ToolParameterText.ChildInstanceRestoreHint)] string instance = "",
         [Description("目标进程 id（必填，默认 0=未指定）；必须是 child 内进程。")] int processId = 0,
         [Description("目标窗口句柄（默认空=要求该进程唯一可选顶层窗口；多窗口时必须显式指定）。")] string hwnd = "",
         [Description("动作类型（默认空=返回合法值提示）：move / click / doubleclick / drag / scroll。")] string action = "",
@@ -38,7 +39,7 @@ public static class ChildInputTools
     [McpServerTool]
     [Description("在子会话内执行真实键盘输入。action（必填）：text=Unicode 系统输入，不自动追加 Enter、不关闭 IME——IME 提交需显式再发 Enter；key=单键、chord=组合键（如 Ctrl+K，恰一个非修饰键），用键码名（Ctrl/Alt/Shift/Win、A-Z、0-9、F1-F24、Enter/Tab/Escape/Space/Backspace/Delete/Insert/Home/End/PageUp/PageDown/Up/Down/Left/Right）。不跨调用保留按下状态，也不释放并非本轮按下的键。没有主会话模式：缺 instance 直接拒绝，不回退父侧输入。**输入成功只表示事件已提交，不表示目标业务已消费**——请用 ui_get / screenshot 确认结果。observationId 可省略，但省略后不保证目标仍是先前观察的画面。")]
     public static Task<string> ChildKeyboard(
-        [Description("实例标识（默认空）；本工具没有主会话模式，空值直接拒绝、不回退父侧输入。")] string instance = "",
+        [Description("实例标识（默认空）；本工具没有主会话模式，空值直接拒绝、不回退父侧输入。" + ToolParameterText.ChildInstanceRestoreHint)] string instance = "",
         [Description("目标进程 id（必填，默认 0=未指定）；必须是 child 内进程。")] int processId = 0,
         [Description("目标窗口句柄（默认空=要求该进程唯一可选顶层窗口；多窗口时必须显式指定）。")] string hwnd = "",
         [Description("动作类型（默认空=返回合法值提示）：text / key / chord。")] string action = "",

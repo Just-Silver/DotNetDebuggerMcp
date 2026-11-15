@@ -13,13 +13,11 @@ public sealed class ChildSessionPlatform(ChildHostCommand command) : IChildSessi
     public ChildPeer StartHolder(string root, string instance)
     {
         ChildStandardHandles.PreventInheritance();
+        // 不重定向 stdio：持有器写实例目录日志，宿主退出或短命 CLI 退出都不会留下无人读取的管道。
         var info = command.StartInfo("--child-internal", "holder", root, instance);
-        info.RedirectStandardOutput = info.RedirectStandardError = true;
-        info.RedirectStandardInput = true;
         var process = Process.Start(info) ?? throw new InvalidOperationException("连接持有器未启动。");
-        process.StandardInput.Close();
         var peer = ChildPeer.Capture(process.Id);
-        _ = DrainAndDisposeAsync(process, Path.Combine(root, instance, "holder.log"));
+        _ = WaitAndDisposeAsync(process);
         return peer;
     }
 
@@ -28,6 +26,12 @@ public sealed class ChildSessionPlatform(ChildHostCommand command) : IChildSessi
         try { return peer.Matches(ChildPeer.Capture(peer.ProcessId)); }
         catch (ArgumentException) { return false; }
         catch (InvalidOperationException) { return false; }
+    }
+
+    public bool? IsActive(int sessionId)
+    {
+        try { return WtsNative.Active(sessionId); }
+        catch (System.ComponentModel.Win32Exception) { return null; }
     }
 
     public void RequestLogoff(int childSessionId) => WtsNative.Logoff(childSessionId);
@@ -40,32 +44,10 @@ public sealed class ChildSessionPlatform(ChildHostCommand command) : IChildSessi
         process.CloseMainWindow();
     }
 
-    private static async Task DrainAndDisposeAsync(Process process, string path)
+    private static async Task WaitAndDisposeAsync(Process process)
     {
-        try
-        {
-            await using var log = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-            using var gate = new SemaphoreSlim(1);
-            await Task.WhenAll(DrainAsync(process.StandardOutput, log, gate), DrainAsync(process.StandardError, log, gate));
-            await process.WaitForExitAsync();
-        }
-        catch (Exception ex) { Console.Error.WriteLine($"持有器输出读取失败：{ex.Message}"); }
+        try { await process.WaitForExitAsync(); }
+        catch (InvalidOperationException) { }
         finally { process.Dispose(); }
-    }
-
-    private static async Task DrainAsync(StreamReader reader, FileStream file, SemaphoreSlim gate)
-    {
-        var buffer = new char[2048];
-        int count;
-        while ((count = await reader.ReadAsync(buffer)) != 0)
-        {
-            await gate.WaitAsync();
-            try
-            {
-                if (file.Length < 65536)
-                    await file.WriteAsync(System.Text.Encoding.UTF8.GetBytes(buffer.AsSpan(0, count).ToString()));
-            }
-            finally { gate.Release(); }
-        }
     }
 }

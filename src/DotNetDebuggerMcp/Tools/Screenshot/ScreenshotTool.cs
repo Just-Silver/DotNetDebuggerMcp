@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Text;
 using System.Text.Json;
+using DotNetDebuggerMcp.Configuration;
 using DotNetDebuggerMcp.Services.Child;
 using DotNetDebuggerMcp.Services.Gui;
 using ModelContextProtocol.Protocol;
@@ -34,7 +35,7 @@ public static class ScreenshotTool
         [Description("window/foreground 等窗口出现的秒数（默认 5，范围 0-30；0=立即试一次，子会话GUI忙则拒绝、不排队；采集本身仍受内部护栏。原路径越界会夹取并在头部注明）。")] int timeoutSeconds = 5,
         [Description("非空=强制落盘到该路径（支持 `%VAR%` 环境变量，会展开；相对路径以临时目录 %TEMP%\\DotNetDebuggerMcp\\screenshots 为基准，绝对路径按原样，均不会写入当前工作目录）；空=仅图片超 2MB 时自动落盘到该临时目录。**落盘时不再附图片内容**：只回文本 +「已落盘: <绝对路径>」，需自行读取该文件。")] string filePath = "",
         [Description("仅 mode=list-windows 用：标题子串过滤（忽略大小写，默认空=全部）。")] string contains = "",
-        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时把本次截图全部模式转发到该子会话执行，需本入口同时启用 child 与 screenshot 能力族；失败或不支持时直接报错，**不回退到本机**。")] string instance = "",
+        [Description("子会话实例 ID（默认空=本机主会话原路径）。非空时把本次截图全部模式转发到该子会话执行，需本入口同时启用 child 与 screenshot 能力族；失败或不支持时直接报错，**不回退到本机**。" + ToolParameterText.ChildInstanceRestoreHint)] string instance = "",
         [Description("子会话观察引用（默认空=不绑定）：仅 instance 非空时有效，绑定此前子会话 ui_find/截图返回的 observationId；与 frameId 同时非空时两者都必须有效且同源。父侧（instance 空）传非空会被拒绝。")] string observationId = "",
         CancellationToken cancellationToken = default)
     {

@@ -22,7 +22,7 @@ internal sealed partial class ChildSessionCases
             var find = await CliAsync("ui_find", new { instance = _instance, process = $"{pid}", limit = 100 });
             var button = Element(find.Message, "CommitButton").Bounds;
             await PointerAsync(pid, "click", button.X + 20, button.Y + 10);
-            await DebugAsync("debug_wait", new { waitSeconds = 10 }, "Stopped");
+            await DebugAsync("debug_wait", new { waitSeconds = 10 }, "BreakpointHit");
             await DebugAsync("debug_frame", new { }, "OnCommit");
             var blocked = await _mcp.CallRawAsync("child_session",
                 Arguments(new { action = "stop", instance = _instance }), CancellationToken.None);

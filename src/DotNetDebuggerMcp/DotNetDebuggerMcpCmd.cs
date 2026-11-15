@@ -376,6 +376,12 @@ public class DotNetDebuggerMcpCmd
         .WithStdioServerTransport().WithTools((IEnumerable<Type>)ToolFeatureRegistry.EnabledToolTypes(features));
         // 后台 fire-and-forget 预检（TTL/退避内不联网）：刷新 NuGet 磁盘缓存供下一次会话使用，不 await 以免阻塞启动
         _ = AppServices.Updater.RefreshIfStaleAsync();
+        // 子会话的 worker 由临时计划任务投送，进程崩溃会留下无触发器的残留任务：启动时后台清理，
+        // 只删本产品命名且实例已停止/持有器已退出的任务，绝不碰其他计划任务，也不影响启动时延。
+        if (features.HasFlag(FeatureFamily.Child))
+            _ = Task.Run(() => SharpSight.ChildSession.Lifecycle.ChildScheduledTaskCleanup.Sweep(
+                new SharpSight.ChildSession.Lifecycle.ChildInstanceStore(
+                    DotNetDebuggerMcp.Services.Child.ChildServices.Root)));
         var mcpTask = builder.Build().RunAsync();
         await mcpTask;
         return 0;

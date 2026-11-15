@@ -6,7 +6,7 @@ using ModelContextProtocol.Protocol;
 namespace DotNetDebuggerMcp.Client;
 
 [SupportedOSPlatform("windows")]
-internal sealed partial class ChildSessionCases(string tool, string dll, string output)
+internal sealed partial class ChildSessionCases(string tool, string output)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly List<JsonElement> _evidence = [];
@@ -21,8 +21,8 @@ internal sealed partial class ChildSessionCases(string tool, string dll, string 
             Console.Error.WriteLine("未验收：须显式设置DOTNETDEBUGGERMCP_CHILD_INTEGRATION=1，不自动启用系统。");
             return 2;
         }
-        if (args.Length != 3) throw new ArgumentException("--child <安装shim.exe> <安装宿主.dll> <本轮输出目录>");
-        var cases = new ChildSessionCases(Path.GetFullPath(args[0]), Path.GetFullPath(args[1]), Path.GetFullPath(args[2]));
+        if (args.Length != 2) throw new ArgumentException("--child <安装shim.exe> <本轮输出目录>");
+        var cases = new ChildSessionCases(Path.GetFullPath(args[0]), Path.GetFullPath(args[1]));
         Directory.CreateDirectory(cases.outputDirectory);
         try { await cases.ExecuteAsync(); return 0; }
         catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
@@ -54,13 +54,12 @@ internal sealed partial class ChildSessionCases(string tool, string dll, string 
         _roundDirectory = Path.Combine(output, $"round-{round}");
         Directory.CreateDirectory(_roundDirectory);
         _instance = "";
-        await using var mcp = await ClientRunner.ConnectInstalledAsync(round == 2 ? tool : "dotnet",
-            round == 2 ? [] : [dll], CancellationToken.None);
+        await using var mcp = await ClientRunner.ConnectInstalledAsync(tool, CancellationToken.None);
         _mcp = mcp;
         JsonElement identity = default;
         try
         {
-            var start = await CliAsync("child_session", new { action = "start", timeoutSeconds = 30 }, round == 2);
+            var start = await CliAsync("child_session", new { action = "start", timeoutSeconds = 30 });
             _instance = start.Instance;
             Require(_instance.Length != 0, "创建未返回实例。");
             identity = await WaitReadyAsync();
@@ -109,13 +108,12 @@ internal sealed partial class ChildSessionCases(string tool, string dll, string 
         return text;
     }
 
-    private async Task<Reply> CliAsync(string operation, object args, bool viaDll = false)
+    private async Task<Reply> CliAsync(string operation, object args)
     {
-        var info = new ProcessStartInfo(viaDll ? "dotnet" : tool)
+        var info = new ProcessStartInfo(tool)
         {
             UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
         };
-        if (viaDll) info.ArgumentList.Add(dll);
         foreach (var arg in new[] { "child", "call", operation, "--json", JsonSerializer.Serialize(args, Json) })
             info.ArgumentList.Add(arg);
         using var process = Process.Start(info) ?? throw new InvalidOperationException("CLI启动失败。");

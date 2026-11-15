@@ -12,12 +12,12 @@ public sealed class ClientRunner : IAsyncDisposable
 
     private ClientRunner(McpClient mcp) => _mcp = mcp;
 
-    public static async Task<ClientRunner> ConnectInstalledAsync(string command, string[] prefix, CancellationToken ct)
+    public static async Task<ClientRunner> ConnectInstalledAsync(string command, CancellationToken ct)
     {
         var transport = new StdioClientTransport(new()
         {
             Name = "installed child acceptance", Command = command,
-            Arguments = [.. prefix, "--features=decompile,debug,ui,screenshot,child"]
+            Arguments = ["--features=decompile,debug,ui,screenshot,child"]
         });
         return new(await McpClient.CreateAsync(transport, cancellationToken: ct));
     }

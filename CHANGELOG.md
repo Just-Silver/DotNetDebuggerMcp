@@ -12,9 +12,14 @@
 
 ### Added
 
-- **子会话执行（`child` 能力族，Windows RDP Child Session）**：新增 `child_session`（probe/start/status/stop/requests/result）、`child_process`（从原路径启动 exe/解释器/脚本、增量输出、单任务取消）、`child_pointer` 与 `child_keyboard`（子会话内真实鼠标/键盘），把 GUI 操作放进独立 Windows 子会话，不干扰父会话的鼠标、键盘与前台窗口。默认全族注册但**注册不等于启动**：实例需显式 `child_session(action=start)` 建立，MCP 不会自动触发 UAC 或修改系统策略，认证只在系统连接窗口由用户手动完成。
+- **子会话执行（`child` 能力族，Windows RDP Child Session）**：新增 `child_session`（probe/start/status/stop/login/logout/requests/result）、`child_process`（从原路径启动 exe/解释器/脚本、增量输出、单任务取消）、`child_pointer` 与 `child_keyboard`（子会话内真实鼠标/键盘），把 GUI 操作放进独立 Windows 子会话，不干扰父会话的鼠标、键盘与前台窗口。默认全族注册但**注册不等于启动**：实例需显式 `child_session(action=start)` 建立，MCP 不会自动触发 UAC 或修改系统策略。
+- **子会话自动登录与持久化恢复**：首次 `start` 先尝试系统自动登录，认证持续等待时在桌面弹出一次 Windows 安全凭据窗口，密码保存到当前用户的 Windows 凭据管理器（DPAPI 保护，不写配置/源码/日志），之后每次 `start` 自动注入登录，不再要求输入；已保存 `TERMSRV/localhost` 或 `TERMSRV/127.0.0.1` 时直接复用。可用 `child_session(action=login)`（CLI `child login`）更新、`logout` 清除本产品凭据。持有器与子会话 worker 的诊断日志改写到系统临时目录 `%TEMP%\DotNetDebuggerMcp\child\<实例>\`（`holder.log`/`worker.log`），宿主/CLI 退出后仍可复用同一实例；持有器失效时 `start` 在「无 child」时重建、在「child 编号与登记一致」时重连同一实例、编号不明时拒绝接管；`status` 新增 `health` 分列持有器/worker/child 会话/GUI 可交互，`probe`/`status` 报告 `credentialSaved`（不含密码）。
+- **子会话连接窗自适应**：拖动/缩放连接窗后，用 RDP 8.1 动态分辨率（`UpdateSessionDisplaySettings`）把子会话桌面同步为客户区大小，画面 1:1 不再留灰边或变形；连接稳定后才下发，缩小同样生效。
+- **子会话里不再出现空终端窗口**：worker 由计划任务投送（无法指定 `CREATE_NO_WINDOW`），原先会在子会话桌面留下一个 Windows Terminal 窗口；现在 worker 启动即接管诊断输出并脱离控制台，该窗口消失，日志仍可在临时目录查看。
+- **残留计划任务自动清理**：worker 投送用的临时计划任务在进程异常时会残留（无触发器、不会自行运行）。MCP 服务器启动时会后台清理 `SharpSight-child-*` 中「实例记录已不存在 / 实例已停止 / 持有器已退出」的任务；活动实例的任务与其它任何计划任务都不会被触碰。
 - **`ui_*` 与 `screenshot` 新增 `instance` 路由**：传实例即在子会话执行（空值保持原父会话路径），另增 `observationId` 观察引用；需 `child` 与对应族同时启用，否则非空 `instance` 明确返回未启用，绝不静默回退父会话。
-- **CLI `child` 子命令**：`child enable` / `child disable` / `child call <operation> --json <参数对象>`（长参数用 `--json-file <路径>`，二者互斥）；输出单个 JSON 结果，已确认失败或 `unknown` 退出码 1。CLI 不启动 MCP 服务，同一实例可在 CLI 与 MCP 之间复用。
+- **连接窗自动还原**：子会话连接窗被最小化时，GUI/截图/真实键鼠请求前按不激活方式还原；未能确认恢复则明确拒绝执行。后台任务启动、查询、取消和整体停止不会因此弹出连接窗。
+- **CLI `child` 子命令**：`child enable` / `child disable` / `child login` / `child logout` / `child call <operation> --json <参数对象>`（长参数用 `--json-file <路径>`，二者互斥）；输出单个 JSON 结果，已确认失败或 `unknown` 退出码 1。CLI 不启动 MCP 服务，同一实例可在 CLI 与 MCP 之间复用。
 - **超时/失联不重放**：请求超时只表示放弃等待，可用 `child_session(action=requests)` 找回 `requestId` 再 `action=result` 对账；记录淘汰或实例失效明确返回 `unknown`。UIA/截图超时后仍运行则保持 GUI Busy 并拒绝新 GUI 调用，控制查询与 `stop` 不受影响。
 - **`--features` 新增 `child` 取值**；握手按实际启用族说明子会话的创建/原路径启动/真实键鼠/结果找回/整体停止触发条件，未启用的族不出现其工具名或工作流。
 - **说明书与边界**：README 增补子会话能力、配置与 CLI 用法；明确子会话共享宿主文件与用户权限、**不是安全沙箱**，`stop` 会注销整个子会话并结束其中全部应用（含用户手动打开的），实例产物保留在 `%LOCALAPPDATA%\DotNetDebuggerMcp\child\<实例>` 需人工清理。

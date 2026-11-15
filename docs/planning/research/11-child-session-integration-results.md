@@ -2,7 +2,7 @@
 
 # 子会话 MCP / CLI 接入验证记录
 
-日期：2026-11-14。**状态：实施中，尚未完成正式接入，不能当作产品验收通过。**
+日期：2026-11-14起，最终实机验证2026-11-15。**状态：安装产物三轮业务验收已通过（§8）；最终全分支审阅与提交收尾中，尚未合并或发布。完整宿主套件仍须如实单列既有失败，不能称全套全绿。**
 
 设计与任务归 [正式设计](../specs/2026-11-14-child-session-mcp-cli-design.md)及[实施计划](../plans/2026-11-14-child-session-mcp-cli.md)。
 
@@ -234,3 +234,113 @@ TerminalServices-LocalSessionManager/Operational 本轮事件包含09:16:42的 S
 09:39:30再次通过**安装产物**独立probe确认 `Enabled=true`、`ChildSessionId=null`；CIM确认原holder26044、观察器47856及Session2均无进程。开关保持本机初始true，未注销父会话。原产品登记仍为Stopping并保留用于取证，未伪造Stopped或归档/删除它；因此这里只声称系统child已注销，不声称产品状态收尾完成。
 
 原始证据为本轮目录中的 `timeline.jsonl`、`state-transitions.json`、`query-summary.json`、`terminal-services-events.json`、`verified-product-probe.json`、`verified-summary.json`；timeline SHA256=`87E8F199CE2AF586F76801227C5189CE552803A2B1AA000B28DA77505D337972`。本机 `mstscax.dll` 文件版本 `10.0.26100.9949`，`wtsapi32.dll` 为 `10.0.26100.9549`。未取得可使用的观察器进程退出码，不将其记为exit0；清理结论依据原生注销返回、事件23、独立probe与进程核对。以上仍不代表正式产品三轮、worker业务闭环或任务10完成。
+
+## 7. 生产修复与正式验收接续（2026-11-15，进行中）
+
+维护者要求先完成生产修复和验收、之后再收尾合并；主会话负责计划与验收，实现和审阅可交给子代理。没有把上一节恢复取证当作交付完成。
+
+- 登录门控生产回归：新增“登录完成前保留编号而不查询尚无权限的连接态”，先实测RED（Win32=5），再加入OnLoginComplete门控；连接/生命周期/转发定向12/12、0跳过。登录后仍拒绝访问继续保留原生错误，没有一律吞掉5。
+- 新安装目录 `tests/TestData/ChildSessionAcceptance/20261115-094705/`，宿主DLL SHA256=`23567E22C54783F8F24EE1544671D5FB9A54146D09C3E6B1E0FD3C3655396058`。Client Release与业务夹具Debug均构建成功；正式安装用例明确启用integration、使用`--no-build`，没有用研究探针代替生产角色。
+- 此包首次真实建立到Ready：实例 `0a162eb00580430ca1b57c3d4d87ea73`，child3、holder51136/ticks639303040601657317、worker54940/ticks639303040716329243。随后首个MCP `child_process`返回“管道客户端身份不符”；CLI使用安装exe、MCP使用`dotnet <同一安装dll>`，在生产`ChildPipeServer.Validate`中被“客户端映像等于创建者映像”的额外条件拒绝。该条件不同于实际peer与信封Image的核实，违反两种安装宿主形式交叉复用的约定。
+- 这次安装测试2项：只读项通过，真实项失败，0跳过；未完成第一轮业务。finally经正式CLI stop返回Stopped，确认holder/worker退出；未发生真实业务输入。原始证据在本轮 `client-acceptance.log` 与执行账本 `fixed-acceptance-first.log`。
+- 原故障实例 `8c7443b370044904bac95a0ca2d3dd32` 已在无系统child、无原holder且SID/父会话/创建时间核对后，持生命周期锁整体归档至 `%LOCALAPPDATA%/DotNetDebuggerMcp/child/control/recovered-8c7443b370044904bac95a0ca2d3dd32`；原Stopping内容及ACL保留，没有伪造Stopped。归档后正式status确认无本产品活动实例，才允许启动上述新包。
+
+### 定向修正与后续验收准备
+
+- IPC 修正仅去掉“客户端映像必须等于持有器映像”的额外绑定；真实对端与信封身份、SID/Session、凭据、白名单及 worker 固定 holder 检查保留。真实跨进程回归先出现3项失败，修正后13/13、邻接17/17；临时移除信封身份核实会使伪造映像回归失败，已恢复原核实。独立定向审阅通过；仍不等于最终安装业务闭环成功。
+- 登录首版审阅发现事件订阅失败可能被 AxHost 吞掉、生产接线回归不足、fail-open 默认参数、一次 STA 超时误判故障及旧登录状态复用。第1轮修正将订阅失败反馈到既有故障原因、由生产单轮决策消费同一份连接/登录快照、移除登录参数默认值，并在读取超时后保持未确认、复用未完成读取任务，sink 生命周期复位状态。回归先6项中2项失败，修正后连接6/6、生命周期4/4、转发5/5，构建0警告0错误。真实 COM 订阅失败和断连事件尚无本轮独立实机验证，定向复审及最终安装复验待完成。
+- 当前发布/配置入口与后续 DLL 范围裁决归[正式设计§13](../specs/2026-11-14-child-session-mcp-cli-design.md#13-2026-11-15-范围收敛只验收已确认的-exe-入口)，不把维护者询问必要性写成要求删除。后续三轮以正常安装 exe 为业务入口，不再将 DLL 启动差异描述成 MCP 与 CLI 的架构区别。
+- 新一轮验收前只读复核：`Enabled=true`、`ChildSessionId=null`、无本产品活动实例；没有为准备回归修改系统开关。父侧隔离观察和 agent 就绪说明同步仍在实现，尚未打包最终安装产物，也未宣称任何一轮完整通过。
+
+后续关窗回归确定性复现了两种旧快照误判（已关窗仍查询/投递、未确认快照下关窗仍保持等待），最小修正后连接10/10、生命周期4/4、转发5/5；关窗现在先于旧连接快照，监视循环不继续等待已关闭窗口的未完成读取。此项仍须定向复核，不把单测状态冒充真实断连证据。
+
+主会话重新生成通用夹具，宿主测试及 Client Release 构建0警告0错误；默认 Client 实跑全部场景通过（含679个反编译写盘文件校验、finally清理）。完整宿主套件已在未启用真实 child 集成条件下开始运行，尚无最终摘要；后续真实 child 不与该套件并发，避免父侧 GUI 回归污染隔离观察。
+
+验收观察器的首版会在 `confirmed=false` 时仅打印警告、仍可能输出轮次 PASS；独立审阅后已收紧为：先停止采样并保留完整证据，业务成功但父侧隔离未确认则该轮失败，不打印轮次/三轮成功；业务原本失败则保留原异常，仍走正式 stop 清理。初始 holder 前台/最小化与采样无前台同样计入未确认。此修正仅有 Client Release 编译与静态路径证据，没有在本轮独立执行负向真实输入，定向复审待完成。隔离证据明确为50ms采样点观测，不能排除采样间瞬态变化，不将采样未见变化表述成绝对无扰动。
+
+### 冻结构建与完整回归
+
+- 登录关窗修正与隔离失败门槛均经定向复审，规格/质量通过，无阻塞。尚无真实 COM 订阅失败、负向隔离失败的独立实机证据。
+- 完整宿主套件以 Release `--no-build` 正常运行9分08秒并产出最终摘要：890项，878通过、9失败、3跳过，退出2。跳过为无安装清单的只读安装项、未启用integration的安装实机项、未提供活动实例的真实PNG项；没有伪称全绿。
+- 失败中7项 `DebugUiToolsTests` 与 `Window_ByMultiWindowPid_SelectsRealWindow_NotTinyHelper` 和§2基线重合。`Screen_ReturnsPngImageBlock_WithTargetLine` 本次新增失败（图片块为空），原先的 `Element_ByName_ReturnsPngImageBlock_WithFrameId` 本次未失败，不能因为失败总数相同就声称清单相同。
+- 全屏失败只读诊断：本机该时段存在两张3440×1440全屏PNG，分别3,784,889 / 3,737,370字节，按现有base64阈值应走自动落盘而不附图片块；阈值/分支与基线代码等价。日志未包含该用例返回正文，自动落盘的响应原文直证尚缺；未改测试断言或宣称已解决。
+- 新隔离安装目录 `tests/TestData/ChildSessionAcceptance/20261115-132043/`，宿主DLL SHA256=`6659CE2B2CE7EF743754B497311B14A06C82285A950A756228F82087E0BD82ED`。冻结后明确范围回归134项，132通过、2真实项跳过；覆盖child、握手、能力族、工具面、stdio并发及安装只读探测。Debug业务目标DLL与`obj/Debug`哈希一致：`D088870DDC8A6009884A2F0F7BEFC1F76EEE91C90489FF67392A6CC6801F4A7C`；Client Release SHA256=`54234781C932DABC6EC1CA2BB0EB6A980FF535ACB98204BC436B9B5D84609479`。清单与核对原文为该目录 `installed.json` / `frozen-build.json`。
+
+### 安装首轮：Ready后被验收客户端日志共享冲突打断
+
+实例 `e28b522395a9498f9118796a0fc4695d`，child4、holder24968/ticks639303169218358131、worker18052/ticks639303169702653725，正式入口已到Ready。MCP `child_process` 成功启动GUI进程60760/ticks639303169717531685，证明本次exe入口的IPC已越过原误拒点。
+
+随后Client的 `WaitEventAsync` 在读取 `events.jsonl` 时抛共享冲突 `IOException`（`File.ReadAllTextAsync`），没有进入UIA/真实键鼠/图片/调试验证。安装测试2项中只读通过、真实失败、0跳过，完整三轮仍为0轮；不将GUI进程启动等同业务通过。原始现场在安装目录 `client-acceptance.log` 和 `cross-d500d504f3c444d1889e5d5de6217e97/round-1/`。
+
+finally正式stop返回Stopped。13:23:13主会话独立核对：probe `Enabled=true/ChildSessionId=null`、status无本产品活动实例；holder/worker/GUI及Session4剩余进程数0。未改变本机初始开关。日志读取缺陷由Client实现者继续核实读写共享模式并做真实文件边界回归；维护者新提出“连接窗最小化时自动还原且不抢父侧焦点”，另行核实API，不能把现有验收前置检查称为已经具备生产自动恢复。
+
+日志读取已在真实文件边界复现同一共享冲突：写端持有写访问并允许读，新读端却未允许既有写句柄。改为共享读写并仅消费最后一个换行之前的完整UTF-8行；主会话复跑同一实际reader源码的7项磁盘断言通过（持有中可读、半行等待、补齐/追加后可读、不截断、UTF-8尾部等待、无换行不产出事件）。Client新SHA256=`9CD5FE79D7F37F29E4F68C2553725B917406FA0638B2BF2778FD87BFA33B5D03`；临时验证程序不在CI，定向审阅及真实业务复跑仍待完成。
+
+连接窗最小化的历史实测依据归 [research/08 §6.4](08-rdp-child-session-spike.md#64-外层客户端状态与-child-内目标状态)，不是本轮新增推测；该旧PoC证据不外推为当前正式实现全部能力均会失效。
+
+13:30:08主会话通过当前已连接的开发MCP（不是132043安装实例）直接调用 `screenshot(mode=screen)`，未给filePath，实际只返回“目标: 屏幕 / 3440×1440 / BitBlt / 已落盘”文本，文件为 `%TEMP%/DotNetDebuggerMcp/screenshots/screenshot-20261115-133008117-screen.png`，2,082,875字节、SHA256=`1A423BCF88AFD0C8DF1FCC52795DAFECD89FC5C8B92CD620D4D9BCC9DE387071`。这直接验证了本机当前桌面内容会触发大图自动落盘，支持全屏用例“必须有内联图片块”的前提不总成立；没有重跑原失败用例，也不将其标为通过或修改断言。
+
+### 按需恢复连接窗的新增范围
+
+维护者确认[设计§14](../specs/2026-11-14-child-session-mcp-cli-design.md#14-连接窗最小化时自动不激活还原2026-11-15-已确认)，实施计划补Task10A；此时仅完成API与参考实现核对，尚未实现或实测。参考WPF源码在最小化→Normal且ShowActivated=false时使用 `SW_SHOWNOACTIVATE=4`；本轮不采用会激活的WinForms `WindowState=Normal`/`SW_RESTORE`，原生返回值也不作为恢复成功的证明。正式结果仍需确认 `IsIconic`、真实GUI业务和父侧前台/光标；不把文档语义替代为本机ActiveX恢复成功。
+
+首版实现经真实Store/IPC的恢复门回归RED8项中2失败→GREEN相关40/40，其余Child65通过/1真实图像跳过；主会话另跑最新明确范围137项，135通过/2真实项跳过，默认Client全部通过且清理679个文件。曾隔离安装到 `20261115-183811`（宿主SHA256=`EC320BEFF73708BBC3A67755CEA90C4BFE0E855B4E90C78C6DF236F4175584EB`），尚未执行该包真实child恢复验收。
+
+独立审阅建议收口marshal回调异常，主会话进一步确认首版存在确定的迟到回调生命周期缺陷：回调执行时才读取`budget.Token`，如果等待已超时并释放CTS，则Token getter在进入恢复函数之前即抛`ObjectDisposedException`，可能逸出到WinForms默认异常处理。主会话在本机显式调用已释放CTS的`get_Token()`复现该异常；提前保存的`CancellationToken`值在源取消/释放后仍能读取取消状态。PowerShell属性适配器可能吞getter异常，不能把`$cts.Token`未直接报错当反证。此项正在原实现者修正，未以“极窄原生调用竞态”掩盖该确定错误；183811包不再作为最终验收产物。
+
+### 恢复修正包185505：实机输入已达，PNG客户端读取尚未通过
+
+迟到回调修正完成并独立复审通过：保存排队前Token值，marshal异常回传任务/中文未执行，预算单源；确定性RED13项中4失败，GREEN相关45/45。主会话冻结后回归142项，140通过、2真实项跳过；默认Client全通过、679个文件校验后清理。
+
+新隔离包 `tests/TestData/ChildSessionAcceptance/20261115-185505/`，宿主SHA256=`4E2DF79EE87159D0A1BB0B4351678726D1CBA34A33C6F3AE51A16895892EA7A3`；Client=`A4B327D134821450EDE6416E5BF89EE254281773482027BF9024592DD3B5821C`；Debug业务目标与`obj/Debug`均=`D99C4FD09B377D4E37F3A7CFB722D447EFA883C7D7CFAA55A581E476F5D48FA3`。
+
+- 首次实例 `58fa969165034462ab339e6f7485b6b3` / child5：最小化后经正式GUI查询恢复、UIA命中、父前台不变，但父光标 `(817,1074)→(832,1065)`，验收明确失败。只有前后快照，不能确认变化由还原/ActiveX/外部输入中哪一个造成，不将其归因为用户。正式stop及独立核对均无残留；保留 `client-acceptance-restore-cursor-change.log`。
+- 同包、无代码改动复验实例 `c49140686b6746febd56e773e521a59c` / child6：最小化后恢复成功且前后父侧光标/前台相同；GUI进程63580真实处理UIA写读、`中文😀原生输入`、commit、Ctrl+K、doubleclick、拖拽140px、滚轮120。正常执行区间344个50ms父侧样本，光标/前台均0变化、0读取失败、holder未成为父前台/未最小化，`confirmed=true`。这是本轮分项证据，不扩写为采样间瞬态绝对不存在。
+- GUI截图 `cross-be237a122e214eaeab039890c38e5922/round-1/gui.png` 可解码，主会话实际读图看到中文输入、Ctrl+K状态与拖拽轨迹；不是只核对文件存在。
+- 随后Client在标记图 `new Bitmap(stream)` 处失败：`lime.png` 实为75,848字节Base64文本，头部 `iVBORw0KGgo...` 而非PNG二进制，说明 `ImageContentBlock.Data.ToArray()` 的消费口径不正确。另见marker `ui_wait`文本为语义超时，不能仅凭reply completed视作命中；其clientArea路径也不抗遮挡。交Client子项核对SDK契约与实际就绪/捕获方式，不改生产截图或去掉像素断言。
+- 两次真实安装测试均为只读项通过、实机项失败，完整三轮仍0通过。child6正式stop到Stopped；独立probe无child、status无活动实例，holder62376/worker54968/GUI63580/marker57692与Session6进程数0；开关保持true。PNG失败原日志独立保留为 `client-acceptance-png-failure.log`。
+
+### Client协议修正后：图片已通过，停点断言词汇需同步
+
+本地反编译SDK `ModelContextProtocol.Core 2.2.0` 证实：`ImageContentBlock.Data` 是Base64 UTF-8字节，`DecodedData` 才是原始图片字节；`FromBytes`接收原始字节，故宿主路径无需改变。Client改用DecodedData，并实际解码后校验；主会话独立复跑同一实际解码源码的SDK JSON协议往返7项通过。marker无后代控件，旧`ui_wait(text=标题)`条件无法命中，改用截图工具有界等待与实际像素判据；整窗捕获优先WGC/PrintWindow，BitBlt回退仍受遮挡影响，以真实Lime像素判准，不降低像素要求。
+
+Client新哈希=`08E0699F3080B7D68D7A6F43CEC1FCAB07863949FE667BC5628DEDB2EC2E90D0`，仍使用185505宿主包及同一Debug目标。实例 `031cac1220174422a08ac205b58765fe` / child7，恢复前后父侧光标与前台相同，随后真实输入再次通过，Lime图片402×312、中心ARGB=-16711936；主会话实际读图看到绿色标记窗，GUI截图也可解码。
+
+调试已真实完成attach→设置`OnCommit`断点（token `0x0600008b`）→continue→child内真实点击→命中BreakpointHit，线程51716，`debug_wait`带当前OnCommit源码。Client却期待英文`Stopped`，实际工具返回中文“已停下”加`BreakpointHit`，所以验收错误地在该断言停止；这是测试词汇与现有工具输出不一致，不是“未命中断点”。仍须修正断言后继续核验栈帧、附加时stop保护及后续cancel/断连/worker退出；不据此签收完整调试闭环或三轮。
+
+本次正常执行区间199个50ms父侧样本，光标/前台0变化、0读取失败、confirmed=true。finally已disconnect，正式stop到Stopped；19:07:55独立probe无child/status无活动实例，holder45128/worker32148/GUI38632及Session7进程数0。现场 `client-acceptance-debug-wording.log` 与 `cross-4fdcb17e14cc4e4f99253391ed214e56/` 保留。
+
+## 8. 最终安装产物三轮业务验收通过（2026-11-15）
+
+使用§7所记185505同一安装宿主与Debug业务目标；Client仅将旧停点预期改为真实的`BreakpointHit`，实际验收Client SHA256=`9823C5CE22E7E4D3169EF4C675662E9F455410893DD107E05253974062ACBDF8`。正式 `ChildInstalledToolTests` 2/2通过、0跳过、约1分53秒，未用开发bin/研究探针代替安装exe，MCP/CLI三轮都从同一安装exe进入。
+
+原始证据：`tests/TestData/ChildSessionAcceptance/20261115-185505/cross-71266593eae0483782c4974982872cf6/` 的 `evidence.json`、各轮 `events.jsonl`、`gui.png`、`lime.png`；安装目录 `client-acceptance.log`、`controller-verification.json` 与 `controller-png-event-check.json`。原始产物仍在忽略目录，以下事实记录为长期保留，不承诺原始文件永久存在。
+
+| 轮次 | 实例 / child | holder / worker / GUI PID | 父侧50ms样本 | 专项与清理 |
+|---|---|---|---|---|
+| 1 | `56fcc3e509de4e1c90ed404629356bb8` / 8 | 7988 / 63248 / 54176 | 188 | 连接窗故意最小化→正式ui_find触发不激活还原，前后光标/前台一致；随后cancel与stop完成 |
+| 2 | `40695d132b6f4efca4e7669dc8530b02` / 9 | 8276 / 51012 / 53928 | 180 | 真实断连后状态Disconnected，仍可list/output/cancel，GUI明确拒绝；最后stop完成 |
+| 3 | `02d92a4331d84f0b9d6f65e35c97f2fb` / 10 | 61968 / 17388 / 65488 | 186 | 核实身份后结束worker，新请求not-executed而非伪报完成；最后stop完成 |
+
+每轮均实际经过：
+
+- UIA写读、真实Unicode“中文😀原生输入”、提交、Ctrl+K、点击/双击、140px拖拽与120滚轮，目标消息泵事件齐全。
+- GUI PNG可解码702×532；MCP图片实际解码402×312，中心ARGB=-16711936（Lime）。主会话另独立读取三轮落盘PNG与事件文件复核，三轮均符合，不只采信Client PASS。
+- 父侧debug_attach→OnCommit断点→continue→child内真实点击→BreakpointHit→debug_frame含OnCommit栈与字段；附加期间stop保护触发；finally disconnect，目标继续运行。
+- 任务output/cancel后running=false；正式stop到Stopped且holder/worker退出。
+
+三轮正常执行区间的父侧采样均为：0光标变化、0前台变化、0读取失败、连接窗未成为父前台且未最小化，3/3 `confirmed=true`。恢复专项在正常采样之前单列，只证明前后状态与业务可用；50ms正常采样也不排除采样间瞬态，不扩写成任何设备/应用/长期并行都绝对无扰动。
+
+19:13:11主会话独立核对三轮holder/worker PID与child8/9/10均无剩余进程；安装exe probe为`Enabled=true/ChildSessionId=null`，status无本产品活动实例。保留本机初始开关true，未改认证、权限或系统策略，未注销父会话。
+
+验收后仅做无业务行为变化的收尾：为Windows图片解码小类补平台标注、限定BitBlt回退的遮挡敏感性、失败提示不作未经证实的因果判断；Client重建0警告0错误，SHA256=`28C0F0BCC41C638B86CD6C19E65215738B919F1724F8969EF8CFE33F0822F74C`。三轮原始证据仍归上述9823C5CE构建，不伪称在新哈希上重跑过三轮。生产宿主包未变。
+
+最新生产代码完整宿主套件已正常结束：898项，886通过、9失败、3跳过，9分26秒，退出2。9项失败与本机前一轮890项运行逐项相同（7项DebugUiTools前台不变断言、Screen内联图片块前提、Window_ByMultiWindowPid选窗），没有把相同失败总数当作清单一致的替代证据；3跳过仍为未提供安装清单/真实集成/活动实例的明确条件。已有失败不通过放宽断言或跳过来“修绿”，不能称全套全绿。
+
+维护者随后发现child登录重复启动后台软件，要求先定位启动来源、最小PoC后再接入；合并因此暂停，新增问题归[启动项隔离研究](12-child-session-startup-isolation.md)。全分支独立审阅只评估既有冻结实现，本文不声明已合并或发布。
+
+### 独立整分支审阅返回（未开始处理新增发现）
+
+审阅结论为“有条件通过、未发现Critical”，不等于可立即合并。报告提出两项需要后续核实并裁决的Important：holder失效后正式stop可能无法恢复清理；标准用户以另一管理员账户提权enable/disable时，生命周期目录ACL可能与原账户不一致。两项均未在最终安装包上完成专项实机验证，本次启动隔离研究不顺手修改生产，也不未经核实直接采用审阅修复建议。
+
+另待收尾核对child路径的AgentActionLog说明、CLI帮助的child入口及实际验收Client的构建记录归属。最终审阅原文在忽略工作区`whole-branch-review.md`；其中“research12未跟踪”是提交完整性提醒，不是当前文件不存在。保持本研究与文档地图同次提交，但当前尚未提交、合并或发布。

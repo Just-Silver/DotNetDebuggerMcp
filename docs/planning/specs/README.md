@@ -7,7 +7,8 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| `2026-11-14-child-session-mcp-cli-design.md` | **子会话 MCP/CLI 正式接入**：共享实例、生命周期、程序/脚本、UIA/真实键鼠/截图、IPC 与验收边界 | **设计正文已批准**；任务1–9已提交，任务10真实验收因启动查询 Win32=5 未完成，接续见 `../research/11-child-session-integration-results.md` §5 |
+| `2026-11-15-child-session-credential-and-persistence-design.md` | **子会话自动登录与持久化恢复**：凭据管理器保存+向 ActiveX 注入、首次配置入口、持有器独立日志、失效后重建/重连边界、`status.health` 分层 | **已实施**（2026-11-15；真实登录仍需用户首次输入一次密码，见 spec §6） |
+| `2026-11-14-child-session-mcp-cli-design.md` | **子会话 MCP/CLI 正式接入**：共享实例、生命周期、程序/脚本、UIA/真实键鼠/截图、IPC 与验收边界 | **设计正文及§14恢复行为已批准**；安装产物三轮验收通过、最终审阅收尾中，结果见 `../research/11-child-session-integration-results.md` §8 |
 | `2026-11-14-native-gui-input-isolation-poc-design.md` | **不干扰用户的 GUI 交互 PoC**：分级补充 UIA、窗口消息与 Child Session 验证、状态矩阵、条件式集成 | **按更正任务实施独立 PoC 中**；未批准产品重构，不承诺任意应用/设备/状态全覆盖 |
 | `2026-09-05-overview-design.md` | **总览 spec**：五项目全局架构、命名布局、各层设计原则、线程/事件模型、阶段边界 P1-P5、风险与合规 | **已确认**（用户 2026-09-05 review OK） |
 | `2026-09-05-p4-webui.md` | **P4 WebUI 细化 spec**：运行形态双模式、页面布局 v1 核心面、文档模型/行映射、技术集成定稿（BB 10.10.0 + 自研 Monaco 互操作 + 宿主 --web 接线） | **历史记录**：Web 已于 2026-10-23 整体移除（`decisions.md` D28），本 spec 仅供追溯 |

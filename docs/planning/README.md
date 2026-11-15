@@ -43,9 +43,12 @@
 | `research/archive/` | 已归档调研：dnSpy 源码结构摸底 / ILSpy 源码结构摸底 |
 | `specs/README.md` | 设计文档目录（specs/ 导航） |
 | `specs/2026-11-14-native-gui-input-isolation-poc-design.md` | **不干扰用户的 GUI 交互 PoC**：分级交互、后台消息与 Child Session 实验设计、能力边界及条件式集成；独立 PoC 已启动，非产品设计签收 |
-| `specs/2026-11-14-child-session-mcp-cli-design.md` | **子会话 MCP/CLI 正式接入设计**：父侧入口与 child worker、实例生命周期、程序/脚本、UIA/真实输入/截图及失败契约；正文已批准，产品工具面已接通、真实验收进行中 |
-| `plans/2026-11-14-child-session-mcp-cli.md` | **子会话接入实施计划**：请求/IPC、生命周期、任务、GUI/输入、MCP/CLI、安装与真实交叉验收；第1–9项已提交，第10项安装与真实验收进行中 |
-| `research/11-child-session-integration-results.md` | **子会话正式接入验证记录**：原始全套基线失败、基础能力定向验证和未完成项；实施中，非产品验收 |
+| `specs/2026-11-14-child-session-mcp-cli-design.md` | **子会话 MCP/CLI 正式接入设计**：父侧入口与 child worker、实例生命周期、程序/脚本、UIA/真实输入/截图及失败契约；含已批准的按需不激活还原，最终结果见验证记录 |
+| `specs/2026-11-15-child-session-credential-and-persistence-design.md` | **子会话自动登录与持久化恢复设计**：凭据管理器保存+ActiveX 注入、首次配置入口、持有器独立日志、失效后重建/重连规则、`status.health` 分层与限制 |
+| `plans/2026-11-14-child-session-mcp-cli.md` | **子会话接入实施计划**：请求/IPC、生命周期、任务、GUI/输入、MCP/CLI、安装与真实交叉验收；安装三轮已通过，独立审阅与提交收尾中 |
+| `research/11-child-session-integration-results.md` | **子会话正式接入验证记录**：历史失败、修正与安装三轮实测、完整套件失败边界及最终清理；最新结论见§8 |
+| `research/12-child-session-startup-isolation.md` | **Child Session登录启动项隔离研究**：PoC-1失败、第三方/官方机制及候选门槛（§9–14）、现有会话复用/重连边界与最小建议（§15–17）；不写已签收的生产设计 |
+| `research/13-native-worker-launch-feasibility.md` | **Worker 原生投送可行性**：LocalRDP `session_launch.cpp` 三段式逐段分析、`CreateProcessAsUser`/`PARENT_PROCESS`/`WTSQueryUserToken` 官方语义与本机 Medium 令牌实测（1314 + 会话不迁移）；结论是普通权限下仍只能 `RunEx`，并划清与登录启动项问题的边界 |
 | `../../tests/Fixtures/NativeInputSpike/README.md` | **原生 GUI 交互 PoC 运行说明**：Debug 构建、脚本/CLI、输入护栏与清理；机制与结果分别归 research/07、08 |
 | `specs/2026-09-05-overview-design.md` | **总览设计 spec**（已确认；其中 §4.4 Web 层已于 2026-10-23 整体移除，见 `decisions.md` D28） |
 | `specs/2026-09-05-p4-webui.md` | **P4 WebUI 细化 spec**（历史记录；Web 已于 2026-10-23 整体移除，见 `decisions.md` D28） |

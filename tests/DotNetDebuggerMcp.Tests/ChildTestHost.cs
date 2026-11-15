@@ -16,11 +16,12 @@ internal sealed class ChildTestHost : IAsyncDisposable
     internal RequestJournal Journal { get; } = new();
 
     internal static async Task<ChildTestHost> StartAsync(CancellationToken ct = default,
-        Func<ChildRequest, CancellationToken, Task<ChildReply>>? boundary = null)
+        Func<ChildRequest, CancellationToken, Task<ChildReply>>? boundary = null,
+        ChildPeer? expectedClient = null)
     {
         var host = new ChildTestHost();
         var peer = ChildPeer.Current;
-        var server = new ChildPipeServer(host.PipeName, "test-instance", Secret, peer);
+        var server = new ChildPipeServer(host.PipeName, "test-instance", Secret, peer, expectedClient);
         var executor = new ChildRequestExecutor(host.Journal, serialize: false);
         host._serverTask = server.RunAsync((request, callToken) =>
         {

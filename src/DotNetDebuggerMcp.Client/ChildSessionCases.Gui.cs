@@ -19,16 +19,55 @@ internal sealed partial class ChildSessionCases
         Require(P(ready, "sessionId").GetInt32() == P(identity, "childSessionId").GetInt32(), "GUI未运行于自有child。");
         var listed = await CliAsync("child_process", new { action = "list", instance = _instance });
         Require(P(listed.Data, "tasks").EnumerateArray().Any(t => P(t, "taskId").GetString() == taskId), "跨CLI未找到MCP任务。");
-        var find = await CliAsync("ui_find", new { instance = _instance, process = $"{pid}", limit = 100 });
-        Require(find.Message.Contains("InputText", StringComparison.Ordinal), "UIA未找到目标控件。");
-        await ExerciseInputAsync(pid, find);
-        await VerifyPicturesAsync(fixture, pid);
-        await VerifyDebugAsync(pid);
+        var holderWindow = await ParentSessionObserver.AwaitReviewableAsync(
+            P(identity, "holderPid").GetInt32(), P(identity, "holderStartedTicks").GetInt64(),
+            P(identity, "parentSessionId").GetInt32());
+        if (round == 1) await VerifyWindowRestoreAsync(identity, holderWindow, pid);
+        var observer = ParentSessionObserver.Start(P(identity, "holderPid").GetInt32(), holderWindow);
+        JsonElement isolation = default;
+        try
+        {
+            var find = await CliAsync("ui_find", new { instance = _instance, process = $"{pid}", limit = 100 });
+            Require(find.Message.Contains("InputText", StringComparison.Ordinal), "UIA未找到目标控件。");
+            await ExerciseInputAsync(pid, find);
+            await VerifyPicturesAsync(fixture, pid);
+            await VerifyDebugAsync(pid);
+        }
+        finally
+        {
+            isolation = await StopParentObservationAsync(observer);
+        }
+        // 判定放在 finally 之后：业务已抛错时保留原异常及已记录证据；业务成功但隔离未确认才在这里判本轮失败。
+        Require(P(isolation, "confirmed").GetBoolean(),
+            $"父侧隔离未确认，本轮不得视为通过：{P(isolation, "isolation").GetString()}");
         await CliAsync("child_process", new { action = "output", instance = _instance, taskId });
         await McpAsync("child_process", new { action = "cancel", instance = _instance, taskId });
         await RequireTaskStoppedAsync(taskId);
         if (round == 2) await VerifyDisconnectedAsync(identity, fixture);
         if (round == 3) await VerifyWorkerExitAsync(identity);
+    }
+
+    private async Task<JsonElement> StopParentObservationAsync(ParentSessionObserver observer)
+    {
+        var evidence = await observer.StopAsync();
+        Record("parent-isolation", evidence);
+        Console.WriteLine(P(evidence, "confirmed").GetBoolean()
+            ? $"[信息] {P(evidence, "isolation").GetString()}"
+            : $"[注意] {P(evidence, "isolation").GetString()}");
+        return evidence;
+    }
+
+    /// <summary>最小化已核实身份的连接窗，发一次 ui_find 触发正式还原，单列记录前后证据后交回严格采样。</summary>
+    private async Task VerifyWindowRestoreAsync(JsonElement identity, nint holderWindow, int pid)
+    {
+        var evidence = await ConnectionWindowRestore.RunAsync(P(identity, "holderPid").GetInt32(), holderWindow, async () =>
+        {
+            var find = await CliAsync("ui_find", new { instance = _instance, process = $"{pid}", limit = 100 });
+            Require(find.Message.Contains("InputText", StringComparison.Ordinal), "还原后UIA未找到目标控件。");
+            return "ui_find 命中 InputText";
+        });
+        Record("connection-restore", evidence);
+        Console.WriteLine($"[信息] 连接窗还原检查：{P(evidence, "business").GetString()}，父侧前台与光标未变。");
     }
 
     private Task<Reply> StartTaskAsync(string executable, string[] args)
@@ -102,10 +141,9 @@ internal sealed partial class ChildSessionCases
         {
             if (File.Exists(path))
             {
-                foreach (var line in (await File.ReadAllTextAsync(path)).Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                // 写端持续追加：只消费换行结束的完整行，半行/未完成 UTF-8 留到下次轮询；读不到不等于事件已发生。
+                foreach (var line in await FixtureEventLog.ReadCompleteLinesAsync(path))
                 {
-                    // 写入中的最后一行尚不是完整事件，不能把它判成应用业务失败。
-                    if (!line.TrimEnd().EndsWith('}')) continue;
                     var value = JsonSerializer.Deserialize<JsonElement>(line);
                     if (matches(value)) { Record("fixture-event", value); return value; }
                 }
@@ -135,17 +173,56 @@ internal sealed partial class ChildSessionCases
         var pid = P(marker.Data, "processId").GetInt32();
         try
         {
-            await McpAsync("ui_wait", new { instance = _instance, process = $"{pid}", text = "ChildSessionTarget", timeoutSeconds = 10 });
-            var capture = await _mcp.CallRawAsync("screenshot",
-                Arguments(new { instance = _instance, mode = "window", processId = pid, clientArea = true }), CancellationToken.None);
-            var image = capture.Content.OfType<ImageContentBlock>().Single();
-            var bytes = image.Data.ToArray();
-            await File.WriteAllBytesAsync(Path.Combine(_roundDirectory, "lime.png"), bytes);
-            using var stream = new MemoryStream(bytes);
-            using var decoded = new Bitmap(stream);
-            Require(decoded.GetPixel(decoded.Width / 2, decoded.Height / 2).ToArgb() == Color.Lime.ToArgb(), "MCP PNG实际像素不是child标记。");
-            Record("png-pixels", new { pid, decoded.Width, decoded.Height, argb = Color.Lime.ToArgb() });
+            var (png, decoded) = await CaptureMarkerAsync(pid);
+            using (decoded)
+            {
+                Require(decoded.Width >= 400 && decoded.Height >= 280,
+                    $"marker 截图尺寸不符：{decoded.Width}x{decoded.Height}。");
+                await File.WriteAllBytesAsync(Path.Combine(_roundDirectory, "lime.png"), png);
+                Record("png-pixels", new { pid, decoded.Width, decoded.Height, argb = Color.Lime.ToArgb() });
+            }
         }
         finally { await CliAsync("child_process", new { action = "cancel", instance = _instance, taskId = P(marker.Data, "taskId").GetString() }); }
+    }
+
+    /// <summary>
+    /// 整窗截图优先走 WGC/PrintWindow（遮挡安全、不依赖目标在前台）；若回退到 BitBlt 仍会受遮挡影响。
+    /// marker 没有子控件，ui_wait 的 text 只匹配后代 Name，只会得到「超时但 status=completed」；
+    /// 因此用截图工具自身的 timeout 等窗口出现，再以真实像素命中（中心 Lime）作为就绪判据。
+    /// </summary>
+    private async Task<(byte[] Png, Bitmap Image)> CaptureMarkerAsync(int pid)
+    {
+        var until = DateTimeOffset.UtcNow.AddSeconds(15);
+        var detail = "尚未取得截图";
+        while (true)
+        {
+            var capture = await _mcp.CallRawAsync("screenshot",
+                Arguments(new { instance = _instance, mode = "window", processId = pid, timeoutSeconds = 10 }),
+                CancellationToken.None);
+            if (capture.Content.OfType<ImageContentBlock>().Count() == 1)
+            {
+                var candidate = TryDecodeMarker(capture, out detail);
+                if (candidate is { } hit) return hit;
+            }
+            else detail = Text(capture);
+            if (DateTimeOffset.UtcNow >= until)
+                throw new InvalidOperationException($"未取得真正可解码且中心为 Lime 的 marker 截图：{detail}");
+            await Task.Delay(200);
+        }
+    }
+
+    private static (byte[] Png, Bitmap Image)? TryDecodeMarker(CallToolResult capture, out string detail)
+    {
+        detail = "";
+        var png = ScreenshotImage.DecodeSinglePng(capture);
+        Bitmap image;
+        try { image = ScreenshotImage.DecodePng(png); }
+        catch (InvalidOperationException ex) { detail = ex.Message; return null; }
+        var center = image.GetPixel(image.Width / 2, image.Height / 2);
+        if (image.Width >= 400 && image.Height >= 280 && center.ToArgb() == Color.Lime.ToArgb())
+            return (png, image);
+        detail = $"尺寸 {image.Width}x{image.Height}，中心 argb=0x{center.ToArgb():X8}（期望 Lime 0x{Color.Lime.ToArgb():X8}）";
+        image.Dispose();
+        return null;
     }
 }

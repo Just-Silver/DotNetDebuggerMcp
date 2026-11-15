@@ -37,8 +37,7 @@ net10.0-windows WinForms + RDP ActiveX（`MsRdpClient10`，CLSID `A0C63C30-F08D-
 | 2 | 建子会话前置条件 | 观察 | 需 `TermService` 运行 + `fDenyTSConnections=0`（RDP 主机开启）；缺一不可 |
 | 3 | 自动登录 | `ConnectToChildSession` + `Connect()` | 本机 Hello-only ⇒ **必须人工输入密码**（官方默认自动登录，这是例外配置） |
 | 4 | 取子会话 ID | 连接后立刻 / 延迟查 `WTSGetChildSessionId` | 立刻查返回 `1168`；**约 2 s 后**返回 `session=2` |
-| 5 | 画面自适应 | 拖拽窗口 → `IMsRdpClient9::UpdateSessionDisplaySettings(w,h,物理w,h,0,100,100)` | 成功，多次生效，画面 **1:1 填满且不变形**；`SmartSizing=false`。无需 `Disconnect/Connect`（后者会白屏） |
-| 6 | 投送进程进子会话 | 计划任务 `RegisterTaskDefinition(TASK_LOGON_INTERACTIVE_TOKEN, LUA)` + `RunEx(null, TASK_RUN_USE_SESSION_ID(0x4), sessionId, null)` | **成功，且不需要管理员**。`WTSQueryUserToken` 路线要 `SeTcbPrivilege`（管理员令牌没有），故不用 |
+| 5 | 画面自适应 | 拖拽窗口 → `IMsRdpClient9::UpdateSessionDisplaySettings(w,h,物理w,h,0,100,100)` | 成功，多次生效，画面 **1:1 填满且不变形**；`SmartSizing=false`。无需 `Disconnect/Connect`（后者会白屏） || 6 | 投送进程进子会话 | 计划任务 `RegisterTaskDefinition(TASK_LOGON_INTERACTIVE_TOKEN, LUA)` + `RunEx(null, TASK_RUN_USE_SESSION_ID(0x4), sessionId, null)` | **成功，且不需要管理员**。`WTSQueryUserToken` 路线要 `SeTcbPrivilege`（管理员令牌没有），故不用 |
 | 7 | 子会话内 UIA | 投送 worker（`ui_find` 同类调用：FlaUI UIA3 按 pid 找窗 → AutomationId 找控件 → ValuePattern 写 → InvokePattern 点） | **全部成功**（会话状态 `Disconnected` 时也成功） |
 | 8 | 子会话内截图（断开态） | `ScreenCapture.CaptureScreen` / `CaptureWindow` | 全屏 BitBlt **失败**（`CaptureException`）；整窗 WGC 失败 → **PrintWindow 成功**（非纯黑） |
 | 9 | 父会话内同一条代码路径（Active） | `launch --session 1` 投送同一 worker | **8/8 通过**：UIA 三项 + 显示器枚举 + 全屏 BitBlt + 整窗 WGC |
@@ -53,6 +52,7 @@ net10.0-windows WinForms + RDP ActiveX（`MsRdpClient10`，CLSID `A0C63C30-F08D-
 2. **截图能力取决于会话是否 Active**：客户端断开后无显示面，BitBlt 必败、WGC 也不出帧，只剩 PrintWindow（依赖目标窗口自绘，Chromium/游戏/部分 UWP 不稳）；客户端连着（Active）时 BitBlt 与 WGC 都正常。**保持 ActiveX 连接 = 保持 WGC/BitBlt 可用**，这是方案的前提而非可选项。
 3. **开启子会话要管理员，投送不要**：前者一次性（系统级开关），后者每个子会话都要跑，用计划任务即可，不要求宿主提权。
 4. **自适应用动态分辨率**：`UpdateSessionDisplaySettings` 必须在连接后约 1–2 s 调用（过早 `E_UNEXPECTED`），参数物理尺寸按 96 DPI 换算成毫米；`SmartSizing` 官方只写「缩放填满客户区」、未承诺保持纵横比，故不依赖它。
+   > 2026-11-15 后续：已落为产品能力（`ChildConnectionWindow` + `RdpActiveXHost`，经 IDispatch 调用），实测正向/缩小两个方向都 1:1 跟随；细节见 `../specs/2026-11-15-child-session-credential-and-persistence-design.md` §5.5。
 5. **密码**：当时本机出现人工认证；不能据此断言所有 Hello-only 配置必然无法免密，或关闭 Hello 后必然修复。官方 PiP 文档列多种认证/策略因素，未做闭环的候选均保留为未验证。
 
 ## 4.5 密码：当时的候选原因，未完成闭环
@@ -81,6 +81,8 @@ net10.0-windows WinForms + RDP ActiveX（`MsRdpClient10`，CLSID `A0C63C30-F08D-
 本机实测可以输对密码，所以这条不是当前根因；但若注销后仍弹凭据，需要一并处理。
 
 上句“不是根因”也仅为当时判断：能输入有效密码不排除 Hello/PIN/默认凭据可用性与自动登录相关，不能把交互认证成功推成已排除 SSO 配置问题。本轮新 PoC 未改这些策略，连接结果独立登记于 §6。
+
+> 2026-11-15 后续：候选 2（凭据管理器 + 显式注入）已落为产品能力，设计见 `../specs/2026-11-15-child-session-credential-and-persistence-design.md`；本节保持当时的实测边界，不回填成已解决。
 
 ## 5. 待验证
 
